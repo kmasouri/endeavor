@@ -3,6 +3,7 @@ import {
   mockApprovalRepository,
   mockDocumentRepository,
   mockNoteRepository,
+  mockResponsibilityRepository,
   mockCatalogRepository,
   mockConversationRepository,
   mockHumanRepository,
@@ -152,6 +153,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
   const approvals = mockApprovalRepository();
   const notes = mockNoteRepository();
   const documents = mockDocumentRepository();
+  const responsibilities = mockResponsibilityRepository();
   const connectionClient = { request: jest.fn() };
   const client: jest.Mocked<ModelClient> = {
     provider: 'scripted',
@@ -210,6 +212,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
     approvals,
     notes,
     documents,
+    responsibilities,
     connectionClient,
     options.client === null ? {} : { scripted: options.client ?? client },
     {
@@ -226,6 +229,8 @@ function setup(options: { client?: ModelClient | null } = {}) {
       onRequestChainTooDeep: jest.fn(),
       onConnectionDenied: jest.fn(),
       onApprovalRequested: jest.fn(),
+      onScheduledRun: jest.fn(),
+      onScheduledRunSkipped: jest.fn(),
       onTickFailed: jest.fn()
     } as unknown as TaskRunnerLogger,
     { ...DEFAULT_RUNNER_OPTIONS, workerId: 'test' }
@@ -240,6 +245,8 @@ function setup(options: { client?: ModelClient | null } = {}) {
     approvals,
     notes,
     documents,
+    responsibilities,
+    conversations,
     connectionClient,
     current: () => current,
     setCurrent: (task: Task) => (current = task)
@@ -1262,6 +1269,73 @@ describe('TaskRunnerService', () => {
     const prompt = (client.complete.mock.calls[0][0].transcript[0] as { text: string }).text;
     expect(prompt).toContain('> ## Instructions');
     expect(prompt.match(/^## Instructions/gm)).toBeNull();
+  });
+
+  describe('scheduled runs', () => {
+    const due = {
+      id: 'r1',
+      agentId: RESEARCHER,
+      conversationId: CONV,
+      title: 'Nightly QA',
+      brief: 'Test checkout',
+      completionCriteria: 'Report',
+      intervalMinutes: 60,
+      missedRunPolicy: 'run_once' as const,
+      status: 'enabled' as const,
+      nextRunAt: new Date('2026-10-22T01:00:00Z'),
+      lastRunAt: null,
+      createdByHumanId: HUMAN,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    it('starts one run for missed slots, keyed by the slot, and moves to the next future slot', async () => {
+      const { runner, tasks, responsibilities, conversations } = setup();
+      responsibilities.listDue.mockResolvedValue([due]);
+      conversations.getMember.mockResolvedValue({} as never);
+      tasks.create.mockImplementation(async (input) => ({
+        task: makeTask({ ...input, id: 'run-1' } as never),
+        created: true
+      }));
+
+      await runner.startDueRuns(new Date('2026-10-22T04:30:00Z'));
+
+      expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
+        nextRunAt: new Date('2026-10-22T05:00:00Z'),
+        lastRunAt: new Date('2026-10-22T04:30:00Z')
+      });
+      expect(tasks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runKey: 'schedule:r1:2026-10-22T04:00:00.000Z',
+          responsibilityId: 'r1',
+          requestedByType: 'schedule',
+          brief: expect.stringContaining('3 earlier scheduled runs were missed')
+        })
+      );
+    });
+
+    it('starts nothing when another runner moved the schedule first', async () => {
+      const { runner, tasks, responsibilities } = setup();
+      responsibilities.listDue.mockResolvedValue([due]);
+      responsibilities.advance.mockResolvedValue(false);
+
+      await runner.startDueRuns(new Date('2026-10-22T01:10:00Z'));
+
+      expect(tasks.create).not.toHaveBeenCalled();
+    });
+
+    it("skips missed slots under the 'skip' policy", async () => {
+      const { runner, tasks, responsibilities } = setup();
+      responsibilities.listDue.mockResolvedValue([{ ...due, missedRunPolicy: 'skip' }]);
+
+      await runner.startDueRuns(new Date('2026-10-22T04:30:00Z'));
+
+      expect(tasks.create).not.toHaveBeenCalled();
+      expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
+        nextRunAt: new Date('2026-10-22T05:00:00Z'),
+        lastRunAt: null
+      });
+    });
   });
 
   describe('rebuildTranscript', () => {

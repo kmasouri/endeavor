@@ -315,3 +315,24 @@ export interface Approval {
   result: ApprovalResult | null;
   createdAt: Date;
 }
+
+export type ResponsibilityStatus = 'enabled' | 'paused' | 'cancelled';
+export type MissedRunPolicy = 'run_once' | 'skip';
+
+// A recurring piece of work for one agent. Each run is a task with this responsibilityId.
+export interface Responsibility {
+  id: string;
+  agentId: string;
+  conversationId: string | null;
+  title: string;
+  brief: string;
+  completionCriteria: string;
+  intervalMinutes: number;
+  missedRunPolicy: MissedRunPolicy;
+  status: ResponsibilityStatus;
+  nextRunAt: Date;
+  lastRunAt: Date | null;
+  createdByHumanId: string;
+  createdAt: Date;
+  updatedAt: Date;
+}

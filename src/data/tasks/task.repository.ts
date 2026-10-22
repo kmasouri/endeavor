@@ -35,6 +35,7 @@ export interface ListTasksInput {
   state?: TaskState;
   ownerAgentId?: string;
   conversationId?: string;
+  responsibilityId?: string;
   limit: number;
   offset: number;
 }

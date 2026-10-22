@@ -6,4 +6,5 @@ export * from './humans';
 export * from './items';
 export * from './messages';
 export * from './notes';
+export * from './responsibilities';
 export * from './tasks';

@@ -12,6 +12,7 @@ import {
   HumanPostgresRepository,
   MessagePostgresRepository,
   NotePostgresRepository,
+  ResponsibilityPostgresRepository,
   TaskPostgresRepository
 } from '../data';
 import {
@@ -82,6 +83,7 @@ const runnerPlugin: FastifyPluginAsync = async (fastify) => {
     new ApprovalPostgresRepository(fastify.pg),
     new NotePostgresRepository(fastify.pg),
     new DocumentPostgresRepository(fastify.pg),
+    new ResponsibilityPostgresRepository(fastify.pg),
     new ConnectionHttpClient(),
     buildModelClients(config),
     new TaskLogger(fastify.log),

@@ -480,7 +480,8 @@ function listFilters(input: Omit<ListTasksInput, 'limit' | 'offset'>): {
   const filters: [unknown, string][] = [
     [input.state, 'state'],
     [input.ownerAgentId, 'owner_agent_id'],
-    [input.conversationId, 'conversation_id']
+    [input.conversationId, 'conversation_id'],
+    [input.responsibilityId, 'responsibility_id']
   ];
   for (const [value, column] of filters) {
     if (value !== undefined) {

@@ -7,6 +7,7 @@ import {
   HumanRepository,
   MessageRepository,
   NoteRepository,
+  ResponsibilityRepository,
   TaskRepository
 } from '.';
 
@@ -149,5 +150,17 @@ export function mockDocumentRepository(): jest.Mocked<DocumentRepository> {
     list: jest.fn().mockResolvedValue([]),
     get: jest.fn().mockResolvedValue(null),
     delete: jest.fn().mockResolvedValue(true)
+  };
+}
+
+export function mockResponsibilityRepository(): jest.Mocked<ResponsibilityRepository> {
+  return {
+    create: jest.fn(),
+    getById: jest.fn().mockResolvedValue(null),
+    list: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0),
+    update: jest.fn(),
+    listDue: jest.fn().mockResolvedValue([]),
+    advance: jest.fn().mockResolvedValue(true)
   };
 }
