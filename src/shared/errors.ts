@@ -8,7 +8,7 @@ interface ErrorDefinition {
 // The key is the error's name in responses. docs/errors.md documents each one.
 //
 // Codes are grouped by feature: 10xxx general, 20xxx items, 30xxx people and access, 40xxx tasks,
-// 50xxx agents.
+// 50xxx agents, 60xxx conversations.
 // Never change or reuse a code once it has shipped; clients may depend on it.
 export const ERRORS = {
   // 10xxx: general
@@ -60,7 +60,22 @@ export const ERRORS = {
     code: 50003,
     statusCode: 409,
     message: 'An agent with this name already exists'
-  }
+  },
+
+  // 60xxx: conversations
+  conversationNotFound: { code: 60001, statusCode: 404, message: 'Conversation not found' },
+  notConversationMember: {
+    code: 60002,
+    statusCode: 403,
+    message: 'You are not a member of this conversation'
+  },
+  mentionNotMember: {
+    code: 60003,
+    statusCode: 422,
+    message: 'A mentioned participant is not a member of this conversation'
+  },
+  messageNotFound: { code: 60004, statusCode: 404, message: 'Message not found' },
+  participantNotFound: { code: 60005, statusCode: 404, message: 'Participant not found' }
 } as const satisfies Record<string, ErrorDefinition>;
 
 export type ErrorName = keyof typeof ERRORS;

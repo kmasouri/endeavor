@@ -11,8 +11,10 @@ import {
 import fastify, { FastifyInstance, FastifyReply, FastifySchemaValidationError } from 'fastify';
 import { config } from './config';
 import agentPlugin from './plugins/agent';
+import conversationPlugin from './plugins/conversation';
 import humanPlugin from './plugins/human';
 import itemPlugin from './plugins/item';
+import runnerPlugin from './plugins/runner';
 import taskPlugin from './plugins/task';
 import { AppError, ErrorName, ERRORS } from './shared/errors';
 import { ErrorDetail, failure } from './shared/response';
@@ -177,11 +179,14 @@ export function setupApp(): FastifyInstance {
   });
 
   app.register(agentPlugin);
+  app.register(conversationPlugin);
   app.register(humanPlugin);
   app.register(itemPlugin);
   app.register(taskPlugin);
+  app.register(runnerPlugin);
 
   app.register(routes.agentsRouter);
+  app.register(routes.conversationsRouter);
   app.register(routes.healthcheckRouter);
   app.register(routes.humansRouter);
   app.register(routes.itemsRouter);

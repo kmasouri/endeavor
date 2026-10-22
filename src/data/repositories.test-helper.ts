@@ -1,0 +1,88 @@
+import {
+  AgentRepository,
+  ConversationRepository,
+  HumanRepository,
+  MessageRepository,
+  TaskRepository
+} from '.';
+
+// Jest mocks of every repository, for service tests. Each method is a bare jest.fn(); tests set
+// the return values they need.
+
+export function mockTaskRepository(): jest.Mocked<TaskRepository> {
+  return {
+    create: jest.fn(),
+    getById: jest.fn(),
+    getByRunKey: jest.fn(),
+    list: jest.fn(),
+    count: jest.fn(),
+    update: jest.fn(),
+    addWaits: jest.fn(),
+    listWaits: jest.fn().mockResolvedValue([]),
+    findOpenWaits: jest.fn().mockResolvedValue([]),
+    resolveWait: jest.fn(),
+    resolveOpenWaits: jest.fn().mockResolvedValue(0),
+    addEvent: jest.fn(),
+    listEvents: jest.fn().mockResolvedValue([]),
+    addOutput: jest.fn(),
+    listOutputs: jest.fn().mockResolvedValue([]),
+    countOutputs: jest.fn().mockResolvedValue(0),
+    claimRunnable: jest.fn().mockResolvedValue([]),
+    releaseLease: jest.fn(),
+    renewLease: jest.fn().mockResolvedValue(true),
+    findOpenTask: jest.fn().mockResolvedValue(null),
+    listWaitingWithoutOpenWaits: jest.fn().mockResolvedValue([]),
+    listFinishedWithoutEvent: jest.fn().mockResolvedValue([]),
+    countEvents: jest.fn().mockResolvedValue(0)
+  };
+}
+
+export function mockAgentRepository(): jest.Mocked<AgentRepository> {
+  return {
+    create: jest.fn(),
+    getById: jest.fn(),
+    getByName: jest.fn().mockResolvedValue(null),
+    list: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0),
+    update: jest.fn(),
+    setDisabled: jest.fn(),
+    addVersion: jest.fn(),
+    getVersion: jest.fn(),
+    getVersions: jest.fn().mockResolvedValue([]),
+    listVersions: jest.fn().mockResolvedValue([])
+  };
+}
+
+export function mockHumanRepository(): jest.Mocked<HumanRepository> {
+  return {
+    create: jest.fn(),
+    createFirst: jest.fn(),
+    getById: jest.fn(),
+    list: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0)
+  };
+}
+
+export function mockConversationRepository(): jest.Mocked<ConversationRepository> {
+  return {
+    create: jest.fn(),
+    getById: jest.fn(),
+    list: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0),
+    addMember: jest.fn(),
+    listMembers: jest.fn().mockResolvedValue([]),
+    getMember: jest.fn().mockResolvedValue(null)
+  };
+}
+
+export function mockMessageRepository(): jest.Mocked<MessageRepository> {
+  return {
+    create: jest.fn(),
+    getById: jest.fn(),
+    list: jest.fn().mockResolvedValue([]),
+    listRecent: jest.fn().mockResolvedValue([]),
+    claimDeliveries: jest.fn().mockResolvedValue([]),
+    markDelivered: jest.fn(),
+    recordDeliveryFailure: jest.fn()
+  };
+}

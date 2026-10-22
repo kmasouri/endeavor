@@ -1,4 +1,9 @@
-import { AgentRepository, HumanRepository, TaskRepository } from '../../data';
+import { TaskRepository } from '../../data';
+import {
+  mockAgentRepository,
+  mockHumanRepository,
+  mockTaskRepository
+} from '../../data/repositories.test-helper';
 import { TaskLogger } from '../../observability';
 import { Agent, Human, Task, TaskWait } from '../../shared/types';
 import { TaskService } from './task.service';
@@ -67,47 +72,18 @@ function makeWait(overrides: Partial<TaskWait> = {}): TaskWait {
 }
 
 function setup() {
-  const tasks: jest.Mocked<TaskRepository> = {
-    create: jest.fn(),
-    getById: jest.fn(),
-    getByRunKey: jest.fn(),
-    list: jest.fn(),
-    count: jest.fn(),
-    // By default an update succeeds and returns the task with the changes applied.
-    update: jest.fn(async (_id, _expected, changes) => makeTask(changes as Partial<Task>)),
-    addWaits: jest.fn(async (_id, waits) => waits.map((wait) => makeWait(wait))),
-    listWaits: jest.fn().mockResolvedValue([]),
-    findOpenWaits: jest.fn().mockResolvedValue([]),
-    resolveWait: jest.fn().mockResolvedValue(makeWait({ resolvedAt: new Date() })),
-    resolveOpenWaits: jest.fn().mockResolvedValue(0),
-    addEvent: jest.fn(),
-    listEvents: jest.fn(),
-    addOutput: jest.fn(),
-    listOutputs: jest.fn(),
-    countOutputs: jest.fn().mockResolvedValue(1),
-    claimRunnable: jest.fn(),
-    releaseLease: jest.fn()
-  };
-  const agents: jest.Mocked<AgentRepository> = {
-    create: jest.fn(),
-    getById: jest.fn().mockResolvedValue(agent),
-    getByName: jest.fn(),
-    list: jest.fn(),
-    count: jest.fn(),
-    update: jest.fn(),
-    setDisabled: jest.fn(),
-    addVersion: jest.fn(),
-    getVersions: jest.fn().mockResolvedValue([]),
-    getVersion: jest.fn(),
-    listVersions: jest.fn()
-  };
-  const humans: jest.Mocked<HumanRepository> = {
-    create: jest.fn(),
-    createFirst: jest.fn(),
-    getById: jest.fn().mockResolvedValue(human),
-    list: jest.fn(),
-    count: jest.fn()
-  };
+  const tasks = mockTaskRepository();
+  // By default an update succeeds and returns the task with the changes applied.
+  tasks.update.mockImplementation(async (_id, _expected, changes) =>
+    makeTask(changes as Partial<Task>)
+  );
+  tasks.addWaits.mockImplementation(async (_id, waits) => waits.map((wait) => makeWait(wait)));
+  tasks.resolveWait.mockResolvedValue(makeWait({ resolvedAt: new Date() }));
+  tasks.countOutputs.mockResolvedValue(1);
+  const agents = mockAgentRepository();
+  agents.getById.mockResolvedValue(agent);
+  const humans = mockHumanRepository();
+  humans.getById.mockResolvedValue(human);
   const logger = {
     onTaskCreated: jest.fn(),
     onTaskStateChanged: jest.fn(),

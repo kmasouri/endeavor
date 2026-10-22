@@ -99,5 +99,19 @@ export interface TaskRepository {
   // Leases up to limit working, unpaused tasks that no live worker holds. A lease that runs out,
   // such as after a crash, makes the task claimable again.
   claimRunnable(workerId: string, leaseMs: number, limit: number): Promise<Task[]>;
-  releaseLease(taskId: string, workerId: string): Promise<void>;
+  // Gives up the lease. With delayMs, nobody can claim the task until then, which is how the
+  // runner waits before trying a failed model call again.
+  releaseLease(taskId: string, workerId: string, delayMs?: number): Promise<void>;
+  renewLease(taskId: string, workerId: string, leaseMs: number): Promise<boolean>;
+
+  // The agent's open (working, waiting, or blocked) task in a conversation, if it has one.
+  findOpenTask(conversationId: string, agentId: string): Promise<Task | null>;
+  // Waiting tasks with no open waits. A crash between resolving a wait and waking the task
+  // can leave one; the runner wakes them.
+  listWaitingWithoutOpenWaits(limit: number): Promise<Task[]>;
+  // Completed tasks that answered a message and have no event of this type yet. The runner uses
+  // it to post results that weren't posted, such as after a review or a crash.
+  listFinishedWithoutEvent(eventType: string, limit: number): Promise<Task[]>;
+  // Counts events of one type, such as model turns, for execution limits.
+  countEvents(taskId: string, type: string): Promise<number>;
 }

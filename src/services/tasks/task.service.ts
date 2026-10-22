@@ -5,18 +5,14 @@ import {
   CreateTaskWaitInput,
   HumanRepository,
   ListTasksInput,
-  TaskChanges,
   TaskRepository
 } from '../../data';
 import { TaskLogger } from '../../observability';
 import { requireHuman } from '../../shared/access';
 import { AppError } from '../../shared/errors';
-import { Actor, Agent, Task, TaskEvent, TaskOutput, TaskState, TaskWait } from '../../shared/types';
-import { canTransition, isFinished } from './task-state';
-
-export interface TaskDetails extends Task {
-  waits: TaskWait[];
-}
+import { Actor, Agent, Task, TaskEvent, TaskOutput } from '../../shared/types';
+import { describeState, TaskDetails, TaskLifecycle } from './task-lifecycle';
+import { isFinished } from './task-state';
 
 export interface CreateTaskRequest {
   ownerAgentId: string;
@@ -37,7 +33,11 @@ export class TaskService {
     private readonly agentRepository: AgentRepository,
     private readonly humanRepository: HumanRepository,
     private readonly taskLogger: TaskLogger
-  ) {}
+  ) {
+    this.lifecycle = new TaskLifecycle(taskRepository, taskLogger);
+  }
+
+  private readonly lifecycle: TaskLifecycle;
 
   async createTask(
     actorId: string,
@@ -67,13 +67,13 @@ export class TaskService {
     });
 
     if (created) {
-      await this.recordCreated(task, { type: 'human', id: human.id });
+      await this.lifecycle.recordCreated(task, { type: 'human', id: human.id });
     }
     return { task, created };
   }
 
   async getTask(taskId: string): Promise<TaskDetails> {
-    const task = await this.requireTask(taskId);
+    const task = await this.lifecycle.requireTask(taskId);
     const waits = await this.taskRepository.listWaits(task.id, { openOnly: false });
     return { ...task, waits };
   }
@@ -95,12 +95,12 @@ export class TaskService {
     taskId: string,
     options: { afterId: number; limit: number }
   ): Promise<TaskEvent[]> {
-    await this.requireTask(taskId);
+    await this.lifecycle.requireTask(taskId);
     return this.taskRepository.listEvents(taskId, options);
   }
 
   async listOutputs(taskId: string): Promise<TaskOutput[]> {
-    await this.requireTask(taskId);
+    await this.lifecycle.requireTask(taskId);
     return this.taskRepository.listOutputs(taskId);
   }
 
@@ -108,12 +108,12 @@ export class TaskService {
 
   async pauseTask(actorId: string, taskId: string, reason?: string): Promise<Task> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
-    const task = await this.requireTask(taskId);
+    const task = await this.lifecycle.requireTask(taskId);
     if (isFinished(task) || task.pausedAt) {
       throw new AppError('taskStateConflict', `Task ${task.id} is ${describeState(task)}`);
     }
 
-    const paused = await this.applyChanges(task, { pausedAt: new Date() });
+    const paused = await this.lifecycle.applyChanges(task, { pausedAt: new Date() });
     await this.taskRepository.addEvent(task.id, 'task.paused', humanActor(human.id), {
       reason: reason ?? null
     });
@@ -126,7 +126,7 @@ export class TaskService {
   async resumeTask(actorId: string, taskId: string, note?: string): Promise<Task> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const actor = humanActor(human.id);
-    let task = await this.requireTask(taskId);
+    let task = await this.lifecycle.requireTask(taskId);
     if (isFinished(task) || (!task.pausedAt && task.state !== 'blocked')) {
       throw new AppError('taskStateConflict', `Task ${task.id} is ${describeState(task)}`);
     }
@@ -134,11 +134,11 @@ export class TaskService {
     // One write, so the task is never left half resumed.
     task =
       task.state === 'blocked'
-        ? await this.transition(task, 'working', actor, {
+        ? await this.lifecycle.transition(task, 'working', actor, {
             reason: note ?? null,
             changes: { pausedAt: null }
           })
-        : await this.applyChanges(task, { pausedAt: null });
+        : await this.lifecycle.applyChanges(task, { pausedAt: null });
 
     await this.taskRepository.addEvent(task.id, 'task.resumed', actor, { note: note ?? null });
     this.taskLogger.onTaskResumed(task.id);
@@ -147,9 +147,9 @@ export class TaskService {
 
   async cancelTask(actorId: string, taskId: string, reason?: string): Promise<Task> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
-    const task = await this.requireTask(taskId);
+    const task = await this.lifecycle.requireTask(taskId);
 
-    const cancelled = await this.transition(task, 'cancelled', humanActor(human.id), {
+    const cancelled = await this.lifecycle.transition(task, 'cancelled', humanActor(human.id), {
       reason: reason ?? null,
       changes: { pausedAt: null, finishedAt: new Date() }
     });
@@ -166,7 +166,7 @@ export class TaskService {
     reason?: string
   ): Promise<{ task: Task; created: boolean }> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
-    const previous = await this.requireTask(taskId);
+    const previous = await this.lifecycle.requireTask(taskId);
     if (!isFinished(previous)) {
       throw new AppError(
         'taskStateConflict',
@@ -201,7 +201,7 @@ export class TaskService {
     });
 
     if (created) {
-      await this.recordCreated(task, actor);
+      await this.lifecycle.recordCreated(task, actor);
       await this.taskRepository.addEvent(previous.id, 'task.restarted', actor, {
         newTaskId: task.id,
         reason: reason ?? null
@@ -220,7 +220,7 @@ export class TaskService {
   ): Promise<Task> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const actor = humanActor(human.id);
-    const task = await this.requireTask(taskId);
+    const task = await this.lifecycle.requireTask(taskId);
     const reviewWait = (await this.taskRepository.findOpenWaits('approval', task.id)).find(
       (wait) => wait.taskId === task.id
     );
@@ -237,10 +237,10 @@ export class TaskService {
     // Change the state first. If another change wins the race, this throws and nothing else
     // has been written, so the review can be tried again.
     const reviewed = input.approved
-      ? await this.transition(task, 'completed', actor, {
+      ? await this.lifecycle.transition(task, 'completed', actor, {
           changes: { review, pausedAt: null, finishedAt: new Date() }
         })
-      : await this.transition(task, 'working', actor, {
+      : await this.lifecycle.transition(task, 'working', actor, {
           reason: `Review asked for changes${input.notes ? `: ${input.notes}` : ''}`,
           changes: { review }
         });
@@ -249,199 +249,35 @@ export class TaskService {
     return reviewed;
   }
 
-  // Lifecycle actions, used by the runner for the agent that owns the task
+  // Lifecycle actions, used by the runner for the agent that owns the task. The rules are in
+  // TaskLifecycle.
 
-  async waitFor(taskId: string, actor: Actor, waits: CreateTaskWaitInput[]): Promise<TaskDetails> {
-    const task = await this.requireTask(taskId);
-    if (waits.length === 0 || task.pausedAt || !canTransition(task.state, 'waiting')) {
-      throw new AppError('taskStateConflict', `Task ${task.id} can't wait while ${task.state}`);
-    }
-
-    // Save the waits first. If the state change then loses a race, close them again so they
-    // don't wake anything later.
-    const created = await this.taskRepository.addWaits(task.id, waits);
-    try {
-      const waiting = await this.transition(task, 'waiting', actor, {
-        reason: created.map((wait) => wait.description).join('; ')
-      });
-      return { ...waiting, waits: created };
-    } catch (error) {
-      for (const wait of created) {
-        await this.taskRepository.resolveWait(wait.id, { abandoned: true });
-      }
-      throw error;
-    }
+  waitFor(taskId: string, actor: Actor, waits: CreateTaskWaitInput[]): Promise<TaskDetails> {
+    return this.lifecycle.waitFor(taskId, actor, waits);
   }
 
-  // Resolves one wait. When none are left open, the task goes back to working.
-  async resolveWait(
-    waitId: string,
-    actor: Actor,
-    resolution: Record<string, unknown>
-  ): Promise<Task> {
-    const wait = await this.taskRepository.resolveWait(waitId, resolution);
-    if (!wait) {
-      throw new AppError('taskWaitNotFound', `Wait ${waitId} is not open`);
-    }
-
-    await this.taskRepository.addEvent(wait.taskId, 'task.wait.resolved', actor, {
-      waitId: wait.id,
-      kind: wait.kind,
-      resolution
-    });
-    return this.wakeIfReady(wait.taskId, actor);
+  resolveWait(waitId: string, actor: Actor, resolution: Record<string, unknown>): Promise<Task> {
+    return this.lifecycle.resolveWait(waitId, actor, resolution);
   }
 
-  // Moves a waiting task with no open waits back to working. Retries when another change gets
-  // there first, such as a pause, so a resolved wait never leaves a task stuck. The runner also
-  // calls this to repair any task that was left that way by a crash.
-  async wakeIfReady(taskId: string, actor: Actor): Promise<Task> {
-    for (let attempt = 1; ; attempt++) {
-      const task = await this.requireTask(taskId);
-      const open = await this.taskRepository.listWaits(task.id, { openOnly: true });
-      if (task.state !== 'waiting' || open.length > 0) {
-        return task;
-      }
-      try {
-        return await this.transition(task, 'working', actor, { reason: null });
-      } catch (error) {
-        if (attempt >= 3 || !(error instanceof AppError) || error.name !== 'taskStateConflict') {
-          throw error;
-        }
-      }
-    }
+  wakeIfReady(taskId: string, actor: Actor): Promise<Task> {
+    return this.lifecycle.wakeIfReady(taskId, actor);
   }
 
-  async addOutput(taskId: string, actor: Actor, input: CreateTaskOutputInput): Promise<TaskOutput> {
-    const task = await this.requireTask(taskId);
-    if (isFinished(task)) {
-      throw new AppError('taskStateConflict', `Task ${task.id} is already ${task.state}`);
-    }
-
-    const output = await this.taskRepository.addOutput(task.id, input);
-    await this.taskRepository.addEvent(task.id, 'task.output.added', actor, {
-      outputId: output.id,
-      kind: output.kind,
-      title: output.title
-    });
-    return output;
+  addOutput(taskId: string, actor: Actor, input: CreateTaskOutputInput): Promise<TaskOutput> {
+    return this.lifecycle.addOutput(taskId, actor, input);
   }
 
-  // Completion needs at least one output and a check against the completion criteria. The
-  // agent saying it is done is not enough. If the task needs review, it waits for a human
-  // instead of completing.
-  async completeTask(
+  completeTask(
     taskId: string,
     actor: Actor,
     check: { met: boolean; summary: string }
   ): Promise<Task> {
-    const task = await this.requireTask(taskId);
-    if (task.state !== 'working' || task.pausedAt) {
-      throw new AppError(
-        'taskStateConflict',
-        `Task ${task.id} can't complete while ${describeState(task)}`
-      );
-    }
-
-    if ((await this.taskRepository.countOutputs(task.id)) === 0) {
-      return this.rejectCompletion(task, 'The task has no output yet');
-    }
-    if (!check.met) {
-      return this.rejectCompletion(task, `The completion criteria are not met: ${check.summary}`);
-    }
-
-    const criteriaCheck = {
-      met: true,
-      summary: check.summary,
-      checkedBy: actor,
-      checkedAt: new Date()
-    };
-    if (task.reviewRequired) {
-      const checked = await this.applyChanges(task, { criteriaCheck });
-      await this.waitFor(checked.id, actor, [
-        {
-          kind: 'approval',
-          targetId: task.id,
-          description: 'A human reviews the output against the completion criteria'
-        }
-      ]);
-      return this.requireTask(task.id);
-    }
-
-    return this.transition(task, 'completed', actor, {
-      changes: { criteriaCheck, finishedAt: new Date() }
-    });
+    return this.lifecycle.completeTask(taskId, actor, check);
   }
 
-  async blockTask(taskId: string, actor: Actor, reason: string): Promise<Task> {
-    const task = await this.requireTask(taskId);
-    return this.transition(task, 'blocked', actor, { reason });
-  }
-
-  // Helpers
-
-  private async rejectCompletion(task: Task, reason: string): Promise<never> {
-    this.taskLogger.onTaskCompletionRejected(task.id, reason);
-    throw new AppError('taskCompletionRejected', reason);
-  }
-
-  private async transition(
-    task: Task,
-    to: TaskState,
-    actor: Actor,
-    options: { reason?: string | null; changes?: TaskChanges } = {}
-  ): Promise<Task> {
-    if (!canTransition(task.state, to)) {
-      throw new AppError(
-        'taskStateConflict',
-        `Task ${task.id} can't go from ${task.state} to ${to}`
-      );
-    }
-
-    const updated = await this.applyChanges(task, {
-      ...options.changes,
-      state: to,
-      ...(options.reason !== undefined && { stateReason: options.reason })
-    });
-    await this.taskRepository.addEvent(task.id, 'task.state.changed', actor, {
-      from: task.state,
-      to,
-      reason: options.reason ?? null
-    });
-    this.taskLogger.onTaskStateChanged(task.id, task.state, to);
-    return updated;
-  }
-
-  // Writes the changes only if nobody changed the task since it was read.
-  private async applyChanges(task: Task, changes: TaskChanges): Promise<Task> {
-    const updated = await this.taskRepository.update(
-      task.id,
-      { state: task.state, paused: task.pausedAt !== null },
-      changes
-    );
-    if (!updated) {
-      throw new AppError(
-        'taskStateConflict',
-        `Task ${task.id} changed at the same time. Try again`
-      );
-    }
-    return updated;
-  }
-
-  private async recordCreated(task: Task, actor: Actor): Promise<void> {
-    await this.taskRepository.addEvent(task.id, 'task.created', actor, {
-      agentVersionId: task.agentVersionId,
-      restartedFromTaskId: task.restartedFromTaskId
-    });
-    this.taskLogger.onTaskCreated(task.id, task.ownerAgentId);
-  }
-
-  private async requireTask(taskId: string): Promise<Task> {
-    const task = await this.taskRepository.getById(taskId);
-    if (!task) {
-      throw new AppError('taskNotFound', `Task ${taskId} was not found`);
-    }
-    return task;
+  blockTask(taskId: string, actor: Actor, reason: string): Promise<Task> {
+    return this.lifecycle.blockTask(taskId, actor, reason);
   }
 
   private async requireAvailableAgent(agentId: string): Promise<Agent> {
@@ -458,8 +294,4 @@ export class TaskService {
 
 function humanActor(humanId: string): Actor {
   return { type: 'human', id: humanId };
-}
-
-function describeState(task: Task): string {
-  return task.pausedAt ? `${task.state} and paused` : task.state;
 }
