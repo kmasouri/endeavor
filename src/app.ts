@@ -10,7 +10,9 @@ import {
 } from '@fastify/type-provider-zod';
 import fastify, { FastifyInstance, FastifyReply, FastifySchemaValidationError } from 'fastify';
 import { config } from './config';
+import humanPlugin from './plugins/human';
 import itemPlugin from './plugins/item';
+import taskPlugin from './plugins/task';
 import { AppError, ErrorName, ERRORS } from './shared/errors';
 import { ErrorDetail, failure } from './shared/response';
 import * as routes from './routes';
@@ -173,10 +175,14 @@ export function setupApp(): FastifyInstance {
     routePrefix: '/docs'
   });
 
+  app.register(humanPlugin);
   app.register(itemPlugin);
+  app.register(taskPlugin);
 
   app.register(routes.healthcheckRouter);
+  app.register(routes.humansRouter);
   app.register(routes.itemsRouter);
+  app.register(routes.tasksRouter);
 
   return app;
 }

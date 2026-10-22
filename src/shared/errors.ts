@@ -7,7 +7,8 @@ interface ErrorDefinition {
 // The error catalog: every error the API can return, each with its own code.
 // The key is the error's name in responses. docs/errors.md documents each one.
 //
-// Codes are grouped by feature: 10xxx for general errors, 20xxx for items.
+// Codes are grouped by feature: 10xxx general, 20xxx items, 30xxx people and access, 40xxx tasks,
+// 50xxx agents.
 // Never change or reuse a code once it has shipped; clients may depend on it.
 export const ERRORS = {
   // 10xxx: general
@@ -24,7 +25,37 @@ export const ERRORS = {
 
   // 20xxx: items
   itemNameTaken: { code: 20001, statusCode: 409, message: 'An item with this name already exists' },
-  itemNotFound: { code: 20002, statusCode: 404, message: 'Item not found' }
+  itemNotFound: { code: 20002, statusCode: 404, message: 'Item not found' },
+
+  // 30xxx: people and access
+  actorNotFound: {
+    code: 30001,
+    statusCode: 401,
+    message: 'The x-actor-id header does not name a known person'
+  },
+  forbidden: { code: 30002, statusCode: 403, message: 'You are not allowed to do this' },
+
+  // 40xxx: tasks
+  taskNotFound: { code: 40001, statusCode: 404, message: 'Task not found' },
+  taskStateConflict: {
+    code: 40002,
+    statusCode: 409,
+    message: 'The task is not in a state that allows this'
+  },
+  taskCompletionRejected: {
+    code: 40003,
+    statusCode: 422,
+    message: 'The task does not meet what completion needs'
+  },
+  taskWaitNotFound: { code: 40004, statusCode: 404, message: 'Open task wait not found' },
+
+  // 50xxx: agents
+  agentNotFound: { code: 50001, statusCode: 404, message: 'Agent not found' },
+  agentUnavailable: {
+    code: 50002,
+    statusCode: 409,
+    message: 'The agent is disabled or has no saved configuration'
+  }
 } as const satisfies Record<string, ErrorDefinition>;
 
 export type ErrorName = keyof typeof ERRORS;
