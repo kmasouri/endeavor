@@ -97,6 +97,8 @@ Requests that act as a person send that person's ID in the `x-actor-id` header. 
 - `POST /conversations`, `GET /conversations`, `GET /conversations/:conversationId`
 - `POST /conversations/:conversationId/members`
 - `POST /conversations/:conversationId/messages`, `GET /conversations/:conversationId/messages`
+- `POST /conversations/:conversationId/documents`, `GET .../documents`, `DELETE .../documents/:documentId`
+- `GET /agents/:agentId/notes`, `PATCH /agents/:agentId/notes/:noteId`, `DELETE /agents/:agentId/notes/:noteId`
 - `POST /tasks`, `GET /tasks?state=&ownerAgentId=&conversationId=`
 - `GET /tasks/:taskId`, `GET /tasks/:taskId/events`, `GET /tasks/:taskId/outputs`
 - `POST /tasks/:taskId/pause`, `/resume`, `/cancel`, `/restart`, `/review`, `/version`

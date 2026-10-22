@@ -18,6 +18,13 @@ export class ConversationLogger {
     );
   }
 
+  onDocumentAdded(documentId: string, conversationId: string): void {
+    currentLogger(this.logger).info(
+      { event: 'conversation.document.added', documentId, conversationId },
+      'document added'
+    );
+  }
+
   onMessagePosted(conversationId: string, messageId: string, addressedAgents: number): void {
     currentLogger(this.logger).info(
       { event: 'conversation.message.posted', conversationId, messageId, addressedAgents },

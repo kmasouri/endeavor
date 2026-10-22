@@ -1,6 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import {
+  addDocumentHandler,
   addMemberHandler,
+  deleteDocumentHandler,
+  listDocumentsHandler,
   createConversationHandler,
   getConversationHandler,
   listConversationsHandler,
@@ -9,6 +12,8 @@ import {
 } from '../../handlers';
 import {
   actorHeadersSchema,
+  addDocumentBodySchema,
+  documentParamsSchema,
   addMemberBodySchema,
   conversationParamsSchema,
   createConversationBodySchema,
@@ -98,5 +103,46 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
       }
     },
     listMessagesHandler
+  );
+
+  fastifyInstance.post(
+    '/conversations/:conversationId/documents',
+    {
+      schema: {
+        description:
+          "Attach a document as a knowledge source for this conversation's agents. Agents read it but can't change it. Members only.",
+        tags: ['conversations'],
+        headers: actorHeadersSchema,
+        params: conversationParamsSchema,
+        body: addDocumentBodySchema
+      }
+    },
+    addDocumentHandler
+  );
+
+  fastifyInstance.get(
+    '/conversations/:conversationId/documents',
+    {
+      schema: {
+        description: 'Documents attached to this conversation.',
+        tags: ['conversations'],
+        headers: actorHeadersSchema,
+        params: conversationParamsSchema
+      }
+    },
+    listDocumentsHandler
+  );
+
+  fastifyInstance.delete(
+    '/conversations/:conversationId/documents/:documentId',
+    {
+      schema: {
+        description: 'Remove a document. Agents stop seeing it on their next run. Members only.',
+        tags: ['conversations'],
+        headers: actorHeadersSchema,
+        params: documentParamsSchema
+      }
+    },
+    deleteDocumentHandler
   );
 }

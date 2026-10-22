@@ -1,6 +1,7 @@
 import {
   mockAgentRepository,
   mockApprovalRepository,
+  mockNoteRepository,
   mockCatalogRepository,
   mockConversationRepository,
   mockHumanRepository,
@@ -148,6 +149,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
   const humans = mockHumanRepository();
   const catalogs = mockCatalogRepository();
   const approvals = mockApprovalRepository();
+  const notes = mockNoteRepository();
   const connectionClient = { request: jest.fn() };
   const client: jest.Mocked<ModelClient> = {
     provider: 'scripted',
@@ -204,6 +206,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
     humans,
     catalogs,
     approvals,
+    notes,
     connectionClient,
     options.client === null ? {} : { scripted: options.client ?? client },
     {
@@ -232,6 +235,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
     agentRepo,
     catalogs,
     approvals,
+    notes,
     connectionClient,
     current: () => current,
     setCurrent: (task: Task) => (current = task)
@@ -1163,6 +1167,91 @@ describe('TaskRunnerService', () => {
       expect(client.complete.mock.calls[0][0].tools.map((tool) => tool.name)).not.toContain(
         'http_request'
       );
+    });
+  });
+
+  describe('saved notes and documents', () => {
+    it('saves a note scoped to this conversation, once', async () => {
+      const { runner, tasks, notes } = setup();
+      notes.create.mockResolvedValue({ id: 'n1' } as never);
+      const call = { id: 'call-n', name: 'save_note', input: { note: 'Gateway ruled out' } };
+      tasks.listEvents
+        .mockResolvedValueOnce([event(1, 'model.turn', { raw: {}, toolCalls: [call] })])
+        .mockResolvedValueOnce([event(1, 'model.turn', { raw: {}, toolCalls: [call] })])
+        .mockResolvedValue([]);
+
+      await runner.runTask(makeTask());
+
+      expect(notes.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: 'Gateway ruled out',
+          sourceConversationId: CONV,
+          scope: 'conversation',
+          sourceTaskId: TASK
+        })
+      );
+      expect(tasks.addEvent).toHaveBeenCalledWith(TASK, 'note.saved', expect.anything(), {
+        callId: 'call-n',
+        noteId: 'n1'
+      });
+    });
+
+    it('does not save the same note again after a crash', async () => {
+      const { runner, tasks, notes } = setup();
+      const call = { id: 'call-n', name: 'save_note', input: { note: 'Gateway ruled out' } };
+      tasks.listEvents
+        .mockResolvedValueOnce([event(1, 'model.turn', { raw: {}, toolCalls: [call] })])
+        .mockResolvedValueOnce([
+          event(1, 'model.turn', { raw: {}, toolCalls: [call] }),
+          event(2, 'note.saved', { callId: 'call-n', noteId: 'n1' })
+        ])
+        .mockResolvedValue([]);
+
+      await runner.runTask(makeTask());
+
+      expect(notes.create).not.toHaveBeenCalled();
+    });
+
+    it("puts this conversation's notes and documents in the prompt, labeled", async () => {
+      const { runner, client, notes } = setup();
+      notes.list.mockResolvedValue([
+        {
+          id: 'n1',
+          agentId: RESEARCHER,
+          body: 'Gateway ruled out',
+          sourceTaskId: null,
+          sourceConversationId: CONV,
+          scope: 'conversation',
+          createdBy: { type: 'agent', id: RESEARCHER },
+          updatedByHumanId: null,
+          createdAt: new Date('2026-10-01T00:00:00Z'),
+          updatedAt: new Date()
+        }
+      ]);
+      notes.listDocuments.mockResolvedValue([
+        {
+          id: 'd1',
+          conversationId: CONV,
+          title: 'Refund policy',
+          content: 'Refunds within 30 days.',
+          addedByHumanId: HUMAN,
+          createdAt: new Date()
+        }
+      ]);
+
+      await runner.runTask(makeTask());
+
+      expect(notes.list).toHaveBeenCalledWith({
+        agentId: RESEARCHER,
+        conversationIds: [CONV],
+        limit: 20,
+        offset: 0
+      });
+      const prompt = (client.complete.mock.calls[0][0].transcript[0] as { text: string }).text;
+      expect(prompt).toContain('## Knowledge sources');
+      expect(prompt).toContain('### Refund policy\nRefunds within 30 days.');
+      expect(prompt).toContain('## Saved notes (agent memory)');
+      expect(prompt).toContain('- (2026-10-01, saved by you) Gateway ruled out');
     });
   });
 

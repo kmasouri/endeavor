@@ -4,7 +4,8 @@ import {
   AgentPostgresRepository,
   ConversationPostgresRepository,
   HumanPostgresRepository,
-  MessagePostgresRepository
+  MessagePostgresRepository,
+  NotePostgresRepository
 } from '../data';
 import { ConversationLogger } from '../observability';
 import { ConversationService } from '../services';
@@ -21,6 +22,7 @@ const conversationPlugin: FastifyPluginAsync = async (fastify) => {
     new MessagePostgresRepository(fastify.pg),
     new AgentPostgresRepository(fastify.pg),
     new HumanPostgresRepository(fastify.pg),
+    new NotePostgresRepository(fastify.pg),
     new ConversationLogger(fastify.log)
   );
 

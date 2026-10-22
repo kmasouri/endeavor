@@ -13,7 +13,7 @@ Every error response has a `code` and a `name` from this list. Clients should ch
 }
 ```
 
-Codes are grouped by feature: `10xxx` general, `20xxx` items, `30xxx` people and access, `40xxx` tasks, `50xxx` agents, `60xxx` conversations, `70xxx` catalogs. A code never changes or gets reused once it ships.
+Codes are grouped by feature: `10xxx` general, `20xxx` items, `30xxx` people and access, `40xxx` tasks, `50xxx` agents, `60xxx` conversations, `70xxx` catalogs, `80xxx` notes. A code never changes or gets reused once it ships.
 
 The list lives in `src/shared/errors.ts`. When you add an error there, add it here too. A test fails if this page is missing one.
 
@@ -83,3 +83,10 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 | 70004 | `catalogEntryUnavailable` | 409  | The skill or connection is disabled, or the skill has no version.                          | Enable it, or choose another.                                                   |
 | 70005 | `credentialsKeyMissing`   | 409  | A credential was sent, but `CREDENTIALS_KEY` isn't set, so it can't be stored safely.      | Set `CREDENTIALS_KEY` to 32 random bytes (base64 or hex) and restart.           |
 | 70006 | `toolAccessDenied`        | 403  | An agent's tool call was refused: no active grant, or a method or path that isn't allowed. | Agents see this as a tool error. Grant access, or widen the connection's rules. |
+
+## Notes and documents (80xxx)
+
+| Code  | Name               | HTTP | What it means                                 | How to fix it                                         |
+| ----- | ------------------ | ---- | --------------------------------------------- | ----------------------------------------------------- |
+| 80001 | `noteNotFound`     | 404  | No note has this ID, or you can't change it.  | Check `GET /agents/:agentId/notes`.                   |
+| 80002 | `documentNotFound` | 404  | No document has this ID in this conversation. | Check `GET /conversations/:conversationId/documents`. |

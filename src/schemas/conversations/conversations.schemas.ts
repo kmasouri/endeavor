@@ -39,6 +39,18 @@ export const listMessagesQuerySchema = z.strictObject({
   offset: z.coerce.number().int().min(0).default(0)
 });
 
+export const addDocumentBodySchema = z.strictObject({
+  title: z.string().trim().min(1).max(200),
+  content: z.string().min(1).max(100_000)
+});
+
+export const documentParamsSchema = z.object({
+  conversationId: z.uuid(),
+  documentId: z.uuid()
+});
+
+export type AddDocumentBody = z.infer<typeof addDocumentBodySchema>;
+export type DocumentParams = z.infer<typeof documentParamsSchema>;
 export type ConversationParams = z.infer<typeof conversationParamsSchema>;
 export type CreateConversationBody = z.infer<typeof createConversationBodySchema>;
 export type AddMemberBody = z.infer<typeof addMemberBodySchema>;

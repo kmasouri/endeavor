@@ -1,6 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import {
   ActorHeaders,
+  AddDocumentBody,
+  DocumentParams,
   AddMemberBody,
   ConversationParams,
   CreateConversationBody,
@@ -91,4 +93,43 @@ export async function listMessagesHandler(
       request.query
     )
   );
+}
+
+export async function addDocumentHandler(
+  request: FastifyRequest<{
+    Params: ConversationParams;
+    Body: AddDocumentBody;
+    Headers: ActorHeaders;
+  }>,
+  reply: FastifyReply
+): Promise<FastifyReply> {
+  const document = await request.server.conversationService.addDocument(
+    request.headers['x-actor-id'],
+    request.params.conversationId,
+    request.body
+  );
+  return reply.code(201).send(success(document));
+}
+
+export async function listDocumentsHandler(
+  request: FastifyRequest<{ Params: ConversationParams; Headers: ActorHeaders }>
+): Promise<unknown> {
+  return success(
+    await request.server.conversationService.listDocuments(
+      request.headers['x-actor-id'],
+      request.params.conversationId
+    )
+  );
+}
+
+export async function deleteDocumentHandler(
+  request: FastifyRequest<{ Params: DocumentParams; Headers: ActorHeaders }>,
+  reply: FastifyReply
+): Promise<FastifyReply> {
+  await request.server.conversationService.deleteDocument(
+    request.headers['x-actor-id'],
+    request.params.conversationId,
+    request.params.documentId
+  );
+  return reply.code(204).send();
 }

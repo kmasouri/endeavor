@@ -2,7 +2,8 @@ import {
   AgentRepository,
   ConversationRepository,
   HumanRepository,
-  MessageRepository
+  MessageRepository,
+  NoteRepository
 } from '../../data';
 import { ConversationLogger } from '../../observability';
 import { requireHuman } from '../../shared/access';
@@ -10,6 +11,7 @@ import { addressedAgentIds } from '../../shared/addressing';
 import { AppError } from '../../shared/errors';
 import {
   Conversation,
+  ConversationDocument,
   ConversationMember,
   Human,
   Message,
@@ -35,6 +37,7 @@ export class ConversationService {
     private readonly messageRepository: MessageRepository,
     private readonly agentRepository: AgentRepository,
     private readonly humanRepository: HumanRepository,
+    private readonly noteRepository: NoteRepository,
     private readonly conversationLogger: ConversationLogger
   ) {}
 
@@ -185,6 +188,43 @@ export class ConversationService {
       since: member?.historyFrom ?? null,
       ...input
     });
+  }
+
+  // Documents: knowledge sources people attach for the agents in a conversation. Agents read
+  // them but can't change them, and they are never mixed up with agents' saved notes.
+
+  async addDocument(
+    actorId: string,
+    conversationId: string,
+    input: { title: string; content: string }
+  ): Promise<ConversationDocument> {
+    const { conversation, human } = await this.requireAccess(actorId, conversationId, {
+      memberOnly: true
+    });
+    const document = await this.noteRepository.addDocument({
+      conversationId: conversation.id,
+      title: input.title,
+      content: input.content,
+      addedByHumanId: human.id
+    });
+    this.conversationLogger.onDocumentAdded(document.id, conversation.id);
+    return document;
+  }
+
+  async listDocuments(actorId: string, conversationId: string): Promise<ConversationDocument[]> {
+    const { conversation } = await this.requireAccess(actorId, conversationId);
+    return this.noteRepository.listDocuments(conversation.id);
+  }
+
+  async deleteDocument(actorId: string, conversationId: string, documentId: string): Promise<void> {
+    const { conversation } = await this.requireAccess(actorId, conversationId, {
+      memberOnly: true
+    });
+    const document = await this.noteRepository.getDocument(documentId);
+    if (!document || document.conversationId !== conversation.id) {
+      throw new AppError('documentNotFound', `Document ${documentId} was not found`);
+    }
+    await this.noteRepository.deleteDocument(document.id);
   }
 
   // Members can read and post. Admins can read any conversation and manage its members, but

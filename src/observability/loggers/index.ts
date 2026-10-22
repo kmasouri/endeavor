@@ -3,5 +3,6 @@ export * from './catalogs';
 export * from './conversations';
 export * from './humans';
 export * from './items';
+export * from './notes';
 export * from './request-logger';
 export * from './tasks';

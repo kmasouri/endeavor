@@ -5,6 +5,7 @@ import {
   ConversationRepository,
   HumanRepository,
   MessageRepository,
+  NoteRepository,
   TaskRepository
 } from '.';
 
@@ -127,5 +128,19 @@ export function mockApprovalRepository(): jest.Mocked<ApprovalRepository> {
     listExecutedAwaitingWake: jest.fn().mockResolvedValue([]),
     markExecuted: jest.fn().mockResolvedValue(true),
     saveResult: jest.fn()
+  };
+}
+
+export function mockNoteRepository(): jest.Mocked<NoteRepository> {
+  return {
+    create: jest.fn(),
+    getById: jest.fn().mockResolvedValue(null),
+    list: jest.fn().mockResolvedValue([]),
+    update: jest.fn(),
+    softDelete: jest.fn().mockResolvedValue(true),
+    addDocument: jest.fn(),
+    listDocuments: jest.fn().mockResolvedValue([]),
+    getDocument: jest.fn().mockResolvedValue(null),
+    deleteDocument: jest.fn().mockResolvedValue(true)
   };
 }
