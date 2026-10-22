@@ -16,14 +16,27 @@ This repo builds the Collaborative Agents platform. The Notion project hub is th
 - [PRD](https://app.notion.com/p/4011a83d088f81918f3ff1d468dc962e): the product, agreed behavior, MVP scope, and open decisions.
 - [Project Backlog](https://app.notion.com/p/4bf42f543b0741fda0c67e6302aafd0a): the tickets, with acceptance criteria and dependencies.
 - [PRD-to-Backlog Coverage](https://app.notion.com/p/4011a83d088f81db842bf362b817b26d): which ticket covers each PRD requirement.
+- [Questions for Kayvan](https://app.notion.com/p/d3fc8fa27ec04f2dad936ea6eaeccb03): decisions and questions waiting on a human.
+- [Architecture](https://app.notion.com/p/4011a83d088f815ba963fc1b87e5459d): the system design and diagrams, linked from the Project Hub.
 
-How to use it:
+If the code and Notion disagree on product behavior, Notion wins. Raise the conflict; don't guess.
 
-- Read the ticket and the parts of the PRD it covers before you start. If the code and Notion disagree on product behavior, Notion wins. Raise the conflict; don't guess.
-- Work from a ticket. Move it to `In Progress` when you start and `Done` only when its acceptance criteria are met and `npm run check` passes.
-- Don't decide an open decision on your own. Write up the options in the ticket and ask a human.
-- Put design notes, diagrams, and decision records in Notion under the Project Hub, and link them from the ticket. Keep repo docs (`docs/`) about how the code works.
-- If the PRD changes, update the affected tickets and the coverage page.
+## Ticket workflow
+
+Every change starts from a ticket in the Project Backlog and ends with the ticket updated. Follow these steps every time.
+
+1. **Pick a ticket.** Choose the highest-priority ticket whose `Blocked By` tickets are done, or that can go ahead on a recorded default (step 3). Read the ticket and the PRD sections it covers.
+2. **Start it.** Set `Status` to `In Progress`, and set `Branch`. Name the branch `ca-<ticket number>-<short-name>`, like `ca-7-persistence`.
+3. **Don't block on a human.** If you need a decision, add a row to Questions for Kayvan. Give the options, your recommendation, and the default you will use until it is answered. Link the row to the ticket and tick `Needs Input` on the ticket. Then keep working on that default. Pick a default that is easy to change later. Never pick one that is hard to undo, like deleting data or spending money. Before starting a ticket, check Questions for Kayvan for answers and apply them. Set an applied answer's `Status` to `Applied`.
+4. **Open a PR.** Use one PR per ticket, or several small PRs for a big ticket. Put the ticket ID and title in the PR title, like `CA-7: Persist tasks, messages, and agent context`. In the PR body, link the ticket, list which acceptance criteria the PR meets, and list any that are still open. `npm run check` must pass.
+5. **Review it.** Read the whole diff as a reviewer would: check correctness, the layer rules in this file, tests, and docs. Fix what you find, then post a short summary of the review on the PR.
+6. **Merge it.** Squash-merge once checks pass, then delete the branch.
+7. **Update the ticket.** Set `PR` to the PR link and write one line in `Last Update`. Add a `## Work log` entry to the ticket page with the date, the PR link, what was built, the decisions made and why, and what is left. Set `Status` to `Done` only when every acceptance criterion is met. If some are left, keep it `In Progress`, or set `Blocked` and give the reason.
+8. **Keep Notion current.** If the design changed, update the Architecture page. If you found new work, add a ticket with acceptance criteria, `Priority`, `Scope`, and `Blocked By`.
+
+Backlog fields: `Ticket ID` (CA-n), `Status` (Backlog, Blocked, In Progress, In Review, Done), `Priority`, `Scope`, `Blocked By` and `Blocks`, `Branch`, `PR`, `Needs Input`, `Last Update`, and `Questions`, which links to rows in Questions for Kayvan.
+
+Put design notes, diagrams, and decision records in Notion under the Project Hub, and link them from the ticket. Keep repo docs (`docs/`) about how the code works. If the PRD changes, update the affected tickets and the coverage page.
 
 ## Commands
 
@@ -35,6 +48,8 @@ npm run typecheck
 npm run build          # compiles src/ to dist/
 npm test               # no database needed
 npm run check          # lint + typecheck + build + test
+npm run db:up          # start local Postgres (Docker)
+npm run db:migrate     # apply new db/schema/ files
 ```
 
 Run `npm run check` before you finish any change. Never call work done while it fails.
@@ -70,7 +85,7 @@ Put new code in the folder for its layer, then in a folder for its feature. The 
 - **Don't catch errors in handlers** just to build an error response. The error handler in `src/app.ts` does that.
 - **Responses use the helpers** in `src/shared/response.ts`: `success(data)` for one thing, `paged(items, { limit, offset, total })` for lists. Creates return `201`. If you change the response shape, update `docs/responses.md`.
 - **Services log through their feature's logger**, passed in the constructor. Add one method per event. Event names are lowercase with dots, feature first (`item.created`). Method names look like `onItemCreated`.
-- **SQL uses parameters** (`$1`, `$2`), never values pasted into the query string. Tables live in the Postgres schema from `db/schema/000_schema.sql`. Each new table gets a new numbered file in `db/schema/`.
+- **SQL uses parameters** (`$1`, `$2`), never values pasted into the query string. Tables live in the Postgres schema from `db/schema/000_schema.sql`. Each new table or change gets a new numbered file in `db/schema/`. Never edit a file that has been merged; `npm run db:migrate` runs each file once.
 - **Every environment variable** goes in the Zod schema in `src/config.ts`, in the table in `README.md`, and in `.env.example`. Read settings only from the exported `config` object.
 - **Import from the layer's root `index.ts`**, like `from '../../data'`, not from a feature folder inside it. Every feature folder has an `index.ts`, and the layer's root `index.ts` re-exports it.
 - **Tests sit next to the file they test** and end in `.test.ts`. Service tests mock repositories and integrations with `jest.fn()`. Route tests use `app.inject`. Tests never need a database.

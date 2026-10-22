@@ -1,0 +1,15 @@
+# Local Postgres for development. Start it with `npm run db:up`.
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: bold_cedar_007
+      POSTGRES_PASSWORD: bold_cedar_007
+      POSTGRES_DB: bold_cedar_007
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:

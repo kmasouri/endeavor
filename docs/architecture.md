@@ -246,7 +246,7 @@ The app uses Postgres through `@fastify/postgres`. It only connects when the fir
 
 If `DATABASE_URL` is set, the app uses it and ignores `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD`.
 
-Table definitions are SQL files in `db/schema/`. `000_schema.sql` creates the Postgres schema, and the other files create the tables in it. Run them in filename order. Running them again is safe, because each one uses `IF NOT EXISTS`.
+Table definitions are SQL files in `db/schema/`. `000_schema.sql` creates the Postgres schema, and the other files create the tables in it. `npm run db:migrate` (`src/migrate.ts`) runs them in filename order, each in its own transaction, and records each one in `schema_migrations` so it runs only once. To change a table, add a new file; never edit one that has been merged.
 
 ## Tests
 
