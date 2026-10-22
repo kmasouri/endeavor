@@ -24,12 +24,15 @@ cp .env.example .env
 npm run dev
 ```
 
-The `.env` file is only read when `ENVIRONMENT=local`. Point it at any Postgres database, then create the tables:
+The `.env` file is only read when `ENVIRONMENT=local`. `.env.example` points at the local Postgres from `docker-compose.yml`. Start it and create the tables:
 
 ```bash
-psql "$DATABASE_URL" -f db/schema/000_schema.sql
-psql "$DATABASE_URL" -f db/schema/001_items.sql
+npm run db:up          # starts Postgres in Docker on localhost:5432
+npm run db:migrate     # applies new files in db/schema/, in filename order
+npm run db:down        # stops it; the data stays in a Docker volume
 ```
+
+`db:migrate` records each file it applies in `schema_migrations`, so each file runs once. In the Docker image, run `node dist/migrate.js`.
 
 The service listens on `http://localhost:3000` by default. Swagger UI is at `http://localhost:3000/docs`.
 
@@ -62,6 +65,8 @@ npm run build          # compiles to dist/
 npm run lint
 npm run format
 npm run check          # lint + typecheck + build + test (CI runs this)
+npm run db:up          # start local Postgres
+npm run db:migrate     # apply db/schema/ files
 ```
 
 ## Docker
