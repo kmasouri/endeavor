@@ -185,10 +185,21 @@ export class AgentService {
     input: { limit: number; offset: number }
   ): Promise<{ entries: DirectoryEntry[]; total: number }> {
     requireHuman(await this.humanRepository.getById(actorId));
-    const { agents, total } = await this.listAgents({ ...input, includeDisabled: false });
-    const entries = agents.flatMap((agent): DirectoryEntry[] =>
-      agent.currentVersion ? [toDirectoryEntry(agent, agent.currentVersion)] : []
+    const [agents, total] = await Promise.all([
+      this.agentRepository.listDirectory({ excludeIds: [], ...input }),
+      this.agentRepository.countDirectory({ excludeIds: [] })
+    ]);
+    const versions = new Map(
+      (
+        await this.agentRepository.getVersions(
+          agents.map((agent) => agent.currentVersionId as string)
+        )
+      ).map((version) => [version.id, version])
     );
+    const entries = agents.flatMap((agent): DirectoryEntry[] => {
+      const version = versions.get(agent.currentVersionId as string);
+      return version ? [toDirectoryEntry(agent, version)] : [];
+    });
     return { entries, total };
   }
 

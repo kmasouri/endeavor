@@ -54,7 +54,7 @@ export function buildTaskPrompt(input: {
     for (const participant of input.participants) {
       const kind = participant.type === 'agent' ? 'agent' : 'person';
       lines.push(
-        `- ${participant.name} (${kind})${participant.purpose ? `: ${participant.purpose}` : ''}`
+        `- ${oneLine(participant.name)} (${kind})${participant.purpose ? `: ${oneLine(participant.purpose)}` : ''}`
       );
     }
   }
@@ -66,7 +66,7 @@ export function buildTaskPrompt(input: {
       'If one of these could help, use suggest_participant. A person decides whether to add them.'
     );
     for (const entry of input.directory) {
-      lines.push(`- ${entry.name}: ${entry.purpose}`);
+      lines.push(`- ${oneLine(entry.name)}: ${oneLine(entry.purpose)}`);
     }
   }
 
@@ -78,6 +78,12 @@ export function buildTaskPrompt(input: {
   }
 
   return lines.join('\n');
+}
+
+// Names and purposes are written by people and shown inside the prompt. Keep each on one line,
+// so text like a heading can't pose as a section of the prompt.
+export function oneLine(text: string): string {
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 export function formatMessage(message: Message, authorName: string): string {

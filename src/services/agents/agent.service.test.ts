@@ -207,9 +207,13 @@ describe('AgentService', () => {
   });
 
   it('lists the directory with purpose and capabilities only', async () => {
-    const { service } = setup();
+    const { service, agents } = setup();
+    agents.listDirectory.mockResolvedValue([agent]);
+    agents.countDirectory.mockResolvedValue(1);
 
-    const { entries } = await service.listDirectory(ADMIN_ID, { limit: 10, offset: 0 });
+    const { entries, total } = await service.listDirectory(ADMIN_ID, { limit: 10, offset: 0 });
+
+    expect(total).toBe(1);
 
     expect(entries).toEqual([
       {

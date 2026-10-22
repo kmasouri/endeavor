@@ -30,6 +30,13 @@ export class TaskRunnerLogger {
     );
   }
 
+  onParticipantSuggested(taskId: string, suggestedAgentId: string): void {
+    currentLogger(this.logger).info(
+      { event: 'runner.participant.suggested', taskId, suggestedAgentId },
+      'agent suggested adding a participant'
+    );
+  }
+
   onModelTurn(
     taskId: string,
     provider: string,

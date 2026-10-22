@@ -32,6 +32,9 @@ export interface AgentRepository {
   getByName(name: string): Promise<Agent | null>;
   list(input: { limit: number; offset: number; includeDisabled: boolean }): Promise<Agent[]>;
   count(input: { includeDisabled: boolean }): Promise<number>;
+  // The directory: enabled agents with a configuration, minus excludeIds, by name.
+  listDirectory(input: { excludeIds: string[]; limit: number; offset: number }): Promise<Agent[]>;
+  countDirectory(input: { excludeIds: string[] }): Promise<number>;
   update(agentId: string, changes: { name?: string; purpose?: string }): Promise<Agent | null>;
   setDisabled(agentId: string, disabled: boolean): Promise<Agent | null>;
 
