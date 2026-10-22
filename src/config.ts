@@ -40,7 +40,9 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((value) => value !== 'false'),
-  RUNNER_INTERVAL_MS: z.coerce.number().int().min(100).default(2000)
+  RUNNER_INTERVAL_MS: z.coerce.number().int().min(100).default(2000),
+  // 32 random bytes, as base64 or hex. Encrypts connection credentials at rest.
+  CREDENTIALS_KEY: z.string().min(1).optional()
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -69,7 +71,8 @@ export const config = {
   OPENAI_BASE_URL: env.OPENAI_BASE_URL,
   // Never runs in tests, so they need no database.
   RUNNER_ENABLED: env.RUNNER_ENABLED && env.ENVIRONMENT !== 'test',
-  RUNNER_INTERVAL_MS: env.RUNNER_INTERVAL_MS
+  RUNNER_INTERVAL_MS: env.RUNNER_INTERVAL_MS,
+  CREDENTIALS_KEY: env.CREDENTIALS_KEY
 };
 
 function getDatabaseConfig(env: Env) {

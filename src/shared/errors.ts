@@ -8,7 +8,7 @@ interface ErrorDefinition {
 // The key is the error's name in responses. docs/errors.md documents each one.
 //
 // Codes are grouped by feature: 10xxx general, 20xxx items, 30xxx people and access, 40xxx tasks,
-// 50xxx agents, 60xxx conversations.
+// 50xxx agents, 60xxx conversations, 70xxx catalogs.
 // Never change or reuse a code once it has shipped; clients may depend on it.
 export const ERRORS = {
   // 10xxx: general
@@ -85,6 +85,26 @@ export const ERRORS = {
     code: 60006,
     statusCode: 422,
     message: 'That agent is not in the directory outside this conversation'
+  },
+
+  // 70xxx: catalogs (skills, connections, grants)
+  skillNotFound: { code: 70001, statusCode: 404, message: 'Skill not found' },
+  connectionNotFound: { code: 70002, statusCode: 404, message: 'Connection not found' },
+  catalogNameTaken: { code: 70003, statusCode: 409, message: 'This name is already used' },
+  catalogEntryUnavailable: {
+    code: 70004,
+    statusCode: 409,
+    message: 'The skill or connection is disabled or has no saved version'
+  },
+  credentialsKeyMissing: {
+    code: 70005,
+    statusCode: 409,
+    message: 'CREDENTIALS_KEY is not set, so credentials cannot be stored'
+  },
+  toolAccessDenied: {
+    code: 70006,
+    statusCode: 403,
+    message: 'The agent is not allowed to make this call'
   }
 } as const satisfies Record<string, ErrorDefinition>;
 

@@ -1,0 +1,251 @@
+import { FastifyInstance } from 'fastify';
+import {
+  addSkillVersionHandler,
+  createConnectionHandler,
+  createSkillHandler,
+  disableConnectionHandler,
+  disableSkillHandler,
+  enableConnectionHandler,
+  enableSkillHandler,
+  getConnectionHandler,
+  getSkillHandler,
+  grantHandler,
+  listConnectionsHandler,
+  listGrantsHandler,
+  listSkillsHandler,
+  listSkillVersionsHandler,
+  revokeHandler,
+  updateConnectionHandler
+} from '../../handlers';
+import {
+  actorHeadersSchema,
+  addSkillVersionBodySchema,
+  connectionParamsSchema,
+  createConnectionBodySchema,
+  createSkillBodySchema,
+  grantBodySchema,
+  grantParamsSchema,
+  listCatalogQuerySchema,
+  listGrantsQuerySchema,
+  revokeParamsSchema,
+  skillParamsSchema,
+  updateConnectionBodySchema
+} from '../../schemas';
+
+const tags = ['catalogs'];
+const headers = actorHeadersSchema;
+
+export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<void> {
+  fastifyInstance.post(
+    '/skills',
+    {
+      schema: {
+        description:
+          'Add a skill to the shared catalog, with version 1. This gives no agent access. Admins only.',
+        tags,
+        headers,
+        body: createSkillBodySchema
+      }
+    },
+    createSkillHandler
+  );
+
+  fastifyInstance.get(
+    '/skills',
+    {
+      schema: {
+        description: 'List skills by name, with their current version.',
+        tags,
+        querystring: listCatalogQuerySchema
+      }
+    },
+    listSkillsHandler
+  );
+
+  fastifyInstance.get(
+    '/skills/:skillId',
+    {
+      schema: {
+        description: 'Get a skill with its current version.',
+        tags,
+        params: skillParamsSchema
+      }
+    },
+    getSkillHandler
+  );
+
+  fastifyInstance.get(
+    '/skills/:skillId/versions',
+    {
+      schema: {
+        description: 'Every version of a skill, newest first.',
+        tags,
+        params: skillParamsSchema
+      }
+    },
+    listSkillVersionsHandler
+  );
+
+  fastifyInstance.post(
+    '/skills/:skillId/versions',
+    {
+      schema: {
+        description:
+          'Save a new version of a skill. Agent configurations saved before keep the version they pinned. Admins only.',
+        tags,
+        headers,
+        params: skillParamsSchema,
+        body: addSkillVersionBodySchema
+      }
+    },
+    addSkillVersionHandler
+  );
+
+  fastifyInstance.post(
+    '/skills/:skillId/disable',
+    {
+      schema: {
+        description:
+          'Disable a skill. Agents stop getting its instructions on their next run. Admins only.',
+        tags,
+        headers,
+        params: skillParamsSchema
+      }
+    },
+    disableSkillHandler
+  );
+
+  fastifyInstance.post(
+    '/skills/:skillId/enable',
+    {
+      schema: {
+        description: 'Enable a disabled skill. Admins only.',
+        tags,
+        headers,
+        params: skillParamsSchema
+      }
+    },
+    enableSkillHandler
+  );
+
+  fastifyInstance.post(
+    '/connections',
+    {
+      schema: {
+        description:
+          'Add a connection to an HTTP API. The credential is stored encrypted and never returned. Admins only.',
+        tags,
+        headers,
+        body: createConnectionBodySchema
+      }
+    },
+    createConnectionHandler
+  );
+
+  fastifyInstance.get(
+    '/connections',
+    {
+      schema: {
+        description: 'List connections by name. Credentials are never included.',
+        tags,
+        querystring: listCatalogQuerySchema
+      }
+    },
+    listConnectionsHandler
+  );
+
+  fastifyInstance.get(
+    '/connections/:connectionId',
+    {
+      schema: {
+        description: 'Get a connection. hasCredential says whether one is stored.',
+        tags,
+        params: connectionParamsSchema
+      }
+    },
+    getConnectionHandler
+  );
+
+  fastifyInstance.patch(
+    '/connections/:connectionId',
+    {
+      schema: {
+        description:
+          'Change a connection. Applies on the next tool call. Send credential: null to remove it. Admins only.',
+        tags,
+        headers,
+        params: connectionParamsSchema,
+        body: updateConnectionBodySchema
+      }
+    },
+    updateConnectionHandler
+  );
+
+  fastifyInstance.post(
+    '/connections/:connectionId/disable',
+    {
+      schema: {
+        description:
+          'Disable a connection. Every call through it is refused from now on. Admins only.',
+        tags,
+        headers,
+        params: connectionParamsSchema
+      }
+    },
+    disableConnectionHandler
+  );
+
+  fastifyInstance.post(
+    '/connections/:connectionId/enable',
+    {
+      schema: {
+        description: 'Enable a disabled connection. Admins only.',
+        tags,
+        headers,
+        params: connectionParamsSchema
+      }
+    },
+    enableConnectionHandler
+  );
+
+  fastifyInstance.get(
+    '/agents/:agentId/grants',
+    {
+      schema: {
+        description: "An agent's grants to skills and connections.",
+        tags,
+        params: grantParamsSchema,
+        querystring: listGrantsQuerySchema
+      }
+    },
+    listGrantsHandler
+  );
+
+  fastifyInstance.post(
+    '/agents/:agentId/grants',
+    {
+      schema: {
+        description: 'Let an agent use a skill or connection. Admins only.',
+        tags,
+        headers,
+        params: grantParamsSchema,
+        body: grantBodySchema
+      }
+    },
+    grantHandler
+  );
+
+  fastifyInstance.delete(
+    '/agents/:agentId/grants/:type/:targetId',
+    {
+      schema: {
+        description:
+          "Revoke a grant. Applies on the agent's next tool call, even in tasks on older configuration versions. Admins only.",
+        tags,
+        headers,
+        params: revokeParamsSchema
+      }
+    },
+    revokeHandler
+  );
+}

@@ -13,7 +13,7 @@ Every error response has a `code` and a `name` from this list. Clients should ch
 }
 ```
 
-Codes are grouped by feature: `10xxx` general, `20xxx` items, `30xxx` people and access, `40xxx` tasks, `50xxx` agents, `60xxx` conversations. A code never changes or gets reused once it ships.
+Codes are grouped by feature: `10xxx` general, `20xxx` items, `30xxx` people and access, `40xxx` tasks, `50xxx` agents, `60xxx` conversations, `70xxx` catalogs. A code never changes or gets reused once it ships.
 
 The list lives in `src/shared/errors.ts`. When you add an error there, add it here too. A test fails if this page is missing one.
 
@@ -70,3 +70,14 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 | 60004 | `messageNotFound`        | 404  | The message being replied to isn't in this conversation.                 | Check `inReplyToMessageId`.                                    |
 | 60005 | `participantNotFound`    | 404  | The person or agent being added doesn't exist.                           | Check the ID against `GET /humans` or `GET /agents`.           |
 | 60006 | `suggestionNotAvailable` | 422  | An agent suggested an agent that isn't in the directory, or is disabled. | The agent sees this as a tool error and can pick another name. |
+
+## Catalogs (70xxx)
+
+| Code  | Name                      | HTTP | What it means                                                                              | How to fix it                                                                   |
+| ----- | ------------------------- | ---- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
+| 70001 | `skillNotFound`           | 404  | No skill has this ID.                                                                      | Check the ID against `GET /skills`.                                             |
+| 70002 | `connectionNotFound`      | 404  | No connection has this ID.                                                                 | Check the ID against `GET /connections`.                                        |
+| 70003 | `catalogNameTaken`        | 409  | Another skill or connection already has this name. Names ignore case.                      | Pick a different name.                                                          |
+| 70004 | `catalogEntryUnavailable` | 409  | The skill or connection is disabled, or the skill has no version.                          | Enable it, or choose another.                                                   |
+| 70005 | `credentialsKeyMissing`   | 409  | A credential was sent, but `CREDENTIALS_KEY` isn't set, so it can't be stored safely.      | Set `CREDENTIALS_KEY` to 32 random bytes (base64 or hex) and restart.           |
+| 70006 | `toolAccessDenied`        | 403  | An agent's tool call was refused: no active grant, or a method or path that isn't allowed. | Agents see this as a tool error. Grant access, or widen the connection's rules. |

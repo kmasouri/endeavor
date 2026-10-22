@@ -1,27 +1,36 @@
 import {
   AgentRepository,
+  CatalogRepository,
   ConversationRepository,
   HumanRepository,
   MessageRepository,
   TaskRepository
 } from '../../data';
 import {
+  ConnectionClient,
   ModelClient,
   ModelClientError,
   ModelToolCall,
+  ModelToolDefinition,
   ModelToolResult,
   ModelTranscriptEntry
 } from '../../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../../observability';
 import { addressedAgentIds } from '../../shared/addressing';
+import { connectionCallDenied } from '../../shared/connection-access';
 import { AppError } from '../../shared/errors';
 import {
   Actor,
   Agent,
   AgentVersion,
+  Connection,
+  HTTP_METHODS,
+  HttpMethod,
   Message,
   ModelProvider,
   ParticipantRef,
+  Skill,
+  SkillVersion,
   Task,
   TaskEvent
 } from '../../shared/types';
@@ -33,7 +42,12 @@ import {
   formatMessage,
   oneLine
 } from './agent-context';
-import { AGENT_TOOL_DEFINITIONS, AGENT_TOOLS, STOPPING_TOOLS } from './agent-tools';
+import {
+  AGENT_TOOL_DEFINITIONS,
+  AGENT_TOOLS,
+  HTTP_REQUEST_TOOL,
+  STOPPING_TOOLS
+} from './agent-tools';
 import { TaskLifecycle } from './task-lifecycle';
 
 export interface TaskRunnerOptions {
@@ -81,6 +95,8 @@ const EVENTS = {
   messageReceived: 'message.received',
   nudge: 'runner.nudge',
   participantSuggested: 'participant.suggested',
+  connectionCall: 'connection.called',
+  connectionDenied: 'connection.denied',
   resultPosted: 'result.posted'
 } as const;
 
@@ -96,6 +112,8 @@ export class TaskRunnerService {
     private readonly conversationRepository: ConversationRepository,
     private readonly agentRepository: AgentRepository,
     private readonly humanRepository: HumanRepository,
+    private readonly catalogRepository: CatalogRepository,
+    private readonly connectionClient: ConnectionClient,
     private readonly modelClients: Partial<Record<ModelProvider, ModelClient>>,
     taskLogger: TaskLogger,
     private readonly runnerLogger: TaskRunnerLogger,
@@ -285,7 +303,14 @@ export class TaskRunnerService {
       return 0;
     }
 
-    const system = buildSystemPrompt(agent, version);
+    // Only skills and connections that are still granted and enabled. A revoke takes effect on
+    // the next claim for instructions, and on the very next call for http_request.
+    const { skills, connections } = await this.usableCatalog(agent.id, version);
+    const system = buildSystemPrompt(agent, version, { skills, connections });
+    const tools =
+      connections.length > 0
+        ? [...AGENT_TOOL_DEFINITIONS, HTTP_REQUEST_TOOL]
+        : AGENT_TOOL_DEFINITIONS;
     const prompt = await this.buildPrompt(claimed, agent);
 
     for (let turn = 0; turn < this.options.turnsPerClaim; turn++) {
@@ -343,6 +368,7 @@ export class TaskRunnerService {
         task,
         agent,
         version,
+        tools,
         client,
         system,
         transcript,
@@ -360,6 +386,7 @@ export class TaskRunnerService {
     task: Task,
     agent: Agent,
     version: AgentVersion,
+    tools: ModelToolDefinition[],
     client: ModelClient,
     system: string,
     transcript: ModelTranscriptEntry[],
@@ -380,7 +407,7 @@ export class TaskRunnerService {
         model: version.model,
         system,
         transcript,
-        tools: AGENT_TOOL_DEFINITIONS,
+        tools,
         maxTokens: this.options.maxTokens
       });
       clearInterval(heartbeat);
@@ -587,9 +614,117 @@ export class TaskRunnerService {
         return `Suggested ${suggested.name} to the people here. A person decides whether to add them.`;
       }
 
+      case AGENT_TOOLS.httpRequest: {
+        return this.httpRequest(task, agent, call.id, input);
+      }
+
       default:
         throw new AppError('validationError', `Unknown tool ${call.name}.`);
     }
+  }
+
+  // Every call is checked now, not when the task started: the connection must be chosen in the
+  // task's configuration (directly or through a chosen skill), still granted, enabled, and allow
+  // the method and path.
+  private async httpRequest(
+    task: Task,
+    agent: Agent,
+    callId: string,
+    input: Record<string, unknown>
+  ): Promise<string> {
+    const name = requireString(input, 'connection');
+    const method = requireString(input, 'method').toUpperCase() as HttpMethod;
+    const path = requireString(input, 'path');
+    if (!HTTP_METHODS.includes(method)) {
+      throw new AppError('validationError', `Unknown method ${method}.`);
+    }
+    const version = await this.agentRepository.getVersion(task.agentVersionId);
+    const usable = version ? (await this.usableCatalog(agent.id, version)).connections : [];
+    const connection = usable.find((c) => c.name.toLowerCase() === name.trim().toLowerCase());
+    const denied = connection
+      ? connectionCallDenied(connection, method, path)
+      : `You can't use a connection named "${name}". Usable: ${usable.map((c) => c.name).join(', ') || 'none'}.`;
+    if (denied) {
+      // Refused calls are recorded too, so admins can see attempts outside the rules.
+      await this.taskRepository.addEvent(
+        task.id,
+        EVENTS.connectionDenied,
+        { type: 'agent', id: agent.id },
+        {
+          callId,
+          connection: name,
+          method,
+          path,
+          reason: denied
+        }
+      );
+      this.runnerLogger.onConnectionDenied(task.id, name, method, path, denied);
+      throw new AppError('toolAccessDenied', denied);
+    }
+    if (!connection) {
+      throw new AppError('toolAccessDenied', `You can't use a connection named "${name}".`);
+    }
+
+    const credential = await this.catalogRepository.getConnectionCredential(connection.id);
+    const response = await this.connectionClient
+      .request({
+        baseUrl: connection.baseUrl,
+        method,
+        path,
+        headers: credential ? { [connection.authHeader]: credential } : {},
+        body: typeof input.body === 'string' ? input.body : null
+      })
+      .catch((error: Error) => {
+        throw new AppError('validationError', `The call failed: ${error.message}`);
+      });
+    // The response body isn't stored in the event; it is in the tool result.
+    await this.taskRepository.addEvent(
+      task.id,
+      EVENTS.connectionCall,
+      { type: 'agent', id: agent.id },
+      {
+        callId,
+        connectionId: connection.id,
+        method,
+        path,
+        status: response.status
+      }
+    );
+    return `HTTP ${response.status}${response.truncated ? ' (cut off at 20,000 characters)' : ''}\n${response.body}`;
+  }
+
+  // What the agent may use right now: skills chosen in the version that are still granted and
+  // enabled, and connections chosen directly or through those skills that are still granted and
+  // enabled. Grants are read fresh each time, so a revoke applies at once.
+  private async usableCatalog(
+    agentId: string,
+    version: AgentVersion
+  ): Promise<{ skills: { skill: Skill; version: SkillVersion }[]; connections: Connection[] }> {
+    const [skillVersions, grants] = await Promise.all([
+      this.catalogRepository.getSkillVersions(version.skillVersionIds),
+      this.catalogRepository.listGrants(agentId, { activeOnly: true })
+    ]);
+    const granted = (type: 'skill' | 'connection') =>
+      new Set(grants.filter((grant) => grant.targetType === type).map((grant) => grant.targetId));
+    const grantedSkills = granted('skill');
+    const grantedConnections = granted('connection');
+
+    const skillRows = await this.catalogRepository.getSkills(skillVersions.map((sv) => sv.skillId));
+    const skills = skillVersions.flatMap((skillVersion) => {
+      const skill = skillRows.find((row) => row.id === skillVersion.skillId);
+      return skill && !skill.disabledAt && grantedSkills.has(skill.id)
+        ? [{ skill, version: skillVersion }]
+        : [];
+    });
+
+    const wanted = new Set([
+      ...version.connectionIds,
+      ...skills.flatMap(({ version: skillVersion }) => skillVersion.connectionIds)
+    ]);
+    const connections = (await this.catalogRepository.getConnections([...wanted])).filter(
+      (connection) => grantedConnections.has(connection.id) && !connection.disabledAt
+    );
+    return { skills, connections };
   }
 
   // Posts the result or reason in reply to the message that asked for the work.

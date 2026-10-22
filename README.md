@@ -39,25 +39,26 @@ The service listens on `http://localhost:3000` by default. Swagger UI is at `htt
 
 The app checks all of these at startup, in `src/config.ts`.
 
-| Name                 | Default                     | Description                                                                         |
-| -------------------- | --------------------------- | ----------------------------------------------------------------------------------- |
-| `ENVIRONMENT`        | `production`                | Where the app runs. `local` reads `.env`. Tests use `test`.                         |
-| `HOST`               | `0.0.0.0`                   | Address the server listens on.                                                      |
-| `PORT`               | `3000`                      | Port the server listens on.                                                         |
-| `DATABASE_URL`       |                             | Full Postgres connection URL. If set, the other `DATABASE_*` are ignored.           |
-| `DATABASE_HOST`      | `localhost`                 | Postgres host, if `DATABASE_URL` isn't set.                                         |
-| `DATABASE_PORT`      | `5432`                      | Postgres port, if `DATABASE_URL` isn't set.                                         |
-| `DATABASE_NAME`      | `bold_cedar_007`            | Database name, if `DATABASE_URL` isn't set.                                         |
-| `DATABASE_USER`      | `bold_cedar_007`            | Username, if `DATABASE_URL` isn't set.                                              |
-| `DATABASE_PASSWORD`  | `bold_cedar_007`            | Password, if `DATABASE_URL` isn't set.                                              |
-| `LOGGER_LEVEL`       | `info`                      | How much to log. Tests use `silent`.                                                |
-| `REQUEST_ID_HEADER`  | `x-request-id`              | Header that carries the request ID, in and out.                                     |
-| `WEBHOOK_URL`        |                             | Where to send events like `item.created`. If not set, webhooks are off.             |
-| `ANTHROPIC_API_KEY`  |                             | Turns on the `anthropic` provider for agents.                                       |
-| `OPENAI_API_KEY`     |                             | Turns on the `openai` provider for agents.                                          |
-| `OPENAI_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible API address.                                                      |
-| `RUNNER_ENABLED`     | `true`                      | Run the runner, which delivers messages and runs agents' work. Always off in tests. |
-| `RUNNER_INTERVAL_MS` | `2000`                      | How often the runner checks for work, in milliseconds.                              |
+| Name                 | Default                     | Description                                                                                       |
+| -------------------- | --------------------------- | ------------------------------------------------------------------------------------------------- |
+| `ENVIRONMENT`        | `production`                | Where the app runs. `local` reads `.env`. Tests use `test`.                                       |
+| `HOST`               | `0.0.0.0`                   | Address the server listens on.                                                                    |
+| `PORT`               | `3000`                      | Port the server listens on.                                                                       |
+| `DATABASE_URL`       |                             | Full Postgres connection URL. If set, the other `DATABASE_*` are ignored.                         |
+| `DATABASE_HOST`      | `localhost`                 | Postgres host, if `DATABASE_URL` isn't set.                                                       |
+| `DATABASE_PORT`      | `5432`                      | Postgres port, if `DATABASE_URL` isn't set.                                                       |
+| `DATABASE_NAME`      | `bold_cedar_007`            | Database name, if `DATABASE_URL` isn't set.                                                       |
+| `DATABASE_USER`      | `bold_cedar_007`            | Username, if `DATABASE_URL` isn't set.                                                            |
+| `DATABASE_PASSWORD`  | `bold_cedar_007`            | Password, if `DATABASE_URL` isn't set.                                                            |
+| `LOGGER_LEVEL`       | `info`                      | How much to log. Tests use `silent`.                                                              |
+| `REQUEST_ID_HEADER`  | `x-request-id`              | Header that carries the request ID, in and out.                                                   |
+| `WEBHOOK_URL`        |                             | Where to send events like `item.created`. If not set, webhooks are off.                           |
+| `ANTHROPIC_API_KEY`  |                             | Turns on the `anthropic` provider for agents.                                                     |
+| `OPENAI_API_KEY`     |                             | Turns on the `openai` provider for agents.                                                        |
+| `OPENAI_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible API address.                                                                    |
+| `RUNNER_ENABLED`     | `true`                      | Run the runner, which delivers messages and runs agents' work. Always off in tests.               |
+| `RUNNER_INTERVAL_MS` | `2000`                      | How often the runner checks for work, in milliseconds.                                            |
+| `CREDENTIALS_KEY`    |                             | 32 random bytes (base64 or hex) that encrypt connection credentials. Needed to save a credential. |
 
 ## Commands
 
@@ -88,6 +89,9 @@ Requests that act as a person send that person's ID in the `x-actor-id` header. 
 - `GET /docs`
 - `POST /humans`, `GET /humans`
 - `GET /providers`, `GET /directory`
+- `POST /skills`, `GET /skills`, `GET /skills/:skillId`, `POST /skills/:skillId/versions`, `/disable`, `/enable`
+- `POST /connections`, `GET /connections`, `PATCH /connections/:connectionId`, `/disable`, `/enable`
+- `GET /agents/:agentId/grants`, `POST /agents/:agentId/grants`, `DELETE /agents/:agentId/grants/:type/:targetId`
 - `POST /agents`, `GET /agents`, `GET /agents/:agentId`, `PATCH /agents/:agentId`
 - `POST /agents/:agentId/config`, `GET /agents/:agentId/versions`, `POST /agents/:agentId/disable`, `/enable`
 - `POST /conversations`, `GET /conversations`, `GET /conversations/:conversationId`

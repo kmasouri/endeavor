@@ -8,7 +8,8 @@ export const AGENT_TOOLS = {
   saveOutput: 'save_output',
   completeTask: 'complete_task',
   reportBlocked: 'report_blocked',
-  suggestParticipant: 'suggest_participant'
+  suggestParticipant: 'suggest_participant',
+  httpRequest: 'http_request'
 } as const;
 
 export type AgentToolName = (typeof AGENT_TOOLS)[keyof typeof AGENT_TOOLS];
@@ -114,6 +115,27 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
     }
   }
 ];
+
+// Offered only to agents with at least one usable connection.
+export const HTTP_REQUEST_TOOL: ModelToolDefinition = {
+  name: AGENT_TOOLS.httpRequest,
+  description:
+    'Call an outside API through one of your connections. The platform adds the credentials and checks the method and path. Responses longer than 20,000 characters are cut off.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      connection: { type: 'string', description: 'The connection name.' },
+      method: { type: 'string', enum: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] },
+      path: {
+        type: 'string',
+        description: 'Path on the connection, starting with "/". May include a query string.'
+      },
+      body: { type: 'string', description: 'Request body, usually JSON.' }
+    },
+    required: ['connection', 'method', 'path'],
+    additionalProperties: false
+  }
+};
 
 // The tools that end the runner's work on a task for now: the task completes, waits, or is
 // blocked.

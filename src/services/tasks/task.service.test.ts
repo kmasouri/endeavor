@@ -297,7 +297,7 @@ describe('TaskService', () => {
       instructions: 'New',
       provider: 'scripted' as const,
       model: 'm',
-      skillIds: [],
+      skillVersionIds: [],
       connectionIds: [],
       createdByHumanId: HUMAN_ID,
       createdAt: new Date()

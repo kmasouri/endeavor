@@ -37,6 +37,19 @@ export class TaskRunnerLogger {
     );
   }
 
+  onConnectionDenied(
+    taskId: string,
+    connection: string,
+    method: string,
+    path: string,
+    reason: string
+  ): void {
+    currentLogger(this.logger).warn(
+      { event: 'runner.connection.denied', taskId, connection, method, path, reason },
+      'connection call refused'
+    );
+  }
+
   onModelTurn(
     taskId: string,
     provider: string,

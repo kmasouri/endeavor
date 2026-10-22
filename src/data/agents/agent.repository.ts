@@ -9,7 +9,7 @@ export interface CreateAgentVersionInput {
   instructions: string;
   provider: ModelProvider;
   model: string;
-  skillIds: string[];
+  skillVersionIds: string[];
   connectionIds: string[];
   createdByHumanId: string | null;
 }

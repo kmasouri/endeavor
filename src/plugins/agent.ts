@@ -1,7 +1,12 @@
 import { FastifyPluginAsync } from 'fastify';
 import fp from 'fastify-plugin';
 import { config } from '../config';
-import { AgentPostgresRepository, HumanPostgresRepository } from '../data';
+import {
+  AgentPostgresRepository,
+  CatalogPostgresRepository,
+  CredentialCipher,
+  HumanPostgresRepository
+} from '../data';
 import { AgentLogger } from '../observability';
 import { AgentService } from '../services';
 import { ModelProvider } from '../shared/types';
@@ -25,6 +30,7 @@ const agentPlugin: FastifyPluginAsync = async (fastify) => {
   const agentService = new AgentService(
     new AgentPostgresRepository(fastify.pg),
     new HumanPostgresRepository(fastify.pg),
+    new CatalogPostgresRepository(fastify.pg, new CredentialCipher(config.CREDENTIALS_KEY)),
     readyProviders(config),
     new AgentLogger(fastify.log)
   );
