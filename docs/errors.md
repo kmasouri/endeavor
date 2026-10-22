@@ -13,7 +13,7 @@ Every error response has a `code` and a `name` from this list. Clients should ch
 }
 ```
 
-Codes are grouped by feature: `10xxx` for general errors, `20xxx` for items. A code never changes or gets reused once it ships.
+Codes are grouped by feature: `10xxx` general, `20xxx` items, `30xxx` people and access, `40xxx` tasks, `50xxx` agents. A code never changes or gets reused once it ships.
 
 The list lives in `src/shared/errors.ts`. When you add an error there, add it here too. A test fails if this page is missing one.
 
@@ -34,3 +34,26 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 | ----- | --------------- | ---- | -------------------------------------------------------------------- | --------------------------------------------- |
 | 20001 | `itemNameTaken` | 409  | An item with this name already exists. Names are not case sensitive. | Pick a different name.                        |
 | 20002 | `itemNotFound`  | 404  | No item has this ID.                                                 | Check the ID. The item may have been removed. |
+
+## People and access (30xxx)
+
+| Code  | Name            | HTTP | What it means                                         | How to fix it                                  |
+| ----- | --------------- | ---- | ----------------------------------------------------- | ---------------------------------------------- |
+| 30001 | `actorNotFound` | 401  | The `x-actor-id` header does not name a known person. | Send the ID of a person from `GET /humans`.    |
+| 30002 | `forbidden`     | 403  | The acting person's role does not allow this action.  | Ask an admin to do it, or to change your role. |
+
+## Tasks (40xxx)
+
+| Code  | Name                     | HTTP | What it means                                                                | How to fix it                                                        |
+| ----- | ------------------------ | ---- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 40001 | `taskNotFound`           | 404  | No task has this ID.                                                         | Check the ID against `GET /tasks`.                                   |
+| 40002 | `taskStateConflict`      | 409  | The task's state doesn't allow this, like resuming a task that isn't paused. | Get the task to see its state, then pick an allowed action.          |
+| 40003 | `taskCompletionRejected` | 422  | The task can't complete: it has no output, or its criteria were not met.     | Attach an output and check it against the completion criteria first. |
+| 40004 | `taskWaitNotFound`       | 404  | No open wait matches. It may already be resolved.                            | Get the task to see its open waits.                                  |
+
+## Agents (50xxx)
+
+| Code  | Name               | HTTP | What it means                                         | How to fix it                                     |
+| ----- | ------------------ | ---- | ----------------------------------------------------- | ------------------------------------------------- |
+| 50001 | `agentNotFound`    | 404  | No agent has this ID.                                 | Check the ID against `GET /agents`.               |
+| 50002 | `agentUnavailable` | 409  | The agent is disabled, or has no saved configuration. | Enable the agent, or save a configuration for it. |

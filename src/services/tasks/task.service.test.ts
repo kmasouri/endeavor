@@ -1,0 +1,563 @@
+import { AgentRepository, HumanRepository, TaskRepository } from '../../data';
+import { TaskLogger } from '../../observability';
+import { Agent, Human, Task, TaskWait } from '../../shared/types';
+import { TaskService } from './task.service';
+
+const HUMAN_ID = '00000000-0000-4000-8000-000000000001';
+const AGENT_ID = '00000000-0000-4000-8000-0000000000a1';
+const VERSION_ID = '00000000-0000-4000-8000-0000000000b1';
+const TASK_ID = '00000000-0000-4000-8000-0000000000c1';
+const NEW_TASK_ID = '00000000-0000-4000-8000-0000000000c2';
+const WAIT_ID = '00000000-0000-4000-8000-0000000000d1';
+
+const human: Human = { id: HUMAN_ID, name: 'Kim', role: 'member', createdAt: new Date() };
+const agentActor = { type: 'agent' as const, id: AGENT_ID };
+
+const agent: Agent = {
+  id: AGENT_ID,
+  name: 'Researcher',
+  purpose: 'Finds and summarizes sources',
+  currentVersionId: VERSION_ID,
+  disabledAt: null,
+  createdAt: new Date(),
+  updatedAt: new Date()
+};
+
+function makeTask(overrides: Partial<Task> = {}): Task {
+  return {
+    id: TASK_ID,
+    runKey: 'human:1',
+    conversationId: null,
+    ownerAgentId: AGENT_ID,
+    agentVersionId: VERSION_ID,
+    title: 'Summarize sources',
+    brief: 'Read the docs and summarize them',
+    completionCriteria: 'A summary with citations',
+    reviewRequired: false,
+    state: 'working',
+    stateReason: null,
+    pausedAt: null,
+    requestedByType: 'human',
+    requestedById: HUMAN_ID,
+    requestMessageId: null,
+    parentTaskId: null,
+    restartedFromTaskId: null,
+    responsibilityId: null,
+    criteriaCheck: null,
+    review: null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    finishedAt: null,
+    ...overrides
+  };
+}
+
+function makeWait(overrides: Partial<TaskWait> = {}): TaskWait {
+  return {
+    id: WAIT_ID,
+    taskId: TASK_ID,
+    kind: 'reply',
+    targetId: '00000000-0000-4000-8000-0000000000e1',
+    description: 'Reply from Reviewer',
+    createdAt: new Date(),
+    resolvedAt: null,
+    resolution: null,
+    ...overrides
+  };
+}
+
+function setup() {
+  const tasks: jest.Mocked<TaskRepository> = {
+    create: jest.fn(),
+    getById: jest.fn(),
+    getByRunKey: jest.fn(),
+    list: jest.fn(),
+    count: jest.fn(),
+    // By default an update succeeds and returns the task with the changes applied.
+    update: jest.fn(async (_id, _expected, changes) => makeTask(changes as Partial<Task>)),
+    addWaits: jest.fn(async (_id, waits) => waits.map((wait) => makeWait(wait))),
+    listWaits: jest.fn().mockResolvedValue([]),
+    findOpenWaits: jest.fn().mockResolvedValue([]),
+    resolveWait: jest.fn().mockResolvedValue(makeWait({ resolvedAt: new Date() })),
+    resolveOpenWaits: jest.fn().mockResolvedValue(0),
+    addEvent: jest.fn(),
+    listEvents: jest.fn(),
+    addOutput: jest.fn(),
+    listOutputs: jest.fn(),
+    countOutputs: jest.fn().mockResolvedValue(1),
+    claimRunnable: jest.fn(),
+    releaseLease: jest.fn()
+  };
+  const agents: jest.Mocked<AgentRepository> = {
+    getById: jest.fn().mockResolvedValue(agent),
+    getVersion: jest.fn()
+  };
+  const humans: jest.Mocked<HumanRepository> = {
+    create: jest.fn(),
+    createFirst: jest.fn(),
+    getById: jest.fn().mockResolvedValue(human),
+    list: jest.fn(),
+    count: jest.fn()
+  };
+  const logger = {
+    onTaskCreated: jest.fn(),
+    onTaskStateChanged: jest.fn(),
+    onTaskPaused: jest.fn(),
+    onTaskResumed: jest.fn(),
+    onTaskRestarted: jest.fn(),
+    onTaskCompletionRejected: jest.fn()
+  } as unknown as jest.Mocked<TaskLogger>;
+
+  const service = new TaskService(tasks, agents, humans, logger);
+  return { service, tasks, agents, humans, logger };
+}
+
+function eventTypes(tasks: jest.Mocked<TaskRepository>): string[] {
+  return tasks.addEvent.mock.calls.map(([, type]) => type);
+}
+
+describe('TaskService', () => {
+  describe('createTask', () => {
+    it("pins the agent's current version and records who asked", async () => {
+      const { service, tasks } = setup();
+      tasks.create.mockResolvedValue({ task: makeTask(), created: true });
+
+      const result = await service.createTask(HUMAN_ID, {
+        ownerAgentId: AGENT_ID,
+        title: 'Summarize sources',
+        brief: 'Read the docs',
+        completionCriteria: 'A summary with citations'
+      });
+
+      expect(result.created).toBe(true);
+      expect(tasks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentVersionId: VERSION_ID,
+          requestedByType: 'human',
+          requestedById: HUMAN_ID,
+          reviewRequired: false
+        })
+      );
+      expect(eventTypes(tasks)).toEqual(['task.created']);
+    });
+
+    it('returns the existing task for a repeated runKey without recording it again', async () => {
+      const { service, tasks } = setup();
+      tasks.create.mockResolvedValue({ task: makeTask(), created: false });
+
+      const result = await service.createTask(HUMAN_ID, {
+        ownerAgentId: AGENT_ID,
+        title: 't',
+        brief: 'b',
+        completionCriteria: 'c',
+        runKey: 'abc'
+      });
+
+      expect(result.created).toBe(false);
+      expect(tasks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ runKey: `client:${HUMAN_ID}:${AGENT_ID}:abc` })
+      );
+      expect(tasks.addEvent).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown person', async () => {
+      const { service, humans } = setup();
+      humans.getById.mockResolvedValue(null);
+
+      await expect(
+        service.createTask(HUMAN_ID, {
+          ownerAgentId: AGENT_ID,
+          title: 't',
+          brief: 'b',
+          completionCriteria: 'c'
+        })
+      ).rejects.toMatchObject({ name: 'actorNotFound' });
+    });
+
+    it('rejects a disabled agent', async () => {
+      const { service, agents } = setup();
+      agents.getById.mockResolvedValue({ ...agent, disabledAt: new Date() });
+
+      await expect(
+        service.createTask(HUMAN_ID, {
+          ownerAgentId: AGENT_ID,
+          title: 't',
+          brief: 'b',
+          completionCriteria: 'c'
+        })
+      ).rejects.toMatchObject({ name: 'agentUnavailable' });
+    });
+  });
+
+  describe('pause and resume', () => {
+    it('pauses without changing the state', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+
+      await service.pauseTask(HUMAN_ID, TASK_ID, 'Hold on');
+
+      const [, expected, changes] = tasks.update.mock.calls[0];
+      expect(expected).toEqual({ state: 'waiting', paused: false });
+      expect(changes).toEqual({ pausedAt: expect.any(Date) });
+      expect(eventTypes(tasks)).toEqual(['task.paused']);
+    });
+
+    it('does not pause a task that is already paused or finished', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValueOnce(makeTask({ pausedAt: new Date() }));
+      await expect(service.pauseTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+
+      tasks.getById.mockResolvedValueOnce(makeTask({ state: 'completed' }));
+      await expect(service.pauseTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+    });
+
+    it('resumes a paused task in its old state', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting', pausedAt: new Date() }));
+      tasks.update.mockResolvedValue(makeTask({ state: 'waiting' }));
+
+      const task = await service.resumeTask(HUMAN_ID, TASK_ID);
+
+      expect(task.state).toBe('waiting');
+      expect(tasks.update).toHaveBeenCalledTimes(1);
+      expect(eventTypes(tasks)).toEqual(['task.resumed']);
+    });
+
+    it('sends a blocked task back to working', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'blocked', stateReason: 'No access' }));
+
+      const task = await service.resumeTask(HUMAN_ID, TASK_ID, 'Access granted');
+
+      expect(task.state).toBe('working');
+      expect(eventTypes(tasks)).toEqual(['task.state.changed', 'task.resumed']);
+    });
+
+    it('clears the pause and unblocks in one write', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'blocked', pausedAt: new Date() }));
+
+      await service.resumeTask(HUMAN_ID, TASK_ID);
+
+      expect(tasks.update).toHaveBeenCalledTimes(1);
+      expect(tasks.update.mock.calls[0][2]).toMatchObject({ state: 'working', pausedAt: null });
+    });
+
+    it('does not resume finished work', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed', pausedAt: new Date() }));
+
+      await expect(service.resumeTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+    });
+
+    it('refuses to resume a task that is neither paused nor blocked', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask());
+
+      await expect(service.resumeTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+    });
+
+    it('reports a conflict when the task changed at the same time', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask());
+      tasks.update.mockResolvedValue(null);
+
+      await expect(service.pauseTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+    });
+  });
+
+  describe('cancelTask', () => {
+    it('cancels, clears the pause, and closes open waits', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting', pausedAt: new Date() }));
+
+      const task = await service.cancelTask(HUMAN_ID, TASK_ID, 'Not needed');
+
+      expect(task.state).toBe('cancelled');
+      expect(tasks.update.mock.calls[0][2]).toMatchObject({
+        state: 'cancelled',
+        stateReason: 'Not needed',
+        pausedAt: null,
+        finishedAt: expect.any(Date)
+      });
+      expect(tasks.resolveOpenWaits).toHaveBeenCalledWith(TASK_ID, { cancelled: true });
+    });
+
+    it('does not cancel finished work', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed' }));
+
+      await expect(service.cancelTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+    });
+  });
+
+  describe('restartTask', () => {
+    it('creates a new linked task and leaves the old one alone', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed' }));
+      tasks.create.mockResolvedValue({
+        task: makeTask({ id: NEW_TASK_ID, restartedFromTaskId: TASK_ID }),
+        created: true
+      });
+
+      const { task, created } = await service.restartTask(HUMAN_ID, TASK_ID);
+
+      expect(created).toBe(true);
+      expect(task.restartedFromTaskId).toBe(TASK_ID);
+      expect(tasks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ runKey: `restart:${TASK_ID}`, restartedFromTaskId: TASK_ID })
+      );
+      expect(tasks.update).not.toHaveBeenCalled();
+      expect(tasks.addEvent).toHaveBeenCalledWith(TASK_ID, 'task.restarted', expect.anything(), {
+        newTaskId: NEW_TASK_ID,
+        reason: null
+      });
+    });
+
+    it('returns the earlier restart without checking the agent again', async () => {
+      const { service, tasks, agents } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed' }));
+      tasks.getByRunKey.mockResolvedValue(makeTask({ id: NEW_TASK_ID }));
+      agents.getById.mockResolvedValue({ ...agent, disabledAt: new Date() });
+
+      const { task, created } = await service.restartTask(HUMAN_ID, TASK_ID);
+
+      expect(created).toBe(false);
+      expect(task.id).toBe(NEW_TASK_ID);
+      expect(tasks.create).not.toHaveBeenCalled();
+    });
+
+    it('only restarts finished work', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+
+      await expect(service.restartTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+    });
+  });
+
+  describe('waits', () => {
+    it('moves a working task to waiting with its waits', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask());
+
+      const task = await service.waitFor(TASK_ID, agentActor, [
+        { kind: 'reply', targetId: 'm1', description: 'Reply from Reviewer' }
+      ]);
+
+      expect(task.state).toBe('waiting');
+      expect(task.waits).toHaveLength(1);
+      expect(tasks.update.mock.calls[0][2]).toMatchObject({
+        state: 'waiting',
+        stateReason: 'Reply from Reviewer'
+      });
+    });
+
+    it('closes the new waits again if the state change loses a race', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask());
+      tasks.update.mockResolvedValue(null);
+
+      await expect(
+        service.waitFor(TASK_ID, agentActor, [
+          { kind: 'external', targetId: null, description: 'x' }
+        ])
+      ).rejects.toMatchObject({ name: 'taskStateConflict' });
+      expect(tasks.resolveWait).toHaveBeenCalledWith(WAIT_ID, { abandoned: true });
+    });
+
+    it('goes back to working when the last wait resolves', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      tasks.listWaits.mockResolvedValue([]);
+
+      const task = await service.resolveWait(WAIT_ID, agentActor, { messageId: 'm2' });
+
+      expect(task.state).toBe('working');
+      expect(eventTypes(tasks)).toEqual(['task.wait.resolved', 'task.state.changed']);
+    });
+
+    it('keeps waiting while other waits are open', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      tasks.listWaits.mockResolvedValue([makeWait({ id: 'other' })]);
+
+      const task = await service.resolveWait(WAIT_ID, agentActor, {});
+
+      expect(task.state).toBe('waiting');
+      expect(tasks.update).not.toHaveBeenCalled();
+    });
+
+    it('stays paused when a wait resolves on a paused task', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting', pausedAt: new Date() }));
+
+      await service.resolveWait(WAIT_ID, agentActor, {});
+
+      const [, expected, changes] = tasks.update.mock.calls[0];
+      expect(expected).toEqual({ state: 'waiting', paused: true });
+      expect(changes).not.toHaveProperty('pausedAt');
+    });
+
+    it('tries again when a pause lands at the same moment', async () => {
+      const { service, tasks } = setup();
+      tasks.getById
+        .mockResolvedValueOnce(makeTask({ state: 'waiting' }))
+        .mockResolvedValueOnce(makeTask({ state: 'waiting', pausedAt: new Date() }));
+      tasks.update.mockResolvedValueOnce(null);
+
+      const task = await service.resolveWait(WAIT_ID, agentActor, {});
+
+      expect(task.state).toBe('working');
+      expect(tasks.update.mock.calls[1][1]).toEqual({ state: 'waiting', paused: true });
+    });
+
+    it('reports a wait that is already resolved', async () => {
+      const { service, tasks } = setup();
+      tasks.resolveWait.mockResolvedValue(null);
+
+      await expect(service.resolveWait(WAIT_ID, agentActor, {})).rejects.toMatchObject({
+        name: 'taskWaitNotFound'
+      });
+    });
+  });
+
+  describe('completeTask', () => {
+    it('completes with an output and a passing criteria check', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask());
+
+      const task = await service.completeTask(TASK_ID, agentActor, {
+        met: true,
+        summary: 'Summary cites all three sources'
+      });
+
+      expect(task.state).toBe('completed');
+      expect(tasks.update.mock.calls[0][2]).toMatchObject({
+        state: 'completed',
+        criteriaCheck: { met: true, checkedBy: agentActor },
+        finishedAt: expect.any(Date)
+      });
+    });
+
+    it('refuses to complete without an output', async () => {
+      const { service, tasks, logger } = setup();
+      tasks.getById.mockResolvedValue(makeTask());
+      tasks.countOutputs.mockResolvedValue(0);
+
+      await expect(
+        service.completeTask(TASK_ID, agentActor, { met: true, summary: 'Done' })
+      ).rejects.toMatchObject({ name: 'taskCompletionRejected' });
+      expect(logger.onTaskCompletionRejected).toHaveBeenCalled();
+      expect(tasks.update).not.toHaveBeenCalled();
+    });
+
+    it('refuses to complete when the criteria are not met', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask());
+
+      await expect(
+        service.completeTask(TASK_ID, agentActor, { met: false, summary: 'One source missing' })
+      ).rejects.toMatchObject({ name: 'taskCompletionRejected' });
+    });
+
+    it('refuses to complete a paused task', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ pausedAt: new Date() }));
+
+      await expect(
+        service.completeTask(TASK_ID, agentActor, { met: true, summary: 'Done' })
+      ).rejects.toMatchObject({ name: 'taskStateConflict' });
+    });
+
+    it('waits for a human review when the task needs one', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ reviewRequired: true }));
+
+      await service.completeTask(TASK_ID, agentActor, { met: true, summary: 'Done' });
+
+      expect(tasks.addWaits).toHaveBeenCalledWith(TASK_ID, [
+        expect.objectContaining({ kind: 'approval', targetId: TASK_ID })
+      ]);
+      const states = tasks.update.mock.calls.map(([, , changes]) => changes.state);
+      expect(states).not.toContain('completed');
+      expect(states).toContain('waiting');
+    });
+  });
+
+  describe('reviewTask', () => {
+    const reviewWait = makeWait({ kind: 'approval', targetId: TASK_ID });
+
+    it('completes the task when the review approves', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting', reviewRequired: true }));
+      tasks.findOpenWaits.mockResolvedValue([reviewWait]);
+
+      const task = await service.reviewTask(HUMAN_ID, TASK_ID, { approved: true });
+
+      expect(task.state).toBe('completed');
+      expect(tasks.resolveWait).toHaveBeenCalledWith(WAIT_ID, expect.anything());
+    });
+
+    it('sends the task back to working with the notes when changes are asked', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting', reviewRequired: true }));
+      tasks.findOpenWaits.mockResolvedValue([reviewWait]);
+
+      const task = await service.reviewTask(HUMAN_ID, TASK_ID, {
+        approved: false,
+        notes: 'Add a source for the second claim'
+      });
+
+      expect(task.state).toBe('working');
+      expect(tasks.update.mock.calls[0][2]).toMatchObject({
+        stateReason: 'Review asked for changes: Add a source for the second claim'
+      });
+    });
+
+    it('changes nothing else when the state change loses a race', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting', reviewRequired: true }));
+      tasks.findOpenWaits.mockResolvedValue([reviewWait]);
+      tasks.update.mockResolvedValue(null);
+
+      await expect(service.reviewTask(HUMAN_ID, TASK_ID, { approved: true })).rejects.toMatchObject(
+        { name: 'taskStateConflict' }
+      );
+      expect(tasks.resolveWait).not.toHaveBeenCalled();
+      expect(tasks.addEvent).not.toHaveBeenCalled();
+    });
+
+    it('refuses when the task is not waiting for review', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+
+      await expect(service.reviewTask(HUMAN_ID, TASK_ID, { approved: true })).rejects.toMatchObject(
+        { name: 'taskStateConflict' }
+      );
+    });
+  });
+
+  it('blocks with a reason', async () => {
+    const { service, tasks } = setup();
+    tasks.getById.mockResolvedValue(makeTask());
+
+    const task = await service.blockTask(TASK_ID, agentActor, 'Needs access to the billing docs');
+
+    expect(task.state).toBe('blocked');
+    expect(task.stateReason).toBe('Needs access to the billing docs');
+  });
+});

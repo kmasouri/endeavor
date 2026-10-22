@@ -234,6 +234,15 @@ Handlers should not catch errors just to format them.
 
 Every response includes the request ID in a header. The header name comes from `REQUEST_ID_HEADER` and is `x-request-id` by default. If the caller sends an ID, the app uses it. If not, the app makes a new one.
 
+## Tasks
+
+A task is one run of work by one agent. `TaskService` owns every change to a task, and the rules for which state changes are allowed are in `src/services/tasks/task-state.ts`. The product rules behind them are on the Architecture page in Notion.
+
+- **Compare and set.** `TaskRepository.update()` only writes if the task still has the state and pause flag the service read. If another change got there first, the service throws `taskStateConflict` instead of overwriting it.
+- **History.** Every change adds a row to `task_events`, and rows there are never changed. This is the execution history the API shows. The runner will also use it to pick up where a task left off.
+- **No duplicates.** Every task has a unique `run_key`. Creating a task with a key that already exists returns the existing task.
+- **Leases.** The runner claims working tasks with `claimRunnable()`. If the service stops, the lease runs out and the task can be claimed again.
+
 ## Configuration
 
 Every environment variable is listed in one Zod schema in `src/config.ts`. The rest of the code reads settings from the `config` object it exports. If a value is wrong, the app stops at startup and names the bad variable.
