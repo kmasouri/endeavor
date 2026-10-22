@@ -139,6 +139,11 @@ export interface AgentNote {
   updatedAt: Date;
 }
 
+// Model providers an agent can use. src/integrations/models has a client for each one.
+// 'scripted' is a fake that answers from a script, for tests and demos with no API key.
+export const MODEL_PROVIDERS = ['anthropic', 'openai', 'scripted'] as const;
+export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
+
 export interface Agent {
   id: string;
   name: string;
@@ -155,7 +160,7 @@ export interface AgentVersion {
   agentId: string;
   version: number;
   instructions: string;
-  provider: string;
+  provider: ModelProvider;
   model: string;
   skillIds: string[];
   connectionIds: string[];

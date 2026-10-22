@@ -30,7 +30,11 @@ const envSchema = z.object({
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
   REQUEST_ID_HEADER: z.string().min(1).default('x-request-id'),
-  WEBHOOK_URL: z.url().optional()
+  WEBHOOK_URL: z.url().optional(),
+  // Model providers. A provider is ready only when its key is set.
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
+  OPENAI_API_KEY: z.string().min(1).optional(),
+  OPENAI_BASE_URL: z.url().default('https://api.openai.com/v1')
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -53,7 +57,10 @@ export const config = {
   DATABASE: getDatabaseConfig(env),
   LOGGER_LEVEL: env.LOGGER_LEVEL,
   REQUEST_ID_HEADER: env.REQUEST_ID_HEADER,
-  WEBHOOK_URL: env.WEBHOOK_URL
+  WEBHOOK_URL: env.WEBHOOK_URL,
+  ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
+  OPENAI_API_KEY: env.OPENAI_API_KEY,
+  OPENAI_BASE_URL: env.OPENAI_BASE_URL
 };
 
 function getDatabaseConfig(env: Env) {
