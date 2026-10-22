@@ -91,7 +91,8 @@ export async function restartTaskHandler(
 ): Promise<FastifyReply> {
   const { task, created } = await request.server.taskService.restartTask(
     request.headers['x-actor-id'],
-    request.params.taskId
+    request.params.taskId,
+    request.body?.reason
   );
   return reply.code(created ? 201 : 200).send(success(task));
 }

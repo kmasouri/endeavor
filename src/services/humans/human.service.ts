@@ -15,20 +15,23 @@ export class HumanService {
     actorId: string | undefined,
     input: { name: string; role: HumanRole }
   ): Promise<Human> {
-    const isFirst = (await this.humanRepository.count()) === 0;
-    if (!isFirst) {
-      requireHuman(actorId ? await this.humanRepository.getById(actorId) : null, ADMIN_ONLY);
+    if ((await this.humanRepository.count()) === 0) {
+      const first = await this.humanRepository.createFirst({ name: input.name, role: 'admin' });
+      if (first) {
+        this.humanLogger.onHumanCreated(first.id, first.role);
+        return first;
+      }
+      // Someone else became the first person a moment ago. Continue as a normal add.
     }
 
-    const human = await this.humanRepository.create({
-      name: input.name,
-      role: isFirst ? 'admin' : input.role
-    });
+    requireHuman(actorId ? await this.humanRepository.getById(actorId) : null, ADMIN_ONLY);
+    const human = await this.humanRepository.create(input);
     this.humanLogger.onHumanCreated(human.id, human.role);
     return human;
   }
 
-  async listHumans(): Promise<Human[]> {
+  async listHumans(actorId: string): Promise<Human[]> {
+    requireHuman(await this.humanRepository.getById(actorId));
     return this.humanRepository.list();
   }
 }

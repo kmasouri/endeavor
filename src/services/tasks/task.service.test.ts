@@ -94,6 +94,7 @@ function setup() {
   };
   const humans: jest.Mocked<HumanRepository> = {
     create: jest.fn(),
+    createFirst: jest.fn(),
     getById: jest.fn().mockResolvedValue(human),
     list: jest.fn(),
     count: jest.fn()
@@ -153,7 +154,9 @@ describe('TaskService', () => {
       });
 
       expect(result.created).toBe(false);
-      expect(tasks.create).toHaveBeenCalledWith(expect.objectContaining({ runKey: 'client:abc' }));
+      expect(tasks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ runKey: `client:${HUMAN_ID}:${AGENT_ID}:abc` })
+      );
       expect(tasks.addEvent).not.toHaveBeenCalled();
     });
 
@@ -234,6 +237,25 @@ describe('TaskService', () => {
       expect(eventTypes(tasks)).toEqual(['task.state.changed', 'task.resumed']);
     });
 
+    it('clears the pause and unblocks in one write', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'blocked', pausedAt: new Date() }));
+
+      await service.resumeTask(HUMAN_ID, TASK_ID);
+
+      expect(tasks.update).toHaveBeenCalledTimes(1);
+      expect(tasks.update.mock.calls[0][2]).toMatchObject({ state: 'working', pausedAt: null });
+    });
+
+    it('does not resume finished work', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed', pausedAt: new Date() }));
+
+      await expect(service.resumeTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+    });
+
     it('refuses to resume a task that is neither paused nor blocked', async () => {
       const { service, tasks } = setup();
       tasks.getById.mockResolvedValue(makeTask());
@@ -299,8 +321,22 @@ describe('TaskService', () => {
       );
       expect(tasks.update).not.toHaveBeenCalled();
       expect(tasks.addEvent).toHaveBeenCalledWith(TASK_ID, 'task.restarted', expect.anything(), {
-        newTaskId: NEW_TASK_ID
+        newTaskId: NEW_TASK_ID,
+        reason: null
       });
+    });
+
+    it('returns the earlier restart without checking the agent again', async () => {
+      const { service, tasks, agents } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed' }));
+      tasks.getByRunKey.mockResolvedValue(makeTask({ id: NEW_TASK_ID }));
+      agents.getById.mockResolvedValue({ ...agent, disabledAt: new Date() });
+
+      const { task, created } = await service.restartTask(HUMAN_ID, TASK_ID);
+
+      expect(created).toBe(false);
+      expect(task.id).toBe(NEW_TASK_ID);
+      expect(tasks.create).not.toHaveBeenCalled();
     });
 
     it('only restarts finished work', async () => {
@@ -376,6 +412,19 @@ describe('TaskService', () => {
       expect(changes).not.toHaveProperty('pausedAt');
     });
 
+    it('tries again when a pause lands at the same moment', async () => {
+      const { service, tasks } = setup();
+      tasks.getById
+        .mockResolvedValueOnce(makeTask({ state: 'waiting' }))
+        .mockResolvedValueOnce(makeTask({ state: 'waiting', pausedAt: new Date() }));
+      tasks.update.mockResolvedValueOnce(null);
+
+      const task = await service.resolveWait(WAIT_ID, agentActor, {});
+
+      expect(task.state).toBe('working');
+      expect(tasks.update.mock.calls[1][1]).toEqual({ state: 'waiting', paused: true });
+    });
+
     it('reports a wait that is already resolved', async () => {
       const { service, tasks } = setup();
       tasks.resolveWait.mockResolvedValue(null);
@@ -425,6 +474,15 @@ describe('TaskService', () => {
       ).rejects.toMatchObject({ name: 'taskCompletionRejected' });
     });
 
+    it('refuses to complete a paused task', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ pausedAt: new Date() }));
+
+      await expect(
+        service.completeTask(TASK_ID, agentActor, { met: true, summary: 'Done' })
+      ).rejects.toMatchObject({ name: 'taskStateConflict' });
+    });
+
     it('waits for a human review when the task needs one', async () => {
       const { service, tasks } = setup();
       tasks.getById.mockResolvedValue(makeTask({ reviewRequired: true }));
@@ -468,6 +526,19 @@ describe('TaskService', () => {
       expect(tasks.update.mock.calls[0][2]).toMatchObject({
         stateReason: 'Review asked for changes: Add a source for the second claim'
       });
+    });
+
+    it('changes nothing else when the state change loses a race', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting', reviewRequired: true }));
+      tasks.findOpenWaits.mockResolvedValue([reviewWait]);
+      tasks.update.mockResolvedValue(null);
+
+      await expect(service.reviewTask(HUMAN_ID, TASK_ID, { approved: true })).rejects.toMatchObject(
+        { name: 'taskStateConflict' }
+      );
+      expect(tasks.resolveWait).not.toHaveBeenCalled();
+      expect(tasks.addEvent).not.toHaveBeenCalled();
     });
 
     it('refuses when the task is not waiting for review', async () => {

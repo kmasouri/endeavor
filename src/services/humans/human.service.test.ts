@@ -8,6 +8,7 @@ const ADMIN_ID = '00000000-0000-4000-8000-000000000001';
 function setup() {
   const humans: jest.Mocked<HumanRepository> = {
     create: jest.fn(async (input) => ({ id: 'new', createdAt: new Date(), ...input })),
+    createFirst: jest.fn(async (input) => ({ id: 'first', createdAt: new Date(), ...input })),
     getById: jest.fn(),
     list: jest.fn(),
     count: jest.fn()
@@ -31,6 +32,25 @@ describe('HumanService', () => {
     const human = await service.createHuman(undefined, { name: 'Kim', role: 'member' });
 
     expect(human.role).toBe('admin');
+    expect(humans.createFirst).toHaveBeenCalledWith({ name: 'Kim', role: 'admin' });
+  });
+
+  it('falls back to a normal add when another setup became first at the same time', async () => {
+    const { service, humans } = setup();
+    humans.count.mockResolvedValue(0);
+    humans.createFirst.mockResolvedValue(null);
+
+    await expect(
+      service.createHuman(undefined, { name: 'Eve', role: 'admin' })
+    ).rejects.toMatchObject({ name: 'actorNotFound' });
+    expect(humans.create).not.toHaveBeenCalled();
+  });
+
+  it('only lists people for a known person', async () => {
+    const { service, humans } = setup();
+    humans.getById.mockResolvedValue(null);
+
+    await expect(service.listHumans(ADMIN_ID)).rejects.toMatchObject({ name: 'actorNotFound' });
   });
 
   it('lets an admin add people after that', async () => {

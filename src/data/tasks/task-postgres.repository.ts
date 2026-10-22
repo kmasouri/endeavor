@@ -187,7 +187,7 @@ export class TaskPostgresRepository implements TaskRepository {
     expected: { state: TaskState; paused: boolean },
     changes: TaskChanges
   ): Promise<Task | null> {
-    const values: unknown[] = [taskId, expected.state];
+    const values: unknown[] = [taskId, expected.state, expected.paused];
     const sets = ['updated_at = now()'];
     for (const [field, column] of Object.entries(CHANGE_COLUMNS)) {
       const value = changes[field as keyof TaskChanges];
@@ -197,8 +197,9 @@ export class TaskPostgresRepository implements TaskRepository {
       }
     }
 
-    // A task that leaves 'working' gives up its lease, so no worker keeps running it.
-    if (changes.state && changes.state !== 'working') {
+    // A task that leaves 'working', or is paused, gives up its lease, so no worker keeps
+    // running it.
+    if ((changes.state && changes.state !== 'working') || changes.pausedAt) {
       sets.push('lease_owner = NULL', 'lease_expires_at = NULL');
     }
 
@@ -207,7 +208,7 @@ export class TaskPostgresRepository implements TaskRepository {
        SET ${sets.join(', ')}
        WHERE id = $1
          AND state = $2
-         AND (paused_at IS NOT NULL) = ${expected.paused ? 'true' : 'false'}
+         AND (paused_at IS NOT NULL) = $3
        RETURNING *`,
       values
     );

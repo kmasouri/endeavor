@@ -24,6 +24,18 @@ export class HumanPostgresRepository implements HumanRepository {
     return this.toHuman(result.rows[0]);
   }
 
+  async createFirst(input: CreateHumanInput): Promise<Human | null> {
+    const result = await this.db.query<HumanRow>(
+      `INSERT INTO bold_cedar_007.humans (id, name, role, is_first)
+       VALUES ($1, $2, $3, true)
+       ON CONFLICT (is_first) WHERE is_first DO NOTHING
+       RETURNING *`,
+      [randomUUID(), input.name, input.role]
+    );
+
+    return result.rows[0] ? this.toHuman(result.rows[0]) : null;
+  }
+
   async getById(humanId: string): Promise<Human | null> {
     const result = await this.db.query<HumanRow>(
       `SELECT *

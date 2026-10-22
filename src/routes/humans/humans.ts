@@ -1,6 +1,10 @@
 import { FastifyInstance } from 'fastify';
 import { createHumanHandler, listHumansHandler } from '../../handlers';
-import { createHumanBodySchema, optionalActorHeadersSchema } from '../../schemas';
+import {
+  actorHeadersSchema,
+  createHumanBodySchema,
+  optionalActorHeadersSchema
+} from '../../schemas';
 
 export async function humansRouter(fastifyInstance: FastifyInstance): Promise<void> {
   fastifyInstance.post(
@@ -22,7 +26,8 @@ export async function humansRouter(fastifyInstance: FastifyInstance): Promise<vo
     {
       schema: {
         description: 'List people, oldest first.',
-        tags: ['humans']
+        tags: ['humans'],
+        headers: actorHeadersSchema
       }
     },
     listHumansHandler
