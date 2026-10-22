@@ -13,7 +13,7 @@ Every error response has a `code` and a `name` from this list. Clients should ch
 }
 ```
 
-Codes are grouped by feature: `10xxx` general, `20xxx` items, `30xxx` people and access, `40xxx` tasks, `50xxx` agents. A code never changes or gets reused once it ships.
+Codes are grouped by feature: `10xxx` general, `20xxx` items, `30xxx` people and access, `40xxx` tasks, `50xxx` agents, `60xxx` conversations. A code never changes or gets reused once it ships.
 
 The list lives in `src/shared/errors.ts`. When you add an error there, add it here too. A test fails if this page is missing one.
 
@@ -53,8 +53,18 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 
 ## Agents (50xxx)
 
-| Code  | Name               | HTTP | What it means                                         | How to fix it                                     |
-| ----- | ------------------ | ---- | ----------------------------------------------------- | ------------------------------------------------- |
-| 50001 | `agentNotFound`    | 404  | No agent has this ID.                                 | Check the ID against `GET /agents`.               |
-| 50002 | `agentUnavailable` | 409  | The agent is disabled, or has no saved configuration. | Enable the agent, or save a configuration for it. |
-| 50003 | `agentNameTaken`   | 409  | Another agent has this name. Names are not case sensitive. | Pick a different name.                       |
+| Code  | Name               | HTTP | What it means                                              | How to fix it                                     |
+| ----- | ------------------ | ---- | ---------------------------------------------------------- | ------------------------------------------------- |
+| 50001 | `agentNotFound`    | 404  | No agent has this ID.                                      | Check the ID against `GET /agents`.               |
+| 50002 | `agentUnavailable` | 409  | The agent is disabled, or has no saved configuration.      | Enable the agent, or save a configuration for it. |
+| 50003 | `agentNameTaken`   | 409  | Another agent has this name. Names are not case sensitive. | Pick a different name.                            |
+
+## Conversations (60xxx)
+
+| Code  | Name                    | HTTP | What it means                                            | How to fix it                                        |
+| ----- | ----------------------- | ---- | -------------------------------------------------------- | ---------------------------------------------------- |
+| 60001 | `conversationNotFound`  | 404  | No conversation has this ID.                             | Check the ID against `GET /conversations`.           |
+| 60002 | `notConversationMember` | 403  | You are not a member of this conversation.               | Ask a member to add you.                             |
+| 60003 | `mentionNotMember`      | 422  | A mention names someone who isn't in the conversation.   | Add them first, or remove the mention.               |
+| 60004 | `messageNotFound`       | 404  | The message being replied to isn't in this conversation. | Check `inReplyToMessageId`.                          |
+| 60005 | `participantNotFound`   | 404  | The person or agent being added doesn't exist.           | Check the ID against `GET /humans` or `GET /agents`. |

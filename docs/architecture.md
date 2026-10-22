@@ -243,6 +243,12 @@ A task is one run of work by one agent. `TaskService` owns every change to a tas
 - **No duplicates.** Every task has a unique `run_key`. Creating a task with a key that already exists returns the existing task.
 - **Leases.** The runner claims working tasks with `claimRunnable()`. If the service stops, the lease runs out and the task can be claimed again.
 
+### Sharing lifecycle rules between services
+
+Two services change tasks: `TaskService`, for the API and human actions, and `TaskRunnerService`, the runner acting for agents. Services never use each other, so both use `TaskLifecycle` (`src/services/tasks/task-lifecycle.ts`). It is a helper inside the tasks feature, not a service, and it holds the rules for state changes, waits, outputs, and completion. Put shared business rules that only one feature needs in a helper like this. Put rules several features need, like `addressedAgentIds()`, in `src/shared/`.
+
+How messages become work is in `docs/conversations.md`.
+
 ## Configuration
 
 Every environment variable is listed in one Zod schema in `src/config.ts`. The rest of the code reads settings from the `config` object it exports. If a value is wrong, the app stops at startup and names the bad variable.

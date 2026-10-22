@@ -1,4 +1,5 @@
-import { AgentNameConflictError, AgentRepository, HumanRepository } from '../../data';
+import { AgentNameConflictError } from '../../data';
+import { mockAgentRepository, mockHumanRepository } from '../../data/repositories.test-helper';
 import { AgentLogger } from '../../observability';
 import { Agent, AgentVersion, Human } from '../../shared/types';
 import { AgentService } from './agent.service';
@@ -32,29 +33,25 @@ const version1: AgentVersion = {
 };
 
 function setup(ready: ('anthropic' | 'openai' | 'scripted')[] = ['anthropic', 'scripted']) {
-  const agents: jest.Mocked<AgentRepository> = {
-    create: jest.fn(async (_input, first) => ({
-      agent: { ...agent, currentVersionId: 'v1' },
-      version: { ...version1, ...first }
-    })),
-    getById: jest.fn().mockResolvedValue(agent),
-    getByName: jest.fn().mockResolvedValue(null),
-    list: jest.fn().mockResolvedValue([agent]),
-    count: jest.fn().mockResolvedValue(1),
-    update: jest.fn(),
-    setDisabled: jest.fn().mockResolvedValue({ ...agent, disabledAt: new Date() }),
-    addVersion: jest.fn(async (_id, input) => ({ ...version1, ...input, id: 'v2', version: 2 })),
-    getVersion: jest.fn().mockResolvedValue(version1),
-    getVersions: jest.fn().mockResolvedValue([version1]),
-    listVersions: jest.fn()
-  };
-  const humans: jest.Mocked<HumanRepository> = {
-    create: jest.fn(),
-    createFirst: jest.fn(),
-    getById: jest.fn().mockResolvedValue(admin),
-    list: jest.fn(),
-    count: jest.fn()
-  };
+  const agents = mockAgentRepository();
+  agents.create.mockImplementation(async (_input, first) => ({
+    agent: { ...agent, currentVersionId: 'v1' },
+    version: { ...version1, ...first }
+  }));
+  agents.getById.mockResolvedValue(agent);
+  agents.list.mockResolvedValue([agent]);
+  agents.count.mockResolvedValue(1);
+  agents.setDisabled.mockResolvedValue({ ...agent, disabledAt: new Date() });
+  agents.addVersion.mockImplementation(async (_id, input) => ({
+    ...version1,
+    ...input,
+    id: 'v2',
+    version: 2
+  }));
+  agents.getVersion.mockResolvedValue(version1);
+  agents.getVersions.mockResolvedValue([version1]);
+  const humans = mockHumanRepository();
+  humans.getById.mockResolvedValue(admin);
   const logger = {
     onAgentCreated: jest.fn(),
     onAgentConfigured: jest.fn(),

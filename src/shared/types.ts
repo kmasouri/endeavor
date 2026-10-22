@@ -167,3 +167,26 @@ export interface AgentVersion {
   createdByHumanId: string | null;
   createdAt: Date;
 }
+
+export interface Conversation {
+  id: string;
+  title: string;
+  createdByHumanId: string;
+  createdAt: Date;
+}
+
+// historyFrom limits how far back a member can read. null means the whole history.
+export interface ConversationMember {
+  conversationId: string;
+  participant: ParticipantRef;
+  addedByHumanId: string | null;
+  historyFrom: Date | null;
+  addedAt: Date;
+}
+
+// A message addressed to an agent, waiting for the runner to turn it into work.
+export interface MessageDelivery {
+  messageId: string;
+  agentId: string;
+  createdAt: Date;
+}

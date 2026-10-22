@@ -34,7 +34,13 @@ const envSchema = z.object({
   // Model providers. A provider is ready only when its key is set.
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
-  OPENAI_BASE_URL: z.url().default('https://api.openai.com/v1')
+  OPENAI_BASE_URL: z.url().default('https://api.openai.com/v1'),
+  // The runner delivers messages and runs agents' work. Tests turn it off.
+  RUNNER_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((value) => value !== 'false'),
+  RUNNER_INTERVAL_MS: z.coerce.number().int().min(100).default(2000)
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -60,7 +66,10 @@ export const config = {
   WEBHOOK_URL: env.WEBHOOK_URL,
   ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
   OPENAI_API_KEY: env.OPENAI_API_KEY,
-  OPENAI_BASE_URL: env.OPENAI_BASE_URL
+  OPENAI_BASE_URL: env.OPENAI_BASE_URL,
+  // Never runs in tests, so they need no database.
+  RUNNER_ENABLED: env.RUNNER_ENABLED && env.ENVIRONMENT !== 'test',
+  RUNNER_INTERVAL_MS: env.RUNNER_INTERVAL_MS
 };
 
 function getDatabaseConfig(env: Env) {

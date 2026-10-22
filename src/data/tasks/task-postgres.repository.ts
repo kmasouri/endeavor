@@ -372,14 +372,75 @@ export class TaskPostgresRepository implements TaskRepository {
     return result.rows.map(toTask);
   }
 
-  async releaseLease(taskId: string, workerId: string): Promise<void> {
+  async releaseLease(taskId: string, workerId: string, delayMs = 0): Promise<void> {
     await this.db.query(
       `UPDATE bold_cedar_007.tasks
-       SET lease_owner = NULL, lease_expires_at = NULL
+       SET lease_owner = NULL,
+           lease_expires_at = CASE
+             WHEN $3::int > 0 THEN now() + ($3::text || ' milliseconds')::interval
+             ELSE NULL
+           END
        WHERE id = $1
          AND lease_owner = $2`,
-      [taskId, workerId]
+      [taskId, workerId, delayMs]
     );
+  }
+
+  async renewLease(taskId: string, workerId: string, leaseMs: number): Promise<boolean> {
+    const result = await this.db.query(
+      `UPDATE bold_cedar_007.tasks
+       SET lease_expires_at = now() + ($3::text || ' milliseconds')::interval
+       WHERE id = $1
+         AND lease_owner = $2`,
+      [taskId, workerId, String(leaseMs)]
+    );
+
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async findOpenTask(conversationId: string, agentId: string): Promise<Task | null> {
+    const result = await this.db.query<TaskRow>(
+      `SELECT *
+       FROM bold_cedar_007.tasks
+       WHERE conversation_id = $1
+         AND owner_agent_id = $2
+         AND state IN ('working', 'waiting', 'blocked')
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [conversationId, agentId]
+    );
+
+    return result.rows[0] ? toTask(result.rows[0]) : null;
+  }
+
+  async listWaitingWithoutOpenWaits(limit: number): Promise<Task[]> {
+    const result = await this.db.query<TaskRow>(
+      `SELECT t.*
+       FROM bold_cedar_007.tasks t
+       WHERE t.state = 'waiting'
+         AND NOT EXISTS (
+           SELECT 1
+           FROM bold_cedar_007.task_waits w
+           WHERE w.task_id = t.id
+             AND w.resolved_at IS NULL
+         )
+       LIMIT $1`,
+      [limit]
+    );
+
+    return result.rows.map(toTask);
+  }
+
+  async countEvents(taskId: string, type: string): Promise<number> {
+    const result = await this.db.query<{ total: number }>(
+      `SELECT count(*)::int AS total
+       FROM bold_cedar_007.task_events
+       WHERE task_id = $1
+         AND type = $2`,
+      [taskId, type]
+    );
+
+    return result.rows[0].total;
   }
 }
 
