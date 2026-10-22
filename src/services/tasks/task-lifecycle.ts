@@ -217,3 +217,20 @@ export class TaskLifecycle {
 export function describeState(task: Task): string {
   return task.pausedAt ? `${task.state} and paused` : task.state;
 }
+
+// For races that are fine to lose: another change already moved the task on.
+export function ignoreStateConflict(error: unknown): void {
+  if (!(error instanceof AppError) || error.name !== 'taskStateConflict') {
+    throw error;
+  }
+}
+
+// For a wait someone else already resolved, or whose task already moved on.
+export function ignoreWaitAlreadyResolved(error: unknown): void {
+  if (
+    !(error instanceof AppError) ||
+    !['taskWaitNotFound', 'taskStateConflict'].includes(error.name)
+  ) {
+    throw error;
+  }
+}

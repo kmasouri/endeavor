@@ -124,6 +124,7 @@ export function mockApprovalRepository(): jest.Mocked<ApprovalRepository> {
     count: jest.fn().mockResolvedValue(0),
     decide: jest.fn().mockResolvedValue(null),
     listApprovedNotExecuted: jest.fn().mockResolvedValue([]),
+    listExecutedAwaitingWake: jest.fn().mockResolvedValue([]),
     markExecuted: jest.fn().mockResolvedValue(true),
     saveResult: jest.fn()
   };

@@ -319,6 +319,20 @@ describe('AgentService', () => {
     });
   });
 
+  it('treats limits with keys in another order as the same', async () => {
+    const { service, agents } = setup();
+    agents.getVersion.mockResolvedValue({
+      ...version1,
+      limits: { maxTokens: 5000, maxModelTurns: 10 }
+    });
+
+    await service.updateConfig(ADMIN_ID, AGENT_ID, {
+      limits: { maxModelTurns: 10, maxTokens: 5000 }
+    });
+
+    expect(agents.addVersion).not.toHaveBeenCalled();
+  });
+
   it('reports which providers are ready', () => {
     const { service } = setup(['scripted']);
 

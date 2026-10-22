@@ -289,9 +289,23 @@ describe('TaskService', () => {
       });
     });
 
-    it('refuses a second decision', async () => {
+    it('refuses to approve when the task moved on, such as after a cancel', async () => {
       const { service, tasks, approvals } = setup();
-      tasks.getById.mockResolvedValue(makeTask());
+      tasks.getById.mockResolvedValue(makeTask({ state: 'cancelled' }));
+      approvals.getById.mockResolvedValue(pending);
+
+      await expect(service.approve(HUMAN_ID, 'ap1')).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+      expect(approvals.decide).not.toHaveBeenCalled();
+    });
+
+    it('refuses a second decision and says what was decided', async () => {
+      const { service, tasks, approvals } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      approvals.getById
+        .mockResolvedValueOnce(pending)
+        .mockResolvedValue({ ...pending, status: 'approved' });
       approvals.getById.mockResolvedValue(pending);
       approvals.decide.mockResolvedValue(null);
 

@@ -171,7 +171,7 @@ export class AgentService {
       current.model === model &&
       sameIds(current.skillVersionIds, skillVersionIds) &&
       sameIds(current.connectionIds, connectionIds) &&
-      JSON.stringify(current.limits) === JSON.stringify(limits)
+      sameLimits(current.limits, limits)
     ) {
       return this.toDetails(agent, current);
     }
@@ -365,4 +365,10 @@ function toDirectoryEntry(agent: Agent, version: AgentVersion): DirectoryEntry {
 
 function sameIds(a: string[], b: string[]): boolean {
   return a.length === b.length && [...a].sort().join() === [...b].sort().join();
+}
+
+// jsonb doesn't keep key order, so compare the values, not the JSON text.
+function sameLimits(a: AgentLimits, b: AgentLimits): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof AgentLimits>;
+  return [...keys].every((key) => a[key] === b[key]);
 }

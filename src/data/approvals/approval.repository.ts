@@ -30,6 +30,8 @@ export interface ApprovalRepository {
     reason: string | null;
   }): Promise<Approval | null>;
   listApprovedNotExecuted(limit: number): Promise<Approval[]>;
+  // Carried-out approvals whose task still has an open wait on them, such as after a crash.
+  listExecutedAwaitingWake(limit: number): Promise<Approval[]>;
   // Claims the approved call before it is made, so it is never made twice, even after a crash.
   // Returns false if it was already claimed.
   markExecuted(approvalId: string, result: ApprovalResult): Promise<boolean>;

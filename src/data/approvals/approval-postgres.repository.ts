@@ -114,6 +114,26 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
     return result.rows.map(toApproval);
   }
 
+  async listExecutedAwaitingWake(limit: number): Promise<Approval[]> {
+    const result = await this.db.query<ApprovalRow>(
+      `SELECT a.*
+       FROM bold_cedar_007.approvals a
+       WHERE a.executed_at IS NOT NULL
+         AND a.executed_at < now() - interval '2 minutes'
+         AND EXISTS (
+           SELECT 1
+           FROM bold_cedar_007.task_waits w
+           WHERE w.kind = 'approval'
+             AND w.target_id = a.id
+             AND w.resolved_at IS NULL
+         )
+       ORDER BY a.executed_at
+       LIMIT $1`,
+      [limit]
+    );
+    return result.rows.map(toApproval);
+  }
+
   async markExecuted(approvalId: string, approvalResult: ApprovalResult): Promise<boolean> {
     const result = await this.db.query(
       `UPDATE bold_cedar_007.approvals

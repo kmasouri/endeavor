@@ -24,6 +24,7 @@ import {
   Actor,
   Agent,
   AgentVersion,
+  Approval,
   ApprovalResult,
   Connection,
   HTTP_METHODS,
@@ -50,7 +51,7 @@ import {
   HTTP_REQUEST_TOOL,
   STOPPING_TOOLS
 } from './agent-tools';
-import { TaskLifecycle } from './task-lifecycle';
+import { ignoreStateConflict, ignoreWaitAlreadyResolved, TaskLifecycle } from './task-lifecycle';
 
 export interface TaskRunnerOptions {
   workerId: string;
@@ -659,6 +660,13 @@ export class TaskRunnerService {
     const connection = await this.checkConnectionCall(task, agent, { name, method, path, callId });
 
     if (connection.approvalMethods.includes(method)) {
+      // Check first, so a paused or moved-on task never leaves an approval with no wait.
+      const before = await this.lifecycle.requireTask(task.id);
+      const existingWaits = await this.taskRepository.listWaits(task.id, { openOnly: false });
+      const replay = existingWaits.some((wait) => wait.kind === 'approval');
+      if (!replay && (before.state !== 'working' || before.pausedAt)) {
+        throw new AppError('taskStateConflict', 'The task is paused or no longer working.');
+      }
       const { approval } = await this.approvalRepository.create({
         clientKey: `tool:${task.id}:${callId}`,
         taskId: task.id,
@@ -703,11 +711,14 @@ export class TaskRunnerService {
   private async checkConnectionCall(
     task: Task,
     agent: Agent,
-    call: { name: string; method: HttpMethod; path: string; callId: string }
+    call: { name: string; connectionId?: string; method: HttpMethod; path: string; callId: string }
   ): Promise<Connection> {
     const version = await this.agentRepository.getVersion(task.agentVersionId);
     const usable = version ? (await this.usableCatalog(agent.id, version)).connections : [];
-    const connection = usable.find((c) => c.name.toLowerCase() === call.name.trim().toLowerCase());
+    // An approved call is matched by ID, so it can only go to the connection a person approved.
+    const connection = call.connectionId
+      ? usable.find((c) => c.id === call.connectionId)
+      : usable.find((c) => c.name.toLowerCase() === call.name.trim().toLowerCase());
     const denied = connection
       ? connectionCallDenied(connection, call.method, call.path)
       : `You can't use a connection named "${call.name}". Usable: ${usable.map((c) => c.name).join(', ') || 'none'}.`;
@@ -772,36 +783,56 @@ export class TaskRunnerService {
   }
 
   // Makes approved calls, after checking access again (it may have been revoked while the
-  // approval waited), records the result for the agent, and wakes the task.
+  // approval waited), records the result for the agent, and wakes the task. Calls run in
+  // parallel, so one slow outside system doesn't hold up the others.
   private async executeApprovedCalls(): Promise<void> {
-    for (const approval of await this.approvalRepository.listApprovedNotExecuted(10)) {
-      const task = await this.taskRepository.getById(approval.taskId);
-      const agent = await this.agentRepository.getById(approval.agentId);
-      // Claim it first, so a crash during the call can never make it twice.
-      const claimed = await this.approvalRepository.markExecuted(approval.id, {
+    const approved = await this.approvalRepository.listApprovedNotExecuted(10);
+    await Promise.all(approved.map((approval) => this.executeApproved(approval)));
+    // A crash after claiming a call but before waking its task would leave the task waiting.
+    for (const approval of await this.approvalRepository.listExecutedAwaitingWake(20)) {
+      await this.finishApproval(approval, approval.result ?? notRecorded());
+    }
+  }
+
+  private async executeApproved(approval: Approval): Promise<void> {
+    const task = await this.taskRepository.getById(approval.taskId);
+    const agent = await this.agentRepository.getById(approval.agentId);
+    if (!task || !agent) {
+      return;
+    }
+    // Wait while the task is paused; a person may still cancel it.
+    if (task.pausedAt && !isFinishedState(task.state)) {
+      return;
+    }
+    // Claim it first, so a crash during the call can never make it twice.
+    if (!(await this.approvalRepository.markExecuted(approval.id, notRecorded()))) {
+      return;
+    }
+
+    let result: ApprovalResult;
+    if (task.state !== 'waiting') {
+      // The task was cancelled, finished, or blocked after the request: never act for it.
+      result = {
         status: null,
         body: '',
         truncated: false,
-        error: 'The call started, but its result was not recorded.'
-      });
-      if (!claimed || !task || !agent) {
-        continue;
-      }
-
-      const { request } = approval;
-      let result: ApprovalResult;
+        error: `The task is ${task.state}, so the call was not made.`
+      };
+    } else {
+      const callId = `approval:${approval.id}`;
       try {
         const connection = await this.checkConnectionCall(task, agent, {
-          name: request.connectionName,
-          method: request.method,
-          path: request.path,
-          callId: `approval:${approval.id}`
+          name: approval.request.connectionName,
+          connectionId: approval.request.connectionId,
+          method: approval.request.method,
+          path: approval.request.path,
+          callId
         });
         const response = await this.performCall(task, agent.id, connection, {
-          method: request.method,
-          path: request.path,
-          body: request.body,
-          callId: `approval:${approval.id}`
+          method: approval.request.method,
+          path: approval.request.path,
+          body: approval.request.body,
+          callId
         });
         result = { ...response, error: null };
       } catch (error) {
@@ -812,17 +843,25 @@ export class TaskRunnerService {
           error: error instanceof AppError ? error.message : (error as Error).message
         };
       }
-      await this.approvalRepository.saveResult(approval.id, result);
-      await this.taskRepository.addEvent(task.id, EVENTS.approvalExecuted, SYSTEM, {
-        approvalId: approval.id,
-        request,
-        result
-      });
-      for (const wait of await this.taskRepository.findOpenWaits('approval', approval.id)) {
-        await this.lifecycle
-          .resolveWait(wait.id, SYSTEM, { approvalId: approval.id, approved: true })
-          .catch(ignoreWaitAlreadyResolved);
-      }
+    }
+    await this.approvalRepository.saveResult(approval.id, result);
+    await this.finishApproval(approval, result);
+  }
+
+  private async finishApproval(approval: Approval, result: ApprovalResult): Promise<void> {
+    const waits = await this.taskRepository.findOpenWaits('approval', approval.id);
+    if (waits.length === 0) {
+      return;
+    }
+    await this.taskRepository.addEvent(approval.taskId, EVENTS.approvalExecuted, SYSTEM, {
+      approvalId: approval.id,
+      request: approval.request,
+      result
+    });
+    for (const wait of waits) {
+      await this.lifecycle
+        .resolveWait(wait.id, SYSTEM, { approvalId: approval.id, approved: true })
+        .catch(ignoreWaitAlreadyResolved);
     }
   }
 
@@ -1283,21 +1322,6 @@ function optionalStrings(input: Record<string, unknown>, field: string): string[
     : [];
 }
 
-function ignoreStateConflict(error: unknown): void {
-  if (!(error instanceof AppError) || error.name !== 'taskStateConflict') {
-    throw error;
-  }
-}
-
-function ignoreWaitAlreadyResolved(error: unknown): void {
-  if (
-    !(error instanceof AppError) ||
-    !['taskWaitNotFound', 'taskStateConflict'].includes(error.name)
-  ) {
-    throw error;
-  }
-}
-
 // Checks a task against its version's limits. Returns why it is over, or null.
 export function budgetExceeded(
   task: Task,
@@ -1306,7 +1330,8 @@ export function budgetExceeded(
   defaultMaxTurns: number,
   now: Date = new Date()
 ): string | null {
-  const maxTurns = version.limits.maxModelTurns ?? defaultMaxTurns;
+  // A version can lower the runner's turn limit, never raise it.
+  const maxTurns = Math.min(version.limits.maxModelTurns ?? defaultMaxTurns, defaultMaxTurns);
   const turns = countType(events, EVENTS.modelTurn);
   if (turns >= maxTurns) {
     return `Reached the limit of ${maxTurns} model turns.`;
@@ -1360,4 +1385,17 @@ export function workingMs(task: Pick<Task, 'createdAt'>, events: TaskEvent[], no
   }
   update(now.getTime(), working, paused);
   return total;
+}
+
+function notRecorded(): ApprovalResult {
+  return {
+    status: null,
+    body: '',
+    truncated: false,
+    error: 'The call started, but its result was not recorded.'
+  };
+}
+
+function isFinishedState(state: Task['state']): boolean {
+  return state === 'completed' || state === 'cancelled';
 }

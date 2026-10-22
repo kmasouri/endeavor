@@ -882,7 +882,9 @@ describe('TaskRunnerService', () => {
     });
 
     it('makes an approved call after checking access again, and wakes the task', async () => {
-      const { runner, tasks, catalogs, approvals, connectionClient } = setupWithConnection();
+      const { runner, tasks, catalogs, approvals, connectionClient, setCurrent } =
+        setupWithConnection();
+      setCurrent(makeTask({ state: 'waiting' }));
       catalogs.getConnections.mockResolvedValue([
         { ...billing, allowedMethods: ['GET', 'POST'], approvalMethods: ['POST'] }
       ]);
@@ -937,7 +939,8 @@ describe('TaskRunnerService', () => {
     });
 
     it('does not make an approved call if access was revoked meanwhile', async () => {
-      const { runner, catalogs, approvals, connectionClient } = setupWithConnection();
+      const { runner, catalogs, approvals, connectionClient, setCurrent } = setupWithConnection();
+      setCurrent(makeTask({ state: 'waiting' }));
       catalogs.listGrants.mockResolvedValue([]);
       approvals.listApprovedNotExecuted.mockResolvedValue([
         {
@@ -969,6 +972,141 @@ describe('TaskRunnerService', () => {
         'ap1',
         expect.objectContaining({ status: null, error: expect.stringContaining("can't use") })
       );
+    });
+
+    it('never makes an approved call for a task that was cancelled meanwhile', async () => {
+      const { runner, approvals, connectionClient, setCurrent } = setupWithConnection();
+      setCurrent(makeTask({ state: 'cancelled' }));
+      approvals.listApprovedNotExecuted.mockResolvedValue([
+        {
+          id: 'ap1',
+          taskId: TASK,
+          agentId: RESEARCHER,
+          kind: 'connection_call',
+          request: {
+            connectionId: 'conn-1',
+            connectionName: 'Billing API',
+            method: 'GET',
+            path: '/invoices',
+            body: null
+          },
+          status: 'approved',
+          decidedByHumanId: HUMAN,
+          decidedAt: new Date(),
+          reason: null,
+          executedAt: null,
+          result: null,
+          createdAt: new Date()
+        }
+      ]);
+
+      await runner.tick();
+
+      expect(connectionClient.request).not.toHaveBeenCalled();
+      expect(approvals.saveResult).toHaveBeenCalledWith(
+        'ap1',
+        expect.objectContaining({ error: expect.stringContaining('cancelled') })
+      );
+    });
+
+    it('holds an approved call while its task is paused', async () => {
+      const { runner, approvals, setCurrent } = setupWithConnection();
+      setCurrent(makeTask({ state: 'waiting', pausedAt: new Date() }));
+      approvals.listApprovedNotExecuted.mockResolvedValue([
+        {
+          id: 'ap1',
+          taskId: TASK,
+          agentId: RESEARCHER,
+          kind: 'connection_call',
+          request: {
+            connectionId: 'conn-1',
+            connectionName: 'Billing API',
+            method: 'GET',
+            path: '/invoices',
+            body: null
+          },
+          status: 'approved',
+          decidedByHumanId: HUMAN,
+          decidedAt: new Date(),
+          reason: null,
+          executedAt: null,
+          result: null,
+          createdAt: new Date()
+        }
+      ]);
+
+      await runner.tick();
+
+      expect(approvals.markExecuted).not.toHaveBeenCalled();
+    });
+
+    it('wakes a task whose approved call was claimed before a crash', async () => {
+      const { runner, tasks, approvals } = setupWithConnection();
+      approvals.listExecutedAwaitingWake.mockResolvedValue([
+        {
+          id: 'ap1',
+          taskId: TASK,
+          agentId: RESEARCHER,
+          kind: 'connection_call',
+          request: {
+            connectionId: 'conn-1',
+            connectionName: 'Billing API',
+            method: 'GET',
+            path: '/invoices',
+            body: null
+          },
+          status: 'approved',
+          decidedByHumanId: HUMAN,
+          decidedAt: new Date(),
+          reason: null,
+          executedAt: new Date(),
+          result: null,
+          createdAt: new Date()
+        }
+      ]);
+      const wait = {
+        id: 'w1',
+        taskId: TASK,
+        kind: 'approval' as const,
+        targetId: 'ap1',
+        description: '',
+        createdAt: new Date(),
+        resolvedAt: null,
+        resolution: null
+      };
+      tasks.findOpenWaits.mockResolvedValue([wait]);
+      tasks.resolveWait.mockResolvedValue({ ...wait, resolvedAt: new Date() });
+
+      await runner.tick();
+
+      expect(tasks.addEvent).toHaveBeenCalledWith(
+        TASK,
+        'approval.executed',
+        expect.anything(),
+        expect.objectContaining({
+          result: expect.objectContaining({ error: expect.stringContaining('not recorded') })
+        })
+      );
+      expect(tasks.resolveWait).toHaveBeenCalledWith('w1', { approvalId: 'ap1', approved: true });
+    });
+
+    it('creates no approval for a paused task', async () => {
+      const { runner, tasks, catalogs, approvals, setCurrent } = setupWithConnection();
+      catalogs.getConnections.mockResolvedValue([
+        { ...billing, allowedMethods: ['POST'], approvalMethods: ['POST'] }
+      ]);
+      tasks.listEvents.mockResolvedValue([
+        event(1, 'model.turn', { raw: {}, toolCalls: [callBilling('/invoices', 'POST')] })
+      ]);
+      // Paused after the claim, while the model turn ran.
+      tasks.getById
+        .mockResolvedValueOnce(makeTask())
+        .mockResolvedValue(makeTask({ pausedAt: new Date() }));
+      void setCurrent;
+
+      await runner.runTask(makeTask());
+
+      expect(approvals.create).not.toHaveBeenCalled();
     });
 
     it('offers http_request and lists connections only when one is usable', async () => {
@@ -1147,6 +1285,14 @@ describe('budgets', () => {
       'Used 1010 of the 1000-token budget.'
     );
     expect(budgetExceeded(makeTask(), version, events, 40)).toBeNull();
+  });
+
+  it("never lets a version raise the runner's turn limit", () => {
+    const events = Array.from({ length: 40 }, (_, i) => event(i + 1, 'model.turn', {}));
+
+    expect(
+      budgetExceeded(makeTask(), { ...version, limits: { maxModelTurns: 1000 } }, events, 40)
+    ).toBe('Reached the limit of 40 model turns.');
   });
 
   it("uses the version's turn limit over the runner default", () => {
