@@ -1,6 +1,13 @@
-import { Actor, AgentNote, ConversationDocument, NoteScope } from '../../shared/types';
+import { Actor, AgentNote, NoteScope } from '../../shared/types';
+
+// Which notes a list returns: every note ('all'), the notes a task in this conversation may see
+// ({ conversationId }), or the notes this person may see ({ visibleToHumanId }). Agent-wide
+// notes are included in all three.
+export type NoteVisibility =
+  'all' | { conversationId: string | null } | { visibleToHumanId: string };
 
 export interface NoteRepository {
+  // Saving again with the same clientKey returns the first note instead of a copy.
   create(input: {
     agentId: string;
     body: string;
@@ -8,30 +15,21 @@ export interface NoteRepository {
     sourceConversationId: string | null;
     scope: NoteScope;
     createdBy: Actor;
+    clientKey: string | null;
   }): Promise<AgentNote>;
   getById(noteId: string): Promise<AgentNote | null>;
-  // Notes that aren't deleted, newest first. conversationIds limits conversation-scoped notes
-  // to those conversations; agent-scoped notes are always included.
+  // Notes that aren't deleted, newest first.
   list(input: {
     agentId: string;
-    conversationIds: string[] | 'all';
+    visibility: NoteVisibility;
     limit: number;
     offset: number;
   }): Promise<AgentNote[]>;
+  count(input: { agentId: string; visibility: NoteVisibility }): Promise<number>;
   update(
     noteId: string,
     changes: { body?: string; scope?: NoteScope },
     humanId: string
   ): Promise<AgentNote | null>;
   softDelete(noteId: string, humanId: string): Promise<boolean>;
-
-  addDocument(input: {
-    conversationId: string;
-    title: string;
-    content: string;
-    addedByHumanId: string;
-  }): Promise<ConversationDocument>;
-  listDocuments(conversationId: string): Promise<ConversationDocument[]>;
-  getDocument(documentId: string): Promise<ConversationDocument | null>;
-  deleteDocument(documentId: string): Promise<boolean>;
 }

@@ -126,7 +126,8 @@ export function buildTaskPrompt(input: {
           ? `${document.content.slice(0, left)}\n(cut off)`
           : document.content;
       left -= text.length;
-      lines.push('', `### ${oneLine(document.title)}`, text);
+      // Every line is quoted, so text inside a document can't pose as a prompt section.
+      lines.push('', `### ${oneLine(document.title)}`, quote(text));
     }
   }
 
@@ -158,6 +159,13 @@ export function buildTaskPrompt(input: {
 // so text like a heading can't pose as a section of the prompt.
 export function oneLine(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+function quote(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => `> ${line}`)
+    .join('\n');
 }
 
 export function formatMessage(message: Message, authorName: string): string {

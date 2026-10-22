@@ -2,8 +2,8 @@ import {
   AgentRepository,
   ConversationRepository,
   HumanRepository,
-  MessageRepository,
-  NoteRepository
+  DocumentRepository,
+  MessageRepository
 } from '../../data';
 import { ConversationLogger } from '../../observability';
 import { requireHuman } from '../../shared/access';
@@ -37,7 +37,7 @@ export class ConversationService {
     private readonly messageRepository: MessageRepository,
     private readonly agentRepository: AgentRepository,
     private readonly humanRepository: HumanRepository,
-    private readonly noteRepository: NoteRepository,
+    private readonly documentRepository: DocumentRepository,
     private readonly conversationLogger: ConversationLogger
   ) {}
 
@@ -201,7 +201,7 @@ export class ConversationService {
     const { conversation, human } = await this.requireAccess(actorId, conversationId, {
       memberOnly: true
     });
-    const document = await this.noteRepository.addDocument({
+    const document = await this.documentRepository.add({
       conversationId: conversation.id,
       title: input.title,
       content: input.content,
@@ -213,18 +213,18 @@ export class ConversationService {
 
   async listDocuments(actorId: string, conversationId: string): Promise<ConversationDocument[]> {
     const { conversation } = await this.requireAccess(actorId, conversationId);
-    return this.noteRepository.listDocuments(conversation.id);
+    return this.documentRepository.list(conversation.id);
   }
 
   async deleteDocument(actorId: string, conversationId: string, documentId: string): Promise<void> {
     const { conversation } = await this.requireAccess(actorId, conversationId, {
       memberOnly: true
     });
-    const document = await this.noteRepository.getDocument(documentId);
+    const document = await this.documentRepository.get(documentId);
     if (!document || document.conversationId !== conversation.id) {
       throw new AppError('documentNotFound', `Document ${documentId} was not found`);
     }
-    await this.noteRepository.deleteDocument(document.id);
+    await this.documentRepository.delete(document.id);
   }
 
   // Members can read and post. Admins can read any conversation and manage its members, but

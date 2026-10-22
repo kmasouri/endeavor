@@ -52,7 +52,7 @@ describe('NoteService', () => {
 
     expect(notes.list).toHaveBeenCalledWith({
       agentId: AGENT,
-      conversationIds: [CONV],
+      visibility: { visibleToHumanId: MEMBER },
       limit: 10,
       offset: 0
     });
@@ -63,14 +63,14 @@ describe('NoteService', () => {
 
     await service.listNotes(MEMBER, AGENT, { limit: 10, offset: 0 });
 
-    expect(notes.list).toHaveBeenCalledWith(expect.objectContaining({ conversationIds: 'all' }));
+    expect(notes.list).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'all' }));
   });
 
   it('lets a member of the source conversation correct a note', async () => {
     const { service, notes, conversations, logger } = setup();
     conversations.getMember.mockResolvedValue({} as never);
 
-    const updated = await service.updateNote(MEMBER, 'n1', {
+    const updated = await service.updateNote(MEMBER, AGENT, 'n1', {
       body: 'The gateway was NOT ruled out'
     });
 
@@ -86,7 +86,9 @@ describe('NoteService', () => {
   it("hides notes from conversations the member isn't in", async () => {
     const { service, notes } = setup();
 
-    await expect(service.deleteNote(MEMBER, 'n1')).rejects.toMatchObject({ name: 'noteNotFound' });
+    await expect(service.deleteNote(MEMBER, AGENT, 'n1')).rejects.toMatchObject({
+      name: 'noteNotFound'
+    });
     expect(notes.softDelete).not.toHaveBeenCalled();
   });
 
@@ -94,15 +96,17 @@ describe('NoteService', () => {
     const { service, conversations } = setup();
     conversations.getMember.mockResolvedValue({} as never);
 
-    await expect(service.updateNote(MEMBER, 'n1', { scope: 'agent' })).rejects.toMatchObject({
-      name: 'forbidden'
-    });
+    await expect(service.updateNote(MEMBER, AGENT, 'n1', { scope: 'agent' })).rejects.toMatchObject(
+      {
+        name: 'forbidden'
+      }
+    );
   });
 
   it('lets an admin make a note agent-wide', async () => {
     const { service, notes } = setup({ ...member, role: 'admin' });
 
-    await service.updateNote(MEMBER, 'n1', { scope: 'agent' });
+    await service.updateNote(MEMBER, AGENT, 'n1', { scope: 'agent' });
 
     expect(notes.update).toHaveBeenCalledWith('n1', { scope: 'agent' }, MEMBER);
   });

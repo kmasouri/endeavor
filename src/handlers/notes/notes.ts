@@ -6,7 +6,7 @@ import {
   NoteParams,
   UpdateNoteBody
 } from '../../schemas';
-import { success } from '../../shared/response';
+import { paged, success } from '../../shared/response';
 
 export async function listNotesHandler(
   request: FastifyRequest<{
@@ -15,13 +15,13 @@ export async function listNotesHandler(
     Headers: ActorHeaders;
   }>
 ): Promise<unknown> {
-  return success(
-    await request.server.noteService.listNotes(
-      request.headers['x-actor-id'],
-      request.params.agentId,
-      request.query
-    )
+  const { limit, offset } = request.query;
+  const { notes, total } = await request.server.noteService.listNotes(
+    request.headers['x-actor-id'],
+    request.params.agentId,
+    request.query
   );
+  return paged(notes, { limit, offset, total });
 }
 
 export async function updateNoteHandler(
@@ -30,6 +30,7 @@ export async function updateNoteHandler(
   return success(
     await request.server.noteService.updateNote(
       request.headers['x-actor-id'],
+      request.params.agentId,
       request.params.noteId,
       request.body
     )
@@ -40,6 +41,10 @@ export async function deleteNoteHandler(
   request: FastifyRequest<{ Params: NoteParams; Headers: ActorHeaders }>,
   reply: FastifyReply
 ): Promise<FastifyReply> {
-  await request.server.noteService.deleteNote(request.headers['x-actor-id'], request.params.noteId);
+  await request.server.noteService.deleteNote(
+    request.headers['x-actor-id'],
+    request.params.agentId,
+    request.params.noteId
+  );
   return reply.code(204).send();
 }

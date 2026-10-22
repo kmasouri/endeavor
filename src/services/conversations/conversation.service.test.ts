@@ -3,7 +3,7 @@ import {
   mockConversationRepository,
   mockHumanRepository,
   mockMessageRepository,
-  mockNoteRepository
+  mockDocumentRepository
 } from '../../data/repositories.test-helper';
 import { ConversationLogger } from '../../observability';
 import { Agent, Conversation, ConversationMember, Human, Message } from '../../shared/types';
@@ -65,7 +65,7 @@ function setup() {
     onMessagePosted: jest.fn(),
     onDocumentAdded: jest.fn()
   } as unknown as jest.Mocked<ConversationLogger>;
-  const notes = mockNoteRepository();
+  const notes = mockDocumentRepository();
   const service = new ConversationService(conversations, messages, agents, humans, notes, logger);
   return { service, conversations, messages, agents, humans, notes };
 }
@@ -202,10 +202,10 @@ describe('ConversationService', () => {
 
   it('lets members attach documents, but not outsiders', async () => {
     const { service, notes, humans } = setup();
-    notes.addDocument.mockResolvedValue({ id: 'd1' } as never);
+    notes.add.mockResolvedValue({ id: 'd1' } as never);
 
     await service.addDocument(KIM, CONV, { title: 'Policy', content: 'Text' });
-    expect(notes.addDocument).toHaveBeenCalledWith({
+    expect(notes.add).toHaveBeenCalledWith({
       conversationId: CONV,
       title: 'Policy',
       content: 'Text',
@@ -225,11 +225,11 @@ describe('ConversationService', () => {
 
   it("won't delete a document from another conversation", async () => {
     const { service, notes } = setup();
-    notes.getDocument.mockResolvedValue({ id: 'd1', conversationId: 'elsewhere' } as never);
+    notes.get.mockResolvedValue({ id: 'd1', conversationId: 'elsewhere' } as never);
 
     await expect(service.deleteDocument(KIM, CONV, 'd1')).rejects.toMatchObject({
       name: 'documentNotFound'
     });
-    expect(notes.deleteDocument).not.toHaveBeenCalled();
+    expect(notes.delete).not.toHaveBeenCalled();
   });
 });

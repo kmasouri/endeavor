@@ -3,6 +3,7 @@ import {
   ApprovalRepository,
   CatalogRepository,
   ConversationRepository,
+  DocumentRepository,
   HumanRepository,
   MessageRepository,
   NoteRepository,
@@ -44,6 +45,7 @@ import {
   ContextParticipant,
   DEFAULT_RESPONSE_CRITERIA,
   formatMessage,
+  MAX_DOCUMENT_CHARS,
   oneLine
 } from './agent-context';
 import {
@@ -123,6 +125,7 @@ export class TaskRunnerService {
     private readonly catalogRepository: CatalogRepository,
     private readonly approvalRepository: ApprovalRepository,
     private readonly noteRepository: NoteRepository,
+    private readonly documentRepository: DocumentRepository,
     private readonly connectionClient: ConnectionClient,
     private readonly modelClients: Partial<Record<ModelProvider, ModelClient>>,
     taskLogger: TaskLogger,
@@ -641,13 +644,10 @@ export class TaskRunnerService {
         if (text.length > 2000) {
           throw new AppError('validationError', 'Keep notes under 2,000 characters.');
         }
-        // A replay after a crash finds the earlier save instead of saving twice.
-        const events = await this.loadEvents(task.id);
-        if (events.some((e) => e.type === EVENTS.noteSaved && e.data.callId === call.id)) {
-          return 'Note saved.';
-        }
-        // Saved for this conversation only, so it can't carry its details into another.
+        // Saved for this conversation only, so it can't carry its details into another. The
+        // tool call is the note's key, so a replay after a crash finds the first save.
         const note = await this.noteRepository.create({
+          clientKey: `tool:${task.id}:${call.id}`,
           agentId: agent.id,
           body: text,
           sourceTaskId: task.id,
@@ -1069,7 +1069,7 @@ export class TaskRunnerService {
     // Notes from this conversation, plus agent-wide ones. Never notes from other conversations.
     const notes = await this.noteRepository.list({
       agentId: agent.id,
-      conversationIds: task.conversationId ? [task.conversationId] : [],
+      visibility: { conversationId: task.conversationId },
       limit: NOTES_IN_PROMPT,
       offset: 0
     });
@@ -1084,13 +1084,16 @@ export class TaskRunnerService {
         nameOf: () => ''
       });
     }
-    const documents = await this.noteRepository.listDocuments(task.conversationId);
+    // Newest first, each cut to what the prompt can hold, so huge documents aren't loaded.
+    const [documents, participants, membership] = await Promise.all([
+      this.documentRepository.list(task.conversationId, {
+        limit: 50,
+        maxChars: MAX_DOCUMENT_CHARS
+      }),
+      this.loadParticipants(task.conversationId),
+      this.conversationRepository.getMember(task.conversationId, { type: 'agent', id: agent.id })
+    ]);
 
-    const participants = await this.loadParticipants(task.conversationId);
-    const membership = await this.conversationRepository.getMember(task.conversationId, {
-      type: 'agent',
-      id: agent.id
-    });
     // Only history this agent may see: nothing from before it joined, if it joined that way.
     const history = await this.messageRepository.listRecent(task.conversationId, {
       since: membership?.historyFrom ?? null,
