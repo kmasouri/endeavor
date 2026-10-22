@@ -15,6 +15,7 @@ import catalogPlugin from './plugins/catalog';
 import conversationPlugin from './plugins/conversation';
 import humanPlugin from './plugins/human';
 import itemPlugin from './plugins/item';
+import notePlugin from './plugins/note';
 import runnerPlugin from './plugins/runner';
 import taskPlugin from './plugins/task';
 import { AppError, ErrorName, ERRORS } from './shared/errors';
@@ -184,6 +185,7 @@ export function setupApp(): FastifyInstance {
   app.register(conversationPlugin);
   app.register(humanPlugin);
   app.register(itemPlugin);
+  app.register(notePlugin);
   app.register(taskPlugin);
   app.register(runnerPlugin);
 
@@ -193,6 +195,7 @@ export function setupApp(): FastifyInstance {
   app.register(routes.healthcheckRouter);
   app.register(routes.humansRouter);
   app.register(routes.itemsRouter);
+  app.register(routes.notesRouter);
   app.register(routes.tasksRouter);
 
   return app;

@@ -9,7 +9,8 @@ export const AGENT_TOOLS = {
   completeTask: 'complete_task',
   reportBlocked: 'report_blocked',
   suggestParticipant: 'suggest_participant',
-  httpRequest: 'http_request'
+  httpRequest: 'http_request',
+  saveNote: 'save_note'
 } as const;
 
 export type AgentToolName = (typeof AGENT_TOOLS)[keyof typeof AGENT_TOOLS];
@@ -97,6 +98,17 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
         reason: { type: 'string', description: 'What you need and from whom.' }
       },
       required: ['reason'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: AGENT_TOOLS.saveNote,
+    description:
+      'Save a note for your later work, like "Yesterday\'s check ruled out the payment gateway." Notes are your own memory, not approved facts, and people can read, fix, or delete them. A note saved here is only shown to you in this conversation. Save only what will help later; don\'t copy whole messages.',
+    inputSchema: {
+      type: 'object',
+      properties: { note: { type: 'string', description: 'The note, in a sentence or two.' } },
+      required: ['note'],
       additionalProperties: false
     }
   },

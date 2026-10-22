@@ -8,7 +8,7 @@ interface ErrorDefinition {
 // The key is the error's name in responses. docs/errors.md documents each one.
 //
 // Codes are grouped by feature: 10xxx general, 20xxx items, 30xxx people and access, 40xxx tasks,
-// 50xxx agents, 60xxx conversations, 70xxx catalogs.
+// 50xxx agents, 60xxx conversations, 70xxx catalogs, 80xxx notes.
 // Never change or reuse a code once it has shipped; clients may depend on it.
 export const ERRORS = {
   // 10xxx: general
@@ -111,7 +111,11 @@ export const ERRORS = {
     code: 70006,
     statusCode: 403,
     message: 'The agent is not allowed to make this call'
-  }
+  },
+
+  // 80xxx: saved notes and documents
+  noteNotFound: { code: 80001, statusCode: 404, message: 'Note not found' },
+  documentNotFound: { code: 80002, statusCode: 404, message: 'Document not found' }
 } as const satisfies Record<string, ErrorDefinition>;
 
 export type ErrorName = keyof typeof ERRORS;

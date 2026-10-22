@@ -133,10 +133,24 @@ export interface AgentNote {
   body: string;
   sourceTaskId: string | null;
   sourceConversationId: string | null;
+  // 'conversation': shown only in tasks in the source conversation. 'agent': in all of them.
+  scope: NoteScope;
   createdBy: Actor;
   updatedByHumanId: string | null;
   createdAt: Date;
   updatedAt: Date;
+}
+
+export type NoteScope = 'conversation' | 'agent';
+
+// A knowledge source a person attached to a conversation.
+export interface ConversationDocument {
+  id: string;
+  conversationId: string;
+  title: string;
+  content: string;
+  addedByHumanId: string;
+  createdAt: Date;
 }
 
 // Model providers an agent can use. src/integrations/models has a client for each one.

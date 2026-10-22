@@ -2,7 +2,8 @@ import {
   mockAgentRepository,
   mockConversationRepository,
   mockHumanRepository,
-  mockMessageRepository
+  mockMessageRepository,
+  mockDocumentRepository
 } from '../../data/repositories.test-helper';
 import { ConversationLogger } from '../../observability';
 import { Agent, Conversation, ConversationMember, Human, Message } from '../../shared/types';
@@ -61,10 +62,12 @@ function setup() {
   const logger = {
     onConversationCreated: jest.fn(),
     onMemberAdded: jest.fn(),
-    onMessagePosted: jest.fn()
+    onMessagePosted: jest.fn(),
+    onDocumentAdded: jest.fn()
   } as unknown as jest.Mocked<ConversationLogger>;
-  const service = new ConversationService(conversations, messages, agents, humans, logger);
-  return { service, conversations, messages, agents, humans };
+  const notes = mockDocumentRepository();
+  const service = new ConversationService(conversations, messages, agents, humans, notes, logger);
+  return { service, conversations, messages, agents, humans, notes };
 }
 
 describe('ConversationService', () => {
@@ -195,5 +198,38 @@ describe('ConversationService', () => {
     expect(conversations.addMember).toHaveBeenCalledWith(
       expect.objectContaining({ addedByHumanId: KIM, historyFrom: expect.any(Date) })
     );
+  });
+
+  it('lets members attach documents, but not outsiders', async () => {
+    const { service, notes, humans } = setup();
+    notes.add.mockResolvedValue({ id: 'd1' } as never);
+
+    await service.addDocument(KIM, CONV, { title: 'Policy', content: 'Text' });
+    expect(notes.add).toHaveBeenCalledWith({
+      conversationId: CONV,
+      title: 'Policy',
+      content: 'Text',
+      addedByHumanId: KIM
+    });
+
+    humans.getById.mockResolvedValue({
+      id: LEE,
+      name: 'Lee',
+      role: 'member',
+      createdAt: new Date()
+    });
+    await expect(
+      service.addDocument(LEE, CONV, { title: 'x', content: 'y' })
+    ).rejects.toMatchObject({ name: 'notConversationMember' });
+  });
+
+  it("won't delete a document from another conversation", async () => {
+    const { service, notes } = setup();
+    notes.get.mockResolvedValue({ id: 'd1', conversationId: 'elsewhere' } as never);
+
+    await expect(service.deleteDocument(KIM, CONV, 'd1')).rejects.toMatchObject({
+      name: 'documentNotFound'
+    });
+    expect(notes.delete).not.toHaveBeenCalled();
   });
 });

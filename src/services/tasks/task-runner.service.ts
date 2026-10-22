@@ -3,8 +3,10 @@ import {
   ApprovalRepository,
   CatalogRepository,
   ConversationRepository,
+  DocumentRepository,
   HumanRepository,
   MessageRepository,
+  NoteRepository,
   TaskRepository
 } from '../../data';
 import {
@@ -43,6 +45,7 @@ import {
   ContextParticipant,
   DEFAULT_RESPONSE_CRITERIA,
   formatMessage,
+  MAX_DOCUMENT_CHARS,
   oneLine
 } from './agent-context';
 import {
@@ -85,6 +88,7 @@ const MAX_REQUEST_DEPTH = 5;
 // How many directory agents the prompt lists. suggest_participant can name any agent in the
 // directory, listed or not.
 const DIRECTORY_IN_PROMPT = 30;
+const NOTES_IN_PROMPT = 20;
 const MAX_NUDGES = 2;
 const NUDGE =
   'You ended your turn without finishing. Use complete_task, ask, or report_blocked to finish, or send_message to post an update.';
@@ -101,6 +105,7 @@ const EVENTS = {
   connectionCall: 'connection.called',
   connectionDenied: 'connection.denied',
   approvalExecuted: 'approval.executed',
+  noteSaved: 'note.saved',
   approvalRejected: 'approval.rejected',
   resultPosted: 'result.posted'
 } as const;
@@ -119,6 +124,8 @@ export class TaskRunnerService {
     private readonly humanRepository: HumanRepository,
     private readonly catalogRepository: CatalogRepository,
     private readonly approvalRepository: ApprovalRepository,
+    private readonly noteRepository: NoteRepository,
+    private readonly documentRepository: DocumentRepository,
     private readonly connectionClient: ConnectionClient,
     private readonly modelClients: Partial<Record<ModelProvider, ModelClient>>,
     taskLogger: TaskLogger,
@@ -632,6 +639,29 @@ export class TaskRunnerService {
         return `Suggested ${suggested.name} to the people here. A person decides whether to add them.`;
       }
 
+      case AGENT_TOOLS.saveNote: {
+        const text = requireString(input, 'note');
+        if (text.length > 2000) {
+          throw new AppError('validationError', 'Keep notes under 2,000 characters.');
+        }
+        // Saved for this conversation only, so it can't carry its details into another. The
+        // tool call is the note's key, so a replay after a crash finds the first save.
+        const note = await this.noteRepository.create({
+          clientKey: `tool:${task.id}:${call.id}`,
+          agentId: agent.id,
+          body: text,
+          sourceTaskId: task.id,
+          sourceConversationId: task.conversationId,
+          scope: task.conversationId ? 'conversation' : 'agent',
+          createdBy: agentActor
+        });
+        await this.taskRepository.addEvent(task.id, EVENTS.noteSaved, agentActor, {
+          callId: call.id,
+          noteId: note.id
+        });
+        return 'Note saved.';
+      }
+
       case AGENT_TOOLS.httpRequest: {
         return this.httpRequest(task, agent, call.id, input);
       }
@@ -1036,21 +1066,34 @@ export class TaskRunnerService {
         ? await this.participantName({ type: task.requestedByType, id: task.requestedById })
         : 'a schedule';
 
+    // Notes from this conversation, plus agent-wide ones. Never notes from other conversations.
+    const notes = await this.noteRepository.list({
+      agentId: agent.id,
+      visibility: { conversationId: task.conversationId },
+      limit: NOTES_IN_PROMPT,
+      offset: 0
+    });
+
     if (!task.conversationId) {
       return buildTaskPrompt({
         task,
         requesterName,
         participants: [],
+        notes,
         history: [],
         nameOf: () => ''
       });
     }
+    // Newest first, each cut to what the prompt can hold, so huge documents aren't loaded.
+    const [documents, participants, membership] = await Promise.all([
+      this.documentRepository.list(task.conversationId, {
+        limit: 50,
+        maxChars: MAX_DOCUMENT_CHARS
+      }),
+      this.loadParticipants(task.conversationId),
+      this.conversationRepository.getMember(task.conversationId, { type: 'agent', id: agent.id })
+    ]);
 
-    const participants = await this.loadParticipants(task.conversationId);
-    const membership = await this.conversationRepository.getMember(task.conversationId, {
-      type: 'agent',
-      id: agent.id
-    });
     // Only history this agent may see: nothing from before it joined, if it joined that way.
     const history = await this.messageRepository.listRecent(task.conversationId, {
       since: membership?.historyFrom ?? null,
@@ -1066,6 +1109,8 @@ export class TaskRunnerService {
       requesterName,
       participants,
       directory,
+      notes,
+      documents,
       history,
       nameOf: (message) => names.get(`${message.authorType}:${message.authorId}`) ?? 'Someone'
     });

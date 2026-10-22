@@ -8,8 +8,10 @@ import {
   CatalogPostgresRepository,
   ConversationPostgresRepository,
   CredentialCipher,
+  DocumentPostgresRepository,
   HumanPostgresRepository,
   MessagePostgresRepository,
+  NotePostgresRepository,
   TaskPostgresRepository
 } from '../data';
 import {
@@ -78,6 +80,8 @@ const runnerPlugin: FastifyPluginAsync = async (fastify) => {
     new HumanPostgresRepository(fastify.pg),
     new CatalogPostgresRepository(fastify.pg, new CredentialCipher(config.CREDENTIALS_KEY)),
     new ApprovalPostgresRepository(fastify.pg),
+    new NotePostgresRepository(fastify.pg),
+    new DocumentPostgresRepository(fastify.pg),
     new ConnectionHttpClient(),
     buildModelClients(config),
     new TaskLogger(fastify.log),
