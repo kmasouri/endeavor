@@ -87,7 +87,7 @@ Requests that act as a person send that person's ID in the `x-actor-id` header. 
 - `GET /health`
 - `GET /docs`
 - `POST /humans`, `GET /humans`
-- `GET /providers`
+- `GET /providers`, `GET /directory`
 - `POST /agents`, `GET /agents`, `GET /agents/:agentId`, `PATCH /agents/:agentId`
 - `POST /agents/:agentId/config`, `GET /agents/:agentId/versions`, `POST /agents/:agentId/disable`, `/enable`
 - `POST /conversations`, `GET /conversations`, `GET /conversations/:conversationId`

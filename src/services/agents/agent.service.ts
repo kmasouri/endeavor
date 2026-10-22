@@ -2,7 +2,13 @@ import { AgentNameConflictError, AgentRepository, HumanRepository } from '../../
 import { AgentLogger } from '../../observability';
 import { ADMIN_ONLY, requireHuman } from '../../shared/access';
 import { AppError } from '../../shared/errors';
-import { Agent, AgentVersion, MODEL_PROVIDERS, ModelProvider } from '../../shared/types';
+import {
+  Agent,
+  AgentVersion,
+  DirectoryEntry,
+  MODEL_PROVIDERS,
+  ModelProvider
+} from '../../shared/types';
 
 export interface AgentDetails extends Agent {
   currentVersion: AgentVersion | null;
@@ -172,6 +178,31 @@ export class AgentService {
     return this.loadDetails(updated ?? agent);
   }
 
+  // The workspace directory: enabled agents a person can discover and ask to add. For now every
+  // person can discover every enabled agent (see "Who can do what?" in Questions for Kayvan).
+  async listDirectory(
+    actorId: string,
+    input: { limit: number; offset: number }
+  ): Promise<{ entries: DirectoryEntry[]; total: number }> {
+    requireHuman(await this.humanRepository.getById(actorId));
+    const [agents, total] = await Promise.all([
+      this.agentRepository.listDirectory({ excludeIds: [], ...input }),
+      this.agentRepository.countDirectory({ excludeIds: [] })
+    ]);
+    const versions = new Map(
+      (
+        await this.agentRepository.getVersions(
+          agents.map((agent) => agent.currentVersionId as string)
+        )
+      ).map((version) => [version.id, version])
+    );
+    const entries = agents.flatMap((agent): DirectoryEntry[] => {
+      const version = versions.get(agent.currentVersionId as string);
+      return version ? [toDirectoryEntry(agent, version)] : [];
+    });
+    return { entries, total };
+  }
+
   listProviders(): ProviderStatus[] {
     return MODEL_PROVIDERS.map((provider) => ({
       provider,
@@ -216,4 +247,18 @@ function toNameTaken(error: unknown): never {
     throw new AppError('agentNameTaken', error.message);
   }
   throw error;
+}
+
+function toDirectoryEntry(agent: Agent, version: AgentVersion): DirectoryEntry {
+  return {
+    id: agent.id,
+    name: agent.name,
+    purpose: agent.purpose,
+    capabilities: {
+      provider: version.provider,
+      model: version.model,
+      skillCount: version.skillIds.length,
+      connectionCount: version.connectionIds.length
+    }
+  };
 }

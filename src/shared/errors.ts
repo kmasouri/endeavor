@@ -80,7 +80,12 @@ export const ERRORS = {
     message: 'A mentioned participant is not a member of this conversation'
   },
   messageNotFound: { code: 60004, statusCode: 404, message: 'Message not found' },
-  participantNotFound: { code: 60005, statusCode: 404, message: 'Participant not found' }
+  participantNotFound: { code: 60005, statusCode: 404, message: 'Participant not found' },
+  suggestionNotAvailable: {
+    code: 60006,
+    statusCode: 422,
+    message: 'That agent is not in the directory outside this conversation'
+  }
 } as const satisfies Record<string, ErrorDefinition>;
 
 export type ErrorName = keyof typeof ERRORS;

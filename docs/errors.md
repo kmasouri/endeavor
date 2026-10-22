@@ -62,10 +62,11 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 
 ## Conversations (60xxx)
 
-| Code  | Name                    | HTTP | What it means                                            | How to fix it                                        |
-| ----- | ----------------------- | ---- | -------------------------------------------------------- | ---------------------------------------------------- |
-| 60001 | `conversationNotFound`  | 404  | No conversation has this ID.                             | Check the ID against `GET /conversations`.           |
-| 60002 | `notConversationMember` | 403  | You are not a member of this conversation.               | Ask a member to add you.                             |
-| 60003 | `mentionNotMember`      | 422  | A mention names someone who isn't in the conversation.   | Add them first, or remove the mention.               |
-| 60004 | `messageNotFound`       | 404  | The message being replied to isn't in this conversation. | Check `inReplyToMessageId`.                          |
-| 60005 | `participantNotFound`   | 404  | The person or agent being added doesn't exist.           | Check the ID against `GET /humans` or `GET /agents`. |
+| Code  | Name                     | HTTP | What it means                                                            | How to fix it                                                  |
+| ----- | ------------------------ | ---- | ------------------------------------------------------------------------ | -------------------------------------------------------------- |
+| 60001 | `conversationNotFound`   | 404  | No conversation has this ID.                                             | Check the ID against `GET /conversations`.                     |
+| 60002 | `notConversationMember`  | 403  | You are not a member of this conversation.                               | Ask a member to add you.                                       |
+| 60003 | `mentionNotMember`       | 422  | A mention names someone who isn't in the conversation.                   | Add them first, or remove the mention.                         |
+| 60004 | `messageNotFound`        | 404  | The message being replied to isn't in this conversation.                 | Check `inReplyToMessageId`.                                    |
+| 60005 | `participantNotFound`    | 404  | The person or agent being added doesn't exist.                           | Check the ID against `GET /humans` or `GET /agents`.           |
+| 60006 | `suggestionNotAvailable` | 422  | An agent suggested an agent that isn't in the directory, or is disabled. | The agent sees this as a tool error and can pick another name. |

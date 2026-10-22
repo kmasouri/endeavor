@@ -30,7 +30,8 @@ import {
   buildTaskPrompt,
   ContextParticipant,
   DEFAULT_RESPONSE_CRITERIA,
-  formatMessage
+  formatMessage,
+  oneLine
 } from './agent-context';
 import { AGENT_TOOL_DEFINITIONS, AGENT_TOOLS, STOPPING_TOOLS } from './agent-tools';
 import { TaskLifecycle } from './task-lifecycle';
@@ -64,6 +65,9 @@ const DELIVERY_LEASE_MS = 60_000;
 // How many agent-to-agent requests can chain before the runner stops starting new tasks. This
 // keeps two agents from asking each other for work forever.
 const MAX_REQUEST_DEPTH = 5;
+// How many directory agents the prompt lists. suggest_participant can name any agent in the
+// directory, listed or not.
+const DIRECTORY_IN_PROMPT = 30;
 const MAX_NUDGES = 2;
 const NUDGE =
   'You ended your turn without finishing. Use complete_task, ask, or report_blocked to finish, or send_message to post an update.';
@@ -76,6 +80,7 @@ const EVENTS = {
   modelFailed: 'model.failed',
   messageReceived: 'message.received',
   nudge: 'runner.nudge',
+  participantSuggested: 'participant.suggested',
   resultPosted: 'result.posted'
 } as const;
 
@@ -460,7 +465,7 @@ export class TaskRunnerService {
 
     switch (call.name) {
       case AGENT_TOOLS.sendMessage: {
-        const message = await this.postAsAgent(task, agent, call.id, {
+        const { message } = await this.postAsAgent(task, agent, call.id, {
           body: requireString(input, 'body'),
           to: optionalStrings(input, 'to'),
           inReplyToMessageId: optionalString(input, 'reply_to_message_id')
@@ -470,7 +475,7 @@ export class TaskRunnerService {
 
       case AGENT_TOOLS.ask: {
         const to = requireString(input, 'to');
-        const message = await this.postAsAgent(task, agent, call.id, {
+        const { message } = await this.postAsAgent(task, agent, call.id, {
           body: requireString(input, 'question'),
           to: [to],
           inReplyToMessageId: null
@@ -538,6 +543,50 @@ export class TaskRunnerService {
         return 'Task blocked. A person will look at it.';
       }
 
+      case AGENT_TOOLS.suggestParticipant: {
+        if (!task.conversationId) {
+          throw new AppError('validationError', 'This task has no conversation to suggest for.');
+        }
+        const name = requireString(input, 'name');
+        const participants = await this.loadParticipants(task.conversationId);
+        const suggested = await this.agentRepository.getByName(name.trim());
+        if (suggested && participants.some((p) => p.type === 'agent' && p.id === suggested.id)) {
+          // Also what a replay sees if a person added the agent after the first run.
+          return `${suggested.name} is already in this conversation. Ask them directly.`;
+        }
+        if (!suggested || suggested.disabledAt || !suggested.currentVersionId) {
+          throw new AppError(
+            'suggestionNotAvailable',
+            `No available agent named "${name}" in the directory. Pick one from the directory list.`
+          );
+        }
+        // Addressed to the people here by ID, never by name, so no agent is woken: people get
+        // no deliveries, and the suggested agent is never contacted.
+        const humans = participants
+          .filter((p) => p.type === 'human')
+          .map((p): ParticipantRef => ({ type: 'human', id: p.id }));
+        const { message, created } = await this.postAsAgent(
+          task,
+          agent,
+          call.id,
+          {
+            body: `Suggestion: add ${suggested.name} (${oneLine(suggested.purpose)}) to this conversation. ${requireString(input, 'reason')}`,
+            to: [],
+            mentionRefs: humans,
+            inReplyToMessageId: null
+          },
+          participants
+        );
+        if (created) {
+          await this.taskRepository.addEvent(task.id, EVENTS.participantSuggested, agentActor, {
+            agentId: suggested.id,
+            messageId: message.id
+          });
+          this.runnerLogger.onParticipantSuggested(task.id, suggested.id);
+        }
+        return `Suggested ${suggested.name} to the people here. A person decides whether to add them.`;
+      }
+
       default:
         throw new AppError('validationError', `Unknown tool ${call.name}.`);
     }
@@ -581,12 +630,13 @@ export class TaskRunnerService {
       to: string[];
       mentionRefs?: ParticipantRef[];
       inReplyToMessageId: string | null;
-    }
-  ): Promise<Message> {
+    },
+    loaded?: ContextParticipant[]
+  ): Promise<{ message: Message; created: boolean }> {
     if (!task.conversationId) {
       throw new AppError('validationError', 'This task has no conversation to post in.');
     }
-    const participants = await this.loadParticipants(task.conversationId);
+    const participants = loaded ?? (await this.loadParticipants(task.conversationId));
     const named = input.to.map((name) => resolveParticipant(participants, name));
     const mentions = dedupeRefs([...named, ...(input.mentionRefs ?? [])]).filter((ref) =>
       participants.some((p) => p.type === ref.type && p.id === ref.id)
@@ -604,7 +654,7 @@ export class TaskRunnerService {
       repliedToAuthor = authorRef(repliedTo);
     }
 
-    const { message } = await this.messageRepository.create({
+    return this.messageRepository.create({
       conversationId: task.conversationId,
       authorType: 'agent',
       authorId: agent.id,
@@ -620,7 +670,6 @@ export class TaskRunnerService {
       }),
       clientKey: `tool:${task.id}:${key}`
     });
-    return message;
   }
 
   private async saveOutputOnce(
@@ -701,12 +750,26 @@ export class TaskRunnerService {
       limit: this.options.historyLimit
     });
     const names = new Map(participants.map((p) => [`${p.type}:${p.id}`, p.name]));
+    const directory = (await this.directoryOutside(participants)).map(({ name, purpose }) => ({
+      name,
+      purpose
+    }));
     return buildTaskPrompt({
       task,
       requesterName,
       participants,
+      directory,
       history,
       nameOf: (message) => names.get(`${message.authorType}:${message.authorId}`) ?? 'Someone'
+    });
+  }
+
+  // Enabled agents with a configuration that aren't members. Only name and purpose are shown.
+  private async directoryOutside(participants: ContextParticipant[]): Promise<Agent[]> {
+    return this.agentRepository.listDirectory({
+      excludeIds: participants.filter((p) => p.type === 'agent').map((p) => p.id),
+      limit: DIRECTORY_IN_PROMPT,
+      offset: 0
     });
   }
 

@@ -6,6 +6,7 @@ import {
   getAgentHandler,
   listAgentsHandler,
   listAgentVersionsHandler,
+  listDirectoryHandler,
   listProvidersHandler,
   updateAgentConfigHandler,
   updateAgentProfileHandler
@@ -15,6 +16,7 @@ import {
   agentParamsSchema,
   createAgentBodySchema,
   listAgentsQuerySchema,
+  listDirectoryQuerySchema,
   updateAgentConfigBodySchema,
   updateAgentProfileBodySchema
 } from '../../schemas';
@@ -30,6 +32,20 @@ export async function agentsRouter(fastifyInstance: FastifyInstance): Promise<vo
       }
     },
     listProvidersHandler
+  );
+
+  fastifyInstance.get(
+    '/directory',
+    {
+      schema: {
+        description:
+          'The agent directory: enabled agents you can ask to add to a conversation, with their purpose and capabilities. It never shows instructions, notes, credentials, or conversations.',
+        tags: ['agents'],
+        headers: actorHeadersSchema,
+        querystring: listDirectoryQuerySchema
+      }
+    },
+    listDirectoryHandler
   );
 
   fastifyInstance.post(

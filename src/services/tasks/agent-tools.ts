@@ -7,7 +7,8 @@ export const AGENT_TOOLS = {
   ask: 'ask',
   saveOutput: 'save_output',
   completeTask: 'complete_task',
-  reportBlocked: 'report_blocked'
+  reportBlocked: 'report_blocked',
+  suggestParticipant: 'suggest_participant'
 } as const;
 
 export type AgentToolName = (typeof AGENT_TOOLS)[keyof typeof AGENT_TOOLS];
@@ -95,6 +96,20 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
         reason: { type: 'string', description: 'What you need and from whom.' }
       },
       required: ['reason'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: AGENT_TOOLS.suggestParticipant,
+    description:
+      'Suggest that a person add an agent from the directory to this conversation. It only posts the suggestion to the people here; it does not add anyone or contact the agent.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'The agent name, from the directory.' },
+        reason: { type: 'string', description: 'Why they would help.' }
+      },
+      required: ['name', 'reason'],
       additionalProperties: false
     }
   }

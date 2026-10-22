@@ -102,6 +102,38 @@ export class AgentPostgresRepository implements AgentRepository {
     return result.rows.map(toAgent);
   }
 
+  async listDirectory(input: {
+    excludeIds: string[];
+    limit: number;
+    offset: number;
+  }): Promise<Agent[]> {
+    const result = await this.db.query<AgentRow>(
+      `SELECT *
+       FROM bold_cedar_007.agents
+       WHERE disabled_at IS NULL
+         AND current_version_id IS NOT NULL
+         AND NOT (id = ANY($1::uuid[]))
+       ORDER BY lower(name)
+       LIMIT $2 OFFSET $3`,
+      [input.excludeIds, input.limit, input.offset]
+    );
+
+    return result.rows.map(toAgent);
+  }
+
+  async countDirectory(input: { excludeIds: string[] }): Promise<number> {
+    const result = await this.db.query<{ total: number }>(
+      `SELECT count(*)::int AS total
+       FROM bold_cedar_007.agents
+       WHERE disabled_at IS NULL
+         AND current_version_id IS NOT NULL
+         AND NOT (id = ANY($1::uuid[]))`,
+      [input.excludeIds]
+    );
+
+    return result.rows[0].total;
+  }
+
   async count(input: { includeDisabled: boolean }): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total

@@ -190,3 +190,17 @@ export interface MessageDelivery {
   agentId: string;
   createdAt: Date;
 }
+
+// What the agent directory shows about an agent. Only what's needed to decide whom to ask:
+// never instructions, saved notes, credentials, or conversations.
+export interface DirectoryEntry {
+  id: string;
+  name: string;
+  purpose: string;
+  capabilities: {
+    provider: ModelProvider;
+    model: string;
+    skillCount: number;
+    connectionCount: number;
+  };
+}

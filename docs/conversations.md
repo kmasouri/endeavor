@@ -22,7 +22,9 @@ Delivering the same message twice finds the same task (its run key is `message:<
 
 ## Membership
 
-Only people add members. Adding a member with `history: "from_now"` hides older messages from them. An agent can't add anyone: if it needs a specialist, it asks a person.
+Only people add members. Adding a member with `history: "from_now"` hides older messages from them. An agent can't add anyone.
+
+`GET /directory` lists the enabled agents a person can discover: name, purpose, and capabilities (provider, model, and how many skills and connections). It never shows instructions, saved notes, credentials, or conversations. Agents also see directory agents that aren't in the conversation, by name and purpose only. If one could help, the agent calls `suggest_participant`. That posts a suggestion to the people in the conversation; it doesn't add the agent or contact it. Seeing an agent in the directory doesn't let anyone message it outside a conversation.
 
 ## What agents can do
 
