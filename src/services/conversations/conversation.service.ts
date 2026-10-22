@@ -162,7 +162,7 @@ export class ConversationService {
       inReplyToMessageId: input.inReplyToMessageId ?? null,
       taskId: null,
       deliverToAgentIds,
-      clientKey: input.clientKey ? `human:${human.id}:${input.clientKey}` : null
+      clientKey: input.clientKey ? `human:${human.id}:${conversation.id}:${input.clientKey}` : null
     });
     if (result.created) {
       this.conversationLogger.onMessagePosted(

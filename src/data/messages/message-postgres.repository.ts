@@ -119,21 +119,51 @@ export class MessagePostgresRepository implements MessageRepository {
     return result.rows.map(toMessage);
   }
 
-  async listPendingDeliveries(limit: number): Promise<MessageDelivery[]> {
+  async claimDeliveries(limit: number, leaseMs: number): Promise<MessageDelivery[]> {
     const result = await this.db.query<DeliveryRow>(
-      `SELECT message_id, agent_id, created_at
-       FROM bold_cedar_007.message_deliveries
-       WHERE delivered_at IS NULL
-       ORDER BY created_at, message_id
-       LIMIT $1`,
-      [limit]
+      `UPDATE bold_cedar_007.message_deliveries d
+       SET claimed_until = now() + $2::int * interval '1 millisecond'
+       FROM (
+         SELECT message_id, agent_id
+         FROM bold_cedar_007.message_deliveries
+         WHERE delivered_at IS NULL
+           AND failed_at IS NULL
+           AND (claimed_until IS NULL OR claimed_until < now())
+         ORDER BY created_at, message_id
+         LIMIT $1
+         FOR UPDATE SKIP LOCKED
+       ) pending
+       WHERE d.message_id = pending.message_id
+         AND d.agent_id = pending.agent_id
+       RETURNING d.message_id, d.agent_id, d.created_at`,
+      [limit, Math.round(leaseMs)]
     );
 
+    // RETURNING order isn't guaranteed; deliver oldest first.
+    result.rows.sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
     return result.rows.map((row) => ({
       messageId: row.message_id,
       agentId: row.agent_id,
       createdAt: row.created_at
     }));
+  }
+
+  async recordDeliveryFailure(
+    messageId: string,
+    agentId: string,
+    error: string,
+    maxAttempts: number
+  ): Promise<void> {
+    await this.db.query(
+      `UPDATE bold_cedar_007.message_deliveries
+       SET attempts = attempts + 1,
+           last_error = $3,
+           claimed_until = NULL,
+           failed_at = CASE WHEN attempts + 1 >= $4::int THEN now() ELSE NULL END
+       WHERE message_id = $1
+         AND agent_id = $2`,
+      [messageId, agentId, error.slice(0, 2000), maxAttempts]
+    );
   }
 
   async markDelivered(messageId: string, agentId: string, taskId: string | null): Promise<void> {

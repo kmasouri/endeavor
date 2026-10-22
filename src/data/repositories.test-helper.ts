@@ -32,6 +32,7 @@ export function mockTaskRepository(): jest.Mocked<TaskRepository> {
     renewLease: jest.fn().mockResolvedValue(true),
     findOpenTask: jest.fn().mockResolvedValue(null),
     listWaitingWithoutOpenWaits: jest.fn().mockResolvedValue([]),
+    listFinishedWithoutEvent: jest.fn().mockResolvedValue([]),
     countEvents: jest.fn().mockResolvedValue(0)
   };
 }
@@ -80,7 +81,8 @@ export function mockMessageRepository(): jest.Mocked<MessageRepository> {
     getById: jest.fn(),
     list: jest.fn().mockResolvedValue([]),
     listRecent: jest.fn().mockResolvedValue([]),
-    listPendingDeliveries: jest.fn().mockResolvedValue([]),
-    markDelivered: jest.fn()
+    claimDeliveries: jest.fn().mockResolvedValue([]),
+    markDelivered: jest.fn(),
+    recordDeliveryFailure: jest.fn()
   };
 }

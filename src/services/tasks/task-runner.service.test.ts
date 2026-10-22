@@ -202,6 +202,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
       onModelTurn: jest.fn(),
       onModelFailed: jest.fn(),
       onTaskRunFailed: jest.fn(),
+      onRequestChainTooDeep: jest.fn(),
       onTickFailed: jest.fn()
     } as unknown as TaskRunnerLogger,
     { ...DEFAULT_RUNNER_OPTIONS, workerId: 'test' }
@@ -224,7 +225,7 @@ describe('TaskRunnerService', () => {
   describe('delivery', () => {
     it('starts a new task for an addressed agent with no open task', async () => {
       const { runner, tasks, messages } = setup();
-      messages.listPendingDeliveries.mockResolvedValue([
+      messages.claimDeliveries.mockResolvedValue([
         { messageId: 'm-request', agentId: RESEARCHER, createdAt: new Date() }
       ]);
       tasks.create.mockResolvedValue({ task: makeTask(), created: true });
@@ -245,7 +246,7 @@ describe('TaskRunnerService', () => {
 
     it('adds the message to an open task instead of starting a competing one', async () => {
       const { runner, tasks, messages } = setup();
-      messages.listPendingDeliveries.mockResolvedValue([
+      messages.claimDeliveries.mockResolvedValue([
         { messageId: 'm-update', agentId: RESEARCHER, createdAt: new Date() }
       ]);
       tasks.findOpenTask.mockResolvedValue(makeTask());
@@ -285,7 +286,7 @@ describe('TaskRunnerService', () => {
             })
           : makeMessage({ id, authorType: 'agent', authorId: REVIEWER, body: 'v1 or v2?' })
       );
-      messages.listPendingDeliveries.mockResolvedValue([
+      messages.claimDeliveries.mockResolvedValue([
         { messageId: 'm-clarify', agentId: RESEARCHER, createdAt: new Date() }
       ]);
 
@@ -304,7 +305,7 @@ describe('TaskRunnerService', () => {
       const { runner, tasks, messages } = setup();
       const blocked = makeTask({ state: 'blocked', stateReason: 'Need access' });
       tasks.findOpenTask.mockResolvedValue(blocked);
-      messages.listPendingDeliveries.mockResolvedValue([
+      messages.claimDeliveries.mockResolvedValue([
         { messageId: 'm-help', agentId: RESEARCHER, createdAt: new Date() }
       ]);
 
@@ -319,7 +320,7 @@ describe('TaskRunnerService', () => {
 
     it('keeps going when one delivery fails', async () => {
       const { runner, messages, tasks } = setup();
-      messages.listPendingDeliveries.mockResolvedValue([
+      messages.claimDeliveries.mockResolvedValue([
         { messageId: 'bad', agentId: RESEARCHER, createdAt: new Date() },
         { messageId: 'good', agentId: REVIEWER, createdAt: new Date() }
       ]);
@@ -330,6 +331,26 @@ describe('TaskRunnerService', () => {
 
       expect(messages.markDelivered).toHaveBeenCalledTimes(1);
       expect(messages.markDelivered).toHaveBeenCalledWith('good', REVIEWER, TASK);
+      expect(messages.recordDeliveryFailure).toHaveBeenCalledWith('bad', RESEARCHER, 'boom', 5);
+    });
+
+    it('stops starting tasks when agents keep asking each other for work', async () => {
+      const { runner, tasks, messages } = setup();
+      // Every task in the chain was asked for by an agent.
+      tasks.getById.mockImplementation(async (id) =>
+        makeTask({ id, requestedByType: 'agent', parentTaskId: `${id}-parent` })
+      );
+      messages.getById.mockResolvedValue(
+        makeMessage({ id: 'm-agent', authorType: 'agent', authorId: REVIEWER, taskId: 't-deep' })
+      );
+      messages.claimDeliveries.mockResolvedValue([
+        { messageId: 'm-agent', agentId: RESEARCHER, createdAt: new Date() }
+      ]);
+
+      await runner.processDeliveries();
+
+      expect(tasks.create).not.toHaveBeenCalled();
+      expect(messages.markDelivered).toHaveBeenCalledWith('m-agent', RESEARCHER, null);
     });
   });
 
@@ -411,6 +432,114 @@ describe('TaskRunnerService', () => {
       );
     });
 
+    it('does not address an agent requester that has no open work, so agents never ping-pong', async () => {
+      const { runner, tasks, messages } = setup();
+      messages.getById.mockImplementation(async (id) =>
+        makeMessage({ id, authorType: 'agent', authorId: REVIEWER })
+      );
+      const call = {
+        id: 'call-4',
+        name: 'complete_task',
+        input: { result: 'Done', criteria_check: 'ok', criteria_met: true }
+      };
+      tasks.listEvents.mockResolvedValue([event(1, 'model.turn', { raw: {}, toolCalls: [call] })]);
+
+      await runner.runTask(makeTask());
+
+      expect(messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({ body: 'Done', mentions: [], deliverToAgentIds: [REVIEWER] })
+      );
+    });
+
+    it('keeps an unreviewed result off the conversation', async () => {
+      const { runner, tasks, messages, setCurrent } = setup();
+      setCurrent(makeTask({ reviewRequired: true }));
+      const call = {
+        id: 'call-5',
+        name: 'complete_task',
+        input: { result: 'Secret draft', criteria_check: 'ok', criteria_met: true }
+      };
+      tasks.listEvents.mockResolvedValue([event(1, 'model.turn', { raw: {}, toolCalls: [call] })]);
+
+      await runner.runTask(makeTask({ reviewRequired: true }));
+
+      const bodies = messages.create.mock.calls.map(([input]) => input.body);
+      expect(bodies).toEqual(['My result is ready for review.']);
+    });
+
+    it('posts approved results later', async () => {
+      const { runner, tasks, messages } = setup();
+      tasks.listFinishedWithoutEvent.mockResolvedValue([makeTask({ state: 'completed' })]);
+      tasks.listOutputs.mockResolvedValue([
+        {
+          id: 'o1',
+          taskId: TASK,
+          kind: 'text',
+          title: 'Result',
+          content: 'Approved answer',
+          uri: null,
+          metadata: {},
+          createdAt: new Date()
+        }
+      ]);
+
+      await runner.tick();
+
+      expect(messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({ body: 'Approved answer', inReplyToMessageId: 'm-request' })
+      );
+      expect(tasks.addEvent).toHaveBeenCalledWith(TASK, 'result.posted', expect.anything(), {
+        outputId: 'o1'
+      });
+    });
+
+    it('does not add a second wait when an ask runs again after a crash', async () => {
+      const { runner, tasks } = setup();
+      const call = { id: 'call-6', name: 'ask', input: { to: 'Reviewer', question: 'Which?' } };
+      tasks.listEvents.mockResolvedValue([event(1, 'model.turn', { raw: {}, toolCalls: [call] })]);
+      tasks.listWaits.mockResolvedValue([
+        {
+          id: 'w-old',
+          taskId: TASK,
+          kind: 'reply',
+          targetId: 'posted-1',
+          description: 'Reply from Reviewer',
+          createdAt: new Date(),
+          resolvedAt: new Date(),
+          resolution: {}
+        }
+      ]);
+
+      await runner.runTask(makeTask());
+
+      expect(tasks.addWaits).not.toHaveBeenCalled();
+    });
+
+    it('stops when another worker took the lease', async () => {
+      const { runner, tasks, client } = setup();
+      tasks.renewLease.mockResolvedValue(false);
+
+      await runner.runTask(makeTask());
+
+      expect(client.complete).not.toHaveBeenCalled();
+    });
+
+    it('only counts model failures since the last good turn', async () => {
+      const { runner, client, tasks, current } = setup();
+      client.complete.mockRejectedValue(new ModelClientError('busy', 'scripted', true));
+      tasks.listEvents.mockResolvedValue([
+        event(1, 'model.failed', {}),
+        event(2, 'model.failed', {}),
+        event(3, 'model.turn', { raw: {}, toolCalls: [] }),
+        event(4, 'runner.nudge', { text: 'go' })
+      ]);
+
+      const delay = await runner.runTask(makeTask());
+
+      expect(delay).toBe(5_000);
+      expect(current().state).toBe('working');
+    });
+
     it('refuses completion the agent says does not meet the criteria', async () => {
       const { runner, tasks, current } = setup();
       const call = {
@@ -489,6 +618,17 @@ describe('TaskRunnerService', () => {
   });
 
   describe('rebuildTranscript', () => {
+    it('shows a message delivered twice only once', async () => {
+      const { runner } = setup();
+
+      const { transcript } = await runner.rebuildTranscript('Task prompt', [
+        event(1, 'message.received', { messageId: 'm1' }),
+        event(2, 'message.received', { messageId: 'm1' })
+      ]);
+
+      expect(transcript).toHaveLength(2);
+    });
+
     it('holds back messages that arrive between a tool call and its results', async () => {
       const { runner } = setup();
       const call = { id: 'c1', name: 'ask', input: {} };

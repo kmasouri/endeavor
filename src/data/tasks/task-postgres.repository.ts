@@ -377,12 +377,12 @@ export class TaskPostgresRepository implements TaskRepository {
       `UPDATE bold_cedar_007.tasks
        SET lease_owner = NULL,
            lease_expires_at = CASE
-             WHEN $3::int > 0 THEN now() + ($3::text || ' milliseconds')::interval
+             WHEN $3::int > 0 THEN now() + $3::int * interval '1 millisecond'
              ELSE NULL
            END
        WHERE id = $1
          AND lease_owner = $2`,
-      [taskId, workerId, delayMs]
+      [taskId, workerId, Math.round(delayMs)]
     );
   }
 
@@ -426,6 +426,26 @@ export class TaskPostgresRepository implements TaskRepository {
          )
        LIMIT $1`,
       [limit]
+    );
+
+    return result.rows.map(toTask);
+  }
+
+  async listFinishedWithoutEvent(eventType: string, limit: number): Promise<Task[]> {
+    const result = await this.db.query<TaskRow>(
+      `SELECT t.*
+       FROM bold_cedar_007.tasks t
+       WHERE t.state = 'completed'
+         AND t.request_message_id IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1
+           FROM bold_cedar_007.task_events e
+           WHERE e.task_id = t.id
+             AND e.type = $1
+         )
+       ORDER BY t.finished_at
+       LIMIT $2`,
+      [eventType, limit]
     );
 
     return result.rows.map(toTask);

@@ -109,6 +109,9 @@ export interface TaskRepository {
   // Waiting tasks with no open waits. A crash between resolving a wait and waking the task
   // can leave one; the runner wakes them.
   listWaitingWithoutOpenWaits(limit: number): Promise<Task[]>;
+  // Completed tasks that answered a message and have no event of this type yet. The runner uses
+  // it to post results that weren't posted, such as after a review or a crash.
+  listFinishedWithoutEvent(eventType: string, limit: number): Promise<Task[]>;
   // Counts events of one type, such as model turns, for execution limits.
   countEvents(taskId: string, type: string): Promise<number>;
 }

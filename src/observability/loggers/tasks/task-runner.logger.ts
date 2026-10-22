@@ -23,6 +23,13 @@ export class TaskRunnerLogger {
     );
   }
 
+  onRequestChainTooDeep(messageId: string, agentId: string): void {
+    currentLogger(this.logger).warn(
+      { event: 'runner.request.too_deep', messageId, agentId },
+      'agent request chain too deep; no new task started'
+    );
+  }
+
   onModelTurn(
     taskId: string,
     provider: string,

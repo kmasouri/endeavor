@@ -11,7 +11,8 @@ export interface ConversationRepository {
   }): Promise<Conversation[]>;
   count(input: { participant: ParticipantRef | null }): Promise<number>;
 
-  // Adds the member, or returns the existing membership unchanged.
+  // Adds the member, or returns the existing membership unchanged. A removed member is added
+  // back as new.
   addMember(input: {
     conversationId: string;
     participant: ParticipantRef;

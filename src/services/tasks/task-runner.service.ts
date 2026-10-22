@@ -59,6 +59,11 @@ export const DEFAULT_RUNNER_OPTIONS: Omit<TaskRunnerOptions, 'workerId'> = {
 };
 
 const MAX_MODEL_FAILURES = 3;
+const MAX_DELIVERY_ATTEMPTS = 5;
+const DELIVERY_LEASE_MS = 60_000;
+// How many agent-to-agent requests can chain before the runner stops starting new tasks. This
+// keeps two agents from asking each other for work forever.
+const MAX_REQUEST_DEPTH = 5;
 const MAX_NUDGES = 2;
 const NUDGE =
   'You ended your turn without finishing. Use complete_task, ask, or report_blocked to finish, or send_message to post an update.';
@@ -70,7 +75,8 @@ const EVENTS = {
   toolResults: 'tool.results',
   modelFailed: 'model.failed',
   messageReceived: 'message.received',
-  nudge: 'runner.nudge'
+  nudge: 'runner.nudge',
+  resultPosted: 'result.posted'
 } as const;
 
 // The runner. It is not an agent and makes no decisions about the work: it delivers messages,
@@ -97,6 +103,7 @@ export class TaskRunnerService {
   async tick(): Promise<void> {
     await this.processDeliveries();
     await this.repairWaitingTasks();
+    await this.postPendingResults();
     const tasks = await this.taskRepository.claimRunnable(
       this.options.workerId,
       this.options.leaseMs,
@@ -108,9 +115,9 @@ export class TaskRunnerService {
   // Delivery
 
   async processDeliveries(): Promise<void> {
-    const deliveries = await this.messageRepository.listPendingDeliveries(50);
+    const deliveries = await this.messageRepository.claimDeliveries(50, DELIVERY_LEASE_MS);
     for (const delivery of deliveries) {
-      // One bad delivery is logged and tried again next tick; it doesn't stop the others.
+      // A bad delivery is retried on later ticks, then marked failed. It never blocks others.
       try {
         const message = await this.messageRepository.getById(delivery.messageId);
         const agent = await this.agentRepository.getById(delivery.agentId);
@@ -118,6 +125,12 @@ export class TaskRunnerService {
         await this.messageRepository.markDelivered(delivery.messageId, delivery.agentId, taskId);
       } catch (error) {
         this.runnerLogger.onDeliveryFailed(delivery.messageId, delivery.agentId, error);
+        await this.messageRepository.recordDeliveryFailure(
+          delivery.messageId,
+          delivery.agentId,
+          (error as Error).message ?? String(error),
+          MAX_DELIVERY_ATTEMPTS
+        );
       }
     }
   }
@@ -144,6 +157,13 @@ export class TaskRunnerService {
     }
 
     if (agent.disabledAt || !agent.currentVersionId) {
+      return null;
+    }
+    if (
+      message.authorType === 'agent' &&
+      (await this.requestDepth(message.taskId)) >= MAX_REQUEST_DEPTH
+    ) {
+      this.runnerLogger.onRequestChainTooDeep(message.id, agent.id);
       return null;
     }
     const authorName = await this.participantName(authorRef(message));
@@ -187,6 +207,39 @@ export class TaskRunnerService {
           .resolveWait(wait.id, author, { messageId: message.id })
           .catch(ignoreWaitAlreadyResolved);
       }
+    }
+  }
+
+  // How many agent requests led to this task: 0 for work a person or schedule started.
+  private async requestDepth(taskId: string | null): Promise<number> {
+    let depth = 0;
+    for (let id = taskId; id && depth <= MAX_REQUEST_DEPTH; depth++) {
+      const task = await this.taskRepository.getById(id);
+      if (!task || task.requestedByType !== 'agent') {
+        return depth;
+      }
+      id = task.parentTaskId;
+    }
+    return depth;
+  }
+
+  // Posts results that weren't posted yet: results a person just approved in review, and
+  // results lost to a crash between completing and posting.
+  private async postPendingResults(): Promise<void> {
+    for (const task of await this.taskRepository.listFinishedWithoutEvent(
+      EVENTS.resultPosted,
+      20
+    )) {
+      const agent = await this.agentRepository.getById(task.ownerAgentId);
+      const result = (await this.taskRepository.listOutputs(task.id))
+        .filter((output) => output.title === 'Result')
+        .pop();
+      if (agent && result?.content) {
+        await this.answerRequester(task, agent, 'result', result.content);
+      }
+      await this.taskRepository.addEvent(task.id, EVENTS.resultPosted, SYSTEM, {
+        outputId: result?.id ?? null
+      });
     }
   }
 
@@ -235,7 +288,16 @@ export class TaskRunnerService {
       if (!task || task.state !== 'working' || task.pausedAt) {
         return 0;
       }
-      await this.taskRepository.renewLease(task.id, this.options.workerId, this.options.leaseMs);
+      // Another worker took over after our lease ran out. Stop, so the task never runs twice.
+      if (
+        !(await this.taskRepository.renewLease(
+          task.id,
+          this.options.workerId,
+          this.options.leaseMs
+        ))
+      ) {
+        return 0;
+      }
 
       const events = await this.loadEvents(task.id);
       const { transcript, pendingCalls } = await this.rebuildTranscript(prompt, events);
@@ -290,6 +352,15 @@ export class TaskRunnerService {
     events: TaskEvent[]
   ): Promise<'continue' | 'stop' | number> {
     const agentActor: Actor = { type: 'agent', id: agent.id };
+    // Model calls can be slow. Keep the lease alive while waiting, and drop the result if the
+    // lease was lost anyway, because another worker may be running the task by now.
+    let leaseHeld = true;
+    const heartbeat = setInterval(() => {
+      this.taskRepository
+        .renewLease(task.id, this.options.workerId, this.options.leaseMs)
+        .then((held) => (leaseHeld = leaseHeld && held))
+        .catch(() => (leaseHeld = false));
+    }, this.options.leaseMs / 3);
     try {
       const result = await client.complete({
         model: version.model,
@@ -298,6 +369,17 @@ export class TaskRunnerService {
         tools: AGENT_TOOL_DEFINITIONS,
         maxTokens: this.options.maxTokens
       });
+      clearInterval(heartbeat);
+      if (
+        !leaseHeld ||
+        !(await this.taskRepository.renewLease(
+          task.id,
+          this.options.workerId,
+          this.options.leaseMs
+        ))
+      ) {
+        return 'stop';
+      }
       await this.taskRepository.addEvent(task.id, EVENTS.modelTurn, agentActor, {
         raw: result.raw,
         text: result.text,
@@ -314,10 +396,13 @@ export class TaskRunnerService {
       }
       return 'continue';
     } catch (error) {
+      clearInterval(heartbeat);
       if (!(error instanceof ModelClientError)) {
         throw error;
       }
-      const failures = countType(events, EVENTS.modelFailed) + 1;
+      // Only failures since the last successful turn count, so a long task can survive
+      // occasional errors.
+      const failures = countSinceLast(events, EVENTS.modelFailed, EVENTS.modelTurn) + 1;
       await this.taskRepository.addEvent(task.id, EVENTS.modelFailed, SYSTEM, {
         provider: error.provider,
         retryable: error.retryable,
@@ -380,9 +465,11 @@ export class TaskRunnerService {
           to: [to],
           inReplyToMessageId: null
         });
-        // After a crash the task may already be waiting on this question.
+        // After a crash this call can run again. If it already made a wait for this question,
+        // even one that has since been answered, don't make another.
+        const waits = await this.taskRepository.listWaits(task.id, { openOnly: false });
         const fresh = await this.lifecycle.requireTask(task.id);
-        if (fresh.state === 'working') {
+        if (fresh.state === 'working' && !waits.some((wait) => wait.targetId === message.id)) {
           await this.lifecycle.waitFor(task.id, agentActor, [
             { kind: 'reply', targetId: message.id, description: `Reply from ${to}` }
           ]);
@@ -419,10 +506,19 @@ export class TaskRunnerService {
           uri: null
         });
         const done = await this.lifecycle.completeTask(task.id, agentActor, check);
+        if (done.state !== 'completed') {
+          // Unreviewed results stay off the conversation. The result is posted once approved.
+          await this.answerRequester(
+            task,
+            agent,
+            `${call.id}:review`,
+            'My result is ready for review.'
+          );
+          return 'Result submitted. A person will review it before the task completes.';
+        }
         await this.answerRequester(task, agent, `${call.id}:answer`, result);
-        return done.state === 'completed'
-          ? 'Task completed. Your result was posted.'
-          : 'Result submitted. A person will review it before the task completes.';
+        await this.taskRepository.addEvent(task.id, EVENTS.resultPosted, agentActor, {});
+        return 'Task completed. Your result was posted.';
       }
 
       case AGENT_TOOLS.reportBlocked: {
@@ -451,10 +547,17 @@ export class TaskRunnerService {
       ? await this.messageRepository.getById(task.requestMessageId)
       : null;
     const requester = request ? authorRef(request) : null;
+    // An agent that asked is only addressed while it still has open work here, such as a task
+    // waiting for this answer. Addressing a finished agent would start new work for it, and
+    // two agents could keep starting work for each other.
+    const addressRequester =
+      requester?.type === 'human' ||
+      (requester?.type === 'agent' &&
+        (await this.taskRepository.findOpenTask(task.conversationId, requester.id)) !== null);
     await this.postAsAgent(task, agent, key, {
       body,
       to: [],
-      mentionRefs: requester ? [requester] : [],
+      mentionRefs: requester && addressRequester ? [requester] : [],
       inReplyToMessageId: request?.id ?? null
     });
   }
@@ -652,6 +755,8 @@ export class TaskRunnerService {
     const transcript: ModelTranscriptEntry[] = [{ role: 'user', text: prompt }];
     let pendingCalls: ModelToolCall[] = [];
     let heldBack: string[] = [];
+    // A crash during delivery can record the same message twice. Show it once.
+    const seenMessages = new Set<string>();
     const say = (text: string) => {
       if (pendingCalls.length > 0) {
         heldBack.push(text);
@@ -680,7 +785,12 @@ export class TaskRunnerService {
           break;
         }
         case EVENTS.messageReceived: {
-          const message = await this.messageRepository.getById(event.data.messageId as string);
+          const messageId = event.data.messageId as string;
+          if (seenMessages.has(messageId)) {
+            break;
+          }
+          seenMessages.add(messageId);
+          const message = await this.messageRepository.getById(messageId);
           if (message) {
             const name = await this.participantName(authorRef(message));
             say(`New message in the conversation:\n${formatMessage(message, name)}`);
@@ -742,6 +852,18 @@ function dedupeRefs(refs: ParticipantRef[]): ParticipantRef[] {
 
 function countType(events: TaskEvent[], type: string): number {
   return events.filter((event) => event.type === type).length;
+}
+
+function countSinceLast(events: TaskEvent[], type: string, resetType: string): number {
+  let count = 0;
+  for (const event of events) {
+    if (event.type === resetType) {
+      count = 0;
+    } else if (event.type === type) {
+      count++;
+    }
+  }
+  return count;
 }
 
 function excerpt(text: string): string {

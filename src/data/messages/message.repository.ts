@@ -28,6 +28,15 @@ export interface MessageRepository {
     options: { since: Date | null; limit: number }
   ): Promise<Message[]>;
 
-  listPendingDeliveries(limit: number): Promise<MessageDelivery[]>;
+  // Claims up to limit pending deliveries for leaseMs, so two runners never handle the same
+  // one at once. A claim that runs out, such as after a crash, can be claimed again.
+  claimDeliveries(limit: number, leaseMs: number): Promise<MessageDelivery[]>;
   markDelivered(messageId: string, agentId: string, taskId: string | null): Promise<void>;
+  // Records a failed attempt. After maxAttempts the delivery is marked failed and skipped.
+  recordDeliveryFailure(
+    messageId: string,
+    agentId: string,
+    error: string,
+    maxAttempts: number
+  ): Promise<void>;
 }

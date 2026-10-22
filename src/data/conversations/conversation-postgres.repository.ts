@@ -99,7 +99,12 @@ export class ConversationPostgresRepository implements ConversationRepository {
          conversation_id, participant_type, participant_id, added_by_human_id, history_from
        )
        VALUES ($1, $2, $3, $4, $5)
-       ON CONFLICT (conversation_id, participant_type, participant_id) DO NOTHING`,
+       ON CONFLICT (conversation_id, participant_type, participant_id) DO UPDATE
+       SET removed_at = NULL,
+           added_by_human_id = EXCLUDED.added_by_human_id,
+           history_from = EXCLUDED.history_from,
+           added_at = now()
+       WHERE conversation_members.removed_at IS NOT NULL`,
       [
         input.conversationId,
         input.participant.type,
