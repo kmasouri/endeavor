@@ -41,6 +41,12 @@ export const listAgentsQuerySchema = z.strictObject({
   offset: z.coerce.number().int().min(0).default(0)
 });
 
+export const listDirectoryQuerySchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0)
+});
+
+export type ListDirectoryQuery = z.infer<typeof listDirectoryQuerySchema>;
 export type AgentParams = z.infer<typeof agentParamsSchema>;
 export type CreateAgentBody = z.infer<typeof createAgentBodySchema>;
 export type UpdateAgentProfileBody = z.infer<typeof updateAgentProfileBodySchema>;

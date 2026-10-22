@@ -206,6 +206,27 @@ describe('AgentService', () => {
     expect(listed[0].currentVersion?.id).toBe('v1');
   });
 
+  it('lists the directory with purpose and capabilities only', async () => {
+    const { service } = setup();
+
+    const { entries } = await service.listDirectory(ADMIN_ID, { limit: 10, offset: 0 });
+
+    expect(entries).toEqual([
+      {
+        id: AGENT_ID,
+        name: 'QA',
+        purpose: 'Tests the staging site',
+        capabilities: {
+          provider: 'anthropic',
+          model: 'claude-opus-5-5',
+          skillCount: 1,
+          connectionCount: 1
+        }
+      }
+    ]);
+    expect(JSON.stringify(entries)).not.toContain('Test the checkout flow');
+  });
+
   it('reports which providers are ready', () => {
     const { service } = setup(['scripted']);
 

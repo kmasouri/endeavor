@@ -538,6 +538,37 @@ export class TaskRunnerService {
         return 'Task blocked. A person will look at it.';
       }
 
+      case AGENT_TOOLS.suggestParticipant: {
+        if (!task.conversationId) {
+          throw new AppError('validationError', 'This task has no conversation to suggest for.');
+        }
+        const name = requireString(input, 'name');
+        const participants = await this.loadParticipants(task.conversationId);
+        const outside = await this.directoryOutside(participants);
+        const suggested = outside.find(
+          (entry) => entry.name.toLowerCase() === name.trim().toLowerCase()
+        );
+        if (!suggested) {
+          throw new AppError(
+            'participantNotFound',
+            `No agent named "${name}" in the directory outside this conversation. Available: ${outside.map((a) => a.name).join(', ') || 'none'}.`
+          );
+        }
+        // Addressed to the people here only. People get no deliveries, so this starts no work,
+        // and the suggested agent is never contacted.
+        const humans = participants.filter((p) => p.type === 'human').map((p) => p.name);
+        const message = await this.postAsAgent(task, agent, call.id, {
+          body: `Suggestion: add ${suggested.name} (${suggested.purpose}) to this conversation. ${requireString(input, 'reason')}`,
+          to: humans,
+          inReplyToMessageId: null
+        });
+        await this.taskRepository.addEvent(task.id, 'participant.suggested', agentActor, {
+          agentId: suggested.id,
+          messageId: message.id
+        });
+        return `Suggested ${suggested.name} to the people here. A person decides whether to add them.`;
+      }
+
       default:
         throw new AppError('validationError', `Unknown tool ${call.name}.`);
     }
@@ -701,13 +732,29 @@ export class TaskRunnerService {
       limit: this.options.historyLimit
     });
     const names = new Map(participants.map((p) => [`${p.type}:${p.id}`, p.name]));
+    const directory = (await this.directoryOutside(participants)).map(({ name, purpose }) => ({
+      name,
+      purpose
+    }));
     return buildTaskPrompt({
       task,
       requesterName,
       participants,
+      directory,
       history,
       nameOf: (message) => names.get(`${message.authorType}:${message.authorId}`) ?? 'Someone'
     });
+  }
+
+  // Enabled agents with a configuration that aren't members. Only name and purpose are shown.
+  private async directoryOutside(participants: ContextParticipant[]): Promise<Agent[]> {
+    const memberIds = new Set(participants.filter((p) => p.type === 'agent').map((p) => p.id));
+    const agents = await this.agentRepository.list({
+      limit: 50,
+      offset: 0,
+      includeDisabled: false
+    });
+    return agents.filter((agent) => agent.currentVersionId && !memberIds.has(agent.id));
   }
 
   private async loadParticipants(conversationId: string): Promise<ContextParticipant[]> {

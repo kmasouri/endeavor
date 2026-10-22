@@ -4,6 +4,7 @@ import {
   AgentParams,
   CreateAgentBody,
   ListAgentsQuery,
+  ListDirectoryQuery,
   UpdateAgentConfigBody,
   UpdateAgentProfileBody
 } from '../../schemas';
@@ -92,6 +93,17 @@ export async function enableAgentHandler(request: AgentActionRequest): Promise<u
       false
     )
   );
+}
+
+export async function listDirectoryHandler(
+  request: FastifyRequest<{ Querystring: ListDirectoryQuery; Headers: ActorHeaders }>
+): Promise<unknown> {
+  const { limit, offset } = request.query;
+  const { entries, total } = await request.server.agentService.listDirectory(
+    request.headers['x-actor-id'],
+    request.query
+  );
+  return paged(entries, { limit, offset, total });
 }
 
 export async function listProvidersHandler(request: FastifyRequest): Promise<unknown> {
