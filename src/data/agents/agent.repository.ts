@@ -1,4 +1,4 @@
-import { Agent, AgentVersion, ModelProvider } from '../../shared/types';
+import { Agent, AgentLimits, AgentVersion, ModelProvider } from '../../shared/types';
 
 export interface CreateAgentInput {
   name: string;
@@ -11,6 +11,7 @@ export interface CreateAgentVersionInput {
   model: string;
   skillVersionIds: string[];
   connectionIds: string[];
+  limits: AgentLimits;
   createdByHumanId: string | null;
 }
 

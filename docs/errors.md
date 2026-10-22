@@ -50,6 +50,8 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 | 40002 | `taskStateConflict`      | 409  | The task's state doesn't allow this, like resuming a task that isn't paused. | Get the task to see its state, then pick an allowed action.          |
 | 40003 | `taskCompletionRejected` | 422  | The task can't complete: it has no output, or its criteria were not met.     | Attach an output and check it against the completion criteria first. |
 | 40004 | `taskWaitNotFound`       | 404  | No open wait matches. It may already be resolved.                            | Get the task to see its open waits.                                  |
+| 40005 | `approvalNotFound`       | 404  | No approval has this ID, or you can't see its task.                          | Check `GET /approvals`.                                              |
+| 40006 | `approvalAlreadyDecided` | 409  | Someone already approved or rejected it.                                     | Get the approval to see the decision.                                |
 
 ## Agents (50xxx)
 

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
   AgentRepository,
+  ApprovalRepository,
+  ConversationRepository,
   CreateTaskOutputInput,
   CreateTaskWaitInput,
   HumanRepository,
@@ -10,8 +12,22 @@ import {
 import { TaskLogger } from '../../observability';
 import { ADMIN_ONLY, requireHuman } from '../../shared/access';
 import { AppError } from '../../shared/errors';
-import { Actor, Agent, Task, TaskEvent, TaskOutput } from '../../shared/types';
-import { describeState, TaskDetails, TaskLifecycle } from './task-lifecycle';
+import {
+  Actor,
+  Agent,
+  Approval,
+  ApprovalStatus,
+  Human,
+  Task,
+  TaskEvent,
+  TaskOutput
+} from '../../shared/types';
+import {
+  describeState,
+  ignoreWaitAlreadyResolved,
+  TaskDetails,
+  TaskLifecycle
+} from './task-lifecycle';
 import { isFinished } from './task-state';
 
 export interface CreateTaskRequest {
@@ -32,6 +48,8 @@ export class TaskService {
     private readonly taskRepository: TaskRepository,
     private readonly agentRepository: AgentRepository,
     private readonly humanRepository: HumanRepository,
+    private readonly conversationRepository: ConversationRepository,
+    private readonly approvalRepository: ApprovalRepository,
     private readonly taskLogger: TaskLogger
   ) {
     this.lifecycle = new TaskLifecycle(taskRepository, taskLogger);
@@ -72,35 +90,42 @@ export class TaskService {
     return { task, created };
   }
 
-  async getTask(taskId: string): Promise<TaskDetails> {
-    const task = await this.lifecycle.requireTask(taskId);
+  async getTask(actorId: string, taskId: string): Promise<TaskDetails> {
+    const task = await this.requireVisibleTask(actorId, taskId);
     const waits = await this.taskRepository.listWaits(task.id, { openOnly: false });
     return { ...task, waits };
   }
 
-  async listTasks(input: ListTasksInput): Promise<{ tasks: Task[]; total: number }> {
+  // Admins see every task. Members see tasks in their conversations and tasks they asked for.
+  async listTasks(
+    actorId: string,
+    input: Omit<ListTasksInput, 'visibleToHumanId'>
+  ): Promise<{ tasks: Task[]; total: number }> {
+    const human = requireHuman(await this.humanRepository.getById(actorId));
     const filters = {
       state: input.state,
       ownerAgentId: input.ownerAgentId,
-      conversationId: input.conversationId
+      conversationId: input.conversationId,
+      ...(human.role !== 'admin' && { visibleToHumanId: human.id })
     };
     const [tasks, total] = await Promise.all([
-      this.taskRepository.list(input),
+      this.taskRepository.list({ ...filters, limit: input.limit, offset: input.offset }),
       this.taskRepository.count(filters)
     ]);
     return { tasks, total };
   }
 
   async listEvents(
+    actorId: string,
     taskId: string,
     options: { afterId: number; limit: number }
   ): Promise<TaskEvent[]> {
-    await this.lifecycle.requireTask(taskId);
+    await this.requireVisibleTask(actorId, taskId);
     return this.taskRepository.listEvents(taskId, options);
   }
 
-  async listOutputs(taskId: string): Promise<TaskOutput[]> {
-    await this.lifecycle.requireTask(taskId);
+  async listOutputs(actorId: string, taskId: string): Promise<TaskOutput[]> {
+    await this.requireVisibleTask(actorId, taskId);
     return this.taskRepository.listOutputs(taskId);
   }
 
@@ -108,7 +133,7 @@ export class TaskService {
 
   async pauseTask(actorId: string, taskId: string, reason?: string): Promise<Task> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
-    const task = await this.lifecycle.requireTask(taskId);
+    const task = await this.requireVisibleTask(human, taskId);
     if (isFinished(task) || task.pausedAt) {
       throw new AppError('taskStateConflict', `Task ${task.id} is ${describeState(task)}`);
     }
@@ -126,7 +151,7 @@ export class TaskService {
   async resumeTask(actorId: string, taskId: string, note?: string): Promise<Task> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const actor = humanActor(human.id);
-    let task = await this.lifecycle.requireTask(taskId);
+    let task = await this.requireVisibleTask(human, taskId);
     if (isFinished(task) || (!task.pausedAt && task.state !== 'blocked')) {
       throw new AppError('taskStateConflict', `Task ${task.id} is ${describeState(task)}`);
     }
@@ -147,7 +172,7 @@ export class TaskService {
 
   async cancelTask(actorId: string, taskId: string, reason?: string): Promise<Task> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
-    const task = await this.lifecycle.requireTask(taskId);
+    const task = await this.requireVisibleTask(human, taskId);
 
     const cancelled = await this.lifecycle.transition(task, 'cancelled', humanActor(human.id), {
       reason: reason ?? null,
@@ -166,7 +191,7 @@ export class TaskService {
     reason?: string
   ): Promise<{ task: Task; created: boolean }> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
-    const previous = await this.lifecycle.requireTask(taskId);
+    const previous = await this.requireVisibleTask(human, taskId);
     if (!isFinished(previous)) {
       throw new AppError(
         'taskStateConflict',
@@ -269,7 +294,7 @@ export class TaskService {
   ): Promise<Task> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const actor = humanActor(human.id);
-    const task = await this.lifecycle.requireTask(taskId);
+    const task = await this.requireVisibleTask(human, taskId);
     const reviewWait = (await this.taskRepository.findOpenWaits('approval', task.id)).find(
       (wait) => wait.taskId === task.id
     );
@@ -296,6 +321,103 @@ export class TaskService {
     await this.taskRepository.resolveWait(reviewWait.id, { review });
     await this.taskRepository.addEvent(task.id, 'task.reviewed', actor, { review });
     return reviewed;
+  }
+
+  // Approvals: actions an agent asked to take that need a person first. Admins and the people
+  // who can see the task (members of its conversation, or who asked for it) decide.
+
+  async listApprovals(
+    actorId: string,
+    input: { status?: ApprovalStatus; limit: number; offset: number }
+  ): Promise<{ approvals: Approval[]; total: number }> {
+    const human = requireHuman(await this.humanRepository.getById(actorId));
+    const filters = {
+      status: input.status,
+      ...(human.role !== 'admin' && { visibleToHumanId: human.id })
+    };
+    const [approvals, total] = await Promise.all([
+      this.approvalRepository.list({ ...filters, limit: input.limit, offset: input.offset }),
+      this.approvalRepository.count(filters)
+    ]);
+    return { approvals, total };
+  }
+
+  async getApproval(actorId: string, approvalId: string): Promise<Approval> {
+    return this.requireVisibleApproval(actorId, approvalId);
+  }
+
+  // The task keeps waiting: the runner makes the call, records the result, and then wakes it.
+  async approve(actorId: string, approvalId: string, reason?: string): Promise<Approval> {
+    const approval = await this.requireVisibleApproval(actorId, approvalId);
+    const task = await this.lifecycle.requireTask(approval.taskId);
+    if (task.state !== 'waiting') {
+      throw new AppError(
+        'taskStateConflict',
+        `The task is ${task.state}, so this action can't be approved. Reject it instead`
+      );
+    }
+    const decided = await this.decide(actorId, approval, 'approved', reason);
+    await this.taskRepository.addEvent(decided.taskId, 'approval.approved', humanActor(actorId), {
+      approvalId: decided.id,
+      reason: reason ?? null
+    });
+    this.taskLogger.onApprovalApproved(decided.id, decided.taskId);
+    return decided;
+  }
+
+  // The call is never made. The agent is told why and its task wakes up.
+  async reject(actorId: string, approvalId: string, reason?: string): Promise<Approval> {
+    const approval = await this.requireVisibleApproval(actorId, approvalId);
+    const decided = await this.decide(actorId, approval, 'rejected', reason);
+    const actor = humanActor(actorId);
+    await this.taskRepository.addEvent(decided.taskId, 'approval.rejected', actor, {
+      approvalId: decided.id,
+      request: decided.request,
+      reason: reason ?? null
+    });
+    const waits = await this.taskRepository.findOpenWaits('approval', decided.id);
+    for (const wait of waits) {
+      await this.lifecycle
+        .resolveWait(wait.id, actor, { approvalId: decided.id, approved: false })
+        .catch(ignoreWaitAlreadyResolved);
+    }
+    this.taskLogger.onApprovalRejected(decided.id, decided.taskId);
+    return decided;
+  }
+
+  private async decide(
+    actorId: string,
+    approval: Approval,
+    status: 'approved' | 'rejected',
+    reason: string | undefined
+  ): Promise<Approval> {
+    const decided = await this.approvalRepository.decide({
+      approvalId: approval.id,
+      status,
+      humanId: actorId,
+      reason: reason ?? null
+    });
+    if (!decided) {
+      const latest = await this.approvalRepository.getById(approval.id);
+      throw new AppError(
+        'approvalAlreadyDecided',
+        `Approval ${approval.id} was already ${latest?.status ?? 'decided'}`
+      );
+    }
+    return decided;
+  }
+
+  private async requireVisibleApproval(actorId: string, approvalId: string): Promise<Approval> {
+    const approval = await this.approvalRepository.getById(approvalId);
+    if (!approval) {
+      throw new AppError('approvalNotFound', `Approval ${approvalId} was not found`);
+    }
+    await this.requireVisibleTask(actorId, approval.taskId).catch((error) => {
+      throw error instanceof AppError && error.name === 'taskNotFound'
+        ? new AppError('approvalNotFound', `Approval ${approvalId} was not found`)
+        : error;
+    });
+    return approval;
   }
 
   // Lifecycle actions, used by the runner for the agent that owns the task. The rules are in
@@ -327,6 +449,30 @@ export class TaskService {
 
   blockTask(taskId: string, actor: Actor, reason: string): Promise<Task> {
     return this.lifecycle.blockTask(taskId, actor, reason);
+  }
+
+  // Not visible reads as not found, so the API doesn't reveal that a task exists.
+  // Takes the person if the caller already loaded them, to save a lookup.
+  private async requireVisibleTask(actor: string | Human, taskId: string): Promise<Task> {
+    const human =
+      typeof actor === 'string' ? requireHuman(await this.humanRepository.getById(actor)) : actor;
+    const task = await this.lifecycle.requireTask(taskId);
+    if (human.role === 'admin') {
+      return task;
+    }
+    if (task.requestedByType === 'human' && task.requestedById === human.id) {
+      return task;
+    }
+    if (
+      task.conversationId &&
+      (await this.conversationRepository.getMember(task.conversationId, {
+        type: 'human',
+        id: human.id
+      }))
+    ) {
+      return task;
+    }
+    throw new AppError('taskNotFound', `Task ${taskId} was not found`);
   }
 
   private async requireAvailableAgent(agentId: string): Promise<Agent> {

@@ -31,6 +31,7 @@ export interface ConnectionInput {
   credential: string | null;
   allowedMethods: HttpMethod[];
   allowedPathPrefixes: string[];
+  approvalMethods: HttpMethod[];
   createdByHumanId: string | null;
 }
 

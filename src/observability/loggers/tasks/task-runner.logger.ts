@@ -50,6 +50,13 @@ export class TaskRunnerLogger {
     );
   }
 
+  onApprovalRequested(taskId: string, approvalId: string): void {
+    currentLogger(this.logger).info(
+      { event: 'runner.approval.requested', taskId, approvalId },
+      'agent call waits for approval'
+    );
+  }
+
   onModelTurn(
     taskId: string,
     provider: string,

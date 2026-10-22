@@ -32,6 +32,7 @@ const version1: AgentVersion = {
   model: 'claude-opus-5-5',
   skillVersionIds: ['s1'],
   connectionIds: ['c1'],
+  limits: {},
   createdByHumanId: ADMIN_ID,
   createdAt: new Date()
 };
@@ -92,6 +93,7 @@ describe('AgentService', () => {
         model: 'gpt-test',
         skillVersionIds: [],
         connectionIds: [],
+        limits: {},
         createdByHumanId: ADMIN_ID
       }
     );
@@ -135,6 +137,7 @@ describe('AgentService', () => {
       model: 'claude-sonnet-5-5',
       skillVersionIds: ['s1'],
       connectionIds: ['c1'],
+      limits: {},
       createdByHumanId: ADMIN_ID
     });
     expect(details.currentVersion?.version).toBe(2);
@@ -265,6 +268,7 @@ describe('AgentService', () => {
               version: 7,
               instructions: 'Cite',
               connectionIds: ['c9'],
+              limits: {},
               createdByHumanId: null,
               createdAt: new Date()
             }
@@ -313,6 +317,20 @@ describe('AgentService', () => {
     ).rejects.toMatchObject({
       name: 'catalogEntryUnavailable'
     });
+  });
+
+  it('treats limits with keys in another order as the same', async () => {
+    const { service, agents } = setup();
+    agents.getVersion.mockResolvedValue({
+      ...version1,
+      limits: { maxTokens: 5000, maxModelTurns: 10 }
+    });
+
+    await service.updateConfig(ADMIN_ID, AGENT_ID, {
+      limits: { maxModelTurns: 10, maxTokens: 5000 }
+    });
+
+    expect(agents.addVersion).not.toHaveBeenCalled();
   });
 
   it('reports which providers are ready', () => {

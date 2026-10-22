@@ -29,6 +29,7 @@ export interface ConnectionChanges {
   credential?: string | null;
   allowedMethods?: HttpMethod[];
   allowedPathPrefixes?: string[];
+  approvalMethods?: HttpMethod[];
 }
 
 // The shared catalogs: reusable skills and connections that admins define once. Being in a
@@ -153,6 +154,7 @@ export class CatalogService {
       credential?: string;
       allowedMethods: HttpMethod[];
       allowedPathPrefixes: string[];
+      approvalMethods?: HttpMethod[];
     }
   ): Promise<Connection> {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
@@ -166,6 +168,7 @@ export class CatalogService {
         credential: input.credential ?? null,
         allowedMethods: input.allowedMethods,
         allowedPathPrefixes: input.allowedPathPrefixes,
+        approvalMethods: input.approvalMethods ?? [],
         createdByHumanId: admin.id
       })
       .catch(toNameTaken);

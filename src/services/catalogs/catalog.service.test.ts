@@ -39,6 +39,7 @@ const connection: Connection = {
   hasCredential: false,
   allowedMethods: ['GET'],
   allowedPathPrefixes: ['/'],
+  approvalMethods: [],
   disabledAt: null,
   createdAt: new Date(),
   updatedAt: new Date()

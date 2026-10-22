@@ -52,8 +52,6 @@ Everything it does is written to the task's events: model turns, tool results, f
 
 Limits:
 
-- A task is blocked after 40 model turns.
+- A task is blocked after 40 model turns, or at its agent version's own limits (`docs/agents.md`).
 - A failed model call that can be retried waits 5 s, then 10 s. After 3 failures, the task is blocked.
 - A model that keeps ending its turn without finishing gets two nudges, then the task is blocked.
-
-Budgets and per-agent limits come with CA-5.

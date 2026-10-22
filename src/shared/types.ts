@@ -154,6 +154,15 @@ export interface Agent {
   updatedAt: Date;
 }
 
+// Limits for each task an agent runs. Leaving one out means the runner's default applies.
+export interface AgentLimits {
+  maxModelTurns?: number;
+  // Input plus output tokens over the whole task. A stand-in for cost.
+  maxTokens?: number;
+  // Minutes spent working. Time spent waiting or paused doesn't count.
+  maxWorkingMinutes?: number;
+}
+
 // One saved version of an agent's settings. Versions never change once saved.
 export interface AgentVersion {
   id: string;
@@ -164,6 +173,7 @@ export interface AgentVersion {
   model: string;
   skillVersionIds: string[];
   connectionIds: string[];
+  limits: AgentLimits;
   createdByHumanId: string | null;
   createdAt: Date;
 }
@@ -240,6 +250,8 @@ export interface Connection {
   hasCredential: boolean;
   allowedMethods: HttpMethod[];
   allowedPathPrefixes: string[];
+  // Methods that need a person's approval before each call.
+  approvalMethods: HttpMethod[];
   disabledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -254,4 +266,38 @@ export interface AgentGrant {
   grantedByHumanId: string | null;
   grantedAt: Date;
   revokedAt: Date | null;
+}
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+
+export interface ConnectionCallRequest {
+  connectionId: string;
+  connectionName: string;
+  method: HttpMethod;
+  path: string;
+  body: string | null;
+}
+
+export interface ApprovalResult {
+  status: number | null;
+  body: string;
+  truncated: boolean;
+  // Set when the call wasn't made after approval, such as when access was revoked meanwhile.
+  error: string | null;
+}
+
+// An action an agent asked to take that needs a person's approval first.
+export interface Approval {
+  id: string;
+  taskId: string;
+  agentId: string;
+  kind: 'connection_call';
+  request: ConnectionCallRequest;
+  status: ApprovalStatus;
+  decidedByHumanId: string | null;
+  decidedAt: Date | null;
+  reason: string | null;
+  executedAt: Date | null;
+  result: ApprovalResult | null;
+  createdAt: Date;
 }

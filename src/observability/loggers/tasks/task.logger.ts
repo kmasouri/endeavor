@@ -43,6 +43,20 @@ export class TaskLogger {
     );
   }
 
+  onApprovalApproved(approvalId: string, taskId: string): void {
+    currentLogger(this.logger).info(
+      { event: 'approval.approved', approvalId, taskId },
+      'approval approved'
+    );
+  }
+
+  onApprovalRejected(approvalId: string, taskId: string): void {
+    currentLogger(this.logger).info(
+      { event: 'approval.rejected', approvalId, taskId },
+      'approval rejected'
+    );
+  }
+
   onTaskCompletionRejected(taskId: string, reason: string): void {
     currentLogger(this.logger).info(
       { event: 'task.completion.rejected', taskId, reason },

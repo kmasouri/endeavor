@@ -10,6 +10,13 @@ const agentConfigFields = {
   provider: z.enum(MODEL_PROVIDERS),
   model: z.string().trim().min(1),
   skillIds: z.array(z.uuid()).max(50).optional(),
+  limits: z
+    .strictObject({
+      maxModelTurns: z.number().int().min(1).max(1000).optional(),
+      maxTokens: z.number().int().min(1000).optional(),
+      maxWorkingMinutes: z.number().int().min(1).max(10_080).optional()
+    })
+    .optional(),
   connectionIds: z.array(z.uuid()).max(50).optional()
 };
 
@@ -32,7 +39,8 @@ export const updateAgentConfigBodySchema = z
     provider: agentConfigFields.provider.optional(),
     model: agentConfigFields.model.optional(),
     skillIds: agentConfigFields.skillIds,
-    connectionIds: agentConfigFields.connectionIds
+    connectionIds: agentConfigFields.connectionIds,
+    limits: agentConfigFields.limits
   })
   .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
 

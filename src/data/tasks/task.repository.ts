@@ -30,6 +30,8 @@ export interface CreateTaskInput {
 }
 
 export interface ListTasksInput {
+  // Only tasks this person may see: in a conversation they belong to, or asked for by them.
+  visibleToHumanId?: string;
   state?: TaskState;
   ownerAgentId?: string;
   conversationId?: string;
