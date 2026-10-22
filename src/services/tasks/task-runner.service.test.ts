@@ -166,7 +166,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
   }));
   tasks.countOutputs.mockResolvedValue(1);
   agentRepo.getById.mockImplementation(async (id) => agents[id] ?? null);
-  agentRepo.getVersion.mockResolvedValue(version);
+  agentRepo.getVersion.mockImplementation(async (id) => (id === version.id ? version : null));
   humans.getById.mockResolvedValue({
     id: HUMAN,
     name: 'Kim',
@@ -295,7 +295,7 @@ describe('TaskRunnerService', () => {
       expect(tasks.resolveWait).toHaveBeenCalledWith('w1', { messageId: 'm-clarify' });
       expect(tasks.update).toHaveBeenCalledWith(
         TASK,
-        { state: 'waiting', paused: false },
+        { state: 'waiting', paused: false, agentVersionId: version.id },
         expect.objectContaining({ state: 'working' })
       );
       void current;
@@ -313,7 +313,7 @@ describe('TaskRunnerService', () => {
 
       expect(tasks.update).toHaveBeenCalledWith(
         TASK,
-        { state: 'blocked', paused: false },
+        { state: 'blocked', paused: false, agentVersionId: version.id },
         expect.objectContaining({ state: 'working' })
       );
     });
@@ -593,6 +593,20 @@ describe('TaskRunnerService', () => {
       expect(current().state).toBe('blocked');
     });
 
+    it("runs on the task's pinned version, not the agent's newer one", async () => {
+      const { runner, client } = setup();
+      agents[RESEARCHER] = { ...agents[RESEARCHER], currentVersionId: 'v-newer' };
+      try {
+        await runner.runTask(makeTask({ agentVersionId: version.id }));
+      } finally {
+        agents[RESEARCHER] = makeAgent(RESEARCHER, 'Researcher');
+      }
+
+      expect(client.complete).toHaveBeenCalledWith(
+        expect.objectContaining({ system: expect.stringContaining('Research carefully.') })
+      );
+    });
+
     it('stops when a person pauses the task', async () => {
       const { runner, client, setCurrent } = setup();
       setCurrent(makeTask({ pausedAt: new Date() }));
@@ -618,13 +632,52 @@ describe('TaskRunnerService', () => {
   });
 
   describe('rebuildTranscript', () => {
+    it('shows turns from another provider as text, since they cannot be replayed', async () => {
+      const { runner } = setup();
+      const call = { id: 'c1', name: 'send_message', input: { body: 'hi' } };
+
+      const { transcript } = await runner.rebuildTranscript(
+        'Task prompt',
+        [
+          event(1, 'model.turn', {
+            raw: 'openai-raw',
+            provider: 'openai',
+            text: 'Checking',
+            toolCalls: [call]
+          }),
+          event(2, 'tool.results', {
+            results: [{ callId: 'c1', content: 'Posted', isError: false }]
+          }),
+          event(3, 'model.turn', { raw: 'scripted-raw', provider: 'scripted', toolCalls: [] })
+        ],
+        'scripted'
+      );
+
+      expect(transcript.map((entry) => entry.role)).toEqual(['user', 'user', 'user', 'assistant']);
+      expect(transcript[1]).toMatchObject({ text: expect.stringContaining('Checking') });
+      expect(transcript[2]).toMatchObject({ text: expect.stringContaining('Posted') });
+    });
+
+    it('stops when the task moved to another version mid-claim', async () => {
+      const { runner, client, setCurrent } = setup();
+      setCurrent(makeTask({ agentVersionId: 'v-other' }));
+
+      await runner.runTask(makeTask());
+
+      expect(client.complete).not.toHaveBeenCalled();
+    });
+
     it('shows a message delivered twice only once', async () => {
       const { runner } = setup();
 
-      const { transcript } = await runner.rebuildTranscript('Task prompt', [
-        event(1, 'message.received', { messageId: 'm1' }),
-        event(2, 'message.received', { messageId: 'm1' })
-      ]);
+      const { transcript } = await runner.rebuildTranscript(
+        'Task prompt',
+        [
+          event(1, 'message.received', { messageId: 'm1' }),
+          event(2, 'message.received', { messageId: 'm1' })
+        ],
+        'scripted'
+      );
 
       expect(transcript).toHaveLength(2);
     });
@@ -633,11 +686,15 @@ describe('TaskRunnerService', () => {
       const { runner } = setup();
       const call = { id: 'c1', name: 'ask', input: {} };
 
-      const { transcript, pendingCalls } = await runner.rebuildTranscript('Task prompt', [
-        event(1, 'model.turn', { raw: 'assistant-1', toolCalls: [call] }),
-        event(2, 'message.received', { messageId: 'm-late' }),
-        event(3, 'tool.results', { results: [{ callId: 'c1', content: 'ok', isError: false }] })
-      ]);
+      const { transcript, pendingCalls } = await runner.rebuildTranscript(
+        'Task prompt',
+        [
+          event(1, 'model.turn', { raw: 'assistant-1', toolCalls: [call] }),
+          event(2, 'message.received', { messageId: 'm-late' }),
+          event(3, 'tool.results', { results: [{ callId: 'c1', content: 'ok', isError: false }] })
+        ],
+        'scripted'
+      );
 
       expect(transcript.map((entry) => entry.role)).toEqual([
         'user',
@@ -652,9 +709,11 @@ describe('TaskRunnerService', () => {
       const { runner } = setup();
       const call = { id: 'c1', name: 'send_message', input: { body: 'hi' } };
 
-      const { pendingCalls } = await runner.rebuildTranscript('Task prompt', [
-        event(1, 'model.turn', { raw: 'assistant-1', toolCalls: [call] })
-      ]);
+      const { pendingCalls } = await runner.rebuildTranscript(
+        'Task prompt',
+        [event(1, 'model.turn', { raw: 'assistant-1', toolCalls: [call] })],
+        'scripted'
+      );
 
       expect(pendingCalls).toEqual([call]);
     });

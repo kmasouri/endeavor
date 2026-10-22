@@ -185,7 +185,7 @@ export class TaskLifecycle {
   async applyChanges(task: Task, changes: TaskChanges): Promise<Task> {
     const updated = await this.taskRepository.update(
       task.id,
-      { state: task.state, paused: task.pausedAt !== null },
+      { state: task.state, paused: task.pausedAt !== null, agentVersionId: task.agentVersionId },
       changes
     );
     if (!updated) {

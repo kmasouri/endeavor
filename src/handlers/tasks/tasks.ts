@@ -4,6 +4,7 @@ import {
   CreateTaskBody,
   ListTaskEventsQuery,
   ListTasksQuery,
+  MigrateTaskVersionBody,
   ReviewTaskBody,
   TaskActionBody,
   TaskParams
@@ -95,6 +96,22 @@ export async function restartTaskHandler(
     request.body?.reason
   );
   return reply.code(created ? 201 : 200).send(success(task));
+}
+
+export async function migrateTaskVersionHandler(
+  request: FastifyRequest<{
+    Params: TaskParams;
+    Body: MigrateTaskVersionBody;
+    Headers: ActorHeaders;
+  }>
+): Promise<unknown> {
+  return success(
+    await request.server.taskService.migrateTaskVersion(
+      request.headers['x-actor-id'],
+      request.params.taskId,
+      request.body ?? {}
+    )
+  );
 }
 
 export async function reviewTaskHandler(

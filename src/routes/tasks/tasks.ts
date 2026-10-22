@@ -6,6 +6,7 @@ import {
   listTaskEventsHandler,
   listTaskOutputsHandler,
   listTasksHandler,
+  migrateTaskVersionHandler,
   pauseTaskHandler,
   restartTaskHandler,
   resumeTaskHandler,
@@ -16,6 +17,7 @@ import {
   createTaskBodySchema,
   listTaskEventsQuerySchema,
   listTasksQuerySchema,
+  migrateTaskVersionBodySchema,
   reviewTaskBodySchema,
   taskActionBodySchema,
   taskParamsSchema
@@ -119,6 +121,21 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
       handler
     );
   }
+
+  fastifyInstance.post(
+    '/tasks/:taskId/version',
+    {
+      schema: {
+        description:
+          "Move an open task to another version of its agent's configuration (default: the current one). Tasks never change version on their own. Admins only.",
+        tags: ['tasks'],
+        headers: actorHeadersSchema,
+        params: taskParamsSchema,
+        body: migrateTaskVersionBodySchema
+      }
+    },
+    migrateTaskVersionHandler
+  );
 
   fastifyInstance.post(
     '/tasks/:taskId/review',

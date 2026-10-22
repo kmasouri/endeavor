@@ -32,7 +32,10 @@ Every change starts from a ticket in the Project Backlog and ends with the ticke
 3. **Don't block on a human.** If you need a decision, add a row to Questions for Kayvan. Give the options, your recommendation, and the default you will use until it is answered. Link the row to the ticket and tick `Needs Input` on the ticket. Then keep working on that default. Pick a default that is easy to change later. Never pick one that is hard to undo, like deleting data or spending money. Before starting a ticket, check Questions for Kayvan for answers and apply them. Set an applied answer's `Status` to `Applied`.
 4. **Open a PR.** Use one PR per ticket, or several small PRs for a big ticket. Put the ticket ID and title in the PR title, like `CA-7: Persist tasks, messages, and agent context`. In the PR body, link the ticket, list which acceptance criteria the PR meets, and list any that are still open. `npm run check` must pass.
 5. **Review it.** Read the whole diff as a reviewer would: check correctness, the layer rules in this file, tests, and docs. Fix what you find, then post a short summary of the review on the PR.
-6. **Merge it.** Squash-merge once checks pass, then delete the branch.
+6. **Merge it.** Squash-merge once checks pass, then delete the branch. CI can take a few seconds to register on a new push, and `gh pr checks <n> --watch` reports "no checks reported" until it does. Wait until a check shows up and passes. Then merge.
+
+   Before you commit, check that you are on the ticket's branch (`git branch --show-current`), not `main`.
+
 7. **Update the ticket.** Set `PR` to the PR link and write one line in `Last Update`. Add a `## Work log` entry to the ticket page with the date, the PR link, what was built, the decisions made and why, and what is left. Set `Status` to `Done` only when every acceptance criterion is met. If some are left, keep it `In Progress`, or set `Blocked` and give the reason.
 8. **Keep Notion current.** If the design changed, update the Architecture page. If you found new work, add a ticket with acceptance criteria, `Priority`, `Scope`, and `Blocked By`.
 

@@ -31,6 +31,18 @@ export class TaskLogger {
     );
   }
 
+  onTaskVersionMigrated(
+    taskId: string,
+    fromVersionId: string,
+    toVersionId: string,
+    by: { humanId: string; reason: string | null }
+  ): void {
+    currentLogger(this.logger).info(
+      { event: 'task.version.migrated', taskId, fromVersionId, toVersionId, ...by },
+      'task moved to another configuration version'
+    );
+  }
+
   onTaskCompletionRejected(taskId: string, reason: string): void {
     currentLogger(this.logger).info(
       { event: 'task.completion.rejected', taskId, reason },

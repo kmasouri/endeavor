@@ -61,6 +61,11 @@ export const ERRORS = {
     statusCode: 409,
     message: 'An agent with this name already exists'
   },
+  agentVersionNotFound: {
+    code: 50004,
+    statusCode: 404,
+    message: "Version not found for this task's agent"
+  },
 
   // 60xxx: conversations
   conversationNotFound: { code: 60001, statusCode: 404, message: 'Conversation not found' },

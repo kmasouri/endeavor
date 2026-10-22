@@ -90,6 +90,7 @@ function setup() {
     onTaskPaused: jest.fn(),
     onTaskResumed: jest.fn(),
     onTaskRestarted: jest.fn(),
+    onTaskVersionMigrated: jest.fn(),
     onTaskCompletionRejected: jest.fn()
   } as unknown as jest.Mocked<TaskLogger>;
 
@@ -182,7 +183,7 @@ describe('TaskService', () => {
       await service.pauseTask(HUMAN_ID, TASK_ID, 'Hold on');
 
       const [, expected, changes] = tasks.update.mock.calls[0];
-      expect(expected).toEqual({ state: 'waiting', paused: false });
+      expect(expected).toEqual({ state: 'waiting', paused: false, agentVersionId: VERSION_ID });
       expect(changes).toEqual({ pausedAt: expect.any(Date) });
       expect(eventTypes(tasks)).toEqual(['task.paused']);
     });
@@ -283,6 +284,102 @@ describe('TaskService', () => {
       tasks.getById.mockResolvedValue(makeTask({ state: 'completed' }));
 
       await expect(service.cancelTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+    });
+  });
+
+  describe('migrateTaskVersion', () => {
+    const v2 = {
+      id: 'v2',
+      agentId: AGENT_ID,
+      version: 2,
+      instructions: 'New',
+      provider: 'scripted' as const,
+      model: 'm',
+      skillIds: [],
+      connectionIds: [],
+      createdByHumanId: HUMAN_ID,
+      createdAt: new Date()
+    };
+
+    it("moves a waiting task to the agent's current version and records it", async () => {
+      const { service, tasks, agents, humans } = setup();
+      humans.getById.mockResolvedValue({ ...human, role: 'admin' });
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      agents.getById.mockResolvedValue({ ...agent, currentVersionId: 'v2' });
+      agents.getVersion.mockResolvedValue(v2);
+
+      await service.migrateTaskVersion(HUMAN_ID, TASK_ID, { reason: 'New instructions' });
+
+      expect(tasks.update.mock.calls[0][2]).toEqual({ agentVersionId: 'v2' });
+      expect(tasks.addEvent).toHaveBeenCalledWith(
+        TASK_ID,
+        'task.version.migrated',
+        { type: 'human', id: HUMAN_ID },
+        { fromVersionId: VERSION_ID, toVersionId: 'v2', toVersion: 2, reason: 'New instructions' }
+      );
+    });
+
+    it('is admin only', async () => {
+      const { service } = setup();
+
+      await expect(service.migrateTaskVersion(HUMAN_ID, TASK_ID, {})).rejects.toMatchObject({
+        name: 'forbidden'
+      });
+    });
+
+    it("refuses another agent's version", async () => {
+      const { service, tasks, agents, humans } = setup();
+      humans.getById.mockResolvedValue({ ...human, role: 'admin' });
+      tasks.getById.mockResolvedValue(makeTask());
+      agents.getVersion.mockResolvedValue({ ...v2, agentId: 'someone-else' });
+
+      await expect(
+        service.migrateTaskVersion(HUMAN_ID, TASK_ID, { versionId: 'v2' })
+      ).rejects.toMatchObject({ name: 'agentVersionNotFound' });
+    });
+
+    it('changes nothing when the task is already on that version', async () => {
+      const { service, tasks, agents, humans } = setup();
+      humans.getById.mockResolvedValue({ ...human, role: 'admin' });
+      tasks.getById.mockResolvedValue(makeTask({ agentVersionId: 'v2' }));
+      agents.getVersion.mockResolvedValue(v2);
+
+      await service.migrateTaskVersion(HUMAN_ID, TASK_ID, { versionId: 'v2' });
+
+      expect(tasks.update).not.toHaveBeenCalled();
+      expect(tasks.addEvent).not.toHaveBeenCalled();
+    });
+
+    it('says the agent is unavailable when it has no current version', async () => {
+      const { service, tasks, agents, humans } = setup();
+      humans.getById.mockResolvedValue({ ...human, role: 'admin' });
+      tasks.getById.mockResolvedValue(makeTask());
+      agents.getById.mockResolvedValue(null);
+
+      await expect(service.migrateTaskVersion(HUMAN_ID, TASK_ID, {})).rejects.toMatchObject({
+        name: 'agentUnavailable'
+      });
+    });
+
+    it('rejects a version that does not exist', async () => {
+      const { service, tasks, agents, humans } = setup();
+      humans.getById.mockResolvedValue({ ...human, role: 'admin' });
+      tasks.getById.mockResolvedValue(makeTask());
+      agents.getVersion.mockResolvedValue(null);
+
+      await expect(
+        service.migrateTaskVersion(HUMAN_ID, TASK_ID, { versionId: 'missing' })
+      ).rejects.toMatchObject({ name: 'agentVersionNotFound' });
+    });
+
+    it('does not migrate finished work', async () => {
+      const { service, tasks, humans } = setup();
+      humans.getById.mockResolvedValue({ ...human, role: 'admin' });
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed' }));
+
+      await expect(service.migrateTaskVersion(HUMAN_ID, TASK_ID, {})).rejects.toMatchObject({
         name: 'taskStateConflict'
       });
     });
@@ -393,7 +490,7 @@ describe('TaskService', () => {
       await service.resolveWait(WAIT_ID, agentActor, {});
 
       const [, expected, changes] = tasks.update.mock.calls[0];
-      expect(expected).toEqual({ state: 'waiting', paused: true });
+      expect(expected).toEqual({ state: 'waiting', paused: true, agentVersionId: VERSION_ID });
       expect(changes).not.toHaveProperty('pausedAt');
     });
 
@@ -407,7 +504,11 @@ describe('TaskService', () => {
       const task = await service.resolveWait(WAIT_ID, agentActor, {});
 
       expect(task.state).toBe('working');
-      expect(tasks.update.mock.calls[1][1]).toEqual({ state: 'waiting', paused: true });
+      expect(tasks.update.mock.calls[1][1]).toEqual({
+        state: 'waiting',
+        paused: true,
+        agentVersionId: VERSION_ID
+      });
     });
 
     it('reports a wait that is already resolved', async () => {
