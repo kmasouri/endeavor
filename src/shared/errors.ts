@@ -55,6 +55,11 @@ export const ERRORS = {
     code: 50002,
     statusCode: 409,
     message: 'The agent is disabled or has no saved configuration'
+  },
+  agentNameTaken: {
+    code: 50003,
+    statusCode: 409,
+    message: 'An agent with this name already exists'
   }
 } as const satisfies Record<string, ErrorDefinition>;
 

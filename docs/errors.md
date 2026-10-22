@@ -57,3 +57,4 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 | ----- | ------------------ | ---- | ----------------------------------------------------- | ------------------------------------------------- |
 | 50001 | `agentNotFound`    | 404  | No agent has this ID.                                 | Check the ID against `GET /agents`.               |
 | 50002 | `agentUnavailable` | 409  | The agent is disabled, or has no saved configuration. | Enable the agent, or save a configuration for it. |
+| 50003 | `agentNameTaken`   | 409  | Another agent has this name. Names are not case sensitive. | Pick a different name.                       |

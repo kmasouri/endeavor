@@ -7,6 +7,7 @@ This file says what to do and what not to do. For how things work and why, read:
 - `docs/architecture.md`: how the code is set up.
 - `docs/adding-a-feature.md`: step-by-step guide for a new feature.
 - `docs/responses.md` and `docs/errors.md`: what the API sends back.
+- `docs/agents.md`: agents, configuration versions, and model providers.
 
 ## Source of truth
 

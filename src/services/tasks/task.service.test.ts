@@ -89,8 +89,17 @@ function setup() {
     releaseLease: jest.fn()
   };
   const agents: jest.Mocked<AgentRepository> = {
+    create: jest.fn(),
     getById: jest.fn().mockResolvedValue(agent),
-    getVersion: jest.fn()
+    getByName: jest.fn(),
+    list: jest.fn(),
+    count: jest.fn(),
+    update: jest.fn(),
+    setDisabled: jest.fn(),
+    addVersion: jest.fn(),
+    getVersions: jest.fn().mockResolvedValue([]),
+    getVersion: jest.fn(),
+    listVersions: jest.fn()
   };
   const humans: jest.Mocked<HumanRepository> = {
     create: jest.fn(),
