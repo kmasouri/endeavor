@@ -295,7 +295,7 @@ describe('TaskRunnerService', () => {
       expect(tasks.resolveWait).toHaveBeenCalledWith('w1', { messageId: 'm-clarify' });
       expect(tasks.update).toHaveBeenCalledWith(
         TASK,
-        { state: 'waiting', paused: false },
+        { state: 'waiting', paused: false, agentVersionId: version.id },
         expect.objectContaining({ state: 'working' })
       );
       void current;
@@ -313,7 +313,7 @@ describe('TaskRunnerService', () => {
 
       expect(tasks.update).toHaveBeenCalledWith(
         TASK,
-        { state: 'blocked', paused: false },
+        { state: 'blocked', paused: false, agentVersionId: version.id },
         expect.objectContaining({ state: 'working' })
       );
     });
@@ -632,13 +632,52 @@ describe('TaskRunnerService', () => {
   });
 
   describe('rebuildTranscript', () => {
+    it('shows turns from another provider as text, since they cannot be replayed', async () => {
+      const { runner } = setup();
+      const call = { id: 'c1', name: 'send_message', input: { body: 'hi' } };
+
+      const { transcript } = await runner.rebuildTranscript(
+        'Task prompt',
+        [
+          event(1, 'model.turn', {
+            raw: 'openai-raw',
+            provider: 'openai',
+            text: 'Checking',
+            toolCalls: [call]
+          }),
+          event(2, 'tool.results', {
+            results: [{ callId: 'c1', content: 'Posted', isError: false }]
+          }),
+          event(3, 'model.turn', { raw: 'scripted-raw', provider: 'scripted', toolCalls: [] })
+        ],
+        'scripted'
+      );
+
+      expect(transcript.map((entry) => entry.role)).toEqual(['user', 'user', 'user', 'assistant']);
+      expect(transcript[1]).toMatchObject({ text: expect.stringContaining('Checking') });
+      expect(transcript[2]).toMatchObject({ text: expect.stringContaining('Posted') });
+    });
+
+    it('stops when the task moved to another version mid-claim', async () => {
+      const { runner, client, setCurrent } = setup();
+      setCurrent(makeTask({ agentVersionId: 'v-other' }));
+
+      await runner.runTask(makeTask());
+
+      expect(client.complete).not.toHaveBeenCalled();
+    });
+
     it('shows a message delivered twice only once', async () => {
       const { runner } = setup();
 
-      const { transcript } = await runner.rebuildTranscript('Task prompt', [
-        event(1, 'message.received', { messageId: 'm1' }),
-        event(2, 'message.received', { messageId: 'm1' })
-      ]);
+      const { transcript } = await runner.rebuildTranscript(
+        'Task prompt',
+        [
+          event(1, 'message.received', { messageId: 'm1' }),
+          event(2, 'message.received', { messageId: 'm1' })
+        ],
+        'scripted'
+      );
 
       expect(transcript).toHaveLength(2);
     });
@@ -647,11 +686,15 @@ describe('TaskRunnerService', () => {
       const { runner } = setup();
       const call = { id: 'c1', name: 'ask', input: {} };
 
-      const { transcript, pendingCalls } = await runner.rebuildTranscript('Task prompt', [
-        event(1, 'model.turn', { raw: 'assistant-1', toolCalls: [call] }),
-        event(2, 'message.received', { messageId: 'm-late' }),
-        event(3, 'tool.results', { results: [{ callId: 'c1', content: 'ok', isError: false }] })
-      ]);
+      const { transcript, pendingCalls } = await runner.rebuildTranscript(
+        'Task prompt',
+        [
+          event(1, 'model.turn', { raw: 'assistant-1', toolCalls: [call] }),
+          event(2, 'message.received', { messageId: 'm-late' }),
+          event(3, 'tool.results', { results: [{ callId: 'c1', content: 'ok', isError: false }] })
+        ],
+        'scripted'
+      );
 
       expect(transcript.map((entry) => entry.role)).toEqual([
         'user',
@@ -666,9 +709,11 @@ describe('TaskRunnerService', () => {
       const { runner } = setup();
       const call = { id: 'c1', name: 'send_message', input: { body: 'hi' } };
 
-      const { pendingCalls } = await runner.rebuildTranscript('Task prompt', [
-        event(1, 'model.turn', { raw: 'assistant-1', toolCalls: [call] })
-      ]);
+      const { pendingCalls } = await runner.rebuildTranscript(
+        'Task prompt',
+        [event(1, 'model.turn', { raw: 'assistant-1', toolCalls: [call] })],
+        'scripted'
+      );
 
       expect(pendingCalls).toEqual([call]);
     });

@@ -185,10 +185,15 @@ export class TaskPostgresRepository implements TaskRepository {
 
   async update(
     taskId: string,
-    expected: { state: TaskState; paused: boolean },
+    expected: { state: TaskState; paused: boolean; agentVersionId?: string },
     changes: TaskChanges
   ): Promise<Task | null> {
-    const values: unknown[] = [taskId, expected.state, expected.paused];
+    const values: unknown[] = [
+      taskId,
+      expected.state,
+      expected.paused,
+      expected.agentVersionId ?? null
+    ];
     const sets = ['updated_at = now()'];
     for (const [field, column] of Object.entries(CHANGE_COLUMNS)) {
       const value = changes[field as keyof TaskChanges];
@@ -210,6 +215,7 @@ export class TaskPostgresRepository implements TaskRepository {
        WHERE id = $1
          AND state = $2
          AND (paused_at IS NOT NULL) = $3
+         AND ($4::uuid IS NULL OR agent_version_id = $4)
        RETURNING *`,
       values
     );

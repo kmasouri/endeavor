@@ -31,9 +31,14 @@ export class TaskLogger {
     );
   }
 
-  onTaskVersionMigrated(taskId: string, fromVersionId: string, toVersionId: string): void {
+  onTaskVersionMigrated(
+    taskId: string,
+    fromVersionId: string,
+    toVersionId: string,
+    by: { humanId: string; reason: string | null }
+  ): void {
     currentLogger(this.logger).info(
-      { event: 'task.version.migrated', taskId, fromVersionId, toVersionId },
+      { event: 'task.version.migrated', taskId, fromVersionId, toVersionId, ...by },
       'task moved to another configuration version'
     );
   }

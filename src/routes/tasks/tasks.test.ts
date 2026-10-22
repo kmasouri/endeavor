@@ -73,4 +73,37 @@ describe('task routes', () => {
     expect(response.statusCode).toBe(400);
     await app.close();
   });
+
+  it('accepts pause with no body', async () => {
+    const app = setupApp();
+    await app.ready();
+    jest.spyOn(app.taskService, 'pauseTask').mockResolvedValue({ id: TASK } as never);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/tasks/${TASK}/pause`,
+      headers: { 'x-actor-id': ACTOR }
+    });
+
+    expect(response.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('moves a task to the current version with no body', async () => {
+    const app = setupApp();
+    await app.ready();
+    const migrate = jest
+      .spyOn(app.taskService, 'migrateTaskVersion')
+      .mockResolvedValue({ id: TASK } as never);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: `/tasks/${TASK}/version`,
+      headers: { 'x-actor-id': ACTOR }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(migrate).toHaveBeenCalledWith(ACTOR, TASK, {});
+    await app.close();
+  });
 });

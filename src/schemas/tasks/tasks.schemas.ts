@@ -27,18 +27,21 @@ export const listTaskEventsQuerySchema = z.strictObject({
   limit: z.coerce.number().int().min(1).max(500).default(100)
 });
 
-// Pause, resume, cancel, and restart take an optional note. Send {} for none.
+// Pause, resume, cancel, and restart take an optional note. The body can be left out:
+// Fastify passes a missing body as null, so these use nullish().
 export const taskActionBodySchema = z
   .strictObject({
     reason: z.string().trim().min(1).optional()
   })
-  .optional();
+  .nullish();
 
-export const migrateTaskVersionBodySchema = z.strictObject({
-  // Leave out to use the agent's current version.
-  versionId: z.uuid().optional(),
-  reason: z.string().trim().min(1).optional()
-});
+// Send {} or no body to use the agent's current version.
+export const migrateTaskVersionBodySchema = z
+  .strictObject({
+    versionId: z.uuid().optional(),
+    reason: z.string().trim().min(1).optional()
+  })
+  .nullish();
 
 export const reviewTaskBodySchema = z.strictObject({
   approved: z.boolean(),

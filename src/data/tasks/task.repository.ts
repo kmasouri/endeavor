@@ -70,11 +70,11 @@ export interface TaskRepository {
   list(input: ListTasksInput): Promise<Task[]>;
   count(input: Omit<ListTasksInput, 'limit' | 'offset'>): Promise<number>;
 
-  // Applies changes only if the task still has pausedAt and state as given in expected.
-  // Returns null when another change got there first.
+  // Applies changes only if the task still has the state, pause flag, and (when given) agent
+  // version in expected. Returns null when another change got there first.
   update(
     taskId: string,
-    expected: { state: TaskState; paused: boolean },
+    expected: { state: TaskState; paused: boolean; agentVersionId?: string },
     changes: TaskChanges
   ): Promise<Task | null>;
 

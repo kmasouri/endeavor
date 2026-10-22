@@ -109,7 +109,7 @@ export async function migrateTaskVersionHandler(
     await request.server.taskService.migrateTaskVersion(
       request.headers['x-actor-id'],
       request.params.taskId,
-      request.body
+      request.body ?? {}
     )
   );
 }

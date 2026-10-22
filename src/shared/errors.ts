@@ -56,15 +56,15 @@ export const ERRORS = {
     statusCode: 409,
     message: 'The agent is disabled or has no saved configuration'
   },
-  agentVersionNotFound: {
-    code: 50004,
-    statusCode: 404,
-    message: "Version not found for this task's agent"
-  },
   agentNameTaken: {
     code: 50003,
     statusCode: 409,
     message: 'An agent with this name already exists'
+  },
+  agentVersionNotFound: {
+    code: 50004,
+    statusCode: 404,
+    message: "Version not found for this task's agent"
   },
 
   // 60xxx: conversations

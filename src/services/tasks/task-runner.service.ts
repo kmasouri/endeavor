@@ -288,6 +288,11 @@ export class TaskRunnerService {
       if (!task || task.state !== 'working' || task.pausedAt) {
         return 0;
       }
+      // A person moved the task to another configuration version. Stop, so the next claim loads
+      // the new instructions, provider, and model.
+      if (task.agentVersionId !== version.id) {
+        return 0;
+      }
       // Another worker took over after our lease ran out. Stop, so the task never runs twice.
       if (
         !(await this.taskRepository.renewLease(
@@ -300,7 +305,11 @@ export class TaskRunnerService {
       }
 
       const events = await this.loadEvents(task.id);
-      const { transcript, pendingCalls } = await this.rebuildTranscript(prompt, events);
+      const { transcript, pendingCalls } = await this.rebuildTranscript(
+        prompt,
+        events,
+        version.provider
+      );
 
       // A tool call that was asked for but never run, such as after a crash, runs first.
       if (pendingCalls.length > 0) {
@@ -382,6 +391,7 @@ export class TaskRunnerService {
       }
       await this.taskRepository.addEvent(task.id, EVENTS.modelTurn, agentActor, {
         raw: result.raw,
+        provider: version.provider,
         text: result.text,
         toolCalls: result.toolCalls,
         stopReason: result.stopReason,
@@ -748,12 +758,17 @@ export class TaskRunnerService {
   // Turns the event history into a model transcript. Messages that arrive while a tool call is
   // still waiting for its results are held back until after the results, because providers
   // need results right after the call. Returns the calls that still need results.
+  //
+  // Turns from another provider, such as before a version change, can't be sent back in their
+  // own format. They are shown as text instead.
   async rebuildTranscript(
     prompt: string,
-    events: TaskEvent[]
+    events: TaskEvent[],
+    provider: ModelProvider
   ): Promise<{ transcript: ModelTranscriptEntry[]; pendingCalls: ModelToolCall[] }> {
     const transcript: ModelTranscriptEntry[] = [{ role: 'user', text: prompt }];
     let pendingCalls: ModelToolCall[] = [];
+    let pendingIsForeign = false;
     let heldBack: string[] = [];
     // A crash during delivery can record the same message twice. Show it once.
     const seenMessages = new Set<string>();
@@ -768,15 +783,36 @@ export class TaskRunnerService {
     for (const event of events) {
       switch (event.type) {
         case EVENTS.modelTurn: {
-          transcript.push({ role: 'assistant', raw: event.data.raw });
-          pendingCalls = (event.data.toolCalls as ModelToolCall[] | undefined) ?? [];
+          const calls = (event.data.toolCalls as ModelToolCall[] | undefined) ?? [];
+          const turnProvider = event.data.provider as ModelProvider | undefined;
+          pendingIsForeign = turnProvider !== undefined && turnProvider !== provider;
+          if (pendingIsForeign) {
+            const callText = calls.map((call) => `${call.name}(${JSON.stringify(call.input)})`);
+            transcript.push({
+              role: 'user',
+              text: [
+                'Earlier in this task, under a previous configuration, you wrote:',
+                (event.data.text as string) || '(no text)',
+                ...(callText.length > 0 ? [`and called: ${callText.join(', ')}`] : [])
+              ].join('\n')
+            });
+          } else {
+            transcript.push({ role: 'assistant', raw: event.data.raw });
+          }
+          pendingCalls = calls;
           break;
         }
         case EVENTS.toolResults: {
-          transcript.push({
-            role: 'tool_results',
-            results: event.data.results as ModelToolResult[]
-          });
+          const results = event.data.results as ModelToolResult[];
+          if (pendingIsForeign) {
+            transcript.push({
+              role: 'user',
+              text: `Those calls returned: ${results.map((result) => result.content).join(' | ')}`
+            });
+          } else {
+            transcript.push({ role: 'tool_results', results });
+          }
+          pendingIsForeign = false;
           pendingCalls = [];
           for (const text of heldBack) {
             transcript.push({ role: 'user', text });

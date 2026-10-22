@@ -227,13 +227,19 @@ export class TaskService {
         `Task ${task.id} is ${task.state}. Restart it to run it on a newer version`
       );
     }
-    const agent = await this.agentRepository.getById(task.ownerAgentId);
-    const versionId = input.versionId ?? agent?.currentVersionId;
-    const version = versionId ? await this.agentRepository.getVersion(versionId) : null;
+    let versionId = input.versionId;
+    if (!versionId) {
+      const agent = await this.agentRepository.getById(task.ownerAgentId);
+      if (!agent?.currentVersionId) {
+        throw new AppError('agentUnavailable', `The task's agent has no current configuration`);
+      }
+      versionId = agent.currentVersionId;
+    }
+    const version = await this.agentRepository.getVersion(versionId);
     if (!version || version.agentId !== task.ownerAgentId) {
       throw new AppError(
         'agentVersionNotFound',
-        `Version ${versionId ?? '(none)'} is not a version of this task's agent`
+        `Version ${versionId} is not a version of this task's agent`
       );
     }
     if (version.id === task.agentVersionId) {
@@ -247,7 +253,10 @@ export class TaskService {
       toVersion: version.version,
       reason: input.reason ?? null
     });
-    this.taskLogger.onTaskVersionMigrated(task.id, task.agentVersionId, version.id);
+    this.taskLogger.onTaskVersionMigrated(task.id, task.agentVersionId, version.id, {
+      humanId: human.id,
+      reason: input.reason ?? null
+    });
     return migrated;
   }
 
