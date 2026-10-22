@@ -1,0 +1,4 @@
+# People listed here are asked to review every pull request that changes a matching file.
+# The last matching line wins. See https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+* @kmasouri
