@@ -78,7 +78,7 @@ export class AgentService {
         }
       )
       .catch(toNameTaken);
-    await this.grantSelected(agent.id, admin.id, input.skillIds ?? [], connectionIds);
+    await this.grantNewlyChosen(agent.id, admin.id, null, version);
     this.agentLogger.onAgentCreated(agent.id);
     this.agentLogger.onAgentConfigured(agent.id, version.version, version.provider);
     return this.toDetails(agent, version);
@@ -157,12 +157,6 @@ export class AgentService {
     const connectionIds = changes.connectionIds
       ? await this.checkConnections(changes.connectionIds)
       : (current?.connectionIds ?? []);
-    await this.grantSelected(
-      agent.id,
-      admin.id,
-      changes.skillIds ?? [],
-      changes.connectionIds ?? []
-    );
 
     // Saving the same settings again doesn't add a copy to the history.
     if (
@@ -184,6 +178,7 @@ export class AgentService {
       connectionIds,
       createdByHumanId: admin.id
     });
+    await this.grantNewlyChosen(agent.id, admin.id, current, version);
     this.agentLogger.onAgentConfigured(agent.id, version.version, version.provider);
     return this.toDetails({ ...agent, currentVersionId: version.id }, version);
   }
@@ -239,20 +234,20 @@ export class AgentService {
     }));
   }
 
-  // Turns skill IDs into their current version IDs. Each skill must be enabled.
+  // Turns skill IDs into their current version IDs, in one query. Each skill must be enabled.
   private async pinSkills(skillIds: string[]): Promise<string[]> {
-    const pinned: string[] = [];
-    for (const skillId of new Set(skillIds)) {
-      const skill = await this.catalogRepository.getSkill(skillId);
+    const unique = [...new Set(skillIds)];
+    const skills = await this.catalogRepository.getSkills(unique);
+    return unique.map((skillId) => {
+      const skill = skills.find((s) => s.id === skillId);
       if (!skill) {
         throw new AppError('skillNotFound', `Skill ${skillId} was not found`);
       }
       if (skill.disabledAt || !skill.currentVersionId) {
         throw new AppError('catalogEntryUnavailable', `Skill ${skill.name} can't be chosen now`);
       }
-      pinned.push(skill.currentVersionId);
-    }
-    return pinned;
+      return skill.currentVersionId;
+    });
   }
 
   private async checkConnections(connectionIds: string[]): Promise<string[]> {
@@ -270,19 +265,43 @@ export class AgentService {
     return unique;
   }
 
-  private async grantSelected(
+  // Choosing a skill or connection grants it, along with the connections a chosen skill
+  // uses. Only newly chosen entries are granted, and only once the version is saved. Saving
+  // again with the same choices never brings back a grant an admin revoked; use the grants API.
+  private async grantNewlyChosen(
     agentId: string,
     adminId: string,
-    skillIds: string[],
-    connectionIds: string[]
+    previous: AgentVersion | null,
+    next: AgentVersion
   ): Promise<void> {
-    const targets = [
-      ...[...new Set(skillIds)].map((id) => ({ targetType: 'skill' as const, targetId: id })),
-      ...connectionIds.map((id) => ({ targetType: 'connection' as const, targetId: id }))
-    ];
-    for (const target of targets) {
-      await this.catalogRepository.grant({ agentId, grantedByHumanId: adminId, ...target });
+    const [before, after] = await Promise.all([
+      this.chosenTargets(previous),
+      this.chosenTargets(next)
+    ]);
+    for (const key of after) {
+      if (!before.has(key)) {
+        const [targetType, targetId] = key.split(':') as ['skill' | 'connection', string];
+        await this.catalogRepository.grant({
+          agentId,
+          grantedByHumanId: adminId,
+          targetType,
+          targetId
+        });
+      }
     }
+  }
+
+  private async chosenTargets(version: AgentVersion | null): Promise<Set<string>> {
+    if (!version) {
+      return new Set();
+    }
+    const skillVersions = await this.catalogRepository.getSkillVersions(version.skillVersionIds);
+    return new Set([
+      ...skillVersions.map((skillVersion) => `skill:${skillVersion.skillId}`),
+      ...[...version.connectionIds, ...skillVersions.flatMap((sv) => sv.connectionIds)].map(
+        (id) => `connection:${id}`
+      )
+    ]);
   }
 
   private async loadDetails(agent: Agent): Promise<AgentDetails> {

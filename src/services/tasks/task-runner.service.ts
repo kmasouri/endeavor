@@ -96,6 +96,7 @@ const EVENTS = {
   nudge: 'runner.nudge',
   participantSuggested: 'participant.suggested',
   connectionCall: 'connection.called',
+  connectionDenied: 'connection.denied',
   resultPosted: 'result.posted'
 } as const;
 
@@ -304,8 +305,7 @@ export class TaskRunnerService {
 
     // Only skills and connections that are still granted and enabled. A revoke takes effect on
     // the next claim for instructions, and on the very next call for http_request.
-    const skills = await this.usableSkills(agent.id, version);
-    const connections = await this.usableConnections(agent.id, version);
+    const { skills, connections } = await this.usableCatalog(agent.id, version);
     const system = buildSystemPrompt(agent, version, { skills, connections });
     const tools =
       connections.length > 0
@@ -639,17 +639,30 @@ export class TaskRunnerService {
       throw new AppError('validationError', `Unknown method ${method}.`);
     }
     const version = await this.agentRepository.getVersion(task.agentVersionId);
-    const usable = version ? await this.usableConnections(agent.id, version) : [];
+    const usable = version ? (await this.usableCatalog(agent.id, version)).connections : [];
     const connection = usable.find((c) => c.name.toLowerCase() === name.trim().toLowerCase());
-    if (!connection) {
-      throw new AppError(
-        'toolAccessDenied',
-        `You can't use a connection named "${name}". Usable: ${usable.map((c) => c.name).join(', ') || 'none'}.`
-      );
-    }
-    const denied = connectionCallDenied(connection, method, path);
+    const denied = connection
+      ? connectionCallDenied(connection, method, path)
+      : `You can't use a connection named "${name}". Usable: ${usable.map((c) => c.name).join(', ') || 'none'}.`;
     if (denied) {
+      // Refused calls are recorded too, so admins can see attempts outside the rules.
+      await this.taskRepository.addEvent(
+        task.id,
+        EVENTS.connectionDenied,
+        { type: 'agent', id: agent.id },
+        {
+          callId,
+          connection: name,
+          method,
+          path,
+          reason: denied
+        }
+      );
+      this.runnerLogger.onConnectionDenied(task.id, name, method, path, denied);
       throw new AppError('toolAccessDenied', denied);
+    }
+    if (!connection) {
+      throw new AppError('toolAccessDenied', `You can't use a connection named "${name}".`);
     }
 
     const credential = await this.catalogRepository.getConnectionCredential(connection.id);
@@ -680,43 +693,38 @@ export class TaskRunnerService {
     return `HTTP ${response.status}${response.truncated ? ' (cut off at 20,000 characters)' : ''}\n${response.body}`;
   }
 
-  private async usableSkills(
+  // What the agent may use right now: skills chosen in the version that are still granted and
+  // enabled, and connections chosen directly or through those skills that are still granted and
+  // enabled. Grants are read fresh each time, so a revoke applies at once.
+  private async usableCatalog(
     agentId: string,
     version: AgentVersion
-  ): Promise<{ skill: Skill; version: SkillVersion }[]> {
-    const versions = await this.catalogRepository.getSkillVersions(version.skillVersionIds);
-    const granted = await this.activeGrantIds(agentId, 'skill');
-    const usable: { skill: Skill; version: SkillVersion }[] = [];
-    for (const skillVersion of versions) {
-      const skill = await this.catalogRepository.getSkill(skillVersion.skillId);
-      if (skill && !skill.disabledAt && granted.has(skill.id)) {
-        usable.push({ skill, version: skillVersion });
-      }
-    }
-    return usable;
-  }
+  ): Promise<{ skills: { skill: Skill; version: SkillVersion }[]; connections: Connection[] }> {
+    const [skillVersions, grants] = await Promise.all([
+      this.catalogRepository.getSkillVersions(version.skillVersionIds),
+      this.catalogRepository.listGrants(agentId, { activeOnly: true })
+    ]);
+    const granted = (type: 'skill' | 'connection') =>
+      new Set(grants.filter((grant) => grant.targetType === type).map((grant) => grant.targetId));
+    const grantedSkills = granted('skill');
+    const grantedConnections = granted('connection');
 
-  // Connections chosen in the version, plus those its usable skills use, that are still
-  // granted and enabled.
-  private async usableConnections(agentId: string, version: AgentVersion): Promise<Connection[]> {
-    const skills = await this.usableSkills(agentId, version);
+    const skillRows = await this.catalogRepository.getSkills(skillVersions.map((sv) => sv.skillId));
+    const skills = skillVersions.flatMap((skillVersion) => {
+      const skill = skillRows.find((row) => row.id === skillVersion.skillId);
+      return skill && !skill.disabledAt && grantedSkills.has(skill.id)
+        ? [{ skill, version: skillVersion }]
+        : [];
+    });
+
     const wanted = new Set([
       ...version.connectionIds,
       ...skills.flatMap(({ version: skillVersion }) => skillVersion.connectionIds)
     ]);
-    const granted = await this.activeGrantIds(agentId, 'connection');
-    const connections = await this.catalogRepository.getConnections([...wanted]);
-    return connections.filter((connection) => granted.has(connection.id) && !connection.disabledAt);
-  }
-
-  private async activeGrantIds(
-    agentId: string,
-    type: 'skill' | 'connection'
-  ): Promise<Set<string>> {
-    const grants = await this.catalogRepository.listGrants(agentId, { activeOnly: true });
-    return new Set(
-      grants.filter((grant) => grant.targetType === type).map((grant) => grant.targetId)
+    const connections = (await this.catalogRepository.getConnections([...wanted])).filter(
+      (connection) => grantedConnections.has(connection.id) && !connection.disabledAt
     );
+    return { skills, connections };
   }
 
   // Posts the result or reason in reply to the message that asked for the work.

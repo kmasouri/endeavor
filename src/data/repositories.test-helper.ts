@@ -94,6 +94,7 @@ export function mockCatalogRepository(): jest.Mocked<CatalogRepository> {
   return {
     createSkill: jest.fn(),
     getSkill: jest.fn().mockResolvedValue(null),
+    getSkills: jest.fn().mockResolvedValue([]),
     listSkills: jest.fn().mockResolvedValue([]),
     countSkills: jest.fn().mockResolvedValue(0),
     addSkillVersion: jest.fn(),

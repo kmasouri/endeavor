@@ -41,6 +41,7 @@ export interface CatalogRepository {
     firstVersion: CreateSkillVersionInput
   ): Promise<{ skill: Skill; version: SkillVersion }>;
   getSkill(skillId: string): Promise<Skill | null>;
+  getSkills(skillIds: string[]): Promise<Skill[]>;
   listSkills(input: { limit: number; offset: number }): Promise<Skill[]>;
   countSkills(): Promise<number>;
   // Saves the next version and makes it current.

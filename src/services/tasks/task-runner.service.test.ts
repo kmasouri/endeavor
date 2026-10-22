@@ -209,6 +209,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
       onModelFailed: jest.fn(),
       onTaskRunFailed: jest.fn(),
       onRequestChainTooDeep: jest.fn(),
+      onConnectionDenied: jest.fn(),
       onTickFailed: jest.fn()
     } as unknown as TaskRunnerLogger,
     { ...DEFAULT_RUNNER_OPTIONS, workerId: 'test' }
@@ -808,7 +809,6 @@ describe('TaskRunnerService', () => {
       // The grant was active when the claim started, then revoked before the call.
       catalogs.listGrants
         .mockResolvedValueOnce([grant('connection', 'conn-1')])
-        .mockResolvedValueOnce([grant('connection', 'conn-1')])
         .mockResolvedValue([]);
       tasks.listEvents
         .mockResolvedValueOnce([
@@ -837,6 +837,12 @@ describe('TaskRunnerService', () => {
 
       expect(connectionClient.request).not.toHaveBeenCalled();
       expect(toolResult(tasks).results[0].content).toContain('DELETE is not allowed');
+      expect(tasks.addEvent).toHaveBeenCalledWith(
+        TASK,
+        'connection.denied',
+        expect.anything(),
+        expect.objectContaining({ method: 'DELETE', path: '/invoices' })
+      );
     });
 
     it('offers http_request and lists connections only when one is usable', async () => {
@@ -872,15 +878,17 @@ describe('TaskRunnerService', () => {
           createdAt: new Date()
         }
       ]);
-      catalogs.getSkill.mockImplementation(async (id) => ({
-        id,
-        name: id === 's1' ? 'Citations' : 'Revoked',
-        description: '',
-        currentVersionId: null,
-        disabledAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      }));
+      catalogs.getSkills.mockImplementation(async (ids) =>
+        ids.map((id) => ({
+          id,
+          name: id === 's1' ? 'Citations' : 'Revoked',
+          description: '',
+          currentVersionId: null,
+          disabledAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }))
+      );
       catalogs.listGrants.mockResolvedValue([grant('skill', 's1')]);
 
       await runner.runTask(makeTask());

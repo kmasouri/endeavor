@@ -28,6 +28,31 @@ describe('ConnectionHttpClient', () => {
   });
 });
 
+it('stops reading a huge body at the cap', async () => {
+  let chunksPulled = 0;
+  const endless = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      chunksPulled++;
+      controller.enqueue(new TextEncoder().encode('y'.repeat(1000)));
+    }
+  });
+  jest.spyOn(global, 'fetch').mockResolvedValue(new Response(endless, { status: 200 }));
+  const client = new ConnectionHttpClient({ timeoutMs: 1000, maxResponseChars: 2500 });
+
+  const response = await client.request({
+    baseUrl: 'https://a.test',
+    method: 'GET',
+    path: '/x',
+    headers: {},
+    body: null
+  });
+
+  expect(response.body).toHaveLength(2500);
+  expect(response.truncated).toBe(true);
+  expect(chunksPulled).toBeLessThan(10);
+  jest.restoreAllMocks();
+});
+
 describe('joinUrl', () => {
   it('keeps paths on the connection host', () => {
     expect(joinUrl('https://a.test/base', '/x')).toBe('https://a.test/base/x');

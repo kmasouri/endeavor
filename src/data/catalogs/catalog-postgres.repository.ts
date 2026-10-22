@@ -122,6 +122,17 @@ export class CatalogPostgresRepository implements CatalogRepository {
     return result.rows[0] ? toSkill(result.rows[0]) : null;
   }
 
+  async getSkills(skillIds: string[]): Promise<Skill[]> {
+    if (skillIds.length === 0) {
+      return [];
+    }
+    const result = await this.db.query<SkillRow>(
+      `SELECT * FROM bold_cedar_007.skills WHERE id = ANY($1::uuid[])`,
+      [skillIds]
+    );
+    return result.rows.map(toSkill);
+  }
+
   async listSkills(input: { limit: number; offset: number }): Promise<Skill[]> {
     const result = await this.db.query<SkillRow>(
       `SELECT *

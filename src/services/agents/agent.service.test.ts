@@ -244,39 +244,69 @@ describe('AgentService', () => {
 
   it('pins chosen skills at their current version and grants them', async () => {
     const { service, catalogs, agents } = setup();
-    catalogs.getSkill.mockResolvedValue({
-      id: 's1',
-      name: 'Citations',
-      description: '',
-      currentVersionId: 'sv7',
-      disabledAt: null,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
+    catalogs.getSkills.mockResolvedValue([
+      {
+        id: 's1',
+        name: 'Citations',
+        description: '',
+        currentVersionId: 'sv7',
+        disabledAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ]);
+    // version1 pinned nothing yet; the new version pins sv7, which uses connection c9.
+    catalogs.getSkillVersions.mockImplementation(async (ids) =>
+      ids.includes('sv7')
+        ? [
+            {
+              id: 'sv7',
+              skillId: 's1',
+              version: 7,
+              instructions: 'Cite',
+              connectionIds: ['c9'],
+              createdByHumanId: null,
+              createdAt: new Date()
+            }
+          ]
+        : []
+    );
 
     await service.updateConfig(ADMIN_ID, AGENT_ID, { skillIds: ['s1'] });
 
-    expect(catalogs.grant).toHaveBeenCalledWith({
-      agentId: AGENT_ID,
-      grantedByHumanId: ADMIN_ID,
-      targetType: 'skill',
-      targetId: 's1'
-    });
-    // The rest is copied from version 1; only the skills change.
-    expect(agents.addVersion).toHaveBeenCalled();
+    expect(agents.addVersion).toHaveBeenCalledWith(
+      AGENT_ID,
+      expect.objectContaining({ skillVersionIds: ['sv7'] })
+    );
+    const granted = catalogs.grant.mock.calls.map(
+      ([input]) => `${input.targetType}:${input.targetId}`
+    );
+    // c1 was already chosen in version 1, so it is not granted again.
+    expect(granted).toEqual(['skill:s1', 'connection:c9']);
+  });
+
+  it('never re-grants an entry that was already chosen, so revokes stick', async () => {
+    const { service, catalogs } = setup();
+    catalogs.getConnections.mockResolvedValue([{ id: 'c1', disabledAt: null } as never]);
+
+    await service.updateConfig(ADMIN_ID, AGENT_ID, { connectionIds: ['c1'], model: 'other' });
+
+    expect(catalogs.grant).not.toHaveBeenCalled();
   });
 
   it('refuses a disabled skill', async () => {
     const { service, catalogs } = setup();
-    catalogs.getSkill.mockResolvedValue({
-      id: 's1',
-      name: 'Old',
-      description: '',
-      currentVersionId: 'sv1',
-      disabledAt: new Date(),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
+    catalogs.getSkills.mockResolvedValue([
+      {
+        id: 's1',
+        name: 'Old',
+        description: '',
+        currentVersionId: 'sv1',
+        disabledAt: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }
+    ]);
 
     await expect(
       service.updateConfig(ADMIN_ID, AGENT_ID, { skillIds: ['s1'] })

@@ -22,13 +22,35 @@ export class ConnectionHttpClient implements ConnectionClient {
       signal: AbortSignal.timeout(this.options.timeoutMs)
     });
 
-    const text = await response.text();
-    const truncated = text.length > this.options.maxResponseChars;
-    return {
-      status: response.status,
-      body: truncated ? text.slice(0, this.options.maxResponseChars) : text,
-      truncated
-    };
+    const { text, truncated } = await readCapped(response, this.options.maxResponseChars);
+    return { status: response.status, body: text, truncated };
+  }
+}
+
+// Reads at most maxChars of the body and then stops, so a huge response can't fill memory.
+async function readCapped(
+  response: Response,
+  maxChars: number
+): Promise<{ text: string; truncated: boolean }> {
+  if (!response.body) {
+    return { text: '', truncated: false };
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let text = '';
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) {
+        return { text: text + decoder.decode(), truncated: false };
+      }
+      text += decoder.decode(value, { stream: true });
+      if (text.length > maxChars) {
+        return { text: text.slice(0, maxChars), truncated: true };
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
   }
 }
 
