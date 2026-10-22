@@ -1,27 +1,36 @@
 import {
   AgentRepository,
+  CatalogRepository,
   ConversationRepository,
   HumanRepository,
   MessageRepository,
   TaskRepository
 } from '../../data';
 import {
+  ConnectionClient,
   ModelClient,
   ModelClientError,
   ModelToolCall,
+  ModelToolDefinition,
   ModelToolResult,
   ModelTranscriptEntry
 } from '../../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../../observability';
 import { addressedAgentIds } from '../../shared/addressing';
+import { connectionCallDenied } from '../../shared/connection-access';
 import { AppError } from '../../shared/errors';
 import {
   Actor,
   Agent,
   AgentVersion,
+  Connection,
+  HTTP_METHODS,
+  HttpMethod,
   Message,
   ModelProvider,
   ParticipantRef,
+  Skill,
+  SkillVersion,
   Task,
   TaskEvent
 } from '../../shared/types';
@@ -33,7 +42,12 @@ import {
   formatMessage,
   oneLine
 } from './agent-context';
-import { AGENT_TOOL_DEFINITIONS, AGENT_TOOLS, STOPPING_TOOLS } from './agent-tools';
+import {
+  AGENT_TOOL_DEFINITIONS,
+  AGENT_TOOLS,
+  HTTP_REQUEST_TOOL,
+  STOPPING_TOOLS
+} from './agent-tools';
 import { TaskLifecycle } from './task-lifecycle';
 
 export interface TaskRunnerOptions {
@@ -81,6 +95,7 @@ const EVENTS = {
   messageReceived: 'message.received',
   nudge: 'runner.nudge',
   participantSuggested: 'participant.suggested',
+  connectionCall: 'connection.called',
   resultPosted: 'result.posted'
 } as const;
 
@@ -96,6 +111,8 @@ export class TaskRunnerService {
     private readonly conversationRepository: ConversationRepository,
     private readonly agentRepository: AgentRepository,
     private readonly humanRepository: HumanRepository,
+    private readonly catalogRepository: CatalogRepository,
+    private readonly connectionClient: ConnectionClient,
     private readonly modelClients: Partial<Record<ModelProvider, ModelClient>>,
     taskLogger: TaskLogger,
     private readonly runnerLogger: TaskRunnerLogger,
@@ -285,7 +302,15 @@ export class TaskRunnerService {
       return 0;
     }
 
-    const system = buildSystemPrompt(agent, version);
+    // Only skills and connections that are still granted and enabled. A revoke takes effect on
+    // the next claim for instructions, and on the very next call for http_request.
+    const skills = await this.usableSkills(agent.id, version);
+    const connections = await this.usableConnections(agent.id, version);
+    const system = buildSystemPrompt(agent, version, { skills, connections });
+    const tools =
+      connections.length > 0
+        ? [...AGENT_TOOL_DEFINITIONS, HTTP_REQUEST_TOOL]
+        : AGENT_TOOL_DEFINITIONS;
     const prompt = await this.buildPrompt(claimed, agent);
 
     for (let turn = 0; turn < this.options.turnsPerClaim; turn++) {
@@ -343,6 +368,7 @@ export class TaskRunnerService {
         task,
         agent,
         version,
+        tools,
         client,
         system,
         transcript,
@@ -360,6 +386,7 @@ export class TaskRunnerService {
     task: Task,
     agent: Agent,
     version: AgentVersion,
+    tools: ModelToolDefinition[],
     client: ModelClient,
     system: string,
     transcript: ModelTranscriptEntry[],
@@ -380,7 +407,7 @@ export class TaskRunnerService {
         model: version.model,
         system,
         transcript,
-        tools: AGENT_TOOL_DEFINITIONS,
+        tools,
         maxTokens: this.options.maxTokens
       });
       clearInterval(heartbeat);
@@ -587,9 +614,109 @@ export class TaskRunnerService {
         return `Suggested ${suggested.name} to the people here. A person decides whether to add them.`;
       }
 
+      case AGENT_TOOLS.httpRequest: {
+        return this.httpRequest(task, agent, call.id, input);
+      }
+
       default:
         throw new AppError('validationError', `Unknown tool ${call.name}.`);
     }
+  }
+
+  // Every call is checked now, not when the task started: the connection must be chosen in the
+  // task's configuration (directly or through a chosen skill), still granted, enabled, and allow
+  // the method and path.
+  private async httpRequest(
+    task: Task,
+    agent: Agent,
+    callId: string,
+    input: Record<string, unknown>
+  ): Promise<string> {
+    const name = requireString(input, 'connection');
+    const method = requireString(input, 'method').toUpperCase() as HttpMethod;
+    const path = requireString(input, 'path');
+    if (!HTTP_METHODS.includes(method)) {
+      throw new AppError('validationError', `Unknown method ${method}.`);
+    }
+    const version = await this.agentRepository.getVersion(task.agentVersionId);
+    const usable = version ? await this.usableConnections(agent.id, version) : [];
+    const connection = usable.find((c) => c.name.toLowerCase() === name.trim().toLowerCase());
+    if (!connection) {
+      throw new AppError(
+        'toolAccessDenied',
+        `You can't use a connection named "${name}". Usable: ${usable.map((c) => c.name).join(', ') || 'none'}.`
+      );
+    }
+    const denied = connectionCallDenied(connection, method, path);
+    if (denied) {
+      throw new AppError('toolAccessDenied', denied);
+    }
+
+    const credential = await this.catalogRepository.getConnectionCredential(connection.id);
+    const response = await this.connectionClient
+      .request({
+        baseUrl: connection.baseUrl,
+        method,
+        path,
+        headers: credential ? { [connection.authHeader]: credential } : {},
+        body: typeof input.body === 'string' ? input.body : null
+      })
+      .catch((error: Error) => {
+        throw new AppError('validationError', `The call failed: ${error.message}`);
+      });
+    // The response body isn't stored in the event; it is in the tool result.
+    await this.taskRepository.addEvent(
+      task.id,
+      EVENTS.connectionCall,
+      { type: 'agent', id: agent.id },
+      {
+        callId,
+        connectionId: connection.id,
+        method,
+        path,
+        status: response.status
+      }
+    );
+    return `HTTP ${response.status}${response.truncated ? ' (cut off at 20,000 characters)' : ''}\n${response.body}`;
+  }
+
+  private async usableSkills(
+    agentId: string,
+    version: AgentVersion
+  ): Promise<{ skill: Skill; version: SkillVersion }[]> {
+    const versions = await this.catalogRepository.getSkillVersions(version.skillVersionIds);
+    const granted = await this.activeGrantIds(agentId, 'skill');
+    const usable: { skill: Skill; version: SkillVersion }[] = [];
+    for (const skillVersion of versions) {
+      const skill = await this.catalogRepository.getSkill(skillVersion.skillId);
+      if (skill && !skill.disabledAt && granted.has(skill.id)) {
+        usable.push({ skill, version: skillVersion });
+      }
+    }
+    return usable;
+  }
+
+  // Connections chosen in the version, plus those its usable skills use, that are still
+  // granted and enabled.
+  private async usableConnections(agentId: string, version: AgentVersion): Promise<Connection[]> {
+    const skills = await this.usableSkills(agentId, version);
+    const wanted = new Set([
+      ...version.connectionIds,
+      ...skills.flatMap(({ version: skillVersion }) => skillVersion.connectionIds)
+    ]);
+    const granted = await this.activeGrantIds(agentId, 'connection');
+    const connections = await this.catalogRepository.getConnections([...wanted]);
+    return connections.filter((connection) => granted.has(connection.id) && !connection.disabledAt);
+  }
+
+  private async activeGrantIds(
+    agentId: string,
+    type: 'skill' | 'connection'
+  ): Promise<Set<string>> {
+    const grants = await this.catalogRepository.listGrants(agentId, { activeOnly: true });
+    return new Set(
+      grants.filter((grant) => grant.targetType === type).map((grant) => grant.targetId)
+    );
   }
 
   // Posts the result or reason in reply to the message that asked for the work.

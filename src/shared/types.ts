@@ -162,7 +162,7 @@ export interface AgentVersion {
   instructions: string;
   provider: ModelProvider;
   model: string;
-  skillIds: string[];
+  skillVersionIds: string[];
   connectionIds: string[];
   createdByHumanId: string | null;
   createdAt: Date;
@@ -203,4 +203,55 @@ export interface DirectoryEntry {
     skillCount: number;
     connectionCount: number;
   };
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  currentVersionId: string | null;
+  disabledAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Skill instructions are guidance for the model, not the agent's own instructions and not a
+// knowledge source. Versions never change once saved.
+export interface SkillVersion {
+  id: string;
+  skillId: string;
+  version: number;
+  instructions: string;
+  connectionIds: string[];
+  createdByHumanId: string | null;
+  createdAt: Date;
+}
+
+export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+export type HttpMethod = (typeof HTTP_METHODS)[number];
+
+// A connection as the API shows it. The credential itself is never included.
+export interface Connection {
+  id: string;
+  name: string;
+  description: string;
+  baseUrl: string;
+  authHeader: string;
+  hasCredential: boolean;
+  allowedMethods: HttpMethod[];
+  allowedPathPrefixes: string[];
+  disabledAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export type GrantTargetType = 'skill' | 'connection';
+
+export interface AgentGrant {
+  agentId: string;
+  targetType: GrantTargetType;
+  targetId: string;
+  grantedByHumanId: string | null;
+  grantedAt: Date;
+  revokedAt: Date | null;
 }

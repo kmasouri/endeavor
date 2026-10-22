@@ -1,5 +1,6 @@
 import {
   AgentRepository,
+  CatalogRepository,
   ConversationRepository,
   HumanRepository,
   MessageRepository,
@@ -86,5 +87,29 @@ export function mockMessageRepository(): jest.Mocked<MessageRepository> {
     claimDeliveries: jest.fn().mockResolvedValue([]),
     markDelivered: jest.fn(),
     recordDeliveryFailure: jest.fn()
+  };
+}
+
+export function mockCatalogRepository(): jest.Mocked<CatalogRepository> {
+  return {
+    createSkill: jest.fn(),
+    getSkill: jest.fn().mockResolvedValue(null),
+    listSkills: jest.fn().mockResolvedValue([]),
+    countSkills: jest.fn().mockResolvedValue(0),
+    addSkillVersion: jest.fn(),
+    getSkillVersions: jest.fn().mockResolvedValue([]),
+    listSkillVersions: jest.fn().mockResolvedValue([]),
+    setSkillDisabled: jest.fn(),
+    createConnection: jest.fn(),
+    getConnection: jest.fn().mockResolvedValue(null),
+    getConnections: jest.fn().mockResolvedValue([]),
+    listConnections: jest.fn().mockResolvedValue([]),
+    countConnections: jest.fn().mockResolvedValue(0),
+    updateConnection: jest.fn(),
+    setConnectionDisabled: jest.fn(),
+    getConnectionCredential: jest.fn().mockResolvedValue(null),
+    grant: jest.fn(),
+    revoke: jest.fn().mockResolvedValue(true),
+    listGrants: jest.fn().mockResolvedValue([])
   };
 }

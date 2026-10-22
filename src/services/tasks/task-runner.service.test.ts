@@ -1,5 +1,6 @@
 import {
   mockAgentRepository,
+  mockCatalogRepository,
   mockConversationRepository,
   mockHumanRepository,
   mockMessageRepository,
@@ -10,6 +11,7 @@ import { TaskLogger, TaskRunnerLogger } from '../../observability';
 import {
   Agent,
   AgentVersion,
+  Connection,
   ConversationMember,
   Message,
   Task,
@@ -48,7 +50,7 @@ const version: AgentVersion = {
   instructions: 'Research carefully.',
   provider: 'scripted',
   model: 'script',
-  skillIds: [],
+  skillVersionIds: [],
   connectionIds: [],
   createdByHumanId: HUMAN,
   createdAt: new Date()
@@ -137,6 +139,8 @@ function setup(options: { client?: ModelClient | null } = {}) {
   const conversations = mockConversationRepository();
   const agentRepo = mockAgentRepository();
   const humans = mockHumanRepository();
+  const catalogs = mockCatalogRepository();
+  const connectionClient = { request: jest.fn() };
   const client: jest.Mocked<ModelClient> = {
     provider: 'scripted',
     complete: jest.fn().mockResolvedValue(turn({}))
@@ -190,6 +194,8 @@ function setup(options: { client?: ModelClient | null } = {}) {
     conversations,
     agentRepo,
     humans,
+    catalogs,
+    connectionClient,
     options.client === null ? {} : { scripted: options.client ?? client },
     {
       onTaskCreated: jest.fn(),
@@ -213,6 +219,8 @@ function setup(options: { client?: ModelClient | null } = {}) {
     messages,
     client,
     agentRepo,
+    catalogs,
+    connectionClient,
     current: () => current,
     setCurrent: (task: Task) => (current = task)
   };
@@ -720,6 +728,169 @@ describe('TaskRunnerService', () => {
 
       expect(client.complete).not.toHaveBeenCalled();
       expect(current().state).toBe('blocked');
+    });
+  });
+
+  describe('skills and connections', () => {
+    const billing: Connection = {
+      id: 'conn-1',
+      name: 'Billing API',
+      description: 'Invoices',
+      baseUrl: 'https://billing.test',
+      authHeader: 'Authorization',
+      hasCredential: true,
+      allowedMethods: ['GET'],
+      allowedPathPrefixes: ['/invoices'],
+      disabledAt: null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    const grant = (targetType: 'skill' | 'connection', targetId: string) => ({
+      agentId: RESEARCHER,
+      targetType,
+      targetId,
+      grantedByHumanId: HUMAN,
+      grantedAt: new Date(),
+      revokedAt: null
+    });
+    const withConnection = { ...version, connectionIds: ['conn-1'] };
+    const callBilling = (path: string, method = 'GET') => ({
+      id: 'call-http',
+      name: 'http_request',
+      input: { connection: 'billing api', method, path }
+    });
+
+    function setupWithConnection() {
+      const ctx = setup();
+      ctx.agentRepo.getVersion.mockResolvedValue(withConnection);
+      ctx.catalogs.getConnections.mockResolvedValue([billing]);
+      ctx.catalogs.listGrants.mockResolvedValue([grant('connection', 'conn-1')]);
+      ctx.catalogs.getConnectionCredential.mockResolvedValue('Bearer secret');
+      ctx.connectionClient.request.mockResolvedValue({
+        status: 200,
+        body: '{"total":3}',
+        truncated: false
+      });
+      return ctx;
+    }
+
+    function toolResult(tasks: ReturnType<typeof setup>['tasks']) {
+      return tasks.addEvent.mock.calls.find(([, type]) => type === 'tool.results')?.[3] as {
+        results: { content: string; isError: boolean }[];
+      };
+    }
+
+    it('makes an allowed call with the stored credential', async () => {
+      const { runner, tasks, connectionClient } = setupWithConnection();
+      tasks.listEvents
+        .mockResolvedValueOnce([
+          event(1, 'model.turn', { raw: {}, toolCalls: [callBilling('/invoices?month=9')] })
+        ])
+        .mockResolvedValue([]);
+
+      await runner.runTask(makeTask());
+
+      expect(connectionClient.request).toHaveBeenCalledWith({
+        baseUrl: 'https://billing.test',
+        method: 'GET',
+        path: '/invoices?month=9',
+        headers: { Authorization: 'Bearer secret' },
+        body: null
+      });
+      expect(toolResult(tasks).results[0]).toMatchObject({
+        isError: false,
+        content: 'HTTP 200\n{"total":3}'
+      });
+    });
+
+    it('refuses the next call once the grant is revoked, even on an old version', async () => {
+      const { runner, tasks, catalogs, connectionClient } = setupWithConnection();
+      // The grant was active when the claim started, then revoked before the call.
+      catalogs.listGrants
+        .mockResolvedValueOnce([grant('connection', 'conn-1')])
+        .mockResolvedValueOnce([grant('connection', 'conn-1')])
+        .mockResolvedValue([]);
+      tasks.listEvents
+        .mockResolvedValueOnce([
+          event(1, 'model.turn', { raw: {}, toolCalls: [callBilling('/invoices')] })
+        ])
+        .mockResolvedValue([]);
+
+      await runner.runTask(makeTask());
+
+      expect(connectionClient.request).not.toHaveBeenCalled();
+      expect(toolResult(tasks).results[0]).toMatchObject({
+        isError: true,
+        content: expect.stringContaining("can't use a connection")
+      });
+    });
+
+    it("refuses a method the connection doesn't allow", async () => {
+      const { runner, tasks, connectionClient } = setupWithConnection();
+      tasks.listEvents
+        .mockResolvedValueOnce([
+          event(1, 'model.turn', { raw: {}, toolCalls: [callBilling('/invoices', 'DELETE')] })
+        ])
+        .mockResolvedValue([]);
+
+      await runner.runTask(makeTask());
+
+      expect(connectionClient.request).not.toHaveBeenCalled();
+      expect(toolResult(tasks).results[0].content).toContain('DELETE is not allowed');
+    });
+
+    it('offers http_request and lists connections only when one is usable', async () => {
+      const { runner, client } = setupWithConnection();
+
+      await runner.runTask(makeTask());
+
+      const request = client.complete.mock.calls[0][0];
+      expect(request.tools.map((tool) => tool.name)).toContain('http_request');
+      expect(request.system).toContain('- Billing API: Invoices (methods: GET; paths: /invoices)');
+    });
+
+    it('includes instructions only for skills that are granted and enabled', async () => {
+      const { runner, client, agentRepo, catalogs } = setup();
+      agentRepo.getVersion.mockResolvedValue({ ...version, skillVersionIds: ['sv1', 'sv2'] });
+      catalogs.getSkillVersions.mockResolvedValue([
+        {
+          id: 'sv1',
+          skillId: 's1',
+          version: 1,
+          instructions: 'Cite every claim.',
+          connectionIds: [],
+          createdByHumanId: null,
+          createdAt: new Date()
+        },
+        {
+          id: 'sv2',
+          skillId: 's2',
+          version: 1,
+          instructions: 'Secret skill.',
+          connectionIds: [],
+          createdByHumanId: null,
+          createdAt: new Date()
+        }
+      ]);
+      catalogs.getSkill.mockImplementation(async (id) => ({
+        id,
+        name: id === 's1' ? 'Citations' : 'Revoked',
+        description: '',
+        currentVersionId: null,
+        disabledAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      }));
+      catalogs.listGrants.mockResolvedValue([grant('skill', 's1')]);
+
+      await runner.runTask(makeTask());
+
+      const system = client.complete.mock.calls[0][0].system;
+      expect(system).toContain('### Citations\nCite every claim.');
+      expect(system).not.toContain('Secret skill.');
+      expect(client.complete.mock.calls[0][0].tools.map((tool) => tool.name)).not.toContain(
+        'http_request'
+      );
     });
   });
 

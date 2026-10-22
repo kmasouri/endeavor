@@ -8,7 +8,9 @@ export const agentParamsSchema = z.object({
 const agentConfigFields = {
   instructions: z.string().trim().min(1),
   provider: z.enum(MODEL_PROVIDERS),
-  model: z.string().trim().min(1)
+  model: z.string().trim().min(1),
+  skillIds: z.array(z.uuid()).max(50).optional(),
+  connectionIds: z.array(z.uuid()).max(50).optional()
 };
 
 export const createAgentBodySchema = z.strictObject({
@@ -28,7 +30,9 @@ export const updateAgentConfigBodySchema = z
   .strictObject({
     instructions: agentConfigFields.instructions.optional(),
     provider: agentConfigFields.provider.optional(),
-    model: agentConfigFields.model.optional()
+    model: agentConfigFields.model.optional(),
+    skillIds: agentConfigFields.skillIds,
+    connectionIds: agentConfigFields.connectionIds
   })
   .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
 

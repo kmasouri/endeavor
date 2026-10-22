@@ -25,7 +25,7 @@ interface AgentVersionRow {
   instructions: string;
   provider: ModelProvider;
   model: string;
-  skill_ids: string[];
+  skill_version_ids: string[];
   connection_ids: string[];
   created_by_human_id: string | null;
   created_at: Date;
@@ -50,7 +50,7 @@ export class AgentPostgresRepository implements AgentRepository {
            RETURNING *
          ), version AS (
            INSERT INTO bold_cedar_007.agent_versions (
-             id, agent_id, version, instructions, provider, model, skill_ids, connection_ids,
+             id, agent_id, version, instructions, provider, model, skill_version_ids, connection_ids,
              created_by_human_id
            )
            SELECT $4, agent.id, 1, $5, $6, $7, $8, $9, $10
@@ -67,7 +67,7 @@ export class AgentPostgresRepository implements AgentRepository {
           firstVersion.instructions,
           firstVersion.provider,
           firstVersion.model,
-          firstVersion.skillIds,
+          firstVersion.skillVersionIds,
           firstVersion.connectionIds,
           firstVersion.createdByHumanId
         ]
@@ -187,7 +187,7 @@ export class AgentPostgresRepository implements AgentRepository {
              WHERE agent_id = $2
            ), saved AS (
              INSERT INTO bold_cedar_007.agent_versions (
-               id, agent_id, version, instructions, provider, model, skill_ids, connection_ids,
+               id, agent_id, version, instructions, provider, model, skill_version_ids, connection_ids,
                created_by_human_id
              )
              SELECT $1, $2, next.version, $3, $4, $5, $6, $7, $8
@@ -205,7 +205,7 @@ export class AgentPostgresRepository implements AgentRepository {
             input.instructions,
             input.provider,
             input.model,
-            input.skillIds,
+            input.skillVersionIds,
             input.connectionIds,
             input.createdByHumanId
           ]
@@ -307,7 +307,7 @@ function toAgentVersion(row: AgentVersionRow): AgentVersion {
     instructions: row.instructions,
     provider: row.provider,
     model: row.model,
-    skillIds: row.skill_ids,
+    skillVersionIds: row.skill_version_ids,
     connectionIds: row.connection_ids,
     createdByHumanId: row.created_by_human_id,
     createdAt: row.created_at

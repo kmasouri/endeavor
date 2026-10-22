@@ -11,6 +11,7 @@ import {
 import fastify, { FastifyInstance, FastifyReply, FastifySchemaValidationError } from 'fastify';
 import { config } from './config';
 import agentPlugin from './plugins/agent';
+import catalogPlugin from './plugins/catalog';
 import conversationPlugin from './plugins/conversation';
 import humanPlugin from './plugins/human';
 import itemPlugin from './plugins/item';
@@ -179,6 +180,7 @@ export function setupApp(): FastifyInstance {
   });
 
   app.register(agentPlugin);
+  app.register(catalogPlugin);
   app.register(conversationPlugin);
   app.register(humanPlugin);
   app.register(itemPlugin);
@@ -186,6 +188,7 @@ export function setupApp(): FastifyInstance {
   app.register(runnerPlugin);
 
   app.register(routes.agentsRouter);
+  app.register(routes.catalogsRouter);
   app.register(routes.conversationsRouter);
   app.register(routes.healthcheckRouter);
   app.register(routes.humansRouter);

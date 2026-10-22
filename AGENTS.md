@@ -9,6 +9,7 @@ This file says what to do and what not to do. For how things work and why, read:
 - `docs/responses.md` and `docs/errors.md`: what the API sends back.
 - `docs/agents.md`: agents, configuration versions, and model providers.
 - `docs/conversations.md`: how messages become work, agent tools, and the runner.
+- `docs/catalogs.md`: skills, connections, credentials, and grants.
 
 ## Source of truth
 
