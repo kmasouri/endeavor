@@ -28,13 +28,16 @@ const connectionFields = {
   // Sent once and stored encrypted. The API never returns it.
   credential: z.string().min(1).max(10_000),
   allowedMethods: z.array(z.enum(HTTP_METHODS)).min(1),
-  allowedPathPrefixes: z.array(pathPrefix).min(1).max(50)
+  allowedPathPrefixes: z.array(pathPrefix).min(1).max(50),
+  // Methods that need a person's approval before each call.
+  approvalMethods: z.array(z.enum(HTTP_METHODS))
 };
 
 export const createConnectionBodySchema = z.strictObject({
   ...connectionFields,
   authHeader: connectionFields.authHeader.optional(),
-  credential: connectionFields.credential.optional()
+  credential: connectionFields.credential.optional(),
+  approvalMethods: connectionFields.approvalMethods.optional()
 });
 
 export const updateConnectionBodySchema = z
@@ -46,7 +49,8 @@ export const updateConnectionBodySchema = z
     // null removes the credential.
     credential: connectionFields.credential.nullable().optional(),
     allowedMethods: connectionFields.allowedMethods.optional(),
-    allowedPathPrefixes: connectionFields.allowedPathPrefixes.optional()
+    allowedPathPrefixes: connectionFields.allowedPathPrefixes.optional(),
+    approvalMethods: connectionFields.approvalMethods.optional()
   })
   .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
 

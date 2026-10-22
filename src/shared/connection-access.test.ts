@@ -10,6 +10,7 @@ const connection: Connection = {
   hasCredential: true,
   allowedMethods: ['GET'],
   allowedPathPrefixes: ['/invoices', '/customers/'],
+  approvalMethods: [],
   disabledAt: null,
   createdAt: new Date(),
   updatedAt: new Date()

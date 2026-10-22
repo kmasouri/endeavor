@@ -48,6 +48,12 @@ export const ERRORS = {
     message: 'The task does not meet what completion needs'
   },
   taskWaitNotFound: { code: 40004, statusCode: 404, message: 'Open task wait not found' },
+  approvalNotFound: { code: 40005, statusCode: 404, message: 'Approval not found' },
+  approvalAlreadyDecided: {
+    code: 40006,
+    statusCode: 409,
+    message: 'This approval was already decided'
+  },
 
   // 50xxx: agents
   agentNotFound: { code: 50001, statusCode: 404, message: 'Agent not found' },

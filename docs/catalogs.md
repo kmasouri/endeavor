@@ -28,7 +28,17 @@ A connection is an outside HTTP API: a base URL, an auth header, an optional cre
 
 So a revoke, a disabled connection, or a narrower path list applies on the very next call. That holds even for tasks on an older configuration version. Revoked or disabled skills drop out of the prompt on the task's next run.
 
+## Approvals
+
+A connection's `approvalMethods` (for example `["POST", "DELETE"]`) are methods that need a person's approval before each call. A matching call is never made right away:
+
+1. The runner saves a pending approval with the exact request, the task waits, and the agent's turn ends.
+2. `GET /approvals?status=pending` lists it for admins, members of the task's conversation, and the person who asked for the task. Others get 404.
+3. On `POST /approvals/:id/approve`, the runner checks access again (it may have been revoked meanwhile), makes the call once, records the result on the approval, gives the result to the agent, and wakes the task. The call is claimed before it is made, so a crash can never make it twice.
+4. On `POST /approvals/:id/reject`, the call is never made. The agent is told the reason, and its task wakes up.
+
+A second decision on the same approval gets `approvalAlreadyDecided`.
+
 ## Not yet
 
 - Explicitly supplied documents, and knowledge-source connections beyond plain HTTP calls, come with saved notes and context (CA-21).
-- Approvals for risky calls, and budgets, come with CA-5.

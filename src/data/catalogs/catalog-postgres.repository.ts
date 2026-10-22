@@ -45,6 +45,7 @@ interface ConnectionRow {
   credential_ciphertext: string | null;
   allowed_methods: HttpMethod[];
   allowed_path_prefixes: string[];
+  approval_methods: HttpMethod[];
   disabled_at: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -67,7 +68,8 @@ const UPDATABLE_CONNECTION_COLUMNS = {
   baseUrl: 'base_url',
   authHeader: 'auth_header',
   allowedMethods: 'allowed_methods',
-  allowedPathPrefixes: 'allowed_path_prefixes'
+  allowedPathPrefixes: 'allowed_path_prefixes',
+  approvalMethods: 'approval_methods'
 } as const;
 
 export class CatalogPostgresRepository implements CatalogRepository {
@@ -223,9 +225,9 @@ export class CatalogPostgresRepository implements CatalogRepository {
       .query<ConnectionRow>(
         `INSERT INTO bold_cedar_007.connections (
            id, name, description, base_url, auth_header, credential_ciphertext, allowed_methods,
-           allowed_path_prefixes, created_by_human_id
+           allowed_path_prefixes, created_by_human_id, approval_methods
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *`,
         [
           randomUUID(),
@@ -236,7 +238,8 @@ export class CatalogPostgresRepository implements CatalogRepository {
           input.credential === null ? null : this.cipher.encrypt(input.credential),
           input.allowedMethods,
           input.allowedPathPrefixes,
-          input.createdByHumanId
+          input.createdByHumanId,
+          input.approvalMethods
         ]
       )
       .catch((error) => rethrowNameConflict(error, input.name));
@@ -439,6 +442,7 @@ function toConnection(row: ConnectionRow): Connection {
     hasCredential: row.credential_ciphertext !== null,
     allowedMethods: row.allowed_methods,
     allowedPathPrefixes: row.allowed_path_prefixes,
+    approvalMethods: row.approval_methods,
     disabledAt: row.disabled_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at

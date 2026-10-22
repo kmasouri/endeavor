@@ -32,6 +32,7 @@ const version1: AgentVersion = {
   model: 'claude-opus-5-5',
   skillVersionIds: ['s1'],
   connectionIds: ['c1'],
+  limits: {},
   createdByHumanId: ADMIN_ID,
   createdAt: new Date()
 };
@@ -92,6 +93,7 @@ describe('AgentService', () => {
         model: 'gpt-test',
         skillVersionIds: [],
         connectionIds: [],
+        limits: {},
         createdByHumanId: ADMIN_ID
       }
     );
@@ -135,6 +137,7 @@ describe('AgentService', () => {
       model: 'claude-sonnet-5-5',
       skillVersionIds: ['s1'],
       connectionIds: ['c1'],
+      limits: {},
       createdByHumanId: ADMIN_ID
     });
     expect(details.currentVersion?.version).toBe(2);
@@ -265,6 +268,7 @@ describe('AgentService', () => {
               version: 7,
               instructions: 'Cite',
               connectionIds: ['c9'],
+              limits: {},
               createdByHumanId: null,
               createdAt: new Date()
             }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
-import { Agent, AgentVersion, ModelProvider } from '../../shared/types';
+import { Agent, AgentLimits, AgentVersion, ModelProvider } from '../../shared/types';
 import {
   AgentNameConflictError,
   AgentRepository,
@@ -27,6 +27,7 @@ interface AgentVersionRow {
   model: string;
   skill_version_ids: string[];
   connection_ids: string[];
+  limits: AgentLimits;
   created_by_human_id: string | null;
   created_at: Date;
 }
@@ -51,9 +52,9 @@ export class AgentPostgresRepository implements AgentRepository {
          ), version AS (
            INSERT INTO bold_cedar_007.agent_versions (
              id, agent_id, version, instructions, provider, model, skill_version_ids, connection_ids,
-             created_by_human_id
+             created_by_human_id, limits
            )
-           SELECT $4, agent.id, 1, $5, $6, $7, $8, $9, $10
+           SELECT $4, agent.id, 1, $5, $6, $7, $8, $9, $10, $11
            FROM agent
            RETURNING *
          )
@@ -69,7 +70,8 @@ export class AgentPostgresRepository implements AgentRepository {
           firstVersion.model,
           firstVersion.skillVersionIds,
           firstVersion.connectionIds,
-          firstVersion.createdByHumanId
+          firstVersion.createdByHumanId,
+          firstVersion.limits
         ]
       )
       .catch((error) => rethrowNameConflict(error, input.name));
@@ -188,9 +190,9 @@ export class AgentPostgresRepository implements AgentRepository {
            ), saved AS (
              INSERT INTO bold_cedar_007.agent_versions (
                id, agent_id, version, instructions, provider, model, skill_version_ids, connection_ids,
-               created_by_human_id
+               created_by_human_id, limits
              )
-             SELECT $1, $2, next.version, $3, $4, $5, $6, $7, $8
+             SELECT $1, $2, next.version, $3, $4, $5, $6, $7, $8, $9
              FROM next
              RETURNING *
            ), current AS (
@@ -207,7 +209,8 @@ export class AgentPostgresRepository implements AgentRepository {
             input.model,
             input.skillVersionIds,
             input.connectionIds,
-            input.createdByHumanId
+            input.createdByHumanId,
+            input.limits
           ]
         );
         return toAgentVersion(result.rows[0]);
@@ -309,6 +312,7 @@ function toAgentVersion(row: AgentVersionRow): AgentVersion {
     model: row.model,
     skillVersionIds: row.skill_version_ids,
     connectionIds: row.connection_ids,
+    limits: row.limits ?? {},
     createdByHumanId: row.created_by_human_id,
     createdAt: row.created_at
   };

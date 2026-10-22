@@ -1,6 +1,8 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import {
   ActorHeaders,
+  ApprovalParams,
+  ListApprovalsQuery,
   CreateTaskBody,
   ListTaskEventsQuery,
   ListTasksQuery,
@@ -30,29 +32,49 @@ export async function createTaskHandler(
 }
 
 export async function listTasksHandler(
-  request: FastifyRequest<{ Querystring: ListTasksQuery }>
+  request: FastifyRequest<{ Querystring: ListTasksQuery; Headers: ActorHeaders }>
 ): Promise<unknown> {
   const { limit, offset } = request.query;
-  const { tasks, total } = await request.server.taskService.listTasks(request.query);
+  const { tasks, total } = await request.server.taskService.listTasks(
+    request.headers['x-actor-id'],
+    request.query
+  );
   return paged(tasks, { limit, offset, total });
 }
 
 export async function getTaskHandler(
-  request: FastifyRequest<{ Params: TaskParams }>
+  request: FastifyRequest<{ Params: TaskParams; Headers: ActorHeaders }>
 ): Promise<unknown> {
-  return success(await request.server.taskService.getTask(request.params.taskId));
+  return success(
+    await request.server.taskService.getTask(request.headers['x-actor-id'], request.params.taskId)
+  );
 }
 
 export async function listTaskEventsHandler(
-  request: FastifyRequest<{ Params: TaskParams; Querystring: ListTaskEventsQuery }>
+  request: FastifyRequest<{
+    Params: TaskParams;
+    Querystring: ListTaskEventsQuery;
+    Headers: ActorHeaders;
+  }>
 ): Promise<unknown> {
-  return success(await request.server.taskService.listEvents(request.params.taskId, request.query));
+  return success(
+    await request.server.taskService.listEvents(
+      request.headers['x-actor-id'],
+      request.params.taskId,
+      request.query
+    )
+  );
 }
 
 export async function listTaskOutputsHandler(
-  request: FastifyRequest<{ Params: TaskParams }>
+  request: FastifyRequest<{ Params: TaskParams; Headers: ActorHeaders }>
 ): Promise<unknown> {
-  return success(await request.server.taskService.listOutputs(request.params.taskId));
+  return success(
+    await request.server.taskService.listOutputs(
+      request.headers['x-actor-id'],
+      request.params.taskId
+    )
+  );
 }
 
 export async function pauseTaskHandler(request: TaskActionRequest): Promise<unknown> {
@@ -122,6 +144,54 @@ export async function reviewTaskHandler(
       request.headers['x-actor-id'],
       request.params.taskId,
       request.body
+    )
+  );
+}
+
+export async function listApprovalsHandler(
+  request: FastifyRequest<{ Querystring: ListApprovalsQuery; Headers: ActorHeaders }>
+): Promise<unknown> {
+  const { limit, offset } = request.query;
+  const { approvals, total } = await request.server.taskService.listApprovals(
+    request.headers['x-actor-id'],
+    request.query
+  );
+  return paged(approvals, { limit, offset, total });
+}
+
+export async function getApprovalHandler(
+  request: FastifyRequest<{ Params: ApprovalParams; Headers: ActorHeaders }>
+): Promise<unknown> {
+  return success(
+    await request.server.taskService.getApproval(
+      request.headers['x-actor-id'],
+      request.params.approvalId
+    )
+  );
+}
+
+type DecisionRequest = FastifyRequest<{
+  Params: ApprovalParams;
+  Body: TaskActionBody;
+  Headers: ActorHeaders;
+}>;
+
+export async function approveHandler(request: DecisionRequest): Promise<unknown> {
+  return success(
+    await request.server.taskService.approve(
+      request.headers['x-actor-id'],
+      request.params.approvalId,
+      request.body?.reason
+    )
+  );
+}
+
+export async function rejectHandler(request: DecisionRequest): Promise<unknown> {
+  return success(
+    await request.server.taskService.reject(
+      request.headers['x-actor-id'],
+      request.params.approvalId,
+      request.body?.reason
     )
   );
 }

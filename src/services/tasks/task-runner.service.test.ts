@@ -1,5 +1,6 @@
 import {
   mockAgentRepository,
+  mockApprovalRepository,
   mockCatalogRepository,
   mockConversationRepository,
   mockHumanRepository,
@@ -18,7 +19,12 @@ import {
   TaskEvent,
   TaskWait
 } from '../../shared/types';
-import { DEFAULT_RUNNER_OPTIONS, TaskRunnerService } from './task-runner.service';
+import {
+  budgetExceeded,
+  DEFAULT_RUNNER_OPTIONS,
+  TaskRunnerService,
+  workingMs
+} from './task-runner.service';
 
 const CONV = '00000000-0000-4000-8000-0000000000f1';
 const HUMAN = '00000000-0000-4000-8000-000000000001';
@@ -52,6 +58,7 @@ const version: AgentVersion = {
   model: 'script',
   skillVersionIds: [],
   connectionIds: [],
+  limits: {},
   createdByHumanId: HUMAN,
   createdAt: new Date()
 };
@@ -140,6 +147,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
   const agentRepo = mockAgentRepository();
   const humans = mockHumanRepository();
   const catalogs = mockCatalogRepository();
+  const approvals = mockApprovalRepository();
   const connectionClient = { request: jest.fn() };
   const client: jest.Mocked<ModelClient> = {
     provider: 'scripted',
@@ -195,6 +203,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
     agentRepo,
     humans,
     catalogs,
+    approvals,
     connectionClient,
     options.client === null ? {} : { scripted: options.client ?? client },
     {
@@ -210,6 +219,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
       onTaskRunFailed: jest.fn(),
       onRequestChainTooDeep: jest.fn(),
       onConnectionDenied: jest.fn(),
+      onApprovalRequested: jest.fn(),
       onTickFailed: jest.fn()
     } as unknown as TaskRunnerLogger,
     { ...DEFAULT_RUNNER_OPTIONS, workerId: 'test' }
@@ -221,6 +231,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
     client,
     agentRepo,
     catalogs,
+    approvals,
     connectionClient,
     current: () => current,
     setCurrent: (task: Task) => (current = task)
@@ -742,6 +753,7 @@ describe('TaskRunnerService', () => {
       hasCredential: true,
       allowedMethods: ['GET'],
       allowedPathPrefixes: ['/invoices'],
+      approvalMethods: [],
       disabledAt: null,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -842,6 +854,120 @@ describe('TaskRunnerService', () => {
         'connection.denied',
         expect.anything(),
         expect.objectContaining({ method: 'DELETE', path: '/invoices' })
+      );
+    });
+
+    it('waits for approval on methods the connection marks, and ends the turn', async () => {
+      const { runner, tasks, catalogs, approvals, connectionClient, current } =
+        setupWithConnection();
+      catalogs.getConnections.mockResolvedValue([
+        { ...billing, allowedMethods: ['GET', 'POST'], approvalMethods: ['POST'] }
+      ]);
+      approvals.create.mockResolvedValue({ approval: { id: 'ap1' } as never, created: true });
+      tasks.listEvents.mockResolvedValue([
+        event(1, 'model.turn', { raw: {}, toolCalls: [callBilling('/invoices', 'POST')] })
+      ]);
+
+      await runner.runTask(makeTask());
+
+      expect(connectionClient.request).not.toHaveBeenCalled();
+      expect(approvals.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientKey: `tool:${TASK}:call-http`,
+          request: expect.objectContaining({ method: 'POST', path: '/invoices' })
+        })
+      );
+      expect(current().state).toBe('waiting');
+      expect(toolResult(tasks).results[0].content).toContain("needs a person's approval");
+    });
+
+    it('makes an approved call after checking access again, and wakes the task', async () => {
+      const { runner, tasks, catalogs, approvals, connectionClient } = setupWithConnection();
+      catalogs.getConnections.mockResolvedValue([
+        { ...billing, allowedMethods: ['GET', 'POST'], approvalMethods: ['POST'] }
+      ]);
+      const approved = {
+        id: 'ap1',
+        taskId: TASK,
+        agentId: RESEARCHER,
+        kind: 'connection_call' as const,
+        request: {
+          connectionId: 'conn-1',
+          connectionName: 'Billing API',
+          method: 'POST' as const,
+          path: '/invoices',
+          body: '{}'
+        },
+        status: 'approved' as const,
+        decidedByHumanId: HUMAN,
+        decidedAt: new Date(),
+        reason: null,
+        executedAt: null,
+        result: null,
+        createdAt: new Date()
+      };
+      approvals.listApprovedNotExecuted.mockResolvedValue([approved]);
+      const wait = {
+        id: 'w1',
+        taskId: TASK,
+        kind: 'approval' as const,
+        targetId: 'ap1',
+        description: '',
+        createdAt: new Date(),
+        resolvedAt: null,
+        resolution: null
+      };
+      tasks.findOpenWaits.mockResolvedValue([wait]);
+      tasks.resolveWait.mockResolvedValue({ ...wait, resolvedAt: new Date() });
+
+      await runner.tick();
+
+      // Claimed before the call is made, so a crash can't make it twice.
+      expect(approvals.markExecuted.mock.invocationCallOrder[0]).toBeLessThan(
+        connectionClient.request.mock.invocationCallOrder[0]
+      );
+      expect(connectionClient.request).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'POST', body: '{}' })
+      );
+      expect(approvals.saveResult).toHaveBeenCalledWith(
+        'ap1',
+        expect.objectContaining({ status: 200, error: null })
+      );
+      expect(tasks.resolveWait).toHaveBeenCalledWith('w1', { approvalId: 'ap1', approved: true });
+    });
+
+    it('does not make an approved call if access was revoked meanwhile', async () => {
+      const { runner, catalogs, approvals, connectionClient } = setupWithConnection();
+      catalogs.listGrants.mockResolvedValue([]);
+      approvals.listApprovedNotExecuted.mockResolvedValue([
+        {
+          id: 'ap1',
+          taskId: TASK,
+          agentId: RESEARCHER,
+          kind: 'connection_call',
+          request: {
+            connectionId: 'conn-1',
+            connectionName: 'Billing API',
+            method: 'GET',
+            path: '/invoices',
+            body: null
+          },
+          status: 'approved',
+          decidedByHumanId: HUMAN,
+          decidedAt: new Date(),
+          reason: null,
+          executedAt: null,
+          result: null,
+          createdAt: new Date()
+        }
+      ]);
+
+      await runner.tick();
+
+      expect(connectionClient.request).not.toHaveBeenCalled();
+      expect(approvals.saveResult).toHaveBeenCalledWith(
+        'ap1',
+        expect.objectContaining({ status: null, error: expect.stringContaining("can't use") })
       );
     });
 
@@ -988,5 +1114,54 @@ describe('TaskRunnerService', () => {
 
       expect(pendingCalls).toEqual([call]);
     });
+  });
+});
+
+describe('budgets', () => {
+  const at = (minutes: number) => new Date(Date.UTC(2026, 9, 22, 12, minutes));
+  const timed = (id: number, type: string, data: Record<string, unknown>, minutes: number) => ({
+    ...event(id, type, data),
+    createdAt: at(minutes)
+  });
+
+  it('counts only working, unpaused time', () => {
+    const events = [
+      timed(1, 'task.state.changed', { to: 'waiting' }, 10),
+      timed(2, 'task.state.changed', { to: 'working' }, 70),
+      timed(3, 'task.paused', {}, 75),
+      timed(4, 'task.resumed', {}, 100)
+    ];
+
+    // Working 0-10, then 70-75, then 100-110.
+    expect(workingMs({ createdAt: at(0) }, events, at(110)) / 60_000).toBe(25);
+  });
+
+  it('blocks on tokens once the budget is used', () => {
+    const limited = { ...version, limits: { maxTokens: 1000 } };
+    const events = [
+      event(1, 'model.turn', { usage: { inputTokens: 600, outputTokens: 100 } }),
+      event(2, 'model.turn', { usage: { inputTokens: 250, outputTokens: 60 } })
+    ];
+
+    expect(budgetExceeded(makeTask(), limited, events, 40)).toBe(
+      'Used 1010 of the 1000-token budget.'
+    );
+    expect(budgetExceeded(makeTask(), version, events, 40)).toBeNull();
+  });
+
+  it("uses the version's turn limit over the runner default", () => {
+    const events = [event(1, 'model.turn', {}), event(2, 'model.turn', {})];
+
+    expect(
+      budgetExceeded(makeTask(), { ...version, limits: { maxModelTurns: 2 } }, events, 40)
+    ).toBe('Reached the limit of 2 model turns.');
+  });
+
+  it('blocks on working minutes', () => {
+    const task = makeTask({ createdAt: at(0) });
+
+    expect(
+      budgetExceeded(task, { ...version, limits: { maxWorkingMinutes: 30 } }, [], 40, at(31))
+    ).toBe('Worked 31 of the 30 allowed minutes.');
   });
 });

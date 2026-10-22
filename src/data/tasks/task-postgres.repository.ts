@@ -488,6 +488,18 @@ function listFilters(input: Omit<ListTasksInput, 'limit' | 'offset'>): {
       conditions.push(`${column} = $${values.length}`);
     }
   }
+  if (input.visibleToHumanId !== undefined) {
+    values.push(input.visibleToHumanId);
+    const n = values.length;
+    conditions.push(
+      `(conversation_id IN (
+          SELECT conversation_id
+          FROM bold_cedar_007.conversation_members
+          WHERE participant_type = 'human' AND participant_id = $${n} AND removed_at IS NULL
+        )
+        OR (requested_by_type = 'human' AND requested_by_id = $${n}))`
+    );
+  }
 
   return { where: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '', values };
 }

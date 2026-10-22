@@ -48,6 +48,16 @@ export const reviewTaskBodySchema = z.strictObject({
   notes: z.string().trim().min(1).optional()
 });
 
+export const approvalParamsSchema = z.object({ approvalId: z.uuid() });
+
+export const listApprovalsQuerySchema = z.strictObject({
+  status: z.enum(['pending', 'approved', 'rejected']).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0)
+});
+
+export type ApprovalParams = z.infer<typeof approvalParamsSchema>;
+export type ListApprovalsQuery = z.infer<typeof listApprovalsQuerySchema>;
 export type TaskParams = z.infer<typeof taskParamsSchema>;
 export type CreateTaskBody = z.infer<typeof createTaskBodySchema>;
 export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>;

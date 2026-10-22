@@ -1,6 +1,10 @@
 import { FastifyInstance } from 'fastify';
 import {
+  approveHandler,
   cancelTaskHandler,
+  getApprovalHandler,
+  listApprovalsHandler,
+  rejectHandler,
   createTaskHandler,
   getTaskHandler,
   listTaskEventsHandler,
@@ -14,6 +18,8 @@ import {
 } from '../../handlers';
 import {
   actorHeadersSchema,
+  approvalParamsSchema,
+  listApprovalsQuerySchema,
   createTaskBodySchema,
   listTaskEventsQuerySchema,
   listTasksQuerySchema,
@@ -42,8 +48,10 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
     '/tasks',
     {
       schema: {
-        description: 'List tasks, newest first. Filter by state, agent, or conversation.',
+        description:
+          'List tasks you may see, newest first. Admins see all; members see tasks in their conversations and tasks they asked for.',
         tags: ['tasks'],
+        headers: actorHeadersSchema,
         querystring: listTasksQuerySchema
       }
     },
@@ -56,6 +64,7 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
       schema: {
         description: 'Get a task with all its waits, open and resolved.',
         tags: ['tasks'],
+        headers: actorHeadersSchema,
         params: taskParamsSchema
       }
     },
@@ -68,6 +77,7 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
       schema: {
         description: "A task's execution history, oldest first. Page with afterId.",
         tags: ['tasks'],
+        headers: actorHeadersSchema,
         params: taskParamsSchema,
         querystring: listTaskEventsQuerySchema
       }
@@ -81,6 +91,7 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
       schema: {
         description: "A task's outputs and evidence.",
         tags: ['tasks'],
+        headers: actorHeadersSchema,
         params: taskParamsSchema
       }
     },
@@ -150,5 +161,61 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
       }
     },
     reviewTaskHandler
+  );
+
+  fastifyInstance.get(
+    '/approvals',
+    {
+      schema: {
+        description:
+          'Actions agents asked to take that need a person, newest first. Filter with status=pending. Shows only approvals on tasks you may see.',
+        tags: ['approvals'],
+        headers: actorHeadersSchema,
+        querystring: listApprovalsQuerySchema
+      }
+    },
+    listApprovalsHandler
+  );
+
+  fastifyInstance.get(
+    '/approvals/:approvalId',
+    {
+      schema: {
+        description: 'Get one approval, with its request and, once carried out, its result.',
+        tags: ['approvals'],
+        headers: actorHeadersSchema,
+        params: approvalParamsSchema
+      }
+    },
+    getApprovalHandler
+  );
+
+  fastifyInstance.post(
+    '/approvals/:approvalId/approve',
+    {
+      schema: {
+        description:
+          'Approve the action. The runner makes the call, records the result, and wakes the task.',
+        tags: ['approvals'],
+        headers: actorHeadersSchema,
+        params: approvalParamsSchema,
+        body: taskActionBodySchema
+      }
+    },
+    approveHandler
+  );
+
+  fastifyInstance.post(
+    '/approvals/:approvalId/reject',
+    {
+      schema: {
+        description: 'Reject the action. It is never made; the agent is told why.',
+        tags: ['approvals'],
+        headers: actorHeadersSchema,
+        params: approvalParamsSchema,
+        body: taskActionBodySchema
+      }
+    },
+    rejectHandler
   );
 }

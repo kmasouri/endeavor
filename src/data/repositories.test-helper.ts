@@ -1,5 +1,6 @@
 import {
   AgentRepository,
+  ApprovalRepository,
   CatalogRepository,
   ConversationRepository,
   HumanRepository,
@@ -112,5 +113,18 @@ export function mockCatalogRepository(): jest.Mocked<CatalogRepository> {
     grant: jest.fn(),
     revoke: jest.fn().mockResolvedValue(true),
     listGrants: jest.fn().mockResolvedValue([])
+  };
+}
+
+export function mockApprovalRepository(): jest.Mocked<ApprovalRepository> {
+  return {
+    create: jest.fn(),
+    getById: jest.fn().mockResolvedValue(null),
+    list: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0),
+    decide: jest.fn().mockResolvedValue(null),
+    listApprovedNotExecuted: jest.fn().mockResolvedValue([]),
+    markExecuted: jest.fn().mockResolvedValue(true),
+    saveResult: jest.fn()
   };
 }

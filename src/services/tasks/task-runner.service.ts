@@ -1,5 +1,6 @@
 import {
   AgentRepository,
+  ApprovalRepository,
   CatalogRepository,
   ConversationRepository,
   HumanRepository,
@@ -23,6 +24,7 @@ import {
   Actor,
   Agent,
   AgentVersion,
+  ApprovalResult,
   Connection,
   HTTP_METHODS,
   HttpMethod,
@@ -97,6 +99,8 @@ const EVENTS = {
   participantSuggested: 'participant.suggested',
   connectionCall: 'connection.called',
   connectionDenied: 'connection.denied',
+  approvalExecuted: 'approval.executed',
+  approvalRejected: 'approval.rejected',
   resultPosted: 'result.posted'
 } as const;
 
@@ -113,6 +117,7 @@ export class TaskRunnerService {
     private readonly agentRepository: AgentRepository,
     private readonly humanRepository: HumanRepository,
     private readonly catalogRepository: CatalogRepository,
+    private readonly approvalRepository: ApprovalRepository,
     private readonly connectionClient: ConnectionClient,
     private readonly modelClients: Partial<Record<ModelProvider, ModelClient>>,
     taskLogger: TaskLogger,
@@ -127,6 +132,7 @@ export class TaskRunnerService {
     await this.processDeliveries();
     await this.repairWaitingTasks();
     await this.postPendingResults();
+    await this.executeApprovedCalls();
     const tasks = await this.taskRepository.claimRunnable(
       this.options.workerId,
       this.options.leaseMs,
@@ -350,8 +356,12 @@ export class TaskRunnerService {
         continue;
       }
 
-      if (countType(events, EVENTS.modelTurn) >= this.options.maxTurnsPerTask) {
-        await this.block(task, `Reached the limit of ${this.options.maxTurnsPerTask} model turns.`);
+      const overBudget = budgetExceeded(task, version, events, this.options.maxTurnsPerTask);
+      if (overBudget) {
+        await this.block(
+          task,
+          `${overBudget} An admin can raise the agent's limits and move this task to the new version.`
+        );
         return 0;
       }
 
@@ -474,9 +484,10 @@ export class TaskRunnerService {
         continue;
       }
       try {
-        const content = await this.runTool(task, agent, call);
+        const outcome = await this.runTool(task, agent, call);
+        const content = typeof outcome === 'string' ? outcome : outcome.content;
         results.push({ callId: call.id, content, isError: false });
-        stopped = STOPPING_TOOLS.has(call.name);
+        stopped = STOPPING_TOOLS.has(call.name) || (typeof outcome !== 'string' && outcome.stop);
       } catch (error) {
         const message = error instanceof AppError ? error.message : (error as Error).message;
         results.push({ callId: call.id, content: message, isError: true });
@@ -486,7 +497,13 @@ export class TaskRunnerService {
     return stopped;
   }
 
-  private async runTool(task: Task, agent: Agent, call: ModelToolCall): Promise<string> {
+  // Returns the tool result, or { content, stop: true } when this call ended the turn (such as
+  // a call that now waits for approval).
+  private async runTool(
+    task: Task,
+    agent: Agent,
+    call: ModelToolCall
+  ): Promise<string | { content: string; stop: boolean }> {
     const input = (call.input ?? {}) as Record<string, unknown>;
     const agentActor: Actor = { type: 'agent', id: agent.id };
 
@@ -625,54 +642,115 @@ export class TaskRunnerService {
 
   // Every call is checked now, not when the task started: the connection must be chosen in the
   // task's configuration (directly or through a chosen skill), still granted, enabled, and allow
-  // the method and path.
+  // the method and path. Methods the connection marks for approval wait for a person.
   private async httpRequest(
     task: Task,
     agent: Agent,
     callId: string,
     input: Record<string, unknown>
-  ): Promise<string> {
+  ): Promise<string | { content: string; stop: boolean }> {
     const name = requireString(input, 'connection');
     const method = requireString(input, 'method').toUpperCase() as HttpMethod;
     const path = requireString(input, 'path');
     if (!HTTP_METHODS.includes(method)) {
       throw new AppError('validationError', `Unknown method ${method}.`);
     }
+    const body = typeof input.body === 'string' ? input.body : null;
+    const connection = await this.checkConnectionCall(task, agent, { name, method, path, callId });
+
+    if (connection.approvalMethods.includes(method)) {
+      const { approval } = await this.approvalRepository.create({
+        clientKey: `tool:${task.id}:${callId}`,
+        taskId: task.id,
+        agentId: agent.id,
+        request: {
+          connectionId: connection.id,
+          connectionName: connection.name,
+          method,
+          path,
+          body
+        }
+      });
+      const waits = await this.taskRepository.listWaits(task.id, { openOnly: false });
+      const fresh = await this.lifecycle.requireTask(task.id);
+      if (fresh.state === 'working' && !waits.some((wait) => wait.targetId === approval.id)) {
+        await this.lifecycle.waitFor(task.id, { type: 'agent', id: agent.id }, [
+          {
+            kind: 'approval',
+            targetId: approval.id,
+            description: `A person approves ${method} ${path} on ${connection.name}`
+          }
+        ]);
+      }
+      this.runnerLogger.onApprovalRequested(task.id, approval.id);
+      return {
+        content: `${method} ${path} on ${connection.name} needs a person's approval (approval ${approval.id}). Your work is paused until they decide; you'll get the result or their reason.`,
+        stop: true
+      };
+    }
+
+    const response = await this.performCall(task, agent.id, connection, {
+      method,
+      path,
+      body,
+      callId
+    });
+    return `HTTP ${response.status}${response.truncated ? ' (cut off at 20,000 characters)' : ''}\n${response.body}`;
+  }
+
+  // Returns the connection if the agent may make this call right now, or records the refusal
+  // and throws.
+  private async checkConnectionCall(
+    task: Task,
+    agent: Agent,
+    call: { name: string; method: HttpMethod; path: string; callId: string }
+  ): Promise<Connection> {
     const version = await this.agentRepository.getVersion(task.agentVersionId);
     const usable = version ? (await this.usableCatalog(agent.id, version)).connections : [];
-    const connection = usable.find((c) => c.name.toLowerCase() === name.trim().toLowerCase());
+    const connection = usable.find((c) => c.name.toLowerCase() === call.name.trim().toLowerCase());
     const denied = connection
-      ? connectionCallDenied(connection, method, path)
-      : `You can't use a connection named "${name}". Usable: ${usable.map((c) => c.name).join(', ') || 'none'}.`;
-    if (denied) {
+      ? connectionCallDenied(connection, call.method, call.path)
+      : `You can't use a connection named "${call.name}". Usable: ${usable.map((c) => c.name).join(', ') || 'none'}.`;
+    if (denied || !connection) {
       // Refused calls are recorded too, so admins can see attempts outside the rules.
       await this.taskRepository.addEvent(
         task.id,
         EVENTS.connectionDenied,
         { type: 'agent', id: agent.id },
         {
-          callId,
-          connection: name,
-          method,
-          path,
+          callId: call.callId,
+          connection: call.name,
+          method: call.method,
+          path: call.path,
           reason: denied
         }
       );
-      this.runnerLogger.onConnectionDenied(task.id, name, method, path, denied);
-      throw new AppError('toolAccessDenied', denied);
+      this.runnerLogger.onConnectionDenied(
+        task.id,
+        call.name,
+        call.method,
+        call.path,
+        denied ?? ''
+      );
+      throw new AppError('toolAccessDenied', denied ?? `You can't use "${call.name}".`);
     }
-    if (!connection) {
-      throw new AppError('toolAccessDenied', `You can't use a connection named "${name}".`);
-    }
+    return connection;
+  }
 
+  private async performCall(
+    task: Task,
+    agentId: string,
+    connection: Connection,
+    call: { method: HttpMethod; path: string; body: string | null; callId: string }
+  ): Promise<{ status: number; body: string; truncated: boolean }> {
     const credential = await this.catalogRepository.getConnectionCredential(connection.id);
     const response = await this.connectionClient
       .request({
         baseUrl: connection.baseUrl,
-        method,
-        path,
+        method: call.method,
+        path: call.path,
         headers: credential ? { [connection.authHeader]: credential } : {},
-        body: typeof input.body === 'string' ? input.body : null
+        body: call.body
       })
       .catch((error: Error) => {
         throw new AppError('validationError', `The call failed: ${error.message}`);
@@ -681,16 +759,71 @@ export class TaskRunnerService {
     await this.taskRepository.addEvent(
       task.id,
       EVENTS.connectionCall,
-      { type: 'agent', id: agent.id },
+      { type: 'agent', id: agentId },
       {
-        callId,
+        callId: call.callId,
         connectionId: connection.id,
-        method,
-        path,
+        method: call.method,
+        path: call.path,
         status: response.status
       }
     );
-    return `HTTP ${response.status}${response.truncated ? ' (cut off at 20,000 characters)' : ''}\n${response.body}`;
+    return response;
+  }
+
+  // Makes approved calls, after checking access again (it may have been revoked while the
+  // approval waited), records the result for the agent, and wakes the task.
+  private async executeApprovedCalls(): Promise<void> {
+    for (const approval of await this.approvalRepository.listApprovedNotExecuted(10)) {
+      const task = await this.taskRepository.getById(approval.taskId);
+      const agent = await this.agentRepository.getById(approval.agentId);
+      // Claim it first, so a crash during the call can never make it twice.
+      const claimed = await this.approvalRepository.markExecuted(approval.id, {
+        status: null,
+        body: '',
+        truncated: false,
+        error: 'The call started, but its result was not recorded.'
+      });
+      if (!claimed || !task || !agent) {
+        continue;
+      }
+
+      const { request } = approval;
+      let result: ApprovalResult;
+      try {
+        const connection = await this.checkConnectionCall(task, agent, {
+          name: request.connectionName,
+          method: request.method,
+          path: request.path,
+          callId: `approval:${approval.id}`
+        });
+        const response = await this.performCall(task, agent.id, connection, {
+          method: request.method,
+          path: request.path,
+          body: request.body,
+          callId: `approval:${approval.id}`
+        });
+        result = { ...response, error: null };
+      } catch (error) {
+        result = {
+          status: null,
+          body: '',
+          truncated: false,
+          error: error instanceof AppError ? error.message : (error as Error).message
+        };
+      }
+      await this.approvalRepository.saveResult(approval.id, result);
+      await this.taskRepository.addEvent(task.id, EVENTS.approvalExecuted, SYSTEM, {
+        approvalId: approval.id,
+        request,
+        result
+      });
+      for (const wait of await this.taskRepository.findOpenWaits('approval', approval.id)) {
+        await this.lifecycle
+          .resolveWait(wait.id, SYSTEM, { approvalId: approval.id, approved: true })
+          .catch(ignoreWaitAlreadyResolved);
+      }
+    }
   }
 
   // What the agent may use right now: skills chosen in the version that are still granted and
@@ -1031,6 +1164,31 @@ export class TaskRunnerService {
           }
           break;
         }
+        case EVENTS.approvalExecuted: {
+          const request = event.data.request as {
+            method: string;
+            path: string;
+            connectionName: string;
+          };
+          const result = event.data.result as ApprovalResult;
+          say(
+            result.error
+              ? `A person approved ${request.method} ${request.path} on ${request.connectionName}, but it could not be made: ${result.error}`
+              : `A person approved ${request.method} ${request.path} on ${request.connectionName}. It returned HTTP ${result.status}${result.truncated ? ' (cut off)' : ''}:\n${result.body}`
+          );
+          break;
+        }
+        case EVENTS.approvalRejected: {
+          const request = event.data.request as {
+            method: string;
+            path: string;
+            connectionName: string;
+          };
+          say(
+            `A person rejected ${request.method} ${request.path} on ${request.connectionName}${event.data.reason ? `: ${event.data.reason as string}` : '.'} It was not made.`
+          );
+          break;
+        }
         case EVENTS.nudge: {
           say(event.data.text as string);
           break;
@@ -1138,4 +1296,68 @@ function ignoreWaitAlreadyResolved(error: unknown): void {
   ) {
     throw error;
   }
+}
+
+// Checks a task against its version's limits. Returns why it is over, or null.
+export function budgetExceeded(
+  task: Task,
+  version: AgentVersion,
+  events: TaskEvent[],
+  defaultMaxTurns: number,
+  now: Date = new Date()
+): string | null {
+  const maxTurns = version.limits.maxModelTurns ?? defaultMaxTurns;
+  const turns = countType(events, EVENTS.modelTurn);
+  if (turns >= maxTurns) {
+    return `Reached the limit of ${maxTurns} model turns.`;
+  }
+
+  if (version.limits.maxTokens !== undefined) {
+    const tokens = events
+      .filter((event) => event.type === EVENTS.modelTurn)
+      .reduce((sum, event) => {
+        const usage = event.data.usage as
+          { inputTokens?: number; outputTokens?: number } | undefined;
+        return sum + (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0);
+      }, 0);
+    if (tokens >= version.limits.maxTokens) {
+      return `Used ${tokens} of the ${version.limits.maxTokens}-token budget.`;
+    }
+  }
+
+  if (version.limits.maxWorkingMinutes !== undefined) {
+    const minutes = workingMs(task, events, now) / 60_000;
+    if (minutes >= version.limits.maxWorkingMinutes) {
+      return `Worked ${Math.floor(minutes)} of the ${version.limits.maxWorkingMinutes} allowed minutes.`;
+    }
+  }
+  return null;
+}
+
+// Time the task spent working and not paused, from its history. Waiting doesn't count.
+export function workingMs(task: Pick<Task, 'createdAt'>, events: TaskEvent[], now: Date): number {
+  let working = true;
+  let paused = false;
+  let since = task.createdAt.getTime();
+  let total = 0;
+  const update = (at: number, nextWorking: boolean, nextPaused: boolean) => {
+    if (working && !paused) {
+      total += at - since;
+    }
+    since = at;
+    working = nextWorking;
+    paused = nextPaused;
+  };
+  for (const event of events) {
+    const at = event.createdAt.getTime();
+    if (event.type === 'task.state.changed') {
+      update(at, event.data.to === 'working', paused);
+    } else if (event.type === 'task.paused') {
+      update(at, working, true);
+    } else if (event.type === 'task.resumed') {
+      update(at, working, false);
+    }
+  }
+  update(now.getTime(), working, paused);
+  return total;
 }

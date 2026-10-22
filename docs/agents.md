@@ -12,6 +12,10 @@ To move open work to a newer version, an admin calls `POST /tasks/:taskId/versio
 
 Permissions are a separate matter. Revoked skills, connections, and actions are checked against the current grants on every tool call, whatever version a task runs (CA-5).
 
+**Limits** (`limits` on the configuration, saved with the version): `maxModelTurns`, `maxTokens` (input plus output over the task, a stand-in for cost), and `maxWorkingMinutes` (time spent working; waiting and paused time don't count). When a task reaches a limit, it is blocked with the reason, and the person who asked is told. To let it go on, an admin raises the limit, which saves a new version, and moves the task to it with `POST /tasks/:taskId/version`.
+
+**Who sees what:** admins see every task and approval. Members see tasks, and their approvals, in conversations they belong to, plus tasks they asked for. Anything else reads as not found.
+
 Only admins create or change agents. A disabled agent takes no new tasks, but its open tasks keep going until a human pauses or cancels them.
 
 ## Example configurations

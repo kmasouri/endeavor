@@ -9,6 +9,7 @@ import { ADMIN_ONLY, requireHuman } from '../../shared/access';
 import { AppError } from '../../shared/errors';
 import {
   Agent,
+  AgentLimits,
   AgentVersion,
   DirectoryEntry,
   MODEL_PROVIDERS,
@@ -29,6 +30,8 @@ export interface AgentConfigInput {
   // Choosing one also grants the agent access to it, which an admin can revoke later.
   skillIds?: string[];
   connectionIds?: string[];
+  // Limits for each task. Saved with the version, like everything else here.
+  limits?: AgentLimits;
 }
 
 export interface ProviderStatus {
@@ -74,6 +77,7 @@ export class AgentService {
           model: input.model,
           skillVersionIds,
           connectionIds,
+          limits: input.limits ?? {},
           createdByHumanId: admin.id
         }
       )
@@ -157,6 +161,7 @@ export class AgentService {
     const connectionIds = changes.connectionIds
       ? await this.checkConnections(changes.connectionIds)
       : (current?.connectionIds ?? []);
+    const limits = changes.limits ?? current?.limits ?? {};
 
     // Saving the same settings again doesn't add a copy to the history.
     if (
@@ -165,7 +170,8 @@ export class AgentService {
       current.provider === provider &&
       current.model === model &&
       sameIds(current.skillVersionIds, skillVersionIds) &&
-      sameIds(current.connectionIds, connectionIds)
+      sameIds(current.connectionIds, connectionIds) &&
+      JSON.stringify(current.limits) === JSON.stringify(limits)
     ) {
       return this.toDetails(agent, current);
     }
@@ -176,6 +182,7 @@ export class AgentService {
       model,
       skillVersionIds,
       connectionIds,
+      limits,
       createdByHumanId: admin.id
     });
     await this.grantNewlyChosen(agent.id, admin.id, current, version);

@@ -4,6 +4,7 @@ import fp from 'fastify-plugin';
 import { config } from '../config';
 import {
   AgentPostgresRepository,
+  ApprovalPostgresRepository,
   CatalogPostgresRepository,
   ConversationPostgresRepository,
   CredentialCipher,
@@ -76,6 +77,7 @@ const runnerPlugin: FastifyPluginAsync = async (fastify) => {
     new AgentPostgresRepository(fastify.pg),
     new HumanPostgresRepository(fastify.pg),
     new CatalogPostgresRepository(fastify.pg, new CredentialCipher(config.CREDENTIALS_KEY)),
+    new ApprovalPostgresRepository(fastify.pg),
     new ConnectionHttpClient(),
     buildModelClients(config),
     new TaskLogger(fastify.log),

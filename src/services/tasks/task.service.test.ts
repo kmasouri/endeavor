@@ -1,6 +1,8 @@
 import { TaskRepository } from '../../data';
 import {
   mockAgentRepository,
+  mockApprovalRepository,
+  mockConversationRepository,
   mockHumanRepository,
   mockTaskRepository
 } from '../../data/repositories.test-helper';
@@ -91,11 +93,15 @@ function setup() {
     onTaskResumed: jest.fn(),
     onTaskRestarted: jest.fn(),
     onTaskVersionMigrated: jest.fn(),
+    onApprovalApproved: jest.fn(),
+    onApprovalRejected: jest.fn(),
     onTaskCompletionRejected: jest.fn()
   } as unknown as jest.Mocked<TaskLogger>;
 
-  const service = new TaskService(tasks, agents, humans, logger);
-  return { service, tasks, agents, humans, logger };
+  const conversations = mockConversationRepository();
+  const approvals = mockApprovalRepository();
+  const service = new TaskService(tasks, agents, humans, conversations, approvals, logger);
+  return { service, tasks, agents, humans, conversations, approvals, logger };
 }
 
 function eventTypes(tasks: jest.Mocked<TaskRepository>): string[] {
@@ -172,6 +178,139 @@ describe('TaskService', () => {
           completionCriteria: 'c'
         })
       ).rejects.toMatchObject({ name: 'agentUnavailable' });
+    });
+  });
+
+  describe('who can see a task', () => {
+    const OTHER = '00000000-0000-4000-8000-000000000009';
+
+    it('hides a task from a member who neither asked for it nor is in its conversation', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(
+        makeTask({ requestedById: OTHER, conversationId: '00000000-0000-4000-8000-0000000000f1' })
+      );
+
+      await expect(service.getTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskNotFound'
+      });
+      await expect(service.pauseTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskNotFound'
+      });
+    });
+
+    it('shows it to members of its conversation', async () => {
+      const { service, tasks, conversations } = setup();
+      tasks.getById.mockResolvedValue(
+        makeTask({ requestedById: OTHER, conversationId: '00000000-0000-4000-8000-0000000000f1' })
+      );
+      conversations.getMember.mockResolvedValue({} as never);
+
+      await expect(service.getTask(HUMAN_ID, TASK_ID)).resolves.toMatchObject({ id: TASK_ID });
+    });
+
+    it('shows everything to admins', async () => {
+      const { service, tasks, humans } = setup();
+      humans.getById.mockResolvedValue({ ...human, role: 'admin' });
+      tasks.getById.mockResolvedValue(makeTask({ requestedById: OTHER }));
+
+      await expect(service.getTask(HUMAN_ID, TASK_ID)).resolves.toMatchObject({ id: TASK_ID });
+    });
+
+    it('filters lists to what a member may see', async () => {
+      const { service, tasks } = setup();
+      tasks.list.mockResolvedValue([]);
+      tasks.count.mockResolvedValue(0);
+
+      await service.listTasks(HUMAN_ID, { limit: 10, offset: 0 });
+
+      expect(tasks.list).toHaveBeenCalledWith(
+        expect.objectContaining({ visibleToHumanId: HUMAN_ID })
+      );
+    });
+  });
+
+  describe('approvals', () => {
+    const pending = {
+      id: 'ap1',
+      taskId: TASK_ID,
+      agentId: AGENT_ID,
+      kind: 'connection_call' as const,
+      request: {
+        connectionId: 'c1',
+        connectionName: 'Billing',
+        method: 'POST' as const,
+        path: '/refunds',
+        body: null
+      },
+      status: 'pending' as const,
+      decidedByHumanId: null,
+      decidedAt: null,
+      reason: null,
+      executedAt: null,
+      result: null,
+      createdAt: new Date()
+    };
+
+    it('approves without waking the task: the runner makes the call first', async () => {
+      const { service, tasks, approvals } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      approvals.getById.mockResolvedValue(pending);
+      approvals.decide.mockResolvedValue({ ...pending, status: 'approved' });
+
+      await service.approve(HUMAN_ID, 'ap1', 'Fine');
+
+      expect(approvals.decide).toHaveBeenCalledWith({
+        approvalId: 'ap1',
+        status: 'approved',
+        humanId: HUMAN_ID,
+        reason: 'Fine'
+      });
+      expect(tasks.resolveWait).not.toHaveBeenCalled();
+    });
+
+    it('rejects, tells the agent why, and wakes the task', async () => {
+      const { service, tasks, approvals } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      approvals.getById.mockResolvedValue(pending);
+      approvals.decide.mockResolvedValue({ ...pending, status: 'rejected' });
+      tasks.findOpenWaits.mockResolvedValue([makeWait({ kind: 'approval', targetId: 'ap1' })]);
+
+      await service.reject(HUMAN_ID, 'ap1', 'Too large');
+
+      expect(tasks.addEvent).toHaveBeenCalledWith(
+        TASK_ID,
+        'approval.rejected',
+        expect.anything(),
+        expect.objectContaining({ reason: 'Too large' })
+      );
+      expect(tasks.resolveWait).toHaveBeenCalledWith(WAIT_ID, {
+        approvalId: 'ap1',
+        approved: false
+      });
+    });
+
+    it('refuses a second decision', async () => {
+      const { service, tasks, approvals } = setup();
+      tasks.getById.mockResolvedValue(makeTask());
+      approvals.getById.mockResolvedValue(pending);
+      approvals.decide.mockResolvedValue(null);
+
+      await expect(service.approve(HUMAN_ID, 'ap1')).rejects.toMatchObject({
+        name: 'approvalAlreadyDecided'
+      });
+    });
+
+    it('hides approvals on tasks the person cannot see', async () => {
+      const { service, tasks, approvals } = setup();
+      tasks.getById.mockResolvedValue(
+        makeTask({ requestedById: 'someone-else', conversationId: 'conv' })
+      );
+      approvals.getById.mockResolvedValue(pending);
+
+      await expect(service.approve(HUMAN_ID, 'ap1')).rejects.toMatchObject({
+        name: 'approvalNotFound'
+      });
+      expect(approvals.decide).not.toHaveBeenCalled();
     });
   });
 
@@ -299,6 +438,7 @@ describe('TaskService', () => {
       model: 'm',
       skillVersionIds: [],
       connectionIds: [],
+      limits: {},
       createdByHumanId: HUMAN_ID,
       createdAt: new Date()
     };
