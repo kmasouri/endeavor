@@ -53,11 +53,12 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 
 ## Agents (50xxx)
 
-| Code  | Name               | HTTP | What it means                                              | How to fix it                                     |
-| ----- | ------------------ | ---- | ---------------------------------------------------------- | ------------------------------------------------- |
-| 50001 | `agentNotFound`    | 404  | No agent has this ID.                                      | Check the ID against `GET /agents`.               |
-| 50002 | `agentUnavailable` | 409  | The agent is disabled, or has no saved configuration.      | Enable the agent, or save a configuration for it. |
-| 50003 | `agentNameTaken`   | 409  | Another agent has this name. Names are not case sensitive. | Pick a different name.                            |
+| Code  | Name                   | HTTP | What it means                                              | How to fix it                                     |
+| ----- | ---------------------- | ---- | ---------------------------------------------------------- | ------------------------------------------------- |
+| 50001 | `agentNotFound`        | 404  | No agent has this ID.                                      | Check the ID against `GET /agents`.               |
+| 50002 | `agentUnavailable`     | 409  | The agent is disabled, or has no saved configuration.      | Enable the agent, or save a configuration for it. |
+| 50003 | `agentNameTaken`       | 409  | Another agent has this name. Names are not case sensitive. | Pick a different name.                            |
+| 50004 | `agentVersionNotFound` | 404  | The version doesn't exist, or belongs to another agent.    | Pick an ID from `GET /agents/:agentId/versions`.  |
 
 ## Conversations (60xxx)
 

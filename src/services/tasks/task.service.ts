@@ -8,7 +8,7 @@ import {
   TaskRepository
 } from '../../data';
 import { TaskLogger } from '../../observability';
-import { requireHuman } from '../../shared/access';
+import { ADMIN_ONLY, requireHuman } from '../../shared/access';
 import { AppError } from '../../shared/errors';
 import { Actor, Agent, Task, TaskEvent, TaskOutput } from '../../shared/types';
 import { describeState, TaskDetails, TaskLifecycle } from './task-lifecycle';
@@ -209,6 +209,46 @@ export class TaskService {
       this.taskLogger.onTaskRestarted(previous.id, task.id);
     }
     return { task, created };
+  }
+
+  // Moves open work to another version of its agent's configuration, usually the newest.
+  // Tasks never change version on their own, so this is always a recorded human decision.
+  // Admins only, because it changes how running work behaves.
+  async migrateTaskVersion(
+    actorId: string,
+    taskId: string,
+    input: { versionId?: string; reason?: string }
+  ): Promise<Task> {
+    const human = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
+    const task = await this.lifecycle.requireTask(taskId);
+    if (isFinished(task)) {
+      throw new AppError(
+        'taskStateConflict',
+        `Task ${task.id} is ${task.state}. Restart it to run it on a newer version`
+      );
+    }
+    const agent = await this.agentRepository.getById(task.ownerAgentId);
+    const versionId = input.versionId ?? agent?.currentVersionId;
+    const version = versionId ? await this.agentRepository.getVersion(versionId) : null;
+    if (!version || version.agentId !== task.ownerAgentId) {
+      throw new AppError(
+        'agentVersionNotFound',
+        `Version ${versionId ?? '(none)'} is not a version of this task's agent`
+      );
+    }
+    if (version.id === task.agentVersionId) {
+      return task;
+    }
+
+    const migrated = await this.lifecycle.applyChanges(task, { agentVersionId: version.id });
+    await this.taskRepository.addEvent(task.id, 'task.version.migrated', humanActor(human.id), {
+      fromVersionId: task.agentVersionId,
+      toVersionId: version.id,
+      toVersion: version.version,
+      reason: input.reason ?? null
+    });
+    this.taskLogger.onTaskVersionMigrated(task.id, task.agentVersionId, version.id);
+    return migrated;
   }
 
   // A human approves the output of a task waiting for review, which completes it, or asks for

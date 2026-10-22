@@ -34,6 +34,12 @@ export const taskActionBodySchema = z
   })
   .optional();
 
+export const migrateTaskVersionBodySchema = z.strictObject({
+  // Leave out to use the agent's current version.
+  versionId: z.uuid().optional(),
+  reason: z.string().trim().min(1).optional()
+});
+
 export const reviewTaskBodySchema = z.strictObject({
   approved: z.boolean(),
   notes: z.string().trim().min(1).optional()
@@ -44,4 +50,5 @@ export type CreateTaskBody = z.infer<typeof createTaskBodySchema>;
 export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>;
 export type ListTaskEventsQuery = z.infer<typeof listTaskEventsQuerySchema>;
 export type TaskActionBody = z.infer<typeof taskActionBodySchema>;
+export type MigrateTaskVersionBody = z.infer<typeof migrateTaskVersionBodySchema>;
 export type ReviewTaskBody = z.infer<typeof reviewTaskBodySchema>;

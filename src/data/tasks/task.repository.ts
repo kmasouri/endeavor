@@ -45,6 +45,7 @@ export interface TaskChanges {
   criteriaCheck?: CriteriaCheck | null;
   review?: TaskReview | null;
   finishedAt?: Date | null;
+  agentVersionId?: string;
 }
 
 export interface CreateTaskWaitInput {

@@ -166,7 +166,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
   }));
   tasks.countOutputs.mockResolvedValue(1);
   agentRepo.getById.mockImplementation(async (id) => agents[id] ?? null);
-  agentRepo.getVersion.mockResolvedValue(version);
+  agentRepo.getVersion.mockImplementation(async (id) => (id === version.id ? version : null));
   humans.getById.mockResolvedValue({
     id: HUMAN,
     name: 'Kim',
@@ -591,6 +591,20 @@ describe('TaskRunnerService', () => {
       await runner.runTask(makeTask());
 
       expect(current().state).toBe('blocked');
+    });
+
+    it("runs on the task's pinned version, not the agent's newer one", async () => {
+      const { runner, client } = setup();
+      agents[RESEARCHER] = { ...agents[RESEARCHER], currentVersionId: 'v-newer' };
+      try {
+        await runner.runTask(makeTask({ agentVersionId: version.id }));
+      } finally {
+        agents[RESEARCHER] = makeAgent(RESEARCHER, 'Researcher');
+      }
+
+      expect(client.complete).toHaveBeenCalledWith(
+        expect.objectContaining({ system: expect.stringContaining('Research carefully.') })
+      );
     });
 
     it('stops when a person pauses the task', async () => {

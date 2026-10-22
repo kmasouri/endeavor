@@ -88,7 +88,8 @@ const CHANGE_COLUMNS: Record<keyof TaskChanges, string> = {
   pausedAt: 'paused_at',
   criteriaCheck: 'criteria_check',
   review: 'review',
-  finishedAt: 'finished_at'
+  finishedAt: 'finished_at',
+  agentVersionId: 'agent_version_id'
 };
 
 export class TaskPostgresRepository implements TaskRepository {
