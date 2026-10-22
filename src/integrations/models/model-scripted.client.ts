@@ -37,7 +37,7 @@ export class ModelScriptedClient implements ModelClient {
       raw: { text: step.text ?? '', toolCalls },
       usage: {
         inputTokens: countWords(request),
-        outputTokens: (step.text ?? '').split(/\s+/).length
+        outputTokens: wordCount(step.text ?? '')
       },
       servedModel: request.model
     };
@@ -48,5 +48,10 @@ function countWords(request: ModelTurnRequest): number {
   const parts = request.transcript.map((entry: ModelTranscriptEntry) =>
     entry.role === 'user' ? entry.text : JSON.stringify(entry)
   );
-  return [request.system, ...parts].join(' ').split(/\s+/).length;
+  return wordCount([request.system, ...parts].join(' '));
+}
+
+function wordCount(text: string): number {
+  const trimmed = text.trim();
+  return trimmed ? trimmed.split(/\s+/).length : 0;
 }

@@ -21,4 +21,16 @@ describe('ModelScriptedClient', () => {
       toolCalls: [{ id: 'scripted-1', name: 'send_message', input: { body: 'hi' } }]
     });
   });
+
+  it('counts no output for an empty turn', async () => {
+    const result = await new ModelScriptedClient().complete({
+      model: 'script',
+      system: 's',
+      transcript: [],
+      tools: [],
+      maxTokens: 100
+    });
+
+    expect(result.usage.outputTokens).toBe(0);
+  });
 });

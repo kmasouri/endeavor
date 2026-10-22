@@ -96,6 +96,39 @@ describe('ModelOpenAIClient', () => {
     expect(result.toolCalls[0].input).toEqual({ invalidJson: '{bad' });
   });
 
+  it('sends back only request fields and trims a trailing slash from the base URL', async () => {
+    const fetchMock = mockFetch(200, {
+      model: 'gpt-test',
+      choices: [
+        {
+          finish_reason: 'stop',
+          message: { role: 'assistant', content: 'Done', refusal: null, annotations: [] }
+        }
+      ]
+    });
+
+    const result = await new ModelOpenAIClient('key', 'https://example.test/v1/').complete(request);
+
+    expect(fetchMock.mock.calls[0][0]).toBe('https://example.test/v1/chat/completions');
+    expect(result.raw).toEqual({ role: 'assistant', content: 'Done' });
+  });
+
+  it('reports a body that is not JSON or has no choices as a retryable model error', async () => {
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(new Response('<html>oops</html>', { status: 200 }));
+    await expect(new ModelOpenAIClient('key').complete(request)).rejects.toMatchObject({
+      name: 'ModelClientError',
+      retryable: true
+    });
+
+    mockFetch(200, { error: { message: 'x' } });
+    await expect(new ModelOpenAIClient('key').complete(request)).rejects.toMatchObject({
+      name: 'ModelClientError',
+      retryable: true
+    });
+  });
+
   it('marks 429 as retryable and 401 as not', async () => {
     mockFetch(429, { error: 'slow' });
     await expect(new ModelOpenAIClient('key').complete(request)).rejects.toMatchObject({

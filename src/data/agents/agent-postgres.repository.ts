@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import { Agent, AgentVersion, ModelProvider } from '../../shared/types';
-import { AgentRepository, CreateAgentInput, CreateAgentVersionInput } from './agent.repository';
+import {
+  AgentNameConflictError,
+  AgentRepository,
+  CreateAgentInput,
+  CreateAgentVersionInput
+} from './agent.repository';
 
 interface AgentRow {
   id: string;
@@ -31,15 +36,46 @@ const UNIQUE_VIOLATION = '23505';
 export class AgentPostgresRepository implements AgentRepository {
   constructor(private readonly db: FastifyInstance['pg']) {}
 
-  async create(input: CreateAgentInput): Promise<Agent> {
-    const result = await this.db.query<AgentRow>(
-      `INSERT INTO bold_cedar_007.agents (id, name, purpose)
-       VALUES ($1, $2, $3)
-       RETURNING *`,
-      [randomUUID(), input.name, input.purpose]
-    );
+  async create(
+    input: CreateAgentInput,
+    firstVersion: CreateAgentVersionInput
+  ): Promise<{ agent: Agent; version: AgentVersion }> {
+    const agentId = randomUUID();
+    const versionId = randomUUID();
+    const result = await this.db
+      .query<{ agent: AgentRow; version: AgentVersionRow }>(
+        `WITH agent AS (
+           INSERT INTO bold_cedar_007.agents (id, name, purpose, current_version_id)
+           VALUES ($1, $2, $3, $4)
+           RETURNING *
+         ), version AS (
+           INSERT INTO bold_cedar_007.agent_versions (
+             id, agent_id, version, instructions, provider, model, skill_ids, connection_ids,
+             created_by_human_id
+           )
+           SELECT $4, agent.id, 1, $5, $6, $7, $8, $9, $10
+           FROM agent
+           RETURNING *
+         )
+         SELECT row_to_json(agent.*) AS agent, row_to_json(version.*) AS version
+         FROM agent, version`,
+        [
+          agentId,
+          input.name,
+          input.purpose,
+          versionId,
+          firstVersion.instructions,
+          firstVersion.provider,
+          firstVersion.model,
+          firstVersion.skillIds,
+          firstVersion.connectionIds,
+          firstVersion.createdByHumanId
+        ]
+      )
+      .catch((error) => rethrowNameConflict(error, input.name));
 
-    return toAgent(result.rows[0]);
+    const row = result.rows[0];
+    return { agent: toAgent(fromJson(row.agent)), version: toAgentVersion(fromJson(row.version)) };
   }
 
   async getByName(name: string): Promise<Agent | null> {
@@ -81,13 +117,15 @@ export class AgentPostgresRepository implements AgentRepository {
     agentId: string,
     changes: { name?: string; purpose?: string }
   ): Promise<Agent | null> {
-    const result = await this.db.query<AgentRow>(
-      `UPDATE bold_cedar_007.agents
+    const result = await this.db
+      .query<AgentRow>(
+        `UPDATE bold_cedar_007.agents
        SET name = coalesce($2, name), purpose = coalesce($3, purpose), updated_at = now()
        WHERE id = $1
        RETURNING *`,
-      [agentId, changes.name ?? null, changes.purpose ?? null]
-    );
+        [agentId, changes.name ?? null, changes.purpose ?? null]
+      )
+      .catch((error) => rethrowNameConflict(error, changes.name ?? ''));
 
     return result.rows[0] ? toAgent(result.rows[0]) : null;
   }
@@ -149,6 +187,20 @@ export class AgentPostgresRepository implements AgentRepository {
     }
   }
 
+  async getVersions(versionIds: string[]): Promise<AgentVersion[]> {
+    if (versionIds.length === 0) {
+      return [];
+    }
+    const result = await this.db.query<AgentVersionRow>(
+      `SELECT *
+       FROM bold_cedar_007.agent_versions
+       WHERE id = ANY($1::uuid[])`,
+      [versionIds]
+    );
+
+    return result.rows.map(toAgentVersion);
+  }
+
   async listVersions(agentId: string): Promise<AgentVersion[]> {
     const result = await this.db.query<AgentVersionRow>(
       `SELECT *
@@ -182,6 +234,25 @@ export class AgentPostgresRepository implements AgentRepository {
 
     return result.rows[0] ? toAgentVersion(result.rows[0]) : null;
   }
+}
+
+function rethrowNameConflict(error: unknown, name: string): never {
+  const { code, constraint } = error as { code?: string; constraint?: string };
+  if (code === UNIQUE_VIOLATION && constraint === 'idx_agents_name_unique') {
+    throw new AgentNameConflictError(name);
+  }
+  throw error;
+}
+
+// row_to_json gives timestamps as strings. Turn them back into dates.
+function fromJson<Row extends { created_at: Date }>(row: Row): Row {
+  const dated = { ...row } as Record<string, unknown>;
+  for (const key of ['created_at', 'updated_at', 'disabled_at']) {
+    if (typeof dated[key] === 'string') {
+      dated[key] = new Date(dated[key] as string);
+    }
+  }
+  return dated as Row;
 }
 
 function toAgent(row: AgentRow): Agent {

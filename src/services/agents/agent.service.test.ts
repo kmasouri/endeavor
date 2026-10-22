@@ -1,4 +1,4 @@
-import { AgentRepository, HumanRepository } from '../../data';
+import { AgentNameConflictError, AgentRepository, HumanRepository } from '../../data';
 import { AgentLogger } from '../../observability';
 import { Agent, AgentVersion, Human } from '../../shared/types';
 import { AgentService } from './agent.service';
@@ -33,7 +33,10 @@ const version1: AgentVersion = {
 
 function setup(ready: ('anthropic' | 'openai' | 'scripted')[] = ['anthropic', 'scripted']) {
   const agents: jest.Mocked<AgentRepository> = {
-    create: jest.fn().mockResolvedValue({ ...agent, currentVersionId: null }),
+    create: jest.fn(async (_input, first) => ({
+      agent: { ...agent, currentVersionId: 'v1' },
+      version: { ...version1, ...first }
+    })),
     getById: jest.fn().mockResolvedValue(agent),
     getByName: jest.fn().mockResolvedValue(null),
     list: jest.fn().mockResolvedValue([agent]),
@@ -42,6 +45,7 @@ function setup(ready: ('anthropic' | 'openai' | 'scripted')[] = ['anthropic', 's
     setDisabled: jest.fn().mockResolvedValue({ ...agent, disabledAt: new Date() }),
     addVersion: jest.fn(async (_id, input) => ({ ...version1, ...input, id: 'v2', version: 2 })),
     getVersion: jest.fn().mockResolvedValue(version1),
+    getVersions: jest.fn().mockResolvedValue([version1]),
     listVersions: jest.fn()
   };
   const humans: jest.Mocked<HumanRepository> = {
@@ -54,7 +58,8 @@ function setup(ready: ('anthropic' | 'openai' | 'scripted')[] = ['anthropic', 's
   const logger = {
     onAgentCreated: jest.fn(),
     onAgentConfigured: jest.fn(),
-    onAgentDisabledChanged: jest.fn()
+    onAgentDisabled: jest.fn(),
+    onAgentEnabled: jest.fn()
   } as unknown as jest.Mocked<AgentLogger>;
   return { service: new AgentService(agents, humans, ready, logger), agents, humans, logger };
 }
@@ -71,15 +76,18 @@ describe('AgentService', () => {
       model: 'gpt-test'
     });
 
-    expect(agents.addVersion).toHaveBeenCalledWith(AGENT_ID, {
-      instructions: 'Test the checkout flow',
-      provider: 'openai',
-      model: 'gpt-test',
-      skillIds: [],
-      connectionIds: [],
-      createdByHumanId: ADMIN_ID
-    });
-    expect(details.currentVersionId).toBe('v2');
+    expect(agents.create).toHaveBeenCalledWith(
+      { name: 'QA', purpose: 'Tests the staging site' },
+      {
+        instructions: 'Test the checkout flow',
+        provider: 'openai',
+        model: 'gpt-test',
+        skillIds: [],
+        connectionIds: [],
+        createdByHumanId: ADMIN_ID
+      }
+    );
+    expect(details.currentVersion?.version).toBe(1);
     // openai has no key in this setup, so the agent is saved but flagged as not ready.
     expect(details.providerReady).toBe(false);
   });
@@ -150,7 +158,55 @@ describe('AgentService', () => {
     const details = await service.setDisabled(ADMIN_ID, AGENT_ID, true);
 
     expect(details.disabledAt).not.toBeNull();
-    expect(logger.onAgentDisabledChanged).toHaveBeenCalledWith(AGENT_ID, true);
+    expect(logger.onAgentDisabled).toHaveBeenCalledWith(AGENT_ID);
+  });
+
+  it('changes and logs nothing when the agent is already disabled', async () => {
+    const { service, agents, logger } = setup();
+    agents.getById.mockResolvedValue({ ...agent, disabledAt: new Date() });
+
+    await service.setDisabled(ADMIN_ID, AGENT_ID, true);
+
+    expect(agents.setDisabled).not.toHaveBeenCalled();
+    expect(logger.onAgentDisabled).not.toHaveBeenCalled();
+  });
+
+  it('does not save a new version when nothing changed', async () => {
+    const { service, agents } = setup();
+
+    const details = await service.updateConfig(ADMIN_ID, AGENT_ID, { model: 'claude-opus-5-5' });
+
+    expect(agents.addVersion).not.toHaveBeenCalled();
+    expect(details.currentVersion?.version).toBe(1);
+  });
+
+  it('turns a name clash from the database into agentNameTaken', async () => {
+    const { service, agents } = setup();
+    agents.create.mockRejectedValue(new AgentNameConflictError('QA'));
+
+    await expect(
+      service.createAgent(ADMIN_ID, {
+        name: 'QA',
+        purpose: 'p',
+        instructions: 'i',
+        provider: 'scripted',
+        model: 'm'
+      })
+    ).rejects.toMatchObject({ name: 'agentNameTaken' });
+  });
+
+  it('loads all current versions for a list in one call', async () => {
+    const { service, agents } = setup();
+
+    const { agents: listed } = await service.listAgents({
+      limit: 10,
+      offset: 0,
+      includeDisabled: false
+    });
+
+    expect(agents.getVersions).toHaveBeenCalledWith(['v1']);
+    expect(agents.getVersion).not.toHaveBeenCalled();
+    expect(listed[0].currentVersion?.id).toBe('v1');
   });
 
   it('reports which providers are ready', () => {

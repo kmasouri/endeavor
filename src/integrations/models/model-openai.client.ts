@@ -40,8 +40,12 @@ export class ModelOpenAIClient implements ModelClient {
 
   constructor(
     private readonly apiKey: string,
-    private readonly baseUrl: string = 'https://api.openai.com/v1'
-  ) {}
+    baseUrl: string = 'https://api.openai.com/v1'
+  ) {
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
+  }
+
+  private readonly baseUrl: string;
 
   async complete(request: ModelTurnRequest): Promise<ModelTurnResult> {
     let response: Response;
@@ -89,9 +93,16 @@ export class ModelOpenAIClient implements ModelClient {
       );
     }
 
-    const data = (await response.json()) as OpenAIResponse;
-    const choice = data.choices[0];
-    if (!choice) {
+    let data: OpenAIResponse;
+    try {
+      data = (await response.json()) as OpenAIResponse;
+    } catch (error) {
+      throw new ModelClientError('OpenAI returned a body that is not JSON', 'openai', true, {
+        cause: error
+      });
+    }
+    const choice = Array.isArray(data.choices) ? data.choices[0] : undefined;
+    if (!choice?.message) {
       throw new ModelClientError('OpenAI returned no choices', 'openai', true);
     }
 
@@ -100,7 +111,12 @@ export class ModelOpenAIClient implements ModelClient {
       text: choice.message.content ?? '',
       toolCalls,
       stopReason: toStopReason(choice, toolCalls.length),
-      raw: choice.message,
+      // Only the fields a request accepts, so strict compatible APIs take it back.
+      raw: {
+        role: 'assistant',
+        content: choice.message.content ?? null,
+        ...(choice.message.tool_calls?.length && { tool_calls: choice.message.tool_calls })
+      },
       usage: {
         inputTokens: data.usage?.prompt_tokens ?? 0,
         outputTokens: data.usage?.completion_tokens ?? 0

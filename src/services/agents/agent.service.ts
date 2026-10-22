@@ -1,4 +1,4 @@
-import { AgentRepository, HumanRepository } from '../../data';
+import { AgentNameConflictError, AgentRepository, HumanRepository } from '../../data';
 import { AgentLogger } from '../../observability';
 import { ADMIN_ONLY, requireHuman } from '../../shared/access';
 import { AppError } from '../../shared/errors';
@@ -47,18 +47,22 @@ export class AgentService {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     await this.requireFreeName(input.name);
 
-    const agent = await this.agentRepository.create({ name: input.name, purpose: input.purpose });
-    const version = await this.agentRepository.addVersion(agent.id, {
-      instructions: input.instructions,
-      provider: input.provider,
-      model: input.model,
-      skillIds: [],
-      connectionIds: [],
-      createdByHumanId: admin.id
-    });
+    const { agent, version } = await this.agentRepository
+      .create(
+        { name: input.name, purpose: input.purpose },
+        {
+          instructions: input.instructions,
+          provider: input.provider,
+          model: input.model,
+          skillIds: [],
+          connectionIds: [],
+          createdByHumanId: admin.id
+        }
+      )
+      .catch(toNameTaken);
     this.agentLogger.onAgentCreated(agent.id);
     this.agentLogger.onAgentConfigured(agent.id, version.version, version.provider);
-    return this.toDetails({ ...agent, currentVersionId: version.id }, version);
+    return this.toDetails(agent, version);
   }
 
   async listAgents(input: {
@@ -70,7 +74,14 @@ export class AgentService {
       this.agentRepository.list(input),
       this.agentRepository.count({ includeDisabled: input.includeDisabled })
     ]);
-    const details = await Promise.all(agents.map((agent) => this.loadDetails(agent)));
+    // One query for all current versions, instead of one per agent.
+    const versionIds = agents.flatMap((agent) => agent.currentVersionId ?? []);
+    const versions = new Map(
+      (await this.agentRepository.getVersions(versionIds)).map((version) => [version.id, version])
+    );
+    const details = agents.map((agent) =>
+      this.toDetails(agent, versions.get(agent.currentVersionId ?? '') ?? null)
+    );
     return { agents: details, total };
   }
 
@@ -95,7 +106,7 @@ export class AgentService {
       await this.requireFreeName(changes.name);
     }
 
-    const updated = await this.agentRepository.update(agent.id, changes);
+    const updated = await this.agentRepository.update(agent.id, changes).catch(toNameTaken);
     return this.loadDetails(updated ?? agent);
   }
 
@@ -121,6 +132,16 @@ export class AgentService {
       );
     }
 
+    // Saving the same settings again doesn't add a copy to the history.
+    if (
+      current &&
+      current.instructions === instructions &&
+      current.provider === provider &&
+      current.model === model
+    ) {
+      return this.toDetails(agent, current);
+    }
+
     const version = await this.agentRepository.addVersion(agent.id, {
       instructions,
       provider,
@@ -138,9 +159,16 @@ export class AgentService {
   async setDisabled(actorId: string, agentId: string, disabled: boolean): Promise<AgentDetails> {
     requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     const agent = await this.requireAgent(agentId);
+    if ((agent.disabledAt !== null) === disabled) {
+      return this.loadDetails(agent);
+    }
 
     const updated = await this.agentRepository.setDisabled(agent.id, disabled);
-    this.agentLogger.onAgentDisabledChanged(agent.id, disabled);
+    if (disabled) {
+      this.agentLogger.onAgentDisabled(agent.id);
+    } else {
+      this.agentLogger.onAgentEnabled(agent.id);
+    }
     return this.loadDetails(updated ?? agent);
   }
 
@@ -175,9 +203,17 @@ export class AgentService {
     return agent;
   }
 
+  // Checked first for a clear error. The unique index still catches two saves at once.
   private async requireFreeName(name: string): Promise<void> {
     if (await this.agentRepository.getByName(name)) {
       throw new AppError('agentNameTaken', `An agent named ${name} already exists`);
     }
   }
+}
+
+function toNameTaken(error: unknown): never {
+  if (error instanceof AgentNameConflictError) {
+    throw new AppError('agentNameTaken', error.message);
+  }
+  throw error;
 }

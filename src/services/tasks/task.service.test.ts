@@ -97,6 +97,7 @@ function setup() {
     update: jest.fn(),
     setDisabled: jest.fn(),
     addVersion: jest.fn(),
+    getVersions: jest.fn().mockResolvedValue([]),
     getVersion: jest.fn(),
     listVersions: jest.fn()
   };

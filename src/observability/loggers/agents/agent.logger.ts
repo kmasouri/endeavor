@@ -15,10 +15,11 @@ export class AgentLogger {
     );
   }
 
-  onAgentDisabledChanged(agentId: string, disabled: boolean): void {
-    currentLogger(this.logger).info(
-      { event: disabled ? 'agent.disabled' : 'agent.enabled', agentId },
-      disabled ? 'agent disabled' : 'agent enabled'
-    );
+  onAgentDisabled(agentId: string): void {
+    currentLogger(this.logger).info({ event: 'agent.disabled', agentId }, 'agent disabled');
+  }
+
+  onAgentEnabled(agentId: string): void {
+    currentLogger(this.logger).info({ event: 'agent.enabled', agentId }, 'agent enabled');
   }
 }
