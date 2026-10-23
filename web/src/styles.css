@@ -365,3 +365,47 @@ details summary {
 .row > .grow {
   min-width: 0;
 }
+
+.badge.state-working {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.badge.state-waiting {
+  color: #9a6a00;
+  border-color: #9a6a00;
+}
+
+.badge.state-blocked {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.badge.state-completed {
+  color: #2e7d32;
+  border-color: #2e7d32;
+}
+
+.events {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.events li {
+  border-left: 2px solid var(--line);
+  padding: 0.2rem 0 0.4rem 0.6rem;
+}
+
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.5rem;
+  font-size: 0.85rem;
+  max-height: 20rem;
+  overflow: auto;
+}

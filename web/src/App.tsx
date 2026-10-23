@@ -3,6 +3,11 @@ import { api, getActorId, Human, setActorId } from './api';
 import { ErrorNote } from './components';
 import { useAction, useLoad, useRoute } from './hooks';
 import { AgentPage } from './pages/Agent';
+import { ApprovalsPage } from './pages/Approvals';
+import { SchedulesPage } from './pages/Schedules';
+import { TaskPage } from './pages/Task';
+import { TasksPage } from './pages/Tasks';
+import { Approval } from './api';
 import { AgentsPage } from './pages/Agents';
 import { CatalogsPage } from './pages/Catalogs';
 import { ConversationPage } from './pages/Conversation';
@@ -13,6 +18,15 @@ export function App() {
   const [actorId, setActor] = useState(getActorId());
   const people = useLoad(() => api.get<Human[]>('/humans'), []);
   const route = useRoute();
+  // Shown as a count in the menu, so a waiting approval is hard to miss.
+  const pending = useLoad(
+    () =>
+      actorId
+        ? api.list<Approval>('/approvals?status=pending&limit=1')
+        : Promise.resolve(undefined),
+    [actorId],
+    10000
+  );
 
   const choose = (id: string | null) => {
     setActorId(id);
@@ -50,6 +64,16 @@ export function App() {
           <a className={!section || section === 'conversations' ? 'active' : ''} href="#/">
             Conversations
           </a>
+          <a className={section === 'tasks' ? 'active' : ''} href="#/tasks">
+            Work
+          </a>
+          <a className={section === 'approvals' ? 'active' : ''} href="#/approvals">
+            Approvals
+            {pending.data && pending.data.page.total > 0 && ` (${pending.data.page.total})`}
+          </a>
+          <a className={section === 'schedules' ? 'active' : ''} href="#/schedules">
+            Schedules
+          </a>
           <a className={section === 'agents' ? 'active' : ''} href="#/agents">
             Agents
           </a>
@@ -74,6 +98,14 @@ export function App() {
       <main>
         {section === 'setup' ? (
           <SetupPage people={people.data} onPeopleChanged={people.reload} />
+        ) : section === 'tasks' && id ? (
+          <TaskPage taskId={id} />
+        ) : section === 'tasks' ? (
+          <TasksPage />
+        ) : section === 'approvals' ? (
+          <ApprovalsPage />
+        ) : section === 'schedules' ? (
+          <SchedulesPage />
         ) : section === 'agents' && id ? (
           <AgentPage agentId={id} />
         ) : section === 'agents' ? (

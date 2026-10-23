@@ -192,3 +192,110 @@ export interface Grant {
   grantedAt: string;
   revokedAt: string | null;
 }
+
+export type TaskState = 'working' | 'waiting' | 'completed' | 'blocked' | 'cancelled';
+export const TASK_STATES: TaskState[] = ['working', 'waiting', 'completed', 'blocked', 'cancelled'];
+
+export interface Actor {
+  type: 'human' | 'agent' | 'system';
+  id: string | null;
+}
+
+export interface TaskWait {
+  id: string;
+  kind: 'reply' | 'approval' | 'external' | 'task';
+  targetId: string | null;
+  description: string;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export interface Task {
+  id: string;
+  conversationId: string | null;
+  ownerAgentId: string;
+  agentVersionId: string;
+  title: string;
+  brief: string;
+  completionCriteria: string;
+  reviewRequired: boolean;
+  state: TaskState;
+  stateReason: string | null;
+  pausedAt: string | null;
+  requestedByType: 'human' | 'agent' | 'schedule';
+  requestedById: string | null;
+  parentTaskId: string | null;
+  restartedFromTaskId: string | null;
+  responsibilityId: string | null;
+  criteriaCheck: { met: boolean; summary: string } | null;
+  review: { approved: boolean; notes: string | null } | null;
+  createdAt: string;
+  updatedAt: string;
+  finishedAt: string | null;
+}
+
+export interface TaskDetails extends Task {
+  waits: TaskWait[];
+}
+
+export interface TaskEvent {
+  id: number;
+  type: string;
+  actor: Actor;
+  data: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface TaskOutput {
+  id: string;
+  kind: string;
+  title: string;
+  content: string | null;
+  uri: string | null;
+  createdAt: string;
+}
+
+export interface Approval {
+  id: string;
+  taskId: string;
+  agentId: string;
+  request: { connectionName: string; method: string; path: string; body: string | null };
+  status: 'pending' | 'approved' | 'rejected';
+  reason: string | null;
+  decidedAt: string | null;
+  result: { status: number | null; body: string; error: string | null } | null;
+  createdAt: string;
+}
+
+export interface Responsibility {
+  id: string;
+  agentId: string;
+  conversationId: string | null;
+  title: string;
+  brief: string;
+  completionCriteria: string;
+  intervalMinutes: number;
+  missedRunPolicy: 'run_once' | 'skip';
+  status: 'enabled' | 'paused' | 'cancelled';
+  nextRunAt: string;
+  lastRunAt: string | null;
+}
+
+export interface AgentNote {
+  id: string;
+  body: string;
+  sourceTaskId: string | null;
+  sourceConversationId: string | null;
+  scope: 'conversation' | 'agent';
+  createdBy: Actor;
+  updatedByHumanId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ConversationDocument {
+  id: string;
+  title: string;
+  content: string;
+  createdAt: string;
+}
