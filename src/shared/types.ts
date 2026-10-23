@@ -317,7 +317,7 @@ export interface Approval {
 }
 
 export type ResponsibilityStatus = 'enabled' | 'paused' | 'cancelled';
-export type MissedRunPolicy = 'run_once' | 'skip';
+export type MissedRunPolicy = 'ask' | 'run_once' | 'skip';
 
 // A recurring piece of work for one agent. Each run is a task with this responsibilityId.
 export interface Responsibility {
@@ -332,6 +332,8 @@ export interface Responsibility {
   status: ResponsibilityStatus;
   nextRunAt: Date;
   lastRunAt: Date | null;
+  // An open "run now or wait?" question about missed runs, or null.
+  catchUp: { slot: Date; missed: number } | null;
   createdByHumanId: string;
   createdAt: Date;
   updatedAt: Date;

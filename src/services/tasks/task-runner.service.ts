@@ -220,13 +220,46 @@ export class TaskRunnerService {
         started = true;
         this.runnerLogger.onScheduledRun(responsibility.id, result.task.id, plan.skipped);
       }
+    } else if (plan.ask) {
+      await this.askToCatchUp(responsibility, plan.slot, plan.skipped, plan.nextRunAt);
     } else {
       this.runnerLogger.onScheduledRun(responsibility.id, null, plan.skipped);
     }
     // Only one runner moves a slot on. lastRunAt only moves when a run really started.
     await this.responsibilityRepository.advance(responsibility.id, responsibility.nextRunAt, {
       nextRunAt: plan.nextRunAt,
-      lastRunAt: started ? now : null
+      lastRunAt: started ? now : null,
+      catchUp: plan.ask ? { slot: plan.slot, missed: plan.skipped } : null
+    });
+  }
+
+  // Asks the people in the schedule's conversation whether to run now or wait. The answer
+  // comes through the API (or the Schedules page), so no agent is woken by this message. The
+  // message key is the slot, so a retry after a crash doesn't post twice.
+  private async askToCatchUp(
+    responsibility: Responsibility,
+    slot: Date,
+    missed: number,
+    nextRunAt: Date
+  ): Promise<void> {
+    this.runnerLogger.onCatchUpAsked(responsibility.id, missed);
+    if (!responsibility.conversationId) {
+      return;
+    }
+    const people = (await this.conversationRepository.listMembers(responsibility.conversationId))
+      .filter((member) => member.participant.type === 'human')
+      .map((member) => member.participant);
+    const runs = missed === 1 ? 'A scheduled run' : `${missed} scheduled runs`;
+    await this.messageRepository.create({
+      conversationId: responsibility.conversationId,
+      authorType: 'system',
+      authorId: null,
+      body: `${runs} of "${responsibility.title}" ${missed === 1 ? 'was' : 'were'} missed while the platform was off. Run it now, or wait for the next one at ${nextRunAt.toISOString().slice(0, 16).replace('T', ' ')} UTC? Answer on the Schedules page. If nobody answers, the next run happens as usual.`,
+      mentions: people,
+      inReplyToMessageId: null,
+      taskId: null,
+      deliverToAgentIds: [],
+      clientKey: `catchup:${responsibility.id}:${slot.toISOString()}`
     });
   }
 

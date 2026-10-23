@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import {
   ActorHeaders,
+  CatchUpBody,
   CreateResponsibilityBody,
   ListResponsibilitiesQuery,
   ListRunsQuery,
@@ -103,6 +104,22 @@ export async function listRunsHandler(
     request.query
   );
   return paged(tasks, { limit, offset, total });
+}
+
+export async function resolveCatchUpHandler(
+  request: FastifyRequest<{
+    Params: ResponsibilityParams;
+    Body: CatchUpBody;
+    Headers: ActorHeaders;
+  }>
+): Promise<unknown> {
+  return success(
+    await request.server.responsibilityService.resolveCatchUp(
+      request.headers['x-actor-id'],
+      request.params.responsibilityId,
+      request.body.decision
+    )
+  );
 }
 
 // Returns 201 for a new run, or 200 when the runKey matched an earlier one.

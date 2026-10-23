@@ -275,10 +275,11 @@ export interface Responsibility {
   brief: string;
   completionCriteria: string;
   intervalMinutes: number;
-  missedRunPolicy: 'run_once' | 'skip';
+  missedRunPolicy: 'ask' | 'run_once' | 'skip';
   status: 'enabled' | 'paused' | 'cancelled';
   nextRunAt: string;
   lastRunAt: string | null;
+  catchUp: { slot: string; missed: number } | null;
 }
 
 export interface AgentNote {

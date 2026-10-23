@@ -26,6 +26,7 @@ const responsibility: Responsibility = {
   status: 'enabled',
   nextRunAt: new Date(Date.now() + 60_000),
   lastRunAt: null,
+  catchUp: null,
   createdByHumanId: ADMIN,
   createdAt: new Date(),
   updatedAt: new Date()
@@ -60,7 +61,8 @@ function setup() {
   }));
   const responsibilityLogger = {
     onResponsibilityCreated: jest.fn(),
-    onResponsibilityStatusChanged: jest.fn()
+    onResponsibilityStatusChanged: jest.fn(),
+    onCatchUpResolved: jest.fn()
   } as unknown as ResponsibilityLogger;
   const taskLogger = { onTaskCreated: jest.fn() } as unknown as TaskLogger;
   const service = new ResponsibilityService(
@@ -92,7 +94,7 @@ describe('ResponsibilityService', () => {
     ).rejects.toMatchObject({ name: 'agentNotInConversation' });
   });
 
-  it('defaults to running once for missed runs, starting now', async () => {
+  it('defaults to asking about missed runs, starting now', async () => {
     const { service, responsibilities } = setup();
 
     await service.create(ADMIN, {
@@ -105,7 +107,7 @@ describe('ResponsibilityService', () => {
 
     expect(responsibilities.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        missedRunPolicy: 'run_once',
+        missedRunPolicy: 'ask',
         nextRunAt: expect.any(Date),
         conversationId: null
       })
@@ -237,5 +239,65 @@ describe('ResponsibilityService', () => {
       name: 'responsibilityRunOpen'
     });
     expect(tasks.create).not.toHaveBeenCalled();
+  });
+
+  describe('resolveCatchUp', () => {
+    const slot = new Date('2026-10-22T04:00:00Z');
+
+    it('starts one run now when the person says run', async () => {
+      const { service, responsibilities, tasks } = setup();
+      responsibilities.getById.mockResolvedValue({
+        ...responsibility,
+        catchUp: { slot, missed: 4 }
+      });
+
+      const { task } = await service.resolveCatchUp(ADMIN, 'r1', 'run');
+
+      expect(responsibilities.clearCatchUp).toHaveBeenCalledWith('r1', slot);
+      expect(task).not.toBeNull();
+      expect(tasks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runKey: 'catchup:r1:2026-10-22T04:00:00.000Z',
+          brief: expect.stringContaining('4 scheduled runs were missed'),
+          requestedByType: 'human'
+        })
+      );
+    });
+
+    it('starts nothing when the person says wait', async () => {
+      const { service, responsibilities, tasks } = setup();
+      responsibilities.getById.mockResolvedValue({
+        ...responsibility,
+        catchUp: { slot, missed: 2 }
+      });
+
+      const result = await service.resolveCatchUp(ADMIN, 'r1', 'wait');
+
+      expect(result.task).toBeNull();
+      expect(result.responsibility.catchUp).toBeNull();
+      expect(tasks.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses an answer after the question lapsed or was already answered', async () => {
+      const { service, responsibilities, tasks } = setup();
+      responsibilities.getById.mockResolvedValue({
+        ...responsibility,
+        catchUp: { slot, missed: 2 }
+      });
+      responsibilities.clearCatchUp.mockResolvedValue(false);
+
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).rejects.toMatchObject({
+        name: 'catchUpNotPending'
+      });
+      expect(tasks.create).not.toHaveBeenCalled();
+    });
+
+    it('refuses when there is no question at all', async () => {
+      const { service } = setup();
+
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'wait')).rejects.toMatchObject({
+        name: 'catchUpNotPending'
+      });
+    });
   });
 });

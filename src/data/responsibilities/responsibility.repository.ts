@@ -41,6 +41,13 @@ export interface ResponsibilityRepository {
   advance(
     responsibilityId: string,
     expectedNextRunAt: Date,
-    changes: { nextRunAt: Date; lastRunAt: Date | null }
+    changes: {
+      nextRunAt: Date;
+      lastRunAt: Date | null;
+      catchUp?: { slot: Date; missed: number } | null;
+    }
   ): Promise<boolean>;
+  // Closes the open catch-up question for this slot. False if it was already answered or
+  // lapsed, so only one answer counts.
+  clearCatchUp(responsibilityId: string, slot: Date): Promise<boolean>;
 }

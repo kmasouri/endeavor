@@ -60,6 +60,11 @@ export const ERRORS = {
     statusCode: 409,
     message: 'The last run of this responsibility is still going'
   },
+  catchUpNotPending: {
+    code: 40010,
+    statusCode: 409,
+    message: 'There is no open question about missed runs for this responsibility'
+  },
   approvalAlreadyDecided: {
     code: 40006,
     statusCode: 409,

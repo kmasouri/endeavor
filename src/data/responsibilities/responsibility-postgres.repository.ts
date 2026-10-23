@@ -19,6 +19,8 @@ interface ResponsibilityRow {
   status: ResponsibilityStatus;
   next_run_at: Date;
   last_run_at: Date | null;
+  catch_up_slot: Date | null;
+  catch_up_missed: number | null;
   created_by_human_id: string;
   created_at: Date;
   updated_at: Date;
@@ -138,17 +140,45 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
   async advance(
     responsibilityId: string,
     expectedNextRunAt: Date,
-    changes: { nextRunAt: Date; lastRunAt: Date | null }
+    changes: {
+      nextRunAt: Date;
+      lastRunAt: Date | null;
+      catchUp?: { slot: Date; missed: number } | null;
+    }
   ): Promise<boolean> {
+    // Moving on always replaces the open catch-up question: a new one, or none. So an
+    // unanswered question lapses when the next run comes due.
     const result = await this.db.query(
       `UPDATE bold_cedar_007.responsibilities
        SET next_run_at = $3,
            last_run_at = coalesce($4, last_run_at),
+           catch_up_slot = $5,
+           catch_up_missed = $6,
            updated_at = now()
        WHERE id = $1
          AND next_run_at = $2
          AND status = 'enabled'`,
-      [responsibilityId, expectedNextRunAt, changes.nextRunAt, changes.lastRunAt]
+      [
+        responsibilityId,
+        expectedNextRunAt,
+        changes.nextRunAt,
+        changes.lastRunAt,
+        changes.catchUp?.slot ?? null,
+        changes.catchUp?.missed ?? null
+      ]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async clearCatchUp(responsibilityId: string, slot: Date): Promise<boolean> {
+    const result = await this.db.query(
+      `UPDATE bold_cedar_007.responsibilities
+       SET catch_up_slot = NULL,
+           catch_up_missed = NULL,
+           updated_at = now()
+       WHERE id = $1
+         AND catch_up_slot = $2`,
+      [responsibilityId, slot]
     );
     return (result.rowCount ?? 0) > 0;
   }
@@ -164,6 +194,10 @@ function toResponsibility(row: ResponsibilityRow): Responsibility {
     completionCriteria: row.completion_criteria,
     intervalMinutes: row.interval_minutes,
     missedRunPolicy: row.missed_run_policy,
+    catchUp:
+      row.catch_up_slot && row.catch_up_missed !== null
+        ? { slot: row.catch_up_slot, missed: row.catch_up_missed }
+        : null,
     status: row.status,
     nextRunAt: row.next_run_at,
     lastRunAt: row.last_run_at,

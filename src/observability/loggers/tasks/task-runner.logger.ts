@@ -71,6 +71,13 @@ export class TaskRunnerLogger {
     );
   }
 
+  onCatchUpAsked(responsibilityId: string, missed: number): void {
+    currentLogger(this.logger).info(
+      { event: 'runner.schedule.catchup_asked', responsibilityId, missed },
+      'asked a person whether to catch up on missed runs'
+    );
+  }
+
   onScheduledRunFailed(responsibilityId: string, error: unknown): void {
     currentLogger(this.logger).error(
       { event: 'runner.schedule.failed', responsibilityId, err: error },

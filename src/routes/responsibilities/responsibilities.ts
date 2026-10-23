@@ -7,11 +7,13 @@ import {
   listRunsHandler,
   pauseResponsibilityHandler,
   resumeResponsibilityHandler,
+  resolveCatchUpHandler,
   startRunHandler,
   updateResponsibilityHandler
 } from '../../handlers';
 import {
   actorHeadersSchema,
+  catchUpBodySchema,
   createResponsibilityBodySchema,
   listResponsibilitiesQuerySchema,
   listRunsQuerySchema,
@@ -142,5 +144,20 @@ export async function responsibilitiesRouter(fastifyInstance: FastifyInstance): 
       }
     },
     startRunHandler
+  );
+
+  fastifyInstance.post(
+    '/responsibilities/:responsibilityId/catch-up',
+    {
+      schema: {
+        description:
+          'Answer the question about missed runs: "run" starts one run now, "wait" leaves it for the next scheduled run. Only the first answer counts.',
+        tags: ['responsibilities'],
+        headers: actorHeadersSchema,
+        params: responsibilityParamsSchema,
+        body: catchUpBodySchema
+      }
+    },
+    resolveCatchUpHandler
   );
 }
