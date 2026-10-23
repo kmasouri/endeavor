@@ -4,7 +4,7 @@
 
 | Label                      | What it is                                                                     | Example                                             | Who controls it                               |
 | -------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- | --------------------------------------------- |
-| Instructions               | How the agent should behave, from its configuration version.                   | "Investigate billing issues and cite your sources." | Admins                                        |
+| Instructions               | How the agent should behave, from its configuration version.                   | "Investigate billing issues and cite your sources." | People                                        |
 | Knowledge sources          | Documents people attach to a conversation, and connections to outside sources. | A refund policy document.                           | The source's owners                           |
 | Conversation history       | Messages the agent may see in this conversation.                               | "Kim: please summarize the billing changes"         | Everyone in the conversation                  |
 | Saved notes (agent memory) | What the agent wrote down for later work. May be incomplete or wrong.          | "Yesterday's check ruled out the payment gateway."  | The agent writes; people inspect, fix, delete |
@@ -12,10 +12,10 @@
 ## Saved notes
 
 - Agents save notes only with the `save_note` tool. What people say never becomes a note on its own.
-- **Scope keeps contexts apart.** A note saved in a conversation only shows up in that agent's tasks in that same conversation. A note saved outside any conversation, or one an admin widens to `scope: "agent"`, shows up in all of the agent's tasks.
+- **Scope keeps contexts apart.** A note saved in a conversation only shows up in that agent's tasks in that same conversation. A note saved outside any conversation, or one a person widens to `scope: "agent"`, shows up in all of the agent's tasks.
 - The newest 20 notes in scope go into the prompt under `## Saved notes (agent memory)`, with their date and who saved them, plus a warning that they may be wrong.
-- `GET /agents/:agentId/notes` lists notes with their origin. Admins see them all. Members see notes from their conversations, plus agent-wide ones.
-- `PATCH` corrects a note; only admins change its scope. `DELETE` hides it and records who deleted it. Changes apply on the agent's next run.
+- `GET /agents/:agentId/notes` lists notes with their origin. Every person sees them all, since v1 has one role.
+- `PATCH` corrects a note or changes its scope. `DELETE` hides it and records who deleted it. Changes apply on the agent's next run.
 
 ## Knowledge sources
 

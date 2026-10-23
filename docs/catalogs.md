@@ -1,6 +1,6 @@
 # Skills, connections, and grants
 
-Admins keep two shared catalogs. Being in a catalog gives no agent access: access comes from per-agent **grants**.
+People keep two shared catalogs. Being in a catalog gives no agent access: access comes from per-agent **grants**.
 
 ## Skills
 
@@ -33,7 +33,7 @@ So a revoke, a disabled connection, or a narrower path list applies on the very 
 A connection's `approvalMethods` (for example `["POST", "DELETE"]`) are methods that need a person's approval before each call. A matching call is never made right away:
 
 1. The runner saves a pending approval with the exact request, the task waits, and the agent's turn ends.
-2. `GET /approvals?status=pending` lists it for admins, members of the task's conversation, and the person who asked for the task. Others get 404.
+2. `GET /approvals?status=pending` lists it for every person, since v1 has one role. Agents can never approve.
 3. On `POST /approvals/:id/approve`, the runner checks access again (it may have been revoked meanwhile), makes the call once, records the result on the approval, gives the result to the agent, and wakes the task. The call is claimed before it is made, so a crash can never make it twice.
 4. On `POST /approvals/:id/reject`, the call is never made. The agent is told the reason, and its task wakes up.
 

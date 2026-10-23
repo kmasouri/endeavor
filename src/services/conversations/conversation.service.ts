@@ -6,7 +6,7 @@ import {
   MessageRepository
 } from '../../data';
 import { ConversationLogger } from '../../observability';
-import { requireHuman } from '../../shared/access';
+import { requireHuman, hasFullAccess } from '../../shared/access';
 import { addressedAgentIds } from '../../shared/addressing';
 import { AppError } from '../../shared/errors';
 import {
@@ -78,8 +78,9 @@ export class ConversationService {
     input: { limit: number; offset: number }
   ): Promise<{ conversations: Conversation[]; total: number }> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
-    const participant: ParticipantRef | null =
-      human.role === 'admin' ? null : { type: 'human', id: human.id };
+    const participant: ParticipantRef | null = hasFullAccess(human)
+      ? null
+      : { type: 'human', id: human.id };
     const [conversations, total] = await Promise.all([
       this.conversationRepository.list({ participant, ...input }),
       this.conversationRepository.count({ participant })
@@ -243,7 +244,7 @@ export class ConversationService {
       type: 'human',
       id: human.id
     });
-    if (!member && (options.memberOnly || human.role !== 'admin')) {
+    if (!member && (options.memberOnly || !hasFullAccess(human))) {
       throw new AppError('notConversationMember');
     }
     return { conversation, human, member };

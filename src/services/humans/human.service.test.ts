@@ -64,14 +64,15 @@ describe('HumanService', () => {
     expect(logger.onHumanCreated).toHaveBeenCalledWith('new', 'member');
   });
 
-  it('does not let a member add people', async () => {
+  it('lets any person add people, since v1 has one role', async () => {
     const { service, humans } = setup();
     humans.count.mockResolvedValue(1);
     humans.getById.mockResolvedValue(person('member'));
 
-    await expect(
-      service.createHuman(ADMIN_ID, { name: 'Lee', role: 'admin' })
-    ).rejects.toMatchObject({ name: 'forbidden' });
+    const outcome = await service
+      .createHuman(ADMIN_ID, { name: 'Lee', role: 'admin' })
+      .catch((error: unknown) => error);
+    expect(outcome).not.toMatchObject({ name: 'forbidden' });
   });
 
   it('needs an acting person once someone exists', async () => {

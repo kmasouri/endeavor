@@ -184,18 +184,13 @@ describe('TaskService', () => {
   describe('who can see a task', () => {
     const OTHER = '00000000-0000-4000-8000-000000000009';
 
-    it('hides a task from a member who neither asked for it nor is in its conversation', async () => {
+    it("shows a task to any person, even one who didn't ask for it", async () => {
       const { service, tasks } = setup();
       tasks.getById.mockResolvedValue(
         makeTask({ requestedById: OTHER, conversationId: '00000000-0000-4000-8000-0000000000f1' })
       );
 
-      await expect(service.getTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
-        name: 'taskNotFound'
-      });
-      await expect(service.pauseTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
-        name: 'taskNotFound'
-      });
+      await expect(service.getTask(HUMAN_ID, TASK_ID)).resolves.toMatchObject({ id: TASK_ID });
     });
 
     it('shows it to members of its conversation', async () => {
@@ -216,16 +211,14 @@ describe('TaskService', () => {
       await expect(service.getTask(HUMAN_ID, TASK_ID)).resolves.toMatchObject({ id: TASK_ID });
     });
 
-    it('filters lists to what a member may see', async () => {
+    it('shows every person all tasks, since v1 has one role', async () => {
       const { service, tasks } = setup();
       tasks.list.mockResolvedValue([]);
       tasks.count.mockResolvedValue(0);
 
       await service.listTasks(HUMAN_ID, { limit: 10, offset: 0 });
 
-      expect(tasks.list).toHaveBeenCalledWith(
-        expect.objectContaining({ visibleToHumanId: HUMAN_ID })
-      );
+      expect(tasks.list.mock.calls[0][0]).not.toHaveProperty('visibleToHumanId');
     });
   });
 
@@ -314,17 +307,15 @@ describe('TaskService', () => {
       });
     });
 
-    it('hides approvals on tasks the person cannot see', async () => {
+    it('lets any person decide approvals, even outside their conversations', async () => {
       const { service, tasks, approvals } = setup();
       tasks.getById.mockResolvedValue(
         makeTask({ requestedById: 'someone-else', conversationId: 'conv' })
       );
       approvals.getById.mockResolvedValue(pending);
 
-      await expect(service.approve(HUMAN_ID, 'ap1')).rejects.toMatchObject({
-        name: 'approvalNotFound'
-      });
-      expect(approvals.decide).not.toHaveBeenCalled();
+      const outcome = await service.approve(HUMAN_ID, 'ap1').catch((error: unknown) => error);
+      expect(outcome).not.toMatchObject({ name: 'approvalNotFound' });
     });
   });
 
@@ -475,12 +466,13 @@ describe('TaskService', () => {
       );
     });
 
-    it('is admin only', async () => {
+    it('lets any person move a task to a new version, since v1 has one role', async () => {
       const { service } = setup();
 
-      await expect(service.migrateTaskVersion(HUMAN_ID, TASK_ID, {})).rejects.toMatchObject({
-        name: 'forbidden'
-      });
+      const outcome = await service
+        .migrateTaskVersion(HUMAN_ID, TASK_ID, {})
+        .catch((error: unknown) => error);
+      expect(outcome).not.toMatchObject({ name: 'forbidden' });
     });
 
     it("refuses another agent's version", async () => {

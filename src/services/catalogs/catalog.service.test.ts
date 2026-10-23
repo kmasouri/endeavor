@@ -92,13 +92,14 @@ describe('CatalogService', () => {
     );
   });
 
-  it('only lets admins change catalogs', async () => {
+  it('lets any person change catalogs, since v1 has one role', async () => {
     const { service, humans } = setup();
     humans.getById.mockResolvedValue({ ...admin, role: 'member' });
 
-    await expect(
-      service.createSkill(ADMIN, { name: 'x', description: 'y', instructions: 'z' })
-    ).rejects.toMatchObject({ name: 'forbidden' });
+    const outcome = await service
+      .createSkill(ADMIN, { name: 'x', description: 'y', instructions: 'z' })
+      .catch((error: unknown) => error);
+    expect(outcome).not.toMatchObject({ name: 'forbidden' });
   });
 
   it('turns a name clash into catalogNameTaken', async () => {

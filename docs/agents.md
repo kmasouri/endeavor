@@ -8,15 +8,15 @@ An agent is a configured participant. It is not a built-in role: a QA agent and 
 - **Configuration (versioned).** Instructions, provider, and model. Saving any change creates a new version, and versions never change once saved. Each task records the version it started with, so editing an agent never changes work that is already running or waiting. Only new tasks use the new version.
 - **Skills and connections.** Chosen from the shared catalogs (coming with CA-1). They are saved with the configuration version.
 
-To move open work to a newer version, an admin calls `POST /tasks/:taskId/version`. It defaults to the agent's current version. The change is recorded as a `task.version.migrated` event with who did it and why. Tasks never change version on their own, including after a restart. Finished tasks aren't moved: restart them instead, and the new run uses the current version.
+To move open work to a newer version, a person calls `POST /tasks/:taskId/version`. It defaults to the agent's current version. The change is recorded as a `task.version.migrated` event with who did it and why. Tasks never change version on their own, including after a restart. Finished tasks aren't moved: restart them instead, and the new run uses the current version.
 
 Permissions are a separate matter. Revoked skills, connections, and actions are checked against the current grants on every tool call, whatever version a task runs (CA-5).
 
-**Limits** (`limits` on the configuration, saved with the version): `maxModelTurns`, `maxTokens` (input plus output over the task, a stand-in for cost), and `maxWorkingMinutes` (time spent working; waiting and paused time don't count). When a task reaches a limit, it is blocked with the reason, and the person who asked is told. To let it go on, an admin raises the limit, which saves a new version, and moves the task to it with `POST /tasks/:taskId/version`.
+**Limits** (`limits` on the configuration, saved with the version): `maxModelTurns`, `maxTokens` (input plus output over the task, a stand-in for cost), and `maxWorkingMinutes` (time spent working; waiting and paused time don't count). When a task reaches a limit, it is blocked with the reason, and the person who asked is told. To let it go on, a person raises the limit, which saves a new version, and moves the task to it with `POST /tasks/:taskId/version`.
 
-**Who sees what:** admins see every task and approval. Members see tasks, and their approvals, in conversations they belong to, plus tasks they asked for. Anything else reads as not found.
+**Who sees what:** in v1 there is one role, so every person sees every task and approval. The member rules are still in the code, switched off in `src/shared/access.ts`: with roles on, members see only tasks, and their approvals, in conversations they belong to, plus tasks they asked for.
 
-Only admins create or change agents. A disabled agent takes no new tasks, but its open tasks keep going until a human pauses or cancels them.
+Any person can create or change agents. Agents can't. A disabled agent takes no new tasks, but its open tasks keep going until a human pauses or cancels them.
 
 ## Example configurations
 

@@ -5,7 +5,7 @@ import {
   NoteRepository
 } from '../../data';
 import { NoteLogger } from '../../observability';
-import { requireHuman } from '../../shared/access';
+import { requireHuman, hasFullAccess } from '../../shared/access';
 import { AppError } from '../../shared/errors';
 import { AgentNote, Human, NoteScope } from '../../shared/types';
 
@@ -32,7 +32,7 @@ export class NoteService {
     if (!(await this.agentRepository.getById(agentId))) {
       throw new AppError('agentNotFound', `Agent ${agentId} was not found`);
     }
-    const visibility = human.role === 'admin' ? ('all' as const) : { visibleToHumanId: human.id };
+    const visibility = hasFullAccess(human) ? ('all' as const) : { visibleToHumanId: human.id };
     const [notes, total] = await Promise.all([
       this.noteRepository.list({ agentId, visibility, ...input }),
       this.noteRepository.count({ agentId, visibility })
@@ -49,7 +49,7 @@ export class NoteService {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const note = await this.requireEditableNote(human, agentId, noteId);
     if (changes.scope !== undefined && changes.scope !== note.scope) {
-      if (human.role !== 'admin') {
+      if (!hasFullAccess(human)) {
         throw new AppError('forbidden', "Only admins change a note's scope");
       }
       // A conversation-scoped note needs a conversation, or nobody would ever see it.
@@ -87,7 +87,7 @@ export class NoteService {
     const editable =
       note &&
       note.agentId === agentId &&
-      (human.role === 'admin' ||
+      (hasFullAccess(human) ||
         (note.scope === 'conversation' &&
           note.sourceConversationId !== null &&
           (await this.conversationRepository.getMember(note.sourceConversationId, {

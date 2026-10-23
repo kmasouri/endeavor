@@ -97,7 +97,7 @@ docker run --rm -p 3000:3000 -e DATABASE_URL=postgres://... bold-cedar-007
 
 ## API
 
-Requests that act as a person send that person's ID in the `x-actor-id` header. This is a stand-in until real sign-in. The first person added with `POST /humans` becomes an admin and needs no header.
+Requests that act as a person send that person's ID in the `x-actor-id` header. This is a stand-in until real sign-in. The first person added with `POST /humans` needs no header. For v1 there is one role: every person can do everything. Agents still can't do people-only things, like approving or granting access. Roles are switched off in `src/shared/access.ts` (`ROLES_ENABLED`).
 
 - `GET /health`
 - `GET /docs`
