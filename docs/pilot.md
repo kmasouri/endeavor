@@ -106,6 +106,24 @@ CA-2 also asks for these. Do them during the pilot, and note the result and the 
 | Second task type               | Compare pilot 2's setup with pilot 1's.                                                                              | Pilot 2 needed only new agents, a connection, and a schedule: no platform code.                         |
 | Awake and service needs        | Read `docs/local.md` "Keep it awake", and note whether the computer slept during the pilot.                          | Any sleep shows up as missed runs, handled by the missed-run rule.                                      |
 
+## Settings
+
+These are for the pilot scripts only, not the platform. Each can be a flag or an environment variable.
+
+| Flag                 | Variable                       | Default                     | What                                                       |
+| -------------------- | ------------------------------ | --------------------------- | ---------------------------------------------------------- |
+| `--cheap-model`      | `PILOT_CHEAP_MODEL`            | none                        | Model for the Researcher and Checker.                      |
+| `--strong-model`     | `PILOT_STRONG_MODEL`           | none                        | Model for the Reviewer, Solo Researcher, and Investigator. |
+| `--provider`         |                                | `openai`                    | Provider for all pilot agents.                             |
+| `--interval`         | `PILOT_CHECK_INTERVAL_MINUTES` | `10`                        | Minutes between checks. 5 or more.                         |
+| `--api`              | `PILOT_API_URL`                | `http://localhost:3000`     | Where the scripts reach the platform.                      |
+| `--target-url`       | `PILOT_TARGET_URL`             | `http://pilot-api:4100`     | Where the platform reaches the test API.                   |
+| `--target-admin-url` | `PILOT_TARGET_ADMIN_URL`       | `http://localhost:4100`     | Where the scripts reach the test API.                      |
+|                      | `PILOT_STATE_FILE`             | `pilot/results/state.json`  | What setup made and which briefs started.                  |
+|                      | `PILOT_SCORES_FILE`            | `pilot/results/scores.json` | Your scores.                                               |
+
+Setup reuses connections by name, so changing `--target-url` later doesn't change an existing connection. Edit its base URL on the connection's page instead.
+
 ## Starting over
 
 `docker compose --profile pilot down -v` stops everything and deletes all data, including the test API's clock. Then delete `pilot/results/`, and start again from step 2.
