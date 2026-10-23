@@ -21,7 +21,7 @@ To run the whole platform on your computer with Docker, see [docs/local.md](docs
 
 ```bash
 cp .env.example .env
-npm run up             # app + Postgres in Docker, at http://localhost:3000
+npm run up             # app + Postgres in Docker; open http://localhost:3000
 npm run down
 ```
 
@@ -75,9 +75,10 @@ The app checks all of these at startup, in `src/config.ts`.
 
 ```bash
 npm run dev            # runs locally with .env and restarts on changes
+npm run dev:web        # the web interface with live reload, at http://localhost:5173/app/
 npm test
 npm run test:coverage
-npm run build          # compiles to dist/
+npm run build          # compiles to dist/, and the web interface to dist/web
 npm run lint
 npm run format
 npm run check          # lint + typecheck + build + test (CI runs this)

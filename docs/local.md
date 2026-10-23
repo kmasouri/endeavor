@@ -8,7 +8,7 @@ The whole platform runs on one computer: the API, the runner that does agents' w
 - **An OpenAI API key**, so agents can think. Without one, only the built-in `scripted` test agent works.
 - **For development only:** Node 26 and npm.
 
-It runs anywhere Docker runs. It was tested on Linux. Mac and Windows use the same containers, through Docker Desktop.
+It runs anywhere Docker runs. It was tested on Linux. Mac and Windows use the same containers, through Docker Desktop. On Windows, Docker Desktop needs WSL 2 turned on; its installer offers to do that.
 
 ## Start, stop, and watch it
 
@@ -21,7 +21,7 @@ npm run down             # stops everything; your data stays
 
 Without npm, use `docker compose up -d --build`, `docker compose logs -f app`, and `docker compose down`.
 
-When it's up, the API is at `http://localhost:3000`, and Swagger is at `http://localhost:3000/docs`. Only this computer can reach it. Nobody signs in yet, so anyone who could reach the API could act as anyone.
+When it's up, open `http://localhost:3000` for the web interface. The API is at the same address, and Swagger is at `http://localhost:3000/docs`. Only this computer can reach it. Nobody signs in yet, so anyone who could reach the API could act as anyone.
 
 `npm run up` applies new database changes (`db/schema/`) before the server starts.
 
@@ -75,5 +75,7 @@ npm run dev              # the app, restarting when you save a file
 ```
 
 Here, workspaces go in a `workspaces/` folder in the repo, which git ignores. Set `WORKSPACES_DIR` to put them somewhere else.
+
+For the web interface with live reload, also run `npm run dev:web` and open `http://localhost:5173/app/`. It sends API calls to `npm run dev` on port 3000. Without it, `npm run build` puts the interface in `dist/web`, and the server serves it at `/app/`.
 
 Don't run `npm run up` and `npm run dev` at the same time: both use port 3000.

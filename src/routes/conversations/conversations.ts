@@ -40,7 +40,7 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     '/conversations',
     {
       schema: {
-        description: 'Conversations you belong to, newest first. Admins see all of them.',
+        description: 'Conversations, newest first. In v1 every person sees all of them.',
         tags: ['conversations'],
         headers: actorHeadersSchema,
         querystring: listConversationsQuerySchema
