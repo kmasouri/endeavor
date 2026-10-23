@@ -49,6 +49,17 @@ export const ERRORS = {
   },
   taskWaitNotFound: { code: 40004, statusCode: 404, message: 'Open task wait not found' },
   approvalNotFound: { code: 40005, statusCode: 404, message: 'Approval not found' },
+  responsibilityNotFound: { code: 40007, statusCode: 404, message: 'Responsibility not found' },
+  responsibilityCancelled: {
+    code: 40008,
+    statusCode: 409,
+    message: 'This responsibility is cancelled and starts no more runs'
+  },
+  responsibilityRunOpen: {
+    code: 40009,
+    statusCode: 409,
+    message: 'The last run of this responsibility is still going'
+  },
   approvalAlreadyDecided: {
     code: 40006,
     statusCode: 409,
@@ -87,6 +98,11 @@ export const ERRORS = {
   },
   messageNotFound: { code: 60004, statusCode: 404, message: 'Message not found' },
   participantNotFound: { code: 60005, statusCode: 404, message: 'Participant not found' },
+  agentNotInConversation: {
+    code: 60007,
+    statusCode: 422,
+    message: 'The agent is not a member of this conversation'
+  },
   suggestionNotAvailable: {
     code: 60006,
     statusCode: 422,

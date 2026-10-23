@@ -44,14 +44,17 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 
 ## Tasks (40xxx)
 
-| Code  | Name                     | HTTP | What it means                                                                | How to fix it                                                        |
-| ----- | ------------------------ | ---- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| 40001 | `taskNotFound`           | 404  | No task has this ID.                                                         | Check the ID against `GET /tasks`.                                   |
-| 40002 | `taskStateConflict`      | 409  | The task's state doesn't allow this, like resuming a task that isn't paused. | Get the task to see its state, then pick an allowed action.          |
-| 40003 | `taskCompletionRejected` | 422  | The task can't complete: it has no output, or its criteria were not met.     | Attach an output and check it against the completion criteria first. |
-| 40004 | `taskWaitNotFound`       | 404  | No open wait matches. It may already be resolved.                            | Get the task to see its open waits.                                  |
-| 40005 | `approvalNotFound`       | 404  | No approval has this ID, or you can't see its task.                          | Check `GET /approvals`.                                              |
-| 40006 | `approvalAlreadyDecided` | 409  | Someone already approved or rejected it.                                     | Get the approval to see the decision.                                |
+| Code  | Name                      | HTTP | What it means                                                                | How to fix it                                                        |
+| ----- | ------------------------- | ---- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| 40001 | `taskNotFound`            | 404  | No task has this ID.                                                         | Check the ID against `GET /tasks`.                                   |
+| 40002 | `taskStateConflict`       | 409  | The task's state doesn't allow this, like resuming a task that isn't paused. | Get the task to see its state, then pick an allowed action.          |
+| 40003 | `taskCompletionRejected`  | 422  | The task can't complete: it has no output, or its criteria were not met.     | Attach an output and check it against the completion criteria first. |
+| 40004 | `taskWaitNotFound`        | 404  | No open wait matches. It may already be resolved.                            | Get the task to see its open waits.                                  |
+| 40005 | `approvalNotFound`        | 404  | No approval has this ID, or you can't see its task.                          | Check `GET /approvals`.                                              |
+| 40006 | `approvalAlreadyDecided`  | 409  | Someone already approved or rejected it.                                     | Get the approval to see the decision.                                |
+| 40007 | `responsibilityNotFound`  | 404  | No responsibility has this ID.                                               | Check `GET /responsibilities`.                                       |
+| 40008 | `responsibilityCancelled` | 409  | The responsibility is cancelled; it can't run or resume.                     | Create a new responsibility.                                         |
+| 40009 | `responsibilityRunOpen`   | 409  | The last run is still working, waiting, or blocked. Only one runs at a time. | Wait for it to finish, or cancel that task first.                    |
 
 ## Agents (50xxx)
 
@@ -64,14 +67,15 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 
 ## Conversations (60xxx)
 
-| Code  | Name                     | HTTP | What it means                                                            | How to fix it                                                  |
-| ----- | ------------------------ | ---- | ------------------------------------------------------------------------ | -------------------------------------------------------------- |
-| 60001 | `conversationNotFound`   | 404  | No conversation has this ID.                                             | Check the ID against `GET /conversations`.                     |
-| 60002 | `notConversationMember`  | 403  | You are not a member of this conversation.                               | Ask a member to add you.                                       |
-| 60003 | `mentionNotMember`       | 422  | A mention names someone who isn't in the conversation.                   | Add them first, or remove the mention.                         |
-| 60004 | `messageNotFound`        | 404  | The message being replied to isn't in this conversation.                 | Check `inReplyToMessageId`.                                    |
-| 60005 | `participantNotFound`    | 404  | The person or agent being added doesn't exist.                           | Check the ID against `GET /humans` or `GET /agents`.           |
-| 60006 | `suggestionNotAvailable` | 422  | An agent suggested an agent that isn't in the directory, or is disabled. | The agent sees this as a tool error and can pick another name. |
+| Code  | Name                     | HTTP | What it means                                                                                  | How to fix it                                                  |
+| ----- | ------------------------ | ---- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 60001 | `conversationNotFound`   | 404  | No conversation has this ID.                                                                   | Check the ID against `GET /conversations`.                     |
+| 60002 | `notConversationMember`  | 403  | You are not a member of this conversation.                                                     | Ask a member to add you.                                       |
+| 60003 | `mentionNotMember`       | 422  | A mention names someone who isn't in the conversation.                                         | Add them first, or remove the mention.                         |
+| 60004 | `messageNotFound`        | 404  | The message being replied to isn't in this conversation.                                       | Check `inReplyToMessageId`.                                    |
+| 60005 | `participantNotFound`    | 404  | The person or agent being added doesn't exist.                                                 | Check the ID against `GET /humans` or `GET /agents`.           |
+| 60006 | `suggestionNotAvailable` | 422  | An agent suggested an agent that isn't in the directory, or is disabled.                       | The agent sees this as a tool error and can pick another name. |
+| 60007 | `agentNotInConversation` | 422  | The agent must be in the conversation first, such as before it can report there on a schedule. | Add the agent to the conversation.                             |
 
 ## Catalogs (70xxx)
 

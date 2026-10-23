@@ -102,6 +102,7 @@ Requests that act as a person send that person's ID in the `x-actor-id` header. 
 - `POST /tasks`, `GET /tasks?state=&ownerAgentId=&conversationId=`
 - `GET /tasks/:taskId`, `GET /tasks/:taskId/events`, `GET /tasks/:taskId/outputs`
 - `POST /tasks/:taskId/pause`, `/resume`, `/cancel`, `/restart`, `/review`, `/version`
+- `POST /responsibilities`, `GET /responsibilities`, `PATCH /responsibilities/:id`, `/pause`, `/resume`, `/cancel`, `GET|POST /responsibilities/:id/runs`
 - `GET /approvals?status=pending`, `GET /approvals/:approvalId`, `POST /approvals/:approvalId/approve`, `/reject`
 - `POST /items`
 - `GET /items?limit=50&offset=0`

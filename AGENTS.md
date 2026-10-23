@@ -11,6 +11,7 @@ This file says what to do and what not to do. For how things work and why, read:
 - `docs/conversations.md`: how messages become work, agent tools, and the runner.
 - `docs/catalogs.md`: skills, connections, credentials, and grants.
 - `docs/notes.md`: context, saved notes, and knowledge sources.
+- `docs/scheduling.md`: recurring responsibilities, missed runs, and event starts.
 
 ## Source of truth
 

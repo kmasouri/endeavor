@@ -7,6 +7,7 @@ import {
   HumanRepository,
   MessageRepository,
   NoteRepository,
+  ResponsibilityRepository,
   TaskRepository
 } from '../../data';
 import {
@@ -34,6 +35,7 @@ import {
   Message,
   ModelProvider,
   ParticipantRef,
+  Responsibility,
   Skill,
   SkillVersion,
   Task,
@@ -54,6 +56,8 @@ import {
   HTTP_REQUEST_TOOL,
   STOPPING_TOOLS
 } from './agent-tools';
+import { planRun } from './schedule';
+import { startResponsibilityRun } from './scheduled-runs';
 import { ignoreStateConflict, ignoreWaitAlreadyResolved, TaskLifecycle } from './task-lifecycle';
 
 export interface TaskRunnerOptions {
@@ -126,6 +130,7 @@ export class TaskRunnerService {
     private readonly approvalRepository: ApprovalRepository,
     private readonly noteRepository: NoteRepository,
     private readonly documentRepository: DocumentRepository,
+    private readonly responsibilityRepository: ResponsibilityRepository,
     private readonly connectionClient: ConnectionClient,
     private readonly modelClients: Partial<Record<ModelProvider, ModelClient>>,
     taskLogger: TaskLogger,
@@ -137,6 +142,7 @@ export class TaskRunnerService {
 
   // One pass: deliver new messages, wake tasks whose waits are done, then run claimed tasks.
   async tick(): Promise<void> {
+    await this.startDueRuns();
     await this.processDeliveries();
     await this.repairWaitingTasks();
     await this.postPendingResults();
@@ -147,6 +153,66 @@ export class TaskRunnerService {
       this.options.concurrency
     );
     await Promise.all(tasks.map((task) => this.runClaimed(task)));
+  }
+
+  // Scheduling
+
+  // Starts runs for responsibilities that are due. Only the runner that moves the schedule on
+  // starts the run, and the run's key is its time slot, so a slot never runs twice. Slots
+  // missed while the service was down follow each responsibility's missed-run policy.
+  async startDueRuns(now: Date = new Date()): Promise<void> {
+    for (const responsibility of await this.responsibilityRepository.listDue(now, 20)) {
+      // One bad responsibility is logged and tried again next tick; it never stops the rest
+      // of the tick.
+      try {
+        await this.startDueRun(responsibility, now);
+      } catch (error) {
+        this.runnerLogger.onScheduledRunFailed(responsibility.id, error);
+      }
+    }
+  }
+
+  // The run is created first, then the schedule moves on. A crash between the two leaves the
+  // slot due, and the next tick finds the same run by its slot key and moves the schedule on.
+  // A crash before the run is created leaves the slot due too, so it isn't lost.
+  private async startDueRun(responsibility: Responsibility, now: Date): Promise<void> {
+    const plan = planRun(responsibility, now);
+    if (!plan) {
+      return;
+    }
+    let started = false;
+    if (plan.start) {
+      const result = await startResponsibilityRun(
+        {
+          taskRepository: this.taskRepository,
+          agentRepository: this.agentRepository,
+          conversationRepository: this.conversationRepository,
+          lifecycle: this.lifecycle
+        },
+        responsibility,
+        {
+          runKey: `schedule:${responsibility.id}:${plan.slot.toISOString()}`,
+          startedBy: SYSTEM,
+          note:
+            plan.skipped > 0
+              ? `(${plan.skipped} earlier scheduled run${plan.skipped === 1 ? ' was' : 's were'} missed while the platform was off.)`
+              : undefined
+        }
+      );
+      if ('skippedReason' in result) {
+        this.runnerLogger.onScheduledRunSkipped(responsibility.id, result.skippedReason);
+      } else {
+        started = true;
+        this.runnerLogger.onScheduledRun(responsibility.id, result.task.id, plan.skipped);
+      }
+    } else {
+      this.runnerLogger.onScheduledRun(responsibility.id, null, plan.skipped);
+    }
+    // Only one runner moves a slot on. lastRunAt only moves when a run really started.
+    await this.responsibilityRepository.advance(responsibility.id, responsibility.nextRunAt, {
+      nextRunAt: plan.nextRunAt,
+      lastRunAt: started ? now : null
+    });
   }
 
   // Delivery

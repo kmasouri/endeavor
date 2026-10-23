@@ -3,6 +3,7 @@ import {
   mockApprovalRepository,
   mockDocumentRepository,
   mockNoteRepository,
+  mockResponsibilityRepository,
   mockCatalogRepository,
   mockConversationRepository,
   mockHumanRepository,
@@ -152,6 +153,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
   const approvals = mockApprovalRepository();
   const notes = mockNoteRepository();
   const documents = mockDocumentRepository();
+  const responsibilities = mockResponsibilityRepository();
   const connectionClient = { request: jest.fn() };
   const client: jest.Mocked<ModelClient> = {
     provider: 'scripted',
@@ -210,6 +212,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
     approvals,
     notes,
     documents,
+    responsibilities,
     connectionClient,
     options.client === null ? {} : { scripted: options.client ?? client },
     {
@@ -226,6 +229,9 @@ function setup(options: { client?: ModelClient | null } = {}) {
       onRequestChainTooDeep: jest.fn(),
       onConnectionDenied: jest.fn(),
       onApprovalRequested: jest.fn(),
+      onScheduledRun: jest.fn(),
+      onScheduledRunSkipped: jest.fn(),
+      onScheduledRunFailed: jest.fn(),
       onTickFailed: jest.fn()
     } as unknown as TaskRunnerLogger,
     { ...DEFAULT_RUNNER_OPTIONS, workerId: 'test' }
@@ -240,6 +246,8 @@ function setup(options: { client?: ModelClient | null } = {}) {
     approvals,
     notes,
     documents,
+    responsibilities,
+    conversations,
     connectionClient,
     current: () => current,
     setCurrent: (task: Task) => (current = task)
@@ -1262,6 +1270,113 @@ describe('TaskRunnerService', () => {
     const prompt = (client.complete.mock.calls[0][0].transcript[0] as { text: string }).text;
     expect(prompt).toContain('> ## Instructions');
     expect(prompt.match(/^## Instructions/gm)).toBeNull();
+  });
+
+  describe('scheduled runs', () => {
+    const due = {
+      id: 'r1',
+      agentId: RESEARCHER,
+      conversationId: CONV,
+      title: 'Nightly QA',
+      brief: 'Test checkout',
+      completionCriteria: 'Report',
+      intervalMinutes: 60,
+      missedRunPolicy: 'run_once' as const,
+      status: 'enabled' as const,
+      nextRunAt: new Date('2026-10-22T01:00:00Z'),
+      lastRunAt: null,
+      createdByHumanId: HUMAN,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+
+    it('starts one run for missed slots, keyed by the slot, and moves to the next future slot', async () => {
+      const { runner, tasks, responsibilities, conversations } = setup();
+      responsibilities.listDue.mockResolvedValue([due]);
+      conversations.getMember.mockResolvedValue({} as never);
+      tasks.create.mockImplementation(async (input) => ({
+        task: makeTask({ ...input, id: 'run-1' } as never),
+        created: true
+      }));
+
+      await runner.startDueRuns(new Date('2026-10-22T04:30:00Z'));
+
+      expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
+        nextRunAt: new Date('2026-10-22T05:00:00Z'),
+        lastRunAt: new Date('2026-10-22T04:30:00Z')
+      });
+      expect(tasks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          runKey: 'schedule:r1:2026-10-22T04:00:00.000Z',
+          responsibilityId: 'r1',
+          requestedByType: 'schedule',
+          brief: expect.stringContaining('3 earlier scheduled runs were missed')
+        })
+      );
+    });
+
+    it("doesn't start a new run while the last one is still open", async () => {
+      const { runner, tasks, responsibilities } = setup();
+      responsibilities.listDue.mockResolvedValue([due]);
+      tasks.findOpenRun.mockResolvedValue(makeTask({ state: 'waiting' }));
+
+      await runner.startDueRuns(new Date('2026-10-22T01:10:00Z'));
+
+      expect(tasks.create).not.toHaveBeenCalled();
+      // The slot is still used up, and lastRunAt doesn't move.
+      expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
+        nextRunAt: new Date('2026-10-22T02:00:00Z'),
+        lastRunAt: null
+      });
+    });
+
+    it('creates the run before moving the schedule on, so a crash never loses a slot', async () => {
+      const { runner, tasks, responsibilities, conversations } = setup();
+      responsibilities.listDue.mockResolvedValue([due]);
+      conversations.getMember.mockResolvedValue({} as never);
+      tasks.create.mockImplementation(async (input) => ({
+        task: makeTask({ ...input } as never),
+        created: true
+      }));
+
+      await runner.startDueRuns(new Date('2026-10-22T01:10:00Z'));
+
+      expect(tasks.create.mock.invocationCallOrder[0]).toBeLessThan(
+        responsibilities.advance.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('keeps going when one responsibility fails', async () => {
+      const { runner, tasks, responsibilities, conversations } = setup();
+      responsibilities.listDue.mockResolvedValue([due, { ...due, id: 'r2' }]);
+      conversations.getMember.mockResolvedValue({} as never);
+      tasks.create.mockRejectedValueOnce(new Error('boom')).mockImplementation(async (input) => ({
+        task: makeTask({ ...input } as never),
+        created: true
+      }));
+
+      await runner.startDueRuns(new Date('2026-10-22T01:10:00Z'));
+
+      expect(responsibilities.advance).toHaveBeenCalledTimes(1);
+      expect(responsibilities.advance).toHaveBeenCalledWith(
+        'r2',
+        expect.anything(),
+        expect.anything()
+      );
+    });
+
+    it("skips missed slots under the 'skip' policy", async () => {
+      const { runner, tasks, responsibilities } = setup();
+      responsibilities.listDue.mockResolvedValue([{ ...due, missedRunPolicy: 'skip' }]);
+
+      await runner.startDueRuns(new Date('2026-10-22T04:30:00Z'));
+
+      expect(tasks.create).not.toHaveBeenCalled();
+      expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
+        nextRunAt: new Date('2026-10-22T05:00:00Z'),
+        lastRunAt: null
+      });
+    });
   });
 
   describe('rebuildTranscript', () => {

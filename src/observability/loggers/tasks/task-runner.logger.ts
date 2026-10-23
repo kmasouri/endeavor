@@ -57,6 +57,27 @@ export class TaskRunnerLogger {
     );
   }
 
+  onScheduledRun(responsibilityId: string, taskId: string | null, skippedSlots: number): void {
+    currentLogger(this.logger).info(
+      { event: 'runner.schedule.run', responsibilityId, taskId, skippedSlots },
+      taskId ? 'scheduled run started' : 'scheduled run skipped'
+    );
+  }
+
+  onScheduledRunFailed(responsibilityId: string, error: unknown): void {
+    currentLogger(this.logger).error(
+      { event: 'runner.schedule.failed', responsibilityId, err: error },
+      'scheduled run failed'
+    );
+  }
+
+  onScheduledRunSkipped(responsibilityId: string, reason: string): void {
+    currentLogger(this.logger).warn(
+      { event: 'runner.schedule.skipped', responsibilityId, reason },
+      'scheduled run not started'
+    );
+  }
+
   onModelTurn(
     taskId: string,
     provider: string,

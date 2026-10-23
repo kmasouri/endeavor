@@ -405,6 +405,20 @@ export class TaskPostgresRepository implements TaskRepository {
     return (result.rowCount ?? 0) > 0;
   }
 
+  async findOpenRun(responsibilityId: string): Promise<Task | null> {
+    const result = await this.db.query<TaskRow>(
+      `SELECT *
+       FROM bold_cedar_007.tasks
+       WHERE responsibility_id = $1
+         AND state IN ('working', 'waiting', 'blocked')
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [responsibilityId]
+    );
+
+    return result.rows[0] ? toTask(result.rows[0]) : null;
+  }
+
   async findOpenTask(conversationId: string, agentId: string): Promise<Task | null> {
     const result = await this.db.query<TaskRow>(
       `SELECT *
@@ -480,7 +494,8 @@ function listFilters(input: Omit<ListTasksInput, 'limit' | 'offset'>): {
   const filters: [unknown, string][] = [
     [input.state, 'state'],
     [input.ownerAgentId, 'owner_agent_id'],
-    [input.conversationId, 'conversation_id']
+    [input.conversationId, 'conversation_id'],
+    [input.responsibilityId, 'responsibility_id']
   ];
   for (const [value, column] of filters) {
     if (value !== undefined) {
