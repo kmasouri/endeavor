@@ -13,6 +13,7 @@
     "build": "npm run build --workspaces",
     "start": "npm start -w apps/api",
     "test": "npm test --workspaces --if-present && node --test 'pilot/*.test.ts'",
+    "test:coverage": "npm run test:coverage -w apps/api",
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write \"**/*.{ts,json,md,yml,yaml}\"",
     "typecheck": "npm run typecheck --workspaces && tsc -p pilot/tsconfig.json",
