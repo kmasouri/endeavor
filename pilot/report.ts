@@ -259,10 +259,13 @@ async function reportChecks(api: Api, state: PilotState): Promise<TaskReport[]> 
     const window = majorityWindow(requests.map((request) => request.window));
     if (window !== null) windowsSeen.set(window, (windowsSeen.get(window) ?? 0) + 1);
     const called = new Set(requests.map((request) => request.path.split('?')[0]));
-    const report = messages
-      .filter((message) => message.taskId === run.id && message.authorId === state.agents.checker)
-      .map((message) => message.body)
-      .join('\n');
+    // The report is the Checker's last message in the run. Earlier ones are its questions to
+    // the Investigator, which can name the same paths.
+    const report =
+      messages
+        .filter((message) => message.taskId === run.id && message.authorId === state.agents.checker)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+        .at(-1)?.body ?? '';
     const reported = parseBrokenLines(report);
     const score = window === null ? null : scoreRun(window, reported);
     score?.caught.forEach((failure) => caught.add(failure.id));

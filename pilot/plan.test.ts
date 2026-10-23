@@ -48,9 +48,11 @@ test('parseBrokenLines reads the report format and ignores other mentions', () =
     'BROKEN: /api/products - status 500 - the database is likely down',
     '- **BROKEN:** `/api/search?q=lamp` - wrong results',
     '/api/health is fine, not broken',
-    'Note: BROKEN: is the format we use'
+    'Note: BROKEN: is the format we use',
+    'Broken: /api/version. Likely cause?',
+    'BROKEN: /api/inventory. negative stock'
   ].join('\n');
-  assert.deepEqual(parseBrokenLines(text), ['/api/products', '/api/search']);
+  assert.deepEqual(parseBrokenLines(text), ['/api/products', '/api/search', '/api/inventory']);
   assert.deepEqual(parseBrokenLines('ALL OK'), []);
 });
 

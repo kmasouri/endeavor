@@ -107,11 +107,12 @@ export function windowAt(at: Date, startedAt: Date, intervalMinutes: number): nu
 }
 
 // The Checker reports one line per broken endpoint: "BROKEN: <path> - <what is wrong>".
-// Returns the paths it named, without query strings.
+// Returns the paths it named, without query strings or trailing punctuation. Only the exact
+// uppercase "BROKEN:" counts, so a question like "Broken: /api/x?" isn't read as a report.
 export function parseBrokenLines(text: string): string[] {
   const paths = new Set<string>();
-  for (const match of text.matchAll(/^\s*[-*]?\s*\**BROKEN:?\**:?\s*`?(\/[^\s`?]*)/gim)) {
-    paths.add(match[1]);
+  for (const match of text.matchAll(/^\s*[-*]?\s*\**BROKEN:\**\s*`?(\/[^\s`?]*)/gm)) {
+    paths.add(match[1].replace(/[.,;:)]+$/, ''));
   }
   return [...paths];
 }
