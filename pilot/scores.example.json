@@ -1,0 +1,12 @@
+{
+  "note": "Copy this file to pilot/results/scores.json and score each brief after you read it. Keys are <topic>-<mode>. edits is none, minor, or major. humanMinutes is the time you spent steering and reviewing.",
+  "briefs": {
+    "1-team": {
+      "accepted": true,
+      "edits": "minor",
+      "uncitedOrWrongClaims": 0,
+      "humanMinutes": 4,
+      "notes": "Example. Replace with your own scores."
+    }
+  }
+}

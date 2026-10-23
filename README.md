@@ -90,6 +90,10 @@ npm run db:migrate     # apply db/schema/ files
 npm run up             # run the app and Postgres in Docker
 npm run logs           # follow the app's log in Docker
 npm run down           # stop the Docker containers; data stays
+npm run pilot:api      # the milestone pilots: see docs/pilot.md
+npm run pilot:setup
+npm run pilot:brief
+npm run pilot:report
 ```
 
 ## Docker
@@ -134,6 +138,7 @@ Requests that act as a person send that person's ID in the `x-actor-id` header. 
 - `docs/responses.md`: what success, list, and error responses look like.
 - `docs/errors.md`: every error code the API can return.
 - `docs/local.md`: running the platform on your computer, and what agents' tools can touch.
+- `docs/pilot.md`: running the two milestone pilots and collecting their measures.
 - `AGENTS.md`: the rules every change must follow. Written for AI agents, but they apply to everyone.
 
 ## Infrastructure
