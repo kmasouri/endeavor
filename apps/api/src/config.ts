@@ -45,6 +45,9 @@ const envSchema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
   OPENAI_BASE_URL: z.url().default('https://api.openai.com/v1'),
+  // CA-29 spike: 'ai-sdk' calls OpenAI and Anthropic through the Vercel AI SDK instead of the
+  // hand-written clients. Switch only when no task is open: saved turns differ in format.
+  MODEL_ADAPTER: z.enum(['native', 'ai-sdk']).default('native'),
   // The runner delivers messages and runs agents' work. Tests turn it off.
   RUNNER_ENABLED: z
     .enum(['true', 'false'])
@@ -118,6 +121,7 @@ export const config = {
   ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
   OPENAI_API_KEY: env.OPENAI_API_KEY,
   OPENAI_BASE_URL: env.OPENAI_BASE_URL,
+  MODEL_ADAPTER: env.MODEL_ADAPTER,
   // Never runs in tests, so they need no database.
   RUNNER_ENABLED: env.RUNNER_ENABLED && env.ENVIRONMENT !== 'test',
   RUNNER_INTERVAL_MS: env.RUNNER_INTERVAL_MS,

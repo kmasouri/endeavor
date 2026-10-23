@@ -50,30 +50,31 @@ The service listens on `http://localhost:3000` by default. Swagger UI is at `htt
 
 The app checks all of these at startup, in `apps/api/src/config.ts`.
 
-| Name                 | Default                     | Description                                                                                       |
-| -------------------- | --------------------------- | ------------------------------------------------------------------------------------------------- |
-| `ENVIRONMENT`        | `production`                | Where the app runs. `local` reads `.env`. Tests use `test`.                                       |
-| `HOST`               | `0.0.0.0`                   | Address the server listens on.                                                                    |
-| `PORT`               | `3000`                      | Port the server listens on.                                                                       |
-| `DATABASE_URL`       |                             | Full Postgres connection URL. If set, the other `DATABASE_*` are ignored.                         |
-| `DATABASE_HOST`      | `localhost`                 | Postgres host, if `DATABASE_URL` isn't set.                                                       |
-| `DATABASE_PORT`      | `5432`                      | Postgres port, if `DATABASE_URL` isn't set.                                                       |
-| `DATABASE_NAME`      | `bold_cedar_007`            | Database name, if `DATABASE_URL` isn't set.                                                       |
-| `DATABASE_USER`      | `bold_cedar_007`            | Username, if `DATABASE_URL` isn't set.                                                            |
-| `DATABASE_PASSWORD`  | `bold_cedar_007`            | Password, if `DATABASE_URL` isn't set.                                                            |
-| `LOGGER_LEVEL`       | `info`                      | How much to log. Tests use `silent`.                                                              |
-| `REQUEST_ID_HEADER`  | `x-request-id`              | Header that carries the request ID, in and out.                                                   |
-| `WEBHOOK_URL`        |                             | Where to send events like `item.created`. If not set, webhooks are off.                           |
-| `ANTHROPIC_API_KEY`  |                             | Turns on the `anthropic` provider for agents.                                                     |
-| `OPENAI_API_KEY`     |                             | Turns on the `openai` provider for agents.                                                        |
-| `OPENAI_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible API address.                                                                    |
-| `RUNNER_ENABLED`     | `true`                      | Run the runner, which delivers messages and runs agents' work. Always off in tests.               |
-| `RUNNER_INTERVAL_MS` | `2000`                      | How often the runner checks for work, in milliseconds.                                            |
-| `WORKSPACES_DIR`     | `workspaces`                | Folder for agents' files, one subfolder per task.                                                 |
-| `COMPLETION_CHECK`   | `false`                     | Check each result against its criteria with a separate model call before a task completes.        |
-| `MODEL_PRICES`       |                             | Model prices as JSON: `{"model":{"inputPerMillion":0.15,"outputPerMillion":0.6}}`, in US dollars. |
-| `TASK_BUDGET_USD`    | `1`                         | The most one task may spend, in US dollars, unless its agent's configuration sets `maxCostUsd`.   |
-| `CREDENTIALS_KEY`    |                             | 32 random bytes (base64 or hex) that encrypt connection credentials. Needed to save a credential. |
+| Name                 | Default                     | Description                                                                                          |
+| -------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `ENVIRONMENT`        | `production`                | Where the app runs. `local` reads `.env`. Tests use `test`.                                          |
+| `HOST`               | `0.0.0.0`                   | Address the server listens on.                                                                       |
+| `PORT`               | `3000`                      | Port the server listens on.                                                                          |
+| `DATABASE_URL`       |                             | Full Postgres connection URL. If set, the other `DATABASE_*` are ignored.                            |
+| `DATABASE_HOST`      | `localhost`                 | Postgres host, if `DATABASE_URL` isn't set.                                                          |
+| `DATABASE_PORT`      | `5432`                      | Postgres port, if `DATABASE_URL` isn't set.                                                          |
+| `DATABASE_NAME`      | `bold_cedar_007`            | Database name, if `DATABASE_URL` isn't set.                                                          |
+| `DATABASE_USER`      | `bold_cedar_007`            | Username, if `DATABASE_URL` isn't set.                                                               |
+| `DATABASE_PASSWORD`  | `bold_cedar_007`            | Password, if `DATABASE_URL` isn't set.                                                               |
+| `LOGGER_LEVEL`       | `info`                      | How much to log. Tests use `silent`.                                                                 |
+| `REQUEST_ID_HEADER`  | `x-request-id`              | Header that carries the request ID, in and out.                                                      |
+| `WEBHOOK_URL`        |                             | Where to send events like `item.created`. If not set, webhooks are off.                              |
+| `ANTHROPIC_API_KEY`  |                             | Turns on the `anthropic` provider for agents.                                                        |
+| `OPENAI_API_KEY`     |                             | Turns on the `openai` provider for agents.                                                           |
+| `OPENAI_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible API address.                                                                       |
+| `MODEL_ADAPTER`      | `native`                    | CA-29 spike: `ai-sdk` calls the providers through the Vercel AI SDK. Switch only with no open tasks. |
+| `RUNNER_ENABLED`     | `true`                      | Run the runner, which delivers messages and runs agents' work. Always off in tests.                  |
+| `RUNNER_INTERVAL_MS` | `2000`                      | How often the runner checks for work, in milliseconds.                                               |
+| `WORKSPACES_DIR`     | `workspaces`                | Folder for agents' files, one subfolder per task.                                                    |
+| `COMPLETION_CHECK`   | `false`                     | Check each result against its criteria with a separate model call before a task completes.           |
+| `MODEL_PRICES`       |                             | Model prices as JSON: `{"model":{"inputPerMillion":0.15,"outputPerMillion":0.6}}`, in US dollars.    |
+| `TASK_BUDGET_USD`    | `1`                         | The most one task may spend, in US dollars, unless its agent's configuration sets `maxCostUsd`.      |
+| `CREDENTIALS_KEY`    |                             | 32 random bytes (base64 or hex) that encrypt connection credentials. Needed to save a credential.    |
 
 ## Commands
 

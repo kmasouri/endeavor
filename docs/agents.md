@@ -59,6 +59,8 @@ These are examples, not built-in roles. Create them with `POST /agents`.
 | `openai`    | `OPENAI_API_KEY` is set    | Calls the Chat Completions API with `fetch`. `OPENAI_BASE_URL` can point at a compatible API.   |
 | `scripted`  | Always                     | A fake that answers from a script. For tests and demos; no model is called.                     |
 
+`MODEL_ADAPTER=ai-sdk` (CA-29 spike, off by default) calls `openai` and `anthropic` through the Vercel AI SDK instead of the clients above. Switch only when no task is open, because saved turns differ in format. The findings are on the CA-29 page in Notion.
+
 You can save an agent on a provider that isn't ready. Its `providerReady` is `false`, and its tasks can't run until the key is set.
 
 **Local execution doesn't mean local models.** The platform and its tools run on this computer, but every model call goes over the internet to the provider.
