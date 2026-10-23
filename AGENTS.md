@@ -31,13 +31,13 @@ If the code and Notion disagree on product behavior, Notion wins. Raise the conf
 Every change starts from a ticket in the Project Backlog and ends with the ticket updated. Follow these steps every time.
 
 1. **Pick a ticket.** Choose the highest-priority ticket whose `Blocked By` tickets are done, or that can go ahead on a recorded default (step 3). Skip any ticket with `Agent` set; someone else has it. Read the ticket and the PRD sections it covers.
-2. **Claim and start it.** Set `Agent` to who you are, set `Claimed At` to now, set `Status` to `In Progress`, and set `Branch`. Name the branch `ca-<ticket number>-<short-name>`, like `ca-7-persistence`. Then fetch the ticket again: if `Agent` now shows someone else, they claimed it first. Clear nothing of theirs, and pick another ticket. See "Working in parallel" below.
+2. **Claim and start it.** Set `Agent` to who you are, set `Claimed At` to now, set `Status` to `In Progress`, and set `Branch`. Name the branch `ca-<ticket number>-<short-name>`, like `ca-7-persistence`, and create it in its own worktree (see "Worktrees" below). Then fetch the ticket again: if `Agent` now shows someone else, they claimed it first. Clear nothing of theirs, and pick another ticket. See "Working in parallel" below.
 3. **Don't block on a human.** If you need a decision, add a row to Questions for Kayvan. Give the options, your recommendation, and the default you will use until it is answered. Link the row to the ticket and tick `Needs Input` on the ticket. Then keep working on that default. Pick a default that is easy to change later. Never pick one that is hard to undo, like deleting data or spending money. Before starting a ticket, check Questions for Kayvan for answers and apply them. Set an applied answer's `Status` to `Applied`.
 4. **Open a PR.** Use one PR per ticket, or several small PRs for a big ticket. Put the ticket ID and title in the PR title, like `CA-7: Persist tasks, messages, and agent context`. In the PR body, link the ticket, list which acceptance criteria the PR meets, and list any that are still open. `npm run check` must pass.
 5. **Review it.** Read the whole diff as a reviewer would: check correctness, the layer rules in this file, tests, and docs. Fix what you find, then post a short summary of the review on the PR.
 6. **Merge it.** Squash-merge once checks pass, then delete the branch. CI can take a few seconds to register on a new push, and `gh pr checks <n> --watch` reports "no checks reported" until it does. Wait until a check shows up and passes. Then merge.
 
-   Before you commit, check that you are on the ticket's branch (`git branch --show-current`), not `main`.
+   Before you commit, check that you are in the ticket's worktree and on its branch (`git branch --show-current`), not `main`.
 
 7. **Update the ticket.** Set `PR` to the PR link and write one line in `Last Update`. Add a `## Work log` entry to the ticket page with the date, the PR link, what was built, the decisions made and why, and what is left. Set `Status` to `Done` only when every acceptance criterion is met. If some are left, keep it `In Progress`, or set `Blocked` and give the reason. When you stop working on the ticket (done, blocked, or handing it off), clear `Agent` and `Claimed At`.
 8. **Keep Notion current.** If the design changed, update the Architecture page. If you found new work, add a ticket with acceptance criteria, `Priority`, `Scope`, and `Blocked By`.
@@ -53,7 +53,29 @@ Several agents can work at once. The `Agent` field on the backlog keeps them out
 - **Never work on a ticket someone else has claimed**, and never change their branch.
 - **Keep the claim fresh.** Update `Claimed At` and `Last Update` when you push or reach a new step.
 - **Stale claims.** A claim is stale when `Claimed At` is more than 24 hours old and its branch has had no new commits in that time. You may take over a stale claim. Say so in the ticket's work log, then claim it as usual. Continue from its branch rather than starting over.
+- **Your own worktree.** Every agent works in its own git worktree, never in the main checkout. See "Worktrees" below.
 - **Shared files.** Before you push, merge `main` into your branch so you pick up the other agent's work. Each agent numbers its own new `db/schema/` file. If two branches use the same number, the one that merges second renames its file to the next free number.
+
+### Worktrees
+
+Every agent works in its own [git worktree](https://git-scm.com/docs/git-worktree): a separate folder with its own branch, sharing one repo. Agents never switch branches in the main checkout, so one agent's work can't land on another's branch.
+
+- **The main checkout stays on `main`.** Use it only to pull and to add or remove worktrees. Never edit or commit there.
+- **One worktree per ticket.** Put worktrees next to the repo, in `../bold-cedar-007-worktrees/`, named after the branch. Don't put them inside the repo, because lint and tests would pick them up.
+
+  ```bash
+  git -C <main checkout> pull origin main
+  git -C <main checkout> worktree add ../bold-cedar-007-worktrees/ca-7-persistence -b ca-7-persistence main
+  cd ../bold-cedar-007-worktrees/ca-7-persistence
+  npm install
+  cp ../../bold-cedar-007/.env .env   # .env isn't in git
+  ```
+
+  To continue a branch that already exists, such as a stale claim you're taking over, leave out `-b`: `git worktree add <path> <branch>`.
+
+- **Work, test, and commit only inside your worktree.** Run every command from there.
+- **Shared on this computer:** the local Postgres and port 3000. Tests need neither. Only one worktree at a time should run `npm run dev` or `docker compose up`. `npm run db:migrate` is safe from any worktree.
+- **Clean up after merging.** From the main checkout, run `git worktree remove ../bold-cedar-007-worktrees/<branch>` and `git branch -D <branch>`, then pull `main`.
 
 Put design notes, diagrams, and decision records in Notion under the Project Hub, and link them from the ticket. Keep repo docs (`docs/`) about how the code works. If the PRD changes, update the affected tickets and the coverage page.
 
