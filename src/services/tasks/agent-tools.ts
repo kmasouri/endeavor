@@ -60,23 +60,26 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
   {
     name: AGENT_TOOLS.saveOutput,
     description:
-      'Attach an output or piece of evidence to your task, such as a document, a calculation, a source link, or a log.',
+      'Attach an output or piece of evidence to your task, such as a document, a calculation, a source link, a log, or a file from your workspace. People can inspect it, and the completion check reads it.',
     inputSchema: {
       type: 'object',
       properties: {
         title: { type: 'string' },
-        content: { type: 'string' },
+        content: { type: 'string', description: 'The text, unless you give a path.' },
         kind: { type: 'string', enum: ['text', 'link', 'data', 'log'] },
-        uri: { type: 'string', description: 'A link, for kind "link".' }
+        uri: { type: 'string', description: 'A link, for kind "link".' },
+        path: {
+          type: 'string',
+          description: 'A file in your workspace to attach instead of content, like report.md.'
+        }
       },
-      required: ['title', 'content'],
       additionalProperties: false
     }
   },
   {
     name: AGENT_TOOLS.completeTask,
     description:
-      'Finish your task with its result. The result is saved as an output and posted as your answer to whoever asked. Only call this when the result meets the completion criteria; say how in criteria_check.',
+      'Finish your task with its result. A separate check reads the result and your outputs against the completion criteria first; if it finds gaps, you get them back to fix. Then the result is saved and posted to whoever asked. Say how it meets each criterion in criteria_check.',
     inputSchema: {
       type: 'object',
       properties: {

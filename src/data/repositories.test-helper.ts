@@ -32,6 +32,8 @@ export function mockTaskRepository(): jest.Mocked<TaskRepository> {
     addOutput: jest.fn(),
     listOutputs: jest.fn().mockResolvedValue([]),
     countOutputs: jest.fn().mockResolvedValue(0),
+    listConversationOutputs: jest.fn().mockResolvedValue([]),
+    countConversationOutputs: jest.fn().mockResolvedValue(0),
     claimRunnable: jest.fn().mockResolvedValue([]),
     releaseLease: jest.fn(),
     renewLease: jest.fn().mockResolvedValue(true),

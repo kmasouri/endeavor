@@ -41,6 +41,20 @@ Agents act only through these tools. The runner carries out each call:
 | `read_file`      | Read a text file from the workspace.                                                           |
 | `write_file`     | Write a text file in the workspace. Paths can't leave it. See `docs/local.md`.                 |
 
+## Outputs, evidence, and finishing
+
+Agents attach outputs with `save_output`: text, links, data, logs, or a file from their workspace (`path`). A file is copied into the output, so it stays inspectable even if the workspace changes. `GET /tasks/:taskId/outputs` lists one task's outputs, and `GET /conversations/:conversationId/outputs` lists every task's outputs in a conversation, newest first.
+
+An agent's word isn't enough to finish. When it calls `complete_task`:
+
+1. It must say the criteria are met, and explain how (`criteria_check`).
+2. **The completion check.** A separate call to the agent's model, with no tools, reads the request, the criteria, the outputs, and the result. It must answer `MET:`. Anything else, even an unclear answer, counts as not met, and the gaps go back to the agent as a tool error to fix. After 2 failed checks the task is blocked for a person, who is told why.
+3. If the task needs review, a person approves it or sends it back. Otherwise it completes, and the result is saved as an output and posted.
+
+Each check is saved as a `completion.checked` event with its verdict. A replay after a crash reuses the verdict instead of paying for another check. The check's tokens count toward the task's `maxTokens`. It's skipped for the `scripted` test provider, and `COMPLETION_CHECK=false` turns it off.
+
+To ask for a revision of finished work, restart it with a reason (`POST /tasks/:taskId/restart` with `reason`). The new run's brief gets the requested changes and the previous result, and the previous run stays as it was.
+
 Every directed request gets an answer in the conversation. That is the result from `complete_task`, the reason from `report_blocked`, or a message from the runner when the platform itself can't go on, such as a missing API key or a model that declined.
 
 ## The runner

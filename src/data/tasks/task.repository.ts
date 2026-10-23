@@ -99,6 +99,12 @@ export interface TaskRepository {
   addOutput(taskId: string, input: CreateTaskOutputInput): Promise<TaskOutput>;
   listOutputs(taskId: string): Promise<TaskOutput[]>;
   countOutputs(taskId: string): Promise<number>;
+  // Outputs of every task in a conversation, newest first.
+  listConversationOutputs(
+    conversationId: string,
+    options: { limit: number; offset: number }
+  ): Promise<TaskOutput[]>;
+  countConversationOutputs(conversationId: string): Promise<number>;
 
   // Leases up to limit working, unpaused tasks that no live worker holds. A lease that runs out,
   // such as after a crash, makes the task claimable again.

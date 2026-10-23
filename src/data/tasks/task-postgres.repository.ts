@@ -345,6 +345,35 @@ export class TaskPostgresRepository implements TaskRepository {
     return result.rows.map(toTaskOutput);
   }
 
+  async listConversationOutputs(
+    conversationId: string,
+    options: { limit: number; offset: number }
+  ): Promise<TaskOutput[]> {
+    const result = await this.db.query<TaskOutputRow>(
+      `SELECT o.*
+       FROM bold_cedar_007.task_outputs o
+       JOIN bold_cedar_007.tasks t ON t.id = o.task_id
+       WHERE t.conversation_id = $1
+       ORDER BY o.created_at DESC, o.id
+       LIMIT $2 OFFSET $3`,
+      [conversationId, options.limit, options.offset]
+    );
+
+    return result.rows.map(toTaskOutput);
+  }
+
+  async countConversationOutputs(conversationId: string): Promise<number> {
+    const result = await this.db.query<{ total: number }>(
+      `SELECT count(*)::int AS total
+       FROM bold_cedar_007.task_outputs o
+       JOIN bold_cedar_007.tasks t ON t.id = o.task_id
+       WHERE t.conversation_id = $1`,
+      [conversationId]
+    );
+
+    return result.rows[0]?.total ?? 0;
+  }
+
   async countOutputs(taskId: string): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total

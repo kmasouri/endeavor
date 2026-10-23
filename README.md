@@ -69,6 +69,7 @@ The app checks all of these at startup, in `src/config.ts`.
 | `RUNNER_ENABLED`     | `true`                      | Run the runner, which delivers messages and runs agents' work. Always off in tests.               |
 | `RUNNER_INTERVAL_MS` | `2000`                      | How often the runner checks for work, in milliseconds.                                            |
 | `WORKSPACES_DIR`     | `workspaces`                | Folder for agents' files, one subfolder per task.                                                 |
+| `COMPLETION_CHECK`   | `true`                      | Check each result against its criteria with a separate model call before a task completes.        |
 | `CREDENTIALS_KEY`    |                             | 32 random bytes (base64 or hex) that encrypt connection credentials. Needed to save a credential. |
 
 ## Commands
@@ -115,7 +116,7 @@ Requests that act as a person send that person's ID in the `x-actor-id` header. 
 - `POST /conversations/:conversationId/documents`, `GET .../documents`, `DELETE .../documents/:documentId`
 - `GET /agents/:agentId/notes`, `PATCH /agents/:agentId/notes/:noteId`, `DELETE /agents/:agentId/notes/:noteId`
 - `POST /tasks`, `GET /tasks?state=&ownerAgentId=&conversationId=`
-- `GET /tasks/:taskId`, `GET /tasks/:taskId/events`, `GET /tasks/:taskId/outputs`
+- `GET /tasks/:taskId`, `GET /tasks/:taskId/events`, `GET /tasks/:taskId/outputs`, `GET /conversations/:conversationId/outputs`
 - `POST /tasks/:taskId/pause`, `/resume`, `/cancel`, `/restart`, `/review`, `/version`
 - `POST /responsibilities`, `GET /responsibilities`, `PATCH /responsibilities/:id`, `/pause`, `/resume`, `/cancel`, `GET|POST /responsibilities/:id/runs`
 - `GET /approvals?status=pending`, `GET /approvals/:approvalId`, `POST /approvals/:approvalId/approve`, `/reject`

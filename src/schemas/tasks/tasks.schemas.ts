@@ -48,6 +48,13 @@ export const reviewTaskBodySchema = z.strictObject({
   notes: z.string().trim().min(1).optional()
 });
 
+export const conversationOutputsParamsSchema = z.object({ conversationId: z.uuid() });
+
+export const listConversationOutputsQuerySchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  offset: z.coerce.number().int().min(0).default(0)
+});
+
 export const approvalParamsSchema = z.object({ approvalId: z.uuid() });
 
 export const listApprovalsQuerySchema = z.strictObject({
@@ -56,6 +63,8 @@ export const listApprovalsQuerySchema = z.strictObject({
   offset: z.coerce.number().int().min(0).default(0)
 });
 
+export type ConversationOutputsParams = z.infer<typeof conversationOutputsParamsSchema>;
+export type ListConversationOutputsQuery = z.infer<typeof listConversationOutputsQuerySchema>;
 export type ApprovalParams = z.infer<typeof approvalParamsSchema>;
 export type ListApprovalsQuery = z.infer<typeof listApprovalsQuerySchema>;
 export type TaskParams = z.infer<typeof taskParamsSchema>;

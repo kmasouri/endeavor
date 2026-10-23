@@ -67,6 +67,7 @@ export function TaskPage({ taskId }: { taskId: string }) {
           )}
         </div>
 
+        <OpenConcerns task={t} events={events.data ?? []} />
         <ReviewPanel task={t} onDone={reload} />
 
         <div className="panel">
@@ -176,6 +177,8 @@ export function TaskPage({ taskId }: { taskId: string }) {
 function EventDetail({ event }: { event: TaskEvent }) {
   const data = event.data;
   const text =
+    (event.type === 'completion.checked' &&
+      `${data.met ? 'Met' : 'Not met'}: ${String(data.summary ?? '')}`) ||
     (typeof data.reason === 'string' && data.reason) ||
     (typeof data.text === 'string' && data.text) ||
     (Array.isArray(data.toolCalls) &&
@@ -191,6 +194,25 @@ function EventDetail({ event }: { event: TaskEvent }) {
     (typeof data.to === 'string' && `→ ${data.to}`) ||
     '';
   return text ? <div className="muted small">{text}</div> : null;
+}
+
+// Gaps the completion check found that haven't been fixed yet, so people see what's unresolved.
+function OpenConcerns({ task, events }: { task: TaskDetails; events: TaskEvent[] }) {
+  const checks = events.filter((event) => event.type === 'completion.checked');
+  const last = checks[checks.length - 1];
+  if (!last || last.data.met === true || task.state === 'completed') {
+    return null;
+  }
+  return (
+    <div className="panel">
+      <h2>Open concerns</h2>
+      <Hint>
+        The completion check found gaps in the agent's last result. The agent is told; you can add
+        guidance in the conversation.
+      </Hint>
+      <p className="body error">{String(last.data.summary ?? '')}</p>
+    </div>
+  );
 }
 
 // A result that needs review waits for a person to approve it or send it back.
@@ -258,7 +280,7 @@ function Controls(props: { task: TaskDetails; latestVersionId?: string; onDone: 
       <input
         value={reason}
         onChange={(e) => setReason(e.target.value)}
-        placeholder="Reason (optional)"
+        placeholder={finished ? 'What should change? (for Ask for changes)' : 'Reason (optional)'}
       />
       <div className="row wrap">
         {!finished && !t.pausedAt && (
@@ -277,7 +299,16 @@ function Controls(props: { task: TaskDetails; latestVersionId?: string; onDone: 
           </button>
         )}
         {finished && (
-          <button disabled={action.busy} onClick={() => act('restart')}>
+          <button
+            disabled={action.busy || !reason.trim()}
+            title="Write what to change in the box above"
+            onClick={() => act('restart')}
+          >
+            Ask for changes
+          </button>
+        )}
+        {finished && (
+          <button className="secondary" disabled={action.busy} onClick={() => act('restart')}>
             Restart as a new run
           </button>
         )}

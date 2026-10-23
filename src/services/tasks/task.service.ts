@@ -129,6 +129,28 @@ export class TaskService {
     return this.taskRepository.listOutputs(taskId);
   }
 
+  // Everything agents attached in one conversation, so people can inspect results and evidence
+  // without opening each task.
+  async listConversationOutputs(
+    actorId: string,
+    conversationId: string,
+    input: { limit: number; offset: number }
+  ): Promise<{ outputs: TaskOutput[]; total: number }> {
+    const human = requireHuman(await this.humanRepository.getById(actorId));
+    const member = await this.conversationRepository.getMember(conversationId, {
+      type: 'human',
+      id: human.id
+    });
+    if (!member && !hasFullAccess(human)) {
+      throw new AppError('conversationNotFound', `Conversation ${conversationId} was not found`);
+    }
+    const [outputs, total] = await Promise.all([
+      this.taskRepository.listConversationOutputs(conversationId, input),
+      this.taskRepository.countConversationOutputs(conversationId)
+    ]);
+    return { outputs, total };
+  }
+
   // Human actions
 
   async pauseTask(actorId: string, taskId: string, reason?: string): Promise<Task> {
@@ -185,6 +207,19 @@ export class TaskService {
   // Restarting finished work creates a new linked task, so the old outcome stays as it was.
   // The new task uses the agent's current configuration. Each task can be restarted once;
   // to run it again, restart the newest one. Asking twice returns the same new task.
+  // A restart with a reason is a revision request: the new run sees what was asked to change
+  // and the previous result, while the previous run stays as it was.
+  private async revisionBrief(previous: Task, reason: string): Promise<string> {
+    const result = (await this.taskRepository.listOutputs(previous.id))
+      .filter((output) => output.title === 'Result')
+      .pop();
+    return [
+      previous.brief,
+      `Changes requested: ${reason}`,
+      ...(result?.content ? [`Previous result:\n${result.content.slice(0, 10_000)}`] : [])
+    ].join('\n\n');
+  }
+
   async restartTask(
     actorId: string,
     taskId: string,
@@ -214,7 +249,7 @@ export class TaskService {
       ownerAgentId: agent.id,
       agentVersionId: agent.currentVersionId as string,
       title: previous.title,
-      brief: previous.brief,
+      brief: reason ? await this.revisionBrief(previous, reason) : previous.brief,
       completionCriteria: previous.completionCriteria,
       reviewRequired: previous.reviewRequired,
       requestedByType: 'human',

@@ -554,6 +554,30 @@ describe('TaskService', () => {
       });
     });
 
+    it('turns a restart with a reason into a revision request with the previous result', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed' }));
+      tasks.listOutputs.mockResolvedValue([
+        {
+          id: 'o1',
+          taskId: TASK_ID,
+          kind: 'text',
+          title: 'Result',
+          content: 'First draft',
+          uri: null,
+          metadata: {},
+          createdAt: new Date()
+        }
+      ]);
+      tasks.create.mockResolvedValue({ task: makeTask({ id: NEW_TASK_ID }), created: true });
+
+      await service.restartTask(HUMAN_ID, TASK_ID, 'Add sources for each claim');
+
+      const brief = tasks.create.mock.calls[0][0].brief;
+      expect(brief).toContain('Changes requested: Add sources for each claim');
+      expect(brief).toContain('Previous result:\nFirst draft');
+    });
+
     it('returns the earlier restart without checking the agent again', async () => {
       const { service, tasks, agents } = setup();
       tasks.getById.mockResolvedValue(makeTask({ state: 'completed' }));
@@ -791,5 +815,23 @@ describe('TaskService', () => {
 
     expect(task.state).toBe('blocked');
     expect(task.stateReason).toBe('Needs access to the billing docs');
+  });
+
+  describe('listConversationOutputs', () => {
+    it('lists outputs from every task in the conversation', async () => {
+      const { service, tasks } = setup();
+      tasks.countConversationOutputs.mockResolvedValue(2);
+
+      const { total } = await service.listConversationOutputs(HUMAN_ID, 'conv-1', {
+        limit: 10,
+        offset: 0
+      });
+
+      expect(total).toBe(2);
+      expect(tasks.listConversationOutputs).toHaveBeenCalledWith('conv-1', {
+        limit: 10,
+        offset: 0
+      });
+    });
   });
 });
