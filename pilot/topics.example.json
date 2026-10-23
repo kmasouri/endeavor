@@ -1,0 +1,18 @@
+{
+  "note": "Copy this file to pilot/topics.json and replace the five topics with your own. Documents are optional: each entry has a title and a file (a text or Markdown file), and is attached to the brief's conversation.",
+  "topics": [
+    {
+      "topic": "Replace with topic 1, for example: how heat pumps work in cold climates",
+      "audience": "a curious non-expert",
+      "documents": []
+    },
+    { "topic": "Replace with topic 2", "audience": "a curious non-expert", "documents": [] },
+    { "topic": "Replace with topic 3", "audience": "a curious non-expert", "documents": [] },
+    { "topic": "Replace with topic 4", "audience": "a curious non-expert", "documents": [] },
+    {
+      "topic": "Replace with topic 5",
+      "audience": "a curious non-expert",
+      "documents": []
+    }
+  ]
+}

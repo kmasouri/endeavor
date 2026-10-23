@@ -44,6 +44,23 @@ services:
     volumes:
       - workspaces:/app/workspaces
 
+  # The test API for pilot 2 (docs/pilot.md). Only starts with `npm run pilot:api`.
+  pilot-api:
+    image: node:26-alpine
+    profiles: ['pilot']
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      PILOT_API_HOST: 0.0.0.0
+      PILOT_API_STATE_FILE: /data/mock-api-state.json
+    command: ['node', 'pilot/mock-api.ts']
+    ports:
+      - '127.0.0.1:4100:4100'
+    volumes:
+      - ./pilot:/app/pilot:ro
+      - pilot-data:/data
+
 volumes:
+  pilot-data:
   postgres-data:
   workspaces:

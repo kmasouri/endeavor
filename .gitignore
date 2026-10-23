@@ -16,3 +16,7 @@ coverage/
 .vscode
 .idea
 .DS_Store
+
+# Pilot runs (docs/pilot.md)
+/pilot/results/
+/pilot/topics.json

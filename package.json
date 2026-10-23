@@ -10,19 +10,23 @@
     "build": "tsc -p tsconfig.build.json && npm run build:web",
     "build:web": "vite build --config web/vite.config.mts",
     "start": "node dist/index.js",
-    "test": "ENVIRONMENT=test LOGGER_LEVEL=silent NODE_OPTIONS=--experimental-vm-modules jest",
+    "test": "ENVIRONMENT=test LOGGER_LEVEL=silent NODE_OPTIONS=--experimental-vm-modules jest && node --test 'pilot/*.test.ts'",
     "test:coverage": "ENVIRONMENT=test LOGGER_LEVEL=silent NODE_OPTIONS=--experimental-vm-modules jest --coverage",
     "test:watch": "ENVIRONMENT=test LOGGER_LEVEL=silent NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "lint": "eslint \"src/**/*.ts\"",
     "format": "prettier --write \"**/*.{ts,json,md,yml,yaml}\"",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json && tsc -p pilot/tsconfig.json",
     "check": "npm run lint && npm run typecheck && npm run build && npm test",
     "up": "docker compose up -d --build",
     "down": "docker compose down",
     "logs": "docker compose logs -f app",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
-    "db:migrate": "ENVIRONMENT=local tsx src/migrate.ts"
+    "db:migrate": "ENVIRONMENT=local tsx src/migrate.ts",
+    "pilot:api": "docker compose --profile pilot up -d pilot-api",
+    "pilot:setup": "node --env-file-if-exists=.env pilot/setup.ts",
+    "pilot:brief": "node pilot/brief.ts",
+    "pilot:report": "node pilot/report.ts"
   },
   "engines": {
     "node": ">=26"

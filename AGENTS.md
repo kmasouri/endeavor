@@ -13,6 +13,7 @@ This file says what to do and what not to do. For how things work and why, read:
 - `docs/notes.md`: context, saved notes, and knowledge sources.
 - `docs/scheduling.md`: recurring responsibilities, missed runs, and event starts.
 - `docs/local.md`: running everything on one computer with Docker, workspaces, and tool isolation.
+- `docs/pilot.md`: the milestone pilots: setup, runbook, and report (scripts in `pilot/`).
 
 ## Source of truth
 
