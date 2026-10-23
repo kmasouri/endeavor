@@ -30,8 +30,8 @@ If the code and Notion disagree on product behavior, Notion wins. Raise the conf
 
 Every change starts from a ticket in the Project Backlog and ends with the ticket updated. Follow these steps every time.
 
-1. **Pick a ticket.** Choose the highest-priority ticket whose `Blocked By` tickets are done, or that can go ahead on a recorded default (step 3). Read the ticket and the PRD sections it covers.
-2. **Start it.** Set `Status` to `In Progress`, and set `Branch`. Name the branch `ca-<ticket number>-<short-name>`, like `ca-7-persistence`.
+1. **Pick a ticket.** Choose the highest-priority ticket whose `Blocked By` tickets are done, or that can go ahead on a recorded default (step 3). Skip any ticket with `Agent` set; someone else has it. Read the ticket and the PRD sections it covers.
+2. **Claim and start it.** Set `Agent` to who you are, set `Claimed At` to now, set `Status` to `In Progress`, and set `Branch`. Name the branch `ca-<ticket number>-<short-name>`, like `ca-7-persistence`. Then fetch the ticket again: if `Agent` now shows someone else, they claimed it first. Clear nothing of theirs, and pick another ticket. See "Working in parallel" below.
 3. **Don't block on a human.** If you need a decision, add a row to Questions for Kayvan. Give the options, your recommendation, and the default you will use until it is answered. Link the row to the ticket and tick `Needs Input` on the ticket. Then keep working on that default. Pick a default that is easy to change later. Never pick one that is hard to undo, like deleting data or spending money. Before starting a ticket, check Questions for Kayvan for answers and apply them. Set an applied answer's `Status` to `Applied`.
 4. **Open a PR.** Use one PR per ticket, or several small PRs for a big ticket. Put the ticket ID and title in the PR title, like `CA-7: Persist tasks, messages, and agent context`. In the PR body, link the ticket, list which acceptance criteria the PR meets, and list any that are still open. `npm run check` must pass.
 5. **Review it.** Read the whole diff as a reviewer would: check correctness, the layer rules in this file, tests, and docs. Fix what you find, then post a short summary of the review on the PR.
@@ -39,10 +39,21 @@ Every change starts from a ticket in the Project Backlog and ends with the ticke
 
    Before you commit, check that you are on the ticket's branch (`git branch --show-current`), not `main`.
 
-7. **Update the ticket.** Set `PR` to the PR link and write one line in `Last Update`. Add a `## Work log` entry to the ticket page with the date, the PR link, what was built, the decisions made and why, and what is left. Set `Status` to `Done` only when every acceptance criterion is met. If some are left, keep it `In Progress`, or set `Blocked` and give the reason.
+7. **Update the ticket.** Set `PR` to the PR link and write one line in `Last Update`. Add a `## Work log` entry to the ticket page with the date, the PR link, what was built, the decisions made and why, and what is left. Set `Status` to `Done` only when every acceptance criterion is met. If some are left, keep it `In Progress`, or set `Blocked` and give the reason. When you stop working on the ticket (done, blocked, or handing it off), clear `Agent` and `Claimed At`.
 8. **Keep Notion current.** If the design changed, update the Architecture page. If you found new work, add a ticket with acceptance criteria, `Priority`, `Scope`, and `Blocked By`.
 
-Backlog fields: `Ticket ID` (CA-n), `Status` (Backlog, Blocked, In Progress, In Review, Done), `Priority`, `Scope`, `Blocked By` and `Blocks`, `Branch`, `PR`, `Needs Input`, `Last Update`, and `Questions`, which links to rows in Questions for Kayvan.
+Backlog fields: `Ticket ID` (CA-n), `Status` (Backlog, Blocked, In Progress, In Review, Done), `Agent` and `Claimed At` (who is working on it now, and since when), `Priority`, `Scope`, `Blocked By` and `Blocks`, `Branch`, `PR`, `Needs Input`, `Last Update`, and `Questions`, which links to rows in Questions for Kayvan.
+
+### Working in parallel
+
+Several agents can work at once. The `Agent` field on the backlog keeps them out of each other's way.
+
+- **Who you are.** A Claude Code session uses its session ID (`session_...`, from the `get_session` tool). A person uses their name.
+- **One ticket at a time.** Hold at most one claimed ticket. Finish, block, or hand it off, and clear `Agent`, before you claim another.
+- **Never work on a ticket someone else has claimed**, and never change their branch.
+- **Keep the claim fresh.** Update `Claimed At` and `Last Update` when you push or reach a new step.
+- **Stale claims.** A claim is stale when `Claimed At` is more than 24 hours old and its branch has had no new commits in that time. You may take over a stale claim. Say so in the ticket's work log, then claim it as usual. Continue from its branch rather than starting over.
+- **Shared files.** Before you push, merge `main` into your branch so you pick up the other agent's work. Each agent numbers its own new `db/schema/` file. If two branches use the same number, the one that merges second renames its file to the next free number.
 
 Put design notes, diagrams, and decision records in Notion under the Project Hub, and link them from the ticket. Keep repo docs (`docs/`) about how the code works. If the PRD changes, update the affected tickets and the coverage page.
 
