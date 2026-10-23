@@ -90,7 +90,11 @@ const runnerPlugin: FastifyPluginAsync = async (fastify) => {
     buildModelClients(config),
     new TaskLogger(fastify.log),
     new TaskRunnerLogger(fastify.log),
-    { ...DEFAULT_RUNNER_OPTIONS, workerId: `${hostname()}:${process.pid}` }
+    {
+      ...DEFAULT_RUNNER_OPTIONS,
+      workerId: `${hostname()}:${process.pid}`,
+      completionCheck: config.COMPLETION_CHECK
+    }
   );
   fastify.decorate('taskRunnerService', runner);
 

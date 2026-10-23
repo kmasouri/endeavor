@@ -5,6 +5,7 @@ import {
   DirectoryEntry,
   Human,
   Task,
+  TaskOutput,
   Member,
   Message,
   ParticipantRef
@@ -71,6 +72,9 @@ export function ConversationPage({ conversationId, me }: { conversationId: strin
       <aside>
         <div className="panel">
           <ConversationTasks conversationId={conversationId} />
+        </div>
+        <div className="panel">
+          <ConversationOutputs conversationId={conversationId} />
         </div>
         <div className="panel">
           <KnowledgeSources conversationId={conversationId} />
@@ -360,6 +364,42 @@ function ConversationTasks({ conversationId }: { conversationId: string }) {
       {open.length === 0 && (tasks.data?.data ?? []).length > 0 && (
         <p className="muted small">Nothing open. Showing the latest.</p>
       )}
+    </>
+  );
+}
+
+// Results and evidence from every task here, newest first.
+function ConversationOutputs({ conversationId }: { conversationId: string }) {
+  const outputs = useLoad(
+    () =>
+      api.list<TaskOutput & { taskId: string }>(
+        `/conversations/${conversationId}/outputs?limit=20`
+      ),
+    [conversationId],
+    5000
+  );
+  const list = outputs.data?.data ?? [];
+  return (
+    <>
+      <h2>Outputs</h2>
+      <Hint>
+        Results and evidence agents attached here. Ask in the thread to question or revise one.
+      </Hint>
+      {list.length === 0 && <p className="muted">None yet.</p>}
+      <ul className="list small">
+        {list.map((output) => (
+          <li key={output.id}>
+            <details>
+              <summary>
+                {output.title} <span className="badge">{output.kind}</span>
+              </summary>
+              {output.uri && <div className="muted">{output.uri}</div>}
+              {output.content && <pre>{output.content}</pre>}
+              <a href={`#/tasks/${output.taskId}`}>Open the task</a>
+            </details>
+          </li>
+        ))}
+      </ul>
     </>
   );
 }

@@ -73,6 +73,9 @@ export interface TaskRunnerOptions {
   maxTurnsPerTask: number;
   maxTokens: number;
   historyLimit: number;
+  // Before a task completes, a separate model call checks the result against its criteria, so
+  // the agent's own word isn't enough. Skipped for the scripted test provider.
+  completionCheck: boolean;
 }
 
 export const DEFAULT_RUNNER_OPTIONS: Omit<TaskRunnerOptions, 'workerId'> = {
@@ -81,10 +84,19 @@ export const DEFAULT_RUNNER_OPTIONS: Omit<TaskRunnerOptions, 'workerId'> = {
   turnsPerClaim: 8,
   maxTurnsPerTask: 40,
   maxTokens: 16_000,
-  historyLimit: 30
+  historyLimit: 30,
+  completionCheck: true
 };
 
+// After this many failed completion checks, the task is blocked for a person instead of
+// letting the agent keep trying.
+const MAX_COMPLETION_REJECTIONS = 2;
+
 const MAX_MODEL_FAILURES = 3;
+
+const COMPLETION_CHECK_PROMPT = `You check whether a task's result meets its completion criteria. You did not do the work, and you don't have to be kind. Judge only from the request, the criteria, the outputs, and the result below.
+
+Reply with one line. Start with "MET:" if every criterion is met, or "NOT MET:" if any is not. Then say briefly why. For NOT MET, name each unmet criterion and what is missing.`;
 const MAX_DELIVERY_ATTEMPTS = 5;
 const DELIVERY_LEASE_MS = 60_000;
 // How many agent-to-agent requests can chain before the runner stops starting new tasks. This
@@ -106,6 +118,7 @@ const EVENTS = {
   modelFailed: 'model.failed',
   messageReceived: 'message.received',
   nudge: 'runner.nudge',
+  completionChecked: 'completion.checked',
   participantSuggested: 'participant.suggested',
   connectionCall: 'connection.called',
   connectionDenied: 'connection.denied',
@@ -613,6 +626,21 @@ export class TaskRunnerService {
       }
 
       case AGENT_TOOLS.saveOutput: {
+        // A file from the workspace is copied into the output, so it stays inspectable even if
+        // the workspace changes later.
+        const path = optionalString(input, 'path');
+        if (path) {
+          const file = await this.workspaceClient.read(task.id, path);
+          const output = await this.saveOutputOnce(task, agentActor, call.id, {
+            title: optionalString(input, 'title') ?? path,
+            content: file.truncated
+              ? `${file.content}\n(Cut off: the file is ${file.bytes} bytes.)`
+              : file.content,
+            kind: 'file',
+            uri: `workspace:${path}`
+          });
+          return `Saved ${path} as output ${output}.`;
+        }
         const output = await this.saveOutputOnce(task, agentActor, call.id, {
           title: requireString(input, 'title'),
           content: requireString(input, 'content'),
@@ -633,6 +661,27 @@ export class TaskRunnerService {
             'taskCompletionRejected',
             `You said the criteria are not met: ${check.summary}. Keep working, ask for help, or report blocked.`
           );
+        }
+        const verdict = await this.checkCompletion(task, call.id, result);
+        if (verdict && !verdict.met) {
+          if (verdict.failures >= MAX_COMPLETION_REJECTIONS) {
+            const reason = `The result failed the completion check ${verdict.failures} times. Last gaps: ${verdict.summary}`;
+            await this.lifecycle.blockTask(task.id, SYSTEM, reason);
+            await this.answerRequester(
+              task,
+              agent,
+              `${call.id}:answer`,
+              `I couldn't get my result to meet the criteria, so a person needs to look. ${verdict.summary}`
+            );
+            return { content: `Task blocked: ${reason}`, stop: true };
+          }
+          throw new AppError(
+            'taskCompletionRejected',
+            `An independent check says the result doesn't meet the criteria yet: ${verdict.summary} Fix this, then call complete_task again.`
+          );
+        }
+        if (verdict) {
+          check.summary = `${check.summary}\nIndependent check: ${verdict.summary}`;
         }
         await this.saveOutputOnce(task, agentActor, call.id, {
           title: 'Result',
@@ -1110,6 +1159,71 @@ export class TaskRunnerService {
     });
   }
 
+  // Asks the agent's model, in a separate call with no tools, whether the result meets the
+  // task's criteria. The verdict is saved with the tool call, so a replay after a crash reuses
+  // it. Returns null when the check is off or the provider is the scripted test fake.
+  private async checkCompletion(
+    task: Task,
+    callId: string,
+    result: string
+  ): Promise<{ met: boolean; summary: string; failures: number } | null> {
+    if (!this.options.completionCheck) {
+      return null;
+    }
+    const version = await this.agentRepository.getVersion(task.agentVersionId);
+    const client = version ? this.modelClients[version.provider] : undefined;
+    if (!version || !client || version.provider === 'scripted') {
+      return null;
+    }
+    const events = await this.loadEvents(task.id);
+    const checks = events.filter((event) => event.type === EVENTS.completionChecked);
+    const failuresBefore = checks.filter((event) => event.data.met === false).length;
+    const earlier = checks.find((event) => event.data.callId === callId);
+    if (earlier) {
+      const met = earlier.data.met === true;
+      return {
+        met,
+        summary: String(earlier.data.summary ?? ''),
+        failures: failuresBefore
+      };
+    }
+
+    const outputs = await this.taskRepository.listOutputs(task.id);
+    const evidence = outputs.length
+      ? outputs
+          .map(
+            (o) =>
+              `- ${o.title} (${o.kind})${o.uri ? ` ${o.uri}` : ''}: ${(o.content ?? '').slice(0, 2000)}`
+          )
+          .join('\n')
+      : '(none)';
+    const reply = await client.complete({
+      model: version.model,
+      system: COMPLETION_CHECK_PROMPT,
+      transcript: [
+        {
+          role: 'user',
+          text: `Request:\n${task.brief}\n\nCompletion criteria:\n${task.completionCriteria}\n\nOutputs and evidence:\n${evidence}\n\nResult:\n${result.slice(0, 20_000)}`
+        }
+      ],
+      tools: [],
+      maxTokens: 1000
+    });
+    const text = reply.text.trim();
+    // Anything other than a clear "MET:" counts as not met, so a confused check never passes.
+    const met = /^MET\b/i.test(text);
+    const summary =
+      text.replace(/^(NOT MET|MET)\s*:?\s*/i, '').slice(0, 1000) || 'No reason given.';
+    await this.taskRepository.addEvent(task.id, EVENTS.completionChecked, SYSTEM, {
+      callId,
+      met,
+      summary,
+      usage: reply.usage
+    });
+    this.runnerLogger.onCompletionChecked(task.id, met);
+    return { met, summary, failures: failuresBefore + (met ? 0 : 1) };
+  }
+
   private async saveOutputOnce(
     task: Task,
     actor: Actor,
@@ -1117,7 +1231,7 @@ export class TaskRunnerService {
     input: {
       title: string;
       content: string;
-      kind: 'text' | 'link' | 'data' | 'log';
+      kind: 'text' | 'link' | 'data' | 'log' | 'file';
       uri: string | null;
     }
   ): Promise<string> {
@@ -1485,7 +1599,7 @@ export function budgetExceeded(
 
   if (version.limits.maxTokens !== undefined) {
     const tokens = events
-      .filter((event) => event.type === EVENTS.modelTurn)
+      .filter((event) => event.type === EVENTS.modelTurn || event.type === EVENTS.completionChecked)
       .reduce((sum, event) => {
         const usage = event.data.usage as
           { inputTokens?: number; outputTokens?: number } | undefined;

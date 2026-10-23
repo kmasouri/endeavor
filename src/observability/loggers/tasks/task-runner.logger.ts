@@ -64,6 +64,13 @@ export class TaskRunnerLogger {
     );
   }
 
+  onCompletionChecked(taskId: string, met: boolean): void {
+    currentLogger(this.logger).info(
+      { event: 'runner.completion.checked', taskId, met },
+      met ? 'completion check passed' : 'completion check found gaps'
+    );
+  }
+
   onScheduledRunFailed(responsibilityId: string, error: unknown): void {
     currentLogger(this.logger).error(
       { event: 'runner.schedule.failed', responsibilityId, err: error },

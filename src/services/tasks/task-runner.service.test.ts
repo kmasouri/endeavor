@@ -227,6 +227,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
       onMessageDelivered: jest.fn(),
       onDeliveryFailed: jest.fn(),
       onModelTurn: jest.fn(),
+      onCompletionChecked: jest.fn(),
       onModelFailed: jest.fn(),
       onTaskRunFailed: jest.fn(),
       onRequestChainTooDeep: jest.fn(),
@@ -269,6 +270,151 @@ function eventTypes(tasks: ReturnType<typeof setup>['tasks']): string[] {
 }
 
 describe('TaskRunnerService', () => {
+  describe('completion check', () => {
+    // A real provider, so the check runs. The scripted test provider skips it.
+    function setupChecked(replies: string[], earlier: TaskEvent[] = []) {
+      const ctx = setup();
+      const checker: jest.Mocked<ModelClient> = { provider: 'openai', complete: jest.fn() };
+      for (const text of replies) {
+        checker.complete.mockResolvedValueOnce(turn({ text }));
+      }
+      checker.complete.mockResolvedValue(turn({}));
+      (ctx.runner as unknown as { modelClients: Record<string, ModelClient> }).modelClients.openai =
+        checker;
+      ctx.agentRepo.getVersion.mockResolvedValue({ ...version, provider: 'openai' });
+      const call = {
+        id: 'call-done',
+        name: 'complete_task',
+        input: { result: 'Brief with sources', criteria_check: 'All covered', criteria_met: true }
+      };
+      // The first read is the runner's own; later reads (like the check's) still see history.
+      ctx.tasks.listEvents
+        .mockResolvedValueOnce([...earlier, event(9, 'model.turn', { raw: {}, toolCalls: [call] })])
+        .mockResolvedValue(earlier);
+      return { ...ctx, checker };
+    }
+
+    it('completes only after a separate check says the criteria are met', async () => {
+      const { runner, tasks, checker, current } = setupChecked(['MET: every criterion is covered']);
+
+      await runner.runTask(makeTask());
+
+      expect(checker.complete.mock.calls[0][0]).toMatchObject({ tools: [] });
+      expect(checker.complete.mock.calls[0][0].transcript[0]).toMatchObject({
+        text: expect.stringContaining('Brief with sources')
+      });
+      expect(tasks.addEvent).toHaveBeenCalledWith(
+        TASK,
+        'completion.checked',
+        expect.anything(),
+        expect.objectContaining({ callId: 'call-done', met: true })
+      );
+      expect(current().state).toBe('completed');
+      expect(current().criteriaCheck?.summary).toContain('Independent check: every criterion');
+    });
+
+    it('sends the gaps back to the agent instead of completing', async () => {
+      const { runner, tasks, current } = setupChecked(['NOT MET: two claims have no source']);
+
+      await runner.runTask(makeTask());
+
+      expect(current().state).toBe('working');
+      expect(tasks.addOutput).not.toHaveBeenCalledWith(
+        TASK,
+        expect.objectContaining({ title: 'Result' })
+      );
+      expect(toolResult(tasks).results[0]).toMatchObject({
+        isError: true,
+        content: expect.stringContaining('two claims have no source')
+      });
+    });
+
+    it('treats an unclear verdict as not met', async () => {
+      const { runner, current } = setupChecked(['Looks fine I think']);
+
+      await runner.runTask(makeTask());
+
+      expect(current().state).toBe('working');
+    });
+
+    it('blocks the task for a person after the second failed check', async () => {
+      const { runner, current, messages } = setupChecked(
+        ['NOT MET: still no sources'],
+        [
+          event(3, 'completion.checked', {
+            callId: 'call-earlier',
+            met: false,
+            summary: 'no sources'
+          })
+        ]
+      );
+
+      await runner.runTask(makeTask());
+
+      expect(current().state).toBe('blocked');
+      expect(current().stateReason).toContain('failed the completion check 2 times');
+      expect(messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({ body: expect.stringContaining('a person needs to look') })
+      );
+    });
+
+    it('reuses a saved verdict after a crash instead of paying for another check', async () => {
+      const { runner, checker, current } = setupChecked(
+        [],
+        [event(5, 'completion.checked', { callId: 'call-done', met: true, summary: 'ok' })]
+      );
+
+      await runner.runTask(makeTask());
+
+      expect(checker.complete).not.toHaveBeenCalled();
+      expect(current().state).toBe('completed');
+    });
+
+    it('counts the check toward the token budget', async () => {
+      const { runner, tasks, agentRepo, current } = setup();
+      agentRepo.getVersion.mockResolvedValue({ ...version, limits: { maxTokens: 1000 } });
+      // An earlier check alone used up the 1,000-token budget.
+      tasks.listEvents.mockResolvedValue([
+        event(5, 'completion.checked', {
+          callId: 'call-old',
+          met: false,
+          summary: 'x',
+          usage: { inputTokens: 900, outputTokens: 200 }
+        })
+      ]);
+
+      await runner.runTask(makeTask());
+
+      expect(current().state).toBe('blocked');
+      expect(current().stateReason).toContain('token budget');
+    });
+  });
+
+  it('attaches a workspace file as a file output', async () => {
+    const ctx = setup();
+    ctx.workspaceClient.read.mockResolvedValue({ content: '# Report', bytes: 8, truncated: false });
+    ctx.tasks.listEvents
+      .mockResolvedValueOnce([
+        event(1, 'model.turn', {
+          raw: {},
+          toolCalls: [{ id: 'c-file', name: 'save_output', input: { path: 'report.md' } }]
+        })
+      ])
+      .mockResolvedValue([]);
+
+    await ctx.runner.runTask(makeTask());
+
+    expect(ctx.tasks.addOutput).toHaveBeenCalledWith(
+      TASK,
+      expect.objectContaining({
+        kind: 'file',
+        title: 'report.md',
+        content: '# Report',
+        uri: 'workspace:report.md'
+      })
+    );
+  });
+
   describe('workspace files', () => {
     function runCalls(calls: { name: string; input: Record<string, unknown> }[]) {
       const ctx = setup();

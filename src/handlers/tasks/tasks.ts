@@ -4,6 +4,8 @@ import {
   ApprovalParams,
   ListApprovalsQuery,
   CreateTaskBody,
+  ConversationOutputsParams,
+  ListConversationOutputsQuery,
   ListTaskEventsQuery,
   ListTasksQuery,
   MigrateTaskVersionBody,
@@ -64,6 +66,22 @@ export async function listTaskEventsHandler(
       request.query
     )
   );
+}
+
+export async function listConversationOutputsHandler(
+  request: FastifyRequest<{
+    Params: ConversationOutputsParams;
+    Querystring: ListConversationOutputsQuery;
+    Headers: ActorHeaders;
+  }>
+): Promise<unknown> {
+  const { limit, offset } = request.query;
+  const { outputs, total } = await request.server.taskService.listConversationOutputs(
+    request.headers['x-actor-id'],
+    request.params.conversationId,
+    { limit, offset }
+  );
+  return paged(outputs, { limit, offset, total });
 }
 
 export async function listTaskOutputsHandler(

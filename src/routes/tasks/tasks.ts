@@ -8,6 +8,7 @@ import {
   createTaskHandler,
   getTaskHandler,
   listTaskEventsHandler,
+  listConversationOutputsHandler,
   listTaskOutputsHandler,
   listTasksHandler,
   migrateTaskVersionHandler,
@@ -21,6 +22,8 @@ import {
   approvalParamsSchema,
   listApprovalsQuerySchema,
   createTaskBodySchema,
+  conversationOutputsParamsSchema,
+  listConversationOutputsQuerySchema,
   listTaskEventsQuerySchema,
   listTasksQuerySchema,
   migrateTaskVersionBodySchema,
@@ -83,6 +86,21 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
       }
     },
     listTaskEventsHandler
+  );
+
+  fastifyInstance.get(
+    '/conversations/:conversationId/outputs',
+    {
+      schema: {
+        description:
+          'Outputs and evidence from every task in a conversation, newest first: results, documents, links, files, and logs.',
+        tags: ['tasks'],
+        headers: actorHeadersSchema,
+        params: conversationOutputsParamsSchema,
+        querystring: listConversationOutputsQuerySchema
+      }
+    },
+    listConversationOutputsHandler
   );
 
   fastifyInstance.get(
