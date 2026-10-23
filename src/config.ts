@@ -41,6 +41,8 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value !== 'false'),
   RUNNER_INTERVAL_MS: z.coerce.number().int().min(100).default(2000),
+  // Where each task's files go: one folder per task. Relative paths start from where the app runs.
+  WORKSPACES_DIR: z.string().min(1).default('workspaces'),
   // 32 random bytes, as base64 or hex. Encrypts connection credentials at rest.
   CREDENTIALS_KEY: z.string().min(1).optional()
 });
@@ -72,6 +74,7 @@ export const config = {
   // Never runs in tests, so they need no database.
   RUNNER_ENABLED: env.RUNNER_ENABLED && env.ENVIRONMENT !== 'test',
   RUNNER_INTERVAL_MS: env.RUNNER_INTERVAL_MS,
+  WORKSPACES_DIR: env.WORKSPACES_DIR,
   CREDENTIALS_KEY: env.CREDENTIALS_KEY
 };
 

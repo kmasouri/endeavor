@@ -21,7 +21,8 @@ import {
   ModelClient,
   ModelOpenAIClient,
   ModelScript,
-  ModelScriptedClient
+  ModelScriptedClient,
+  WorkspaceFsClient
 } from '../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../observability';
 import { AGENT_TOOLS, DEFAULT_RUNNER_OPTIONS, TaskRunnerService } from '../services';
@@ -85,6 +86,7 @@ const runnerPlugin: FastifyPluginAsync = async (fastify) => {
     new DocumentPostgresRepository(fastify.pg),
     new ResponsibilityPostgresRepository(fastify.pg),
     new ConnectionHttpClient(),
+    new WorkspaceFsClient(config.WORKSPACES_DIR),
     buildModelClients(config),
     new TaskLogger(fastify.log),
     new TaskRunnerLogger(fastify.log),

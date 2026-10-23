@@ -15,6 +15,16 @@ A starting point for a Fastify and TypeScript API. It comes with Postgres, input
 - **Terraform** for a throwaway AWS test setup: network, load balancer, image registry, and containers on ECS Fargate.
 - **GitHub Actions** that run the checks on every push, and deploy when you publish a GitHub release.
 
+## Running it
+
+To run the whole platform on your computer with Docker, see [docs/local.md](docs/local.md):
+
+```bash
+cp .env.example .env
+npm run up             # app + Postgres in Docker, at http://localhost:3000
+npm run down
+```
+
 ## Local development
 
 ```bash
@@ -58,6 +68,7 @@ The app checks all of these at startup, in `src/config.ts`.
 | `OPENAI_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible API address.                                                                    |
 | `RUNNER_ENABLED`     | `true`                      | Run the runner, which delivers messages and runs agents' work. Always off in tests.               |
 | `RUNNER_INTERVAL_MS` | `2000`                      | How often the runner checks for work, in milliseconds.                                            |
+| `WORKSPACES_DIR`     | `workspaces`                | Folder for agents' files, one subfolder per task.                                                 |
 | `CREDENTIALS_KEY`    |                             | 32 random bytes (base64 or hex) that encrypt connection credentials. Needed to save a credential. |
 
 ## Commands
@@ -72,6 +83,9 @@ npm run format
 npm run check          # lint + typecheck + build + test (CI runs this)
 npm run db:up          # start local Postgres
 npm run db:migrate     # apply db/schema/ files
+npm run up             # run the app and Postgres in Docker
+npm run logs           # follow the app's log in Docker
+npm run down           # stop the Docker containers; data stays
 ```
 
 ## Docker
@@ -114,6 +128,7 @@ Requests that act as a person send that person's ID in the `x-actor-id` header. 
 - `docs/adding-a-feature.md`: step-by-step guide for a new feature.
 - `docs/responses.md`: what success, list, and error responses look like.
 - `docs/errors.md`: every error code the API can return.
+- `docs/local.md`: running the platform on your computer, and what agents' tools can touch.
 - `AGENTS.md`: the rules every change must follow. Written for AI agents, but they apply to everyone.
 
 ## Infrastructure

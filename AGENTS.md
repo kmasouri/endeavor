@@ -12,6 +12,7 @@ This file says what to do and what not to do. For how things work and why, read:
 - `docs/catalogs.md`: skills, connections, credentials, and grants.
 - `docs/notes.md`: context, saved notes, and knowledge sources.
 - `docs/scheduling.md`: recurring responsibilities, missed runs, and event starts.
+- `docs/local.md`: running everything on one computer with Docker, workspaces, and tool isolation.
 
 ## Source of truth
 
@@ -91,6 +92,8 @@ npm test               # no database needed
 npm run check          # lint + typecheck + build + test
 npm run db:up          # start local Postgres (Docker)
 npm run db:migrate     # apply new db/schema/ files
+npm run up             # run the app and Postgres in Docker (see docs/local.md)
+npm run down           # stop them
 ```
 
 Run `npm run check` before you finish any change. Never call work done while it fails.

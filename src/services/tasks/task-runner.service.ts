@@ -17,7 +17,8 @@ import {
   ModelToolCall,
   ModelToolDefinition,
   ModelToolResult,
-  ModelTranscriptEntry
+  ModelTranscriptEntry,
+  WorkspaceClient
 } from '../../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../../observability';
 import { addressedAgentIds } from '../../shared/addressing';
@@ -132,6 +133,7 @@ export class TaskRunnerService {
     private readonly documentRepository: DocumentRepository,
     private readonly responsibilityRepository: ResponsibilityRepository,
     private readonly connectionClient: ConnectionClient,
+    private readonly workspaceClient: WorkspaceClient,
     private readonly modelClients: Partial<Record<ModelProvider, ModelClient>>,
     taskLogger: TaskLogger,
     private readonly runnerLogger: TaskRunnerLogger,
@@ -730,6 +732,39 @@ export class TaskRunnerService {
 
       case AGENT_TOOLS.httpRequest: {
         return this.httpRequest(task, agent, call.id, input);
+      }
+
+      // Files live in the task's own folder, so these need no grant. Writing the same file
+      // again after a crash gives the same result.
+      case AGENT_TOOLS.listFiles: {
+        const { entries, truncated } = await this.workspaceClient.list(
+          task.id,
+          optionalString(input, 'folder') ?? ''
+        );
+        if (entries.length === 0) {
+          return 'Your workspace has no files here yet.';
+        }
+        const lines = entries.map((entry) =>
+          entry.type === 'folder' ? `${entry.path}/` : `${entry.path} (${entry.bytes} bytes)`
+        );
+        return `${lines.join('\n')}${truncated ? '\n(More files not shown.)' : ''}`;
+      }
+
+      case AGENT_TOOLS.readFile: {
+        const file = await this.workspaceClient.read(task.id, requireString(input, 'path'));
+        return file.truncated
+          ? `${file.content}\n(Cut off: the file is ${file.bytes} bytes.)`
+          : file.content;
+      }
+
+      case AGENT_TOOLS.writeFile: {
+        const path = requireString(input, 'path');
+        const content = typeof input.content === 'string' ? input.content : null;
+        if (content === null) {
+          throw new AppError('validationError', 'content must be a string.');
+        }
+        const { bytes } = await this.workspaceClient.write(task.id, path, content);
+        return `Wrote ${path} (${bytes} bytes).`;
       }
 
       default:

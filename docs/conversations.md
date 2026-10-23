@@ -37,6 +37,9 @@ Agents act only through these tools. The runner carries out each call:
 | `save_output`    | Attach an output or piece of evidence to the task.                                             |
 | `complete_task`  | Finish with a result. It is saved as an output, checked against the criteria, and posted back. |
 | `report_blocked` | Stop, and say what a person needs to do.                                                       |
+| `list_files`     | List the files in the task's own workspace folder.                                             |
+| `read_file`      | Read a text file from the workspace.                                                           |
+| `write_file`     | Write a text file in the workspace. Paths can't leave it. See `docs/local.md`.                 |
 
 Every directed request gets an answer in the conversation. That is the result from `complete_task`, the reason from `report_blocked`, or a message from the runner when the platform itself can't go on, such as a missing API key or a model that declined.
 
