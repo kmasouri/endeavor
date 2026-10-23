@@ -30,8 +30,13 @@ export class HumanService {
     return human;
   }
 
-  async listHumans(actorId: string): Promise<Human[]> {
-    requireHuman(await this.humanRepository.getById(actorId));
+  // Anyone may list people, so the web interface can ask "who are you?" before anyone is
+  // chosen. Until there is sign-in, anyone who can reach the API can act as anyone anyway, so
+  // the names reveal nothing more. A given actor must still be a real person.
+  async listHumans(actorId?: string): Promise<Human[]> {
+    if (actorId) {
+      requireHuman(await this.humanRepository.getById(actorId));
+    }
     return this.humanRepository.list();
   }
 }

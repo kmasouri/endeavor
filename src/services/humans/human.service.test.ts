@@ -46,7 +46,14 @@ describe('HumanService', () => {
     expect(humans.create).not.toHaveBeenCalled();
   });
 
-  it('only lists people for a known person', async () => {
+  it('lists people with no actor, so the web interface can ask who you are', async () => {
+    const { service, humans } = setup();
+    humans.list.mockResolvedValue([person('admin')]);
+
+    await expect(service.listHumans(undefined)).resolves.toEqual([person('admin')]);
+  });
+
+  it('still refuses an actor who is not a known person', async () => {
     const { service, humans } = setup();
     humans.getById.mockResolvedValue(null);
 

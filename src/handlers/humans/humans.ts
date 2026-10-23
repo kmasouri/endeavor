@@ -1,5 +1,5 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { ActorHeaders, CreateHumanBody, OptionalActorHeaders } from '../../schemas';
+import { CreateHumanBody, OptionalActorHeaders } from '../../schemas';
 import { success } from '../../shared/response';
 
 export async function createHumanHandler(
@@ -14,7 +14,7 @@ export async function createHumanHandler(
 }
 
 export async function listHumansHandler(
-  request: FastifyRequest<{ Headers: ActorHeaders }>
+  request: FastifyRequest<{ Headers: OptionalActorHeaders }>
 ): Promise<unknown> {
   return success(await request.server.humanService.listHumans(request.headers['x-actor-id']));
 }

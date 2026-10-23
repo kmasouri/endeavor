@@ -7,6 +7,7 @@ RUN npm ci
 
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
+COPY web ./web
 RUN npm run build
 
 FROM node:26-alpine AS runtime

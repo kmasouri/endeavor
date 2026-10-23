@@ -1,10 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { createHumanHandler, listHumansHandler } from '../../handlers';
-import {
-  actorHeadersSchema,
-  createHumanBodySchema,
-  optionalActorHeadersSchema
-} from '../../schemas';
+import { createHumanBodySchema, optionalActorHeadersSchema } from '../../schemas';
 
 export async function humansRouter(fastifyInstance: FastifyInstance): Promise<void> {
   fastifyInstance.post(
@@ -12,7 +8,7 @@ export async function humansRouter(fastifyInstance: FastifyInstance): Promise<vo
     {
       schema: {
         description:
-          'Add a person. The first person added becomes an admin and needs no x-actor-id. After that, only admins can add people.',
+          'Add a person. The first person added needs no x-actor-id. After that, any person can add people (v1 has one role).',
         tags: ['humans'],
         headers: optionalActorHeadersSchema,
         body: createHumanBodySchema
@@ -25,9 +21,10 @@ export async function humansRouter(fastifyInstance: FastifyInstance): Promise<vo
     '/humans',
     {
       schema: {
-        description: 'List people, oldest first.',
+        description:
+          'List people, oldest first. No x-actor-id needed, so the web interface can ask who you are.',
         tags: ['humans'],
-        headers: actorHeadersSchema
+        headers: optionalActorHeadersSchema
       }
     },
     listHumansHandler

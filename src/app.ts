@@ -9,6 +9,7 @@ import {
   validatorCompiler
 } from '@fastify/type-provider-zod';
 import fastify, { FastifyInstance, FastifyReply, FastifySchemaValidationError } from 'fastify';
+import { join } from 'node:path';
 import { config } from './config';
 import agentPlugin from './plugins/agent';
 import catalogPlugin from './plugins/catalog';
@@ -22,6 +23,7 @@ import taskPlugin from './plugins/task';
 import { AppError, ErrorName, ERRORS } from './shared/errors';
 import { ErrorDetail, failure } from './shared/response';
 import * as routes from './routes';
+import { registerWebApp } from './web';
 
 interface RequestValidationError {
   validation: FastifySchemaValidationError[];
@@ -200,6 +202,9 @@ export function setupApp(): FastifyInstance {
   app.register(routes.notesRouter);
   app.register(routes.responsibilitiesRouter);
   app.register(routes.tasksRouter);
+
+  // In the built app this file is dist/app.js, and Vite builds the interface into dist/web.
+  registerWebApp(app, join(__dirname, 'web'));
 
   return app;
 }

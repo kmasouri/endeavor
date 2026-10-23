@@ -16,6 +16,7 @@ src/
   index.ts                 starts the server
   app.ts                   builds the app: plugins, error handler, routes
   config.ts                reads and checks environment variables
+  web.ts                   serves the built web interface at /app/
 
   routes/<feature>/        URLs: which method and path run which handler
   schemas/<feature>/       Zod schemas for request input, and their types
@@ -27,6 +28,8 @@ src/
   observability/loggers/   one logger per feature, one method per event
   shared/                  types, response helpers, the error catalog
 
+web/                       the web interface (React, built by Vite into dist/web). It only
+                           calls the HTTP API, like any other client.
 db/schema/                 SQL files that create the tables
 docs/                      how the code works, and what the API returns
 infrastructure/            Terraform for AWS
