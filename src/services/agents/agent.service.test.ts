@@ -117,13 +117,14 @@ describe('AgentService', () => {
     ).rejects.toMatchObject({ name: 'agentNameTaken' });
   });
 
-  it('only lets admins change agents', async () => {
+  it('lets any person change agents, since v1 has one role', async () => {
     const { service, humans } = setup();
     humans.getById.mockResolvedValue({ ...admin, role: 'member' });
 
-    await expect(
-      service.updateConfig(ADMIN_ID, AGENT_ID, { instructions: 'New' })
-    ).rejects.toMatchObject({ name: 'forbidden' });
+    const outcome = await service
+      .updateConfig(ADMIN_ID, AGENT_ID, { instructions: 'New' })
+      .catch((error: unknown) => error);
+    expect(outcome).not.toMatchObject({ name: 'forbidden' });
   });
 
   it('saves a config change as a new version that keeps the rest', async () => {

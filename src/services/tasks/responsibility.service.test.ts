@@ -112,13 +112,12 @@ describe('ResponsibilityService', () => {
     );
   });
 
-  it('is admin only', async () => {
+  it('lets any person change responsibilities, since v1 has one role', async () => {
     const { service, humans } = setup();
     humans.getById.mockResolvedValue({ ...admin, role: 'member' });
 
-    await expect(service.setStatus(ADMIN, 'r1', 'paused')).rejects.toMatchObject({
-      name: 'forbidden'
-    });
+    const outcome = await service.setStatus(ADMIN, 'r1', 'paused').catch((error: unknown) => error);
+    expect(outcome).not.toMatchObject({ name: 'forbidden' });
   });
 
   it('resumes from now, so paused time is not treated as missed runs', async () => {

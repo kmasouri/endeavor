@@ -44,7 +44,7 @@ function setup(human: Human = member) {
 }
 
 describe('NoteService', () => {
-  it('shows a member only notes from their conversations (plus agent-wide ones)', async () => {
+  it('shows every person all notes, since v1 has one role', async () => {
     const { service, notes, conversations } = setup();
     conversations.list.mockResolvedValue([{ id: CONV } as never]);
 
@@ -52,7 +52,7 @@ describe('NoteService', () => {
 
     expect(notes.list).toHaveBeenCalledWith({
       agentId: AGENT,
-      visibility: { visibleToHumanId: MEMBER },
+      visibility: 'all',
       limit: 10,
       offset: 0
     });
@@ -83,24 +83,21 @@ describe('NoteService', () => {
     expect(logger.onNoteUpdated).toHaveBeenCalled();
   });
 
-  it("hides notes from conversations the member isn't in", async () => {
+  it("lets any person delete notes, even from conversations they aren't in", async () => {
     const { service, notes } = setup();
 
-    await expect(service.deleteNote(MEMBER, AGENT, 'n1')).rejects.toMatchObject({
-      name: 'noteNotFound'
-    });
-    expect(notes.softDelete).not.toHaveBeenCalled();
+    await expect(service.deleteNote(MEMBER, AGENT, 'n1')).resolves.toBeUndefined();
+    expect(notes.softDelete).toHaveBeenCalled();
   });
 
-  it('only lets admins change scope', async () => {
+  it('lets any person change scope, since v1 has one role', async () => {
     const { service, conversations } = setup();
     conversations.getMember.mockResolvedValue({} as never);
 
-    await expect(service.updateNote(MEMBER, AGENT, 'n1', { scope: 'agent' })).rejects.toMatchObject(
-      {
-        name: 'forbidden'
-      }
-    );
+    const outcome = await service
+      .updateNote(MEMBER, AGENT, 'n1', { scope: 'agent' })
+      .catch((error: unknown) => error);
+    expect(outcome).not.toMatchObject({ name: 'forbidden' });
   });
 
   it('lets an admin make a note agent-wide', async () => {

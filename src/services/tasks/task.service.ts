@@ -10,7 +10,7 @@ import {
   TaskRepository
 } from '../../data';
 import { TaskLogger } from '../../observability';
-import { ADMIN_ONLY, requireHuman } from '../../shared/access';
+import { ADMIN_ONLY, requireHuman, hasFullAccess } from '../../shared/access';
 import { AppError } from '../../shared/errors';
 import {
   Actor,
@@ -106,7 +106,7 @@ export class TaskService {
       state: input.state,
       ownerAgentId: input.ownerAgentId,
       conversationId: input.conversationId,
-      ...(human.role !== 'admin' && { visibleToHumanId: human.id })
+      ...(!hasFullAccess(human) && { visibleToHumanId: human.id })
     };
     const [tasks, total] = await Promise.all([
       this.taskRepository.list({ ...filters, limit: input.limit, offset: input.offset }),
@@ -333,7 +333,7 @@ export class TaskService {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const filters = {
       status: input.status,
-      ...(human.role !== 'admin' && { visibleToHumanId: human.id })
+      ...(!hasFullAccess(human) && { visibleToHumanId: human.id })
     };
     const [approvals, total] = await Promise.all([
       this.approvalRepository.list({ ...filters, limit: input.limit, offset: input.offset }),
@@ -457,7 +457,7 @@ export class TaskService {
     const human =
       typeof actor === 'string' ? requireHuman(await this.humanRepository.getById(actor)) : actor;
     const task = await this.lifecycle.requireTask(taskId);
-    if (human.role === 'admin') {
+    if (hasFullAccess(human)) {
       return task;
     }
     if (task.requestedByType === 'human' && task.requestedById === human.id) {

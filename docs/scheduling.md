@@ -1,6 +1,6 @@
 # Recurring responsibilities
 
-A **responsibility** is work an agent does on a schedule with nobody asking each time, such as "test the checkout flow every hour". Admins set them up with `POST /responsibilities`: agent, title, brief, completion criteria, `intervalMinutes` (5 or more), an optional `conversationId` for results, an optional `startAt`, and a `missedRunPolicy`.
+A **responsibility** is work an agent does on a schedule with nobody asking each time, such as "test the checkout flow every hour". People set them up with `POST /responsibilities`: agent, title, brief, completion criteria, `intervalMinutes` (5 or more), an optional `conversationId` for results, an optional `startAt`, and a `missedRunPolicy`.
 
 Each run is an ordinary task with `responsibilityId` set, so everything about tasks applies: it pins the agent's configuration version, can wait, can need approval, has limits, and can be paused or cancelled. If the responsibility has a conversation, the run's result is posted there. The agent must already be a member of that conversation.
 
