@@ -24,7 +24,7 @@ A connection is an outside HTTP API: a base URL, an auth header, an optional cre
 1. chosen in the task's configuration version, directly or through a chosen skill,
 2. granted to the agent right now,
 3. enabled, and
-4. allow the method and path (`src/shared/connection-access.ts`).
+4. allow the method and path (`apps/api/src/shared/connection-access.ts`).
 
 So a revoke, a disabled connection, or a narrower path list applies on the very next call. That holds even for tasks on an older configuration version. Revoked or disabled skills drop out of the prompt on the task's next run.
 

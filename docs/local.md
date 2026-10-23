@@ -23,7 +23,7 @@ Without npm, use `docker compose up -d --build`, `docker compose logs -f app`, a
 
 When it's up, open `http://localhost:3000` for the web interface. The API is at the same address, and Swagger is at `http://localhost:3000/docs`. Only this computer can reach it. Nobody signs in yet, so anyone who could reach the API could act as anyone.
 
-`npm run up` applies new database changes (`db/schema/`) before the server starts.
+`npm run up` applies new database changes (`apps/api/db/schema/`) before the server starts.
 
 ## Keep it awake
 
@@ -74,8 +74,8 @@ npm run db:migrate
 npm run dev              # the app, restarting when you save a file
 ```
 
-Here, workspaces go in a `workspaces/` folder in the repo, which git ignores. Set `WORKSPACES_DIR` to put them somewhere else.
+Here, agents' workspaces go in `apps/api/workspaces/`, which git ignores. Set `WORKSPACES_DIR` to put them somewhere else.
 
-For the web interface with live reload, also run `npm run dev:web` and open `http://localhost:5173/app/`. It sends API calls to `npm run dev` on port 3000. Without it, `npm run build` puts the interface in `dist/web`, and the server serves it at `/app/`.
+For the web interface with live reload, also run `npm run dev:web` and open `http://localhost:5173/app/`. It sends API calls to `npm run dev` on port 3000. Without it, `npm run build` puts the interface in `apps/web/dist`, and the server serves it at `/app/`.
 
 Don't run `npm run up` and `npm run dev` at the same time: both use port 3000.

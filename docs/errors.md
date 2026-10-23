@@ -15,7 +15,7 @@ Every error response has a `code` and a `name` from this list. Clients should ch
 
 Codes are grouped by feature: `10xxx` general, `20xxx` items, `30xxx` people and access, `40xxx` tasks, `50xxx` agents, `60xxx` conversations, `70xxx` catalogs, `80xxx` notes. A code never changes or gets reused once it ships.
 
-The list lives in `src/shared/errors.ts`. When you add an error there, add it here too. A test fails if this page is missing one.
+The list lives in `apps/api/src/shared/errors.ts`. When you add an error there, add it here too. A test fails if this page is missing one.
 
 ## General (10xxx)
 
