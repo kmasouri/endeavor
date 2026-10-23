@@ -64,6 +64,13 @@ export class TaskRunnerLogger {
     );
   }
 
+  onScheduledRunFailed(responsibilityId: string, error: unknown): void {
+    currentLogger(this.logger).error(
+      { event: 'runner.schedule.failed', responsibilityId, err: error },
+      'scheduled run failed'
+    );
+  }
+
   onScheduledRunSkipped(responsibilityId: string, reason: string): void {
     currentLogger(this.logger).warn(
       { event: 'runner.schedule.skipped', responsibilityId, reason },

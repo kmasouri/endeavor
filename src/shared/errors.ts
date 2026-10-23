@@ -93,6 +93,11 @@ export const ERRORS = {
   },
   messageNotFound: { code: 60004, statusCode: 404, message: 'Message not found' },
   participantNotFound: { code: 60005, statusCode: 404, message: 'Participant not found' },
+  agentNotInConversation: {
+    code: 60007,
+    statusCode: 422,
+    message: 'The agent is not a member of this conversation'
+  },
   suggestionNotAvailable: {
     code: 60006,
     statusCode: 422,

@@ -7,7 +7,7 @@ import {
   ResponsibilityPostgresRepository,
   TaskPostgresRepository
 } from '../data';
-import { TaskLogger } from '../observability';
+import { ResponsibilityLogger, TaskLogger } from '../observability';
 import { ResponsibilityService } from '../services';
 
 declare module 'fastify' {
@@ -23,6 +23,7 @@ const responsibilityPlugin: FastifyPluginAsync = async (fastify) => {
     new AgentPostgresRepository(fastify.pg),
     new ConversationPostgresRepository(fastify.pg),
     new HumanPostgresRepository(fastify.pg),
+    new ResponsibilityLogger(fastify.log),
     new TaskLogger(fastify.log)
   );
 

@@ -9,10 +9,16 @@ export interface RunPlan {
   nextRunAt: Date;
 }
 
-// Decides what a due responsibility does now. A run that is less than one interval late runs
-// normally. If more slots went by (the service was down), 'run_once' starts one run for the
-// latest missed slot and records the rest as skipped; 'skip' starts none. Either way the next
-// run is the first slot after now, so missed runs never pile up.
+// How late a slot can be and still count as on time: half the interval, at most 15 minutes.
+export function graceMs(intervalMinutes: number): number {
+  return Math.min((intervalMinutes * 60_000) / 2, 15 * 60_000);
+}
+
+// Decides what a due responsibility does now. The latest slot runs if it is within the grace
+// period, whatever the policy; any earlier slots were missed and are counted as skipped. If even
+// the latest slot is past the grace period (the service was down), 'run_once' still runs it
+// once and 'skip' doesn't. Either way the next run is the first slot after now, so missed runs
+// never pile up.
 export function planRun(
   input: { nextRunAt: Date; intervalMinutes: number; missedRunPolicy: MissedRunPolicy },
   now: Date
@@ -25,11 +31,10 @@ export function planRun(
   const extraSlots = Math.floor(lateMs / intervalMs);
   const latestSlot = new Date(input.nextRunAt.getTime() + extraSlots * intervalMs);
   const nextRunAt = new Date(latestSlot.getTime() + intervalMs);
+  const onTime = now.getTime() - latestSlot.getTime() <= graceMs(input.intervalMinutes);
 
-  if (extraSlots === 0) {
-    return { start: true, slot: latestSlot, skipped: 0, nextRunAt };
+  if (onTime || input.missedRunPolicy === 'run_once') {
+    return { start: true, slot: latestSlot, skipped: extraSlots, nextRunAt };
   }
-  return input.missedRunPolicy === 'run_once'
-    ? { start: true, slot: latestSlot, skipped: extraSlots, nextRunAt }
-    : { start: false, slot: latestSlot, skipped: extraSlots + 1, nextRunAt };
+  return { start: false, slot: latestSlot, skipped: extraSlots + 1, nextRunAt };
 }

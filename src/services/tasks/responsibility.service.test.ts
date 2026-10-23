@@ -5,7 +5,7 @@ import {
   mockResponsibilityRepository,
   mockTaskRepository
 } from '../../data/repositories.test-helper';
-import { TaskLogger } from '../../observability';
+import { ResponsibilityLogger, TaskLogger } from '../../observability';
 import { Human, Responsibility } from '../../shared/types';
 import { ResponsibilityService } from './responsibility.service';
 
@@ -58,18 +58,19 @@ function setup() {
     task: { id: 't1', ...input } as never,
     created: true
   }));
-  const logger = {
+  const responsibilityLogger = {
     onResponsibilityCreated: jest.fn(),
-    onResponsibilityStatusChanged: jest.fn(),
-    onTaskCreated: jest.fn()
-  } as unknown as TaskLogger;
+    onResponsibilityStatusChanged: jest.fn()
+  } as unknown as ResponsibilityLogger;
+  const taskLogger = { onTaskCreated: jest.fn() } as unknown as TaskLogger;
   const service = new ResponsibilityService(
     responsibilities,
     tasks,
     agents,
     conversations,
     humans,
-    logger
+    responsibilityLogger,
+    taskLogger
   );
   return { service, responsibilities, tasks, conversations, humans };
 }
@@ -88,7 +89,7 @@ describe('ResponsibilityService', () => {
         completionCriteria: 'c',
         intervalMinutes: 60
       })
-    ).rejects.toMatchObject({ name: 'mentionNotMember' });
+    ).rejects.toMatchObject({ name: 'agentNotInConversation' });
   });
 
   it('defaults to running once for missed runs, starting now', async () => {
@@ -133,6 +134,54 @@ describe('ResponsibilityService', () => {
     const [, changes] = responsibilities.update.mock.calls[0];
     expect(changes.status).toBe('enabled');
     expect(changes.nextRunAt!.getTime()).toBeGreaterThan(Date.now() - 5000);
+  });
+
+  it('turns down a resume that loses a race with a cancel', async () => {
+    const { service, responsibilities } = setup();
+    responsibilities.getById.mockResolvedValue({ ...responsibility, status: 'paused' });
+    // The repository won't change a cancelled row: someone cancelled it at the same moment.
+    responsibilities.update.mockResolvedValue(null);
+
+    await expect(service.setStatus(ADMIN, 'r1', 'enabled')).rejects.toMatchObject({
+      name: 'responsibilityCancelled'
+    });
+  });
+
+  it('applies a shorter interval at once', async () => {
+    const { service, responsibilities } = setup();
+    responsibilities.getById.mockResolvedValue({
+      ...responsibility,
+      intervalMinutes: 10_080,
+      lastRunAt: new Date(Date.now() - 60 * 60_000),
+      nextRunAt: new Date(Date.now() + 6 * 24 * 60 * 60_000)
+    });
+
+    await service.update(ADMIN, 'r1', { intervalMinutes: 5 });
+
+    const [, changes] = responsibilities.update.mock.calls[0];
+    expect(changes.nextRunAt!.getTime()).toBeLessThan(Date.now());
+  });
+
+  it('refuses a disabled agent', async () => {
+    const { service } = setup();
+    const agents = (service as unknown as { agentRepository: { getById: jest.Mock } })
+      .agentRepository;
+    agents.getById.mockResolvedValue({
+      id: AGENT,
+      name: 'QA',
+      disabledAt: new Date(),
+      currentVersionId: 'v1'
+    });
+
+    await expect(
+      service.create(ADMIN, {
+        agentId: AGENT,
+        title: 't',
+        brief: 'b',
+        completionCriteria: 'c',
+        intervalMinutes: 60
+      })
+    ).rejects.toMatchObject({ name: 'agentUnavailable' });
   });
 
   it('never revives a cancelled responsibility', async () => {

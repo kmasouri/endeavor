@@ -108,6 +108,8 @@ export interface TaskRepository {
   releaseLease(taskId: string, workerId: string, delayMs?: number): Promise<void>;
   renewLease(taskId: string, workerId: string, leaseMs: number): Promise<boolean>;
 
+  // A responsibility's open (working, waiting, or blocked) run, if it has one.
+  findOpenRun(responsibilityId: string): Promise<Task | null>;
   // The agent's open (working, waiting, or blocked) task in a conversation, if it has one.
   findOpenTask(conversationId: string, agentId: string): Promise<Task | null>;
   // Waiting tasks with no open waits. A crash between resolving a wait and waking the task

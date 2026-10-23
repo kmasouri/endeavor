@@ -35,6 +35,7 @@ import {
   Message,
   ModelProvider,
   ParticipantRef,
+  Responsibility,
   Skill,
   SkillVersion,
   Task,
@@ -161,22 +162,26 @@ export class TaskRunnerService {
   // missed while the service was down follow each responsibility's missed-run policy.
   async startDueRuns(now: Date = new Date()): Promise<void> {
     for (const responsibility of await this.responsibilityRepository.listDue(now, 20)) {
-      const plan = planRun(responsibility, now);
-      if (!plan) {
-        continue;
+      // One bad responsibility is logged and tried again next tick; it never stops the rest
+      // of the tick.
+      try {
+        await this.startDueRun(responsibility, now);
+      } catch (error) {
+        this.runnerLogger.onScheduledRunFailed(responsibility.id, error);
       }
-      const won = await this.responsibilityRepository.advance(
-        responsibility.id,
-        responsibility.nextRunAt,
-        { nextRunAt: plan.nextRunAt, lastRunAt: plan.start ? now : null }
-      );
-      if (!won) {
-        continue;
-      }
-      if (!plan.start) {
-        this.runnerLogger.onScheduledRun(responsibility.id, null, plan.skipped);
-        continue;
-      }
+    }
+  }
+
+  // The run is created first, then the schedule moves on. A crash between the two leaves the
+  // slot due, and the next tick finds the same run by its slot key and moves the schedule on.
+  // A crash before the run is created leaves the slot due too, so it isn't lost.
+  private async startDueRun(responsibility: Responsibility, now: Date): Promise<void> {
+    const plan = planRun(responsibility, now);
+    if (!plan) {
+      return;
+    }
+    let started = false;
+    if (plan.start) {
       const result = await startResponsibilityRun(
         {
           taskRepository: this.taskRepository,
@@ -197,9 +202,17 @@ export class TaskRunnerService {
       if ('skippedReason' in result) {
         this.runnerLogger.onScheduledRunSkipped(responsibility.id, result.skippedReason);
       } else {
+        started = true;
         this.runnerLogger.onScheduledRun(responsibility.id, result.task.id, plan.skipped);
       }
+    } else {
+      this.runnerLogger.onScheduledRun(responsibility.id, null, plan.skipped);
     }
+    // Only one runner moves a slot on. lastRunAt only moves when a run really started.
+    await this.responsibilityRepository.advance(responsibility.id, responsibility.nextRunAt, {
+      nextRunAt: plan.nextRunAt,
+      lastRunAt: started ? now : null
+    });
   }
 
   // Delivery

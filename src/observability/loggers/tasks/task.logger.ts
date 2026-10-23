@@ -57,20 +57,6 @@ export class TaskLogger {
     );
   }
 
-  onResponsibilityCreated(responsibilityId: string, agentId: string): void {
-    currentLogger(this.logger).info(
-      { event: 'responsibility.created', responsibilityId, agentId },
-      'responsibility created'
-    );
-  }
-
-  onResponsibilityStatusChanged(responsibilityId: string, status: string): void {
-    currentLogger(this.logger).info(
-      { event: 'responsibility.status.changed', responsibilityId, status },
-      'responsibility status changed'
-    );
-  }
-
   onTaskCompletionRejected(taskId: string, reason: string): void {
     currentLogger(this.logger).info(
       { event: 'task.completion.rejected', taskId, reason },

@@ -115,6 +115,7 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
       `UPDATE bold_cedar_007.responsibilities
        SET ${sets.join(', ')}
        WHERE id = $1
+         AND status <> 'cancelled'
        RETURNING *`,
       values
     );

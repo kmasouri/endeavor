@@ -15,6 +15,12 @@ export async function startResponsibilityRun(
   responsibility: Responsibility,
   input: { runKey: string; startedBy: Actor; note?: string }
 ): Promise<{ task: Task; created: boolean } | { skippedReason: string }> {
+  // One run at a time. A new slot doesn't start while the last run is still open, so runs never
+  // pile up or compete for the agent's messages in the conversation.
+  const open = await deps.taskRepository.findOpenRun(responsibility.id);
+  if (open) {
+    return { skippedReason: `The previous run (task ${open.id}) is still ${open.state}.` };
+  }
   const agent = await deps.agentRepository.getById(responsibility.agentId);
   if (!agent || agent.disabledAt || !agent.currentVersionId) {
     return { skippedReason: 'The agent is disabled or has no configuration.' };

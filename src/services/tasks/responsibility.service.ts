@@ -6,7 +6,7 @@ import {
   ResponsibilityRepository,
   TaskRepository
 } from '../../data';
-import { TaskLogger } from '../../observability';
+import { ResponsibilityLogger, TaskLogger } from '../../observability';
 import { ADMIN_ONLY, requireHuman } from '../../shared/access';
 import { AppError } from '../../shared/errors';
 import { MissedRunPolicy, Responsibility, ResponsibilityStatus, Task } from '../../shared/types';
@@ -26,6 +26,8 @@ export interface ResponsibilityInput {
 }
 
 // Recurring responsibilities: work an agent does on a schedule, with no one asking each time.
+// This lives in the tasks feature because each run is a task, and it shares TaskLifecycle and
+// startResponsibilityRun with the runner (services can't import across feature folders).
 // Only admins set them up and change them. The schedule's status is separate from its runs:
 // pausing or cancelling it never stops a run that is already going, and cancelling a run never
 // changes the schedule.
@@ -38,7 +40,8 @@ export class ResponsibilityService {
     private readonly agentRepository: AgentRepository,
     private readonly conversationRepository: ConversationRepository,
     private readonly humanRepository: HumanRepository,
-    private readonly taskLogger: TaskLogger
+    private readonly responsibilityLogger: ResponsibilityLogger,
+    taskLogger: TaskLogger
   ) {
     this.lifecycle = new TaskLifecycle(taskRepository, taskLogger);
   }
@@ -49,6 +52,9 @@ export class ResponsibilityService {
     if (!agent) {
       throw new AppError('agentNotFound', `Agent ${input.agentId} was not found`);
     }
+    if (agent.disabledAt || !agent.currentVersionId) {
+      throw new AppError('agentUnavailable', `${agent.name} can't run scheduled work now`);
+    }
     if (input.conversationId) {
       const member = await this.conversationRepository.getMember(input.conversationId, {
         type: 'agent',
@@ -56,7 +62,7 @@ export class ResponsibilityService {
       });
       if (!member) {
         throw new AppError(
-          'mentionNotMember',
+          'agentNotInConversation',
           `${agent.name} is not in that conversation. Add it first`
         );
       }
@@ -73,7 +79,7 @@ export class ResponsibilityService {
       nextRunAt: input.startAt ?? new Date(),
       createdByHumanId: admin.id
     });
-    this.taskLogger.onResponsibilityCreated(responsibility.id, agent.id);
+    this.responsibilityLogger.onResponsibilityCreated(responsibility.id, agent.id);
     return responsibility;
   }
 
@@ -124,12 +130,22 @@ export class ResponsibilityService {
   ): Promise<Responsibility> {
     requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     const responsibility = await this.requireResponsibility(responsibilityId);
-    if (responsibility.status === 'cancelled') {
+    // A shorter interval takes effect at once, not after the old, longer wait.
+    let nextRunAt = changes.nextRunAt;
+    if (!nextRunAt && changes.intervalMinutes !== undefined) {
+      const sooner = new Date(
+        (responsibility.lastRunAt ?? new Date()).getTime() + changes.intervalMinutes * 60_000
+      );
+      nextRunAt = sooner < responsibility.nextRunAt ? sooner : undefined;
+    }
+    const updated = await this.responsibilityRepository.update(responsibility.id, {
+      ...changes,
+      nextRunAt
+    });
+    if (!updated) {
       throw new AppError('responsibilityCancelled');
     }
-    return (
-      (await this.responsibilityRepository.update(responsibility.id, changes)) ?? responsibility
-    );
+    return updated;
   }
 
   async setStatus(
@@ -148,12 +164,17 @@ export class ResponsibilityService {
     // Resuming after a pause starts from now; the paused time doesn't count as missed runs.
     const nextRunAt =
       status === 'enabled' && responsibility.nextRunAt < new Date() ? new Date() : undefined;
+    // The repository never changes a cancelled responsibility, so a cancel racing a resume
+    // can't bring it back.
     const updated = await this.responsibilityRepository.update(responsibility.id, {
       status,
       nextRunAt
     });
-    this.taskLogger.onResponsibilityStatusChanged(responsibility.id, status);
-    return updated ?? responsibility;
+    if (!updated) {
+      throw new AppError('responsibilityCancelled');
+    }
+    this.responsibilityLogger.onResponsibilityStatusChanged(responsibility.id, status);
+    return updated;
   }
 
   // Starts a run now, outside the schedule: a person asking, or an outside event. The

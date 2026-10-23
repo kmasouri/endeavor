@@ -231,6 +231,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
       onApprovalRequested: jest.fn(),
       onScheduledRun: jest.fn(),
       onScheduledRunSkipped: jest.fn(),
+      onScheduledRunFailed: jest.fn(),
       onTickFailed: jest.fn()
     } as unknown as TaskRunnerLogger,
     { ...DEFAULT_RUNNER_OPTIONS, workerId: 'test' }
@@ -1314,14 +1315,54 @@ describe('TaskRunnerService', () => {
       );
     });
 
-    it('starts nothing when another runner moved the schedule first', async () => {
+    it("doesn't start a new run while the last one is still open", async () => {
       const { runner, tasks, responsibilities } = setup();
       responsibilities.listDue.mockResolvedValue([due]);
-      responsibilities.advance.mockResolvedValue(false);
+      tasks.findOpenRun.mockResolvedValue(makeTask({ state: 'waiting' }));
 
       await runner.startDueRuns(new Date('2026-10-22T01:10:00Z'));
 
       expect(tasks.create).not.toHaveBeenCalled();
+      // The slot is still used up, and lastRunAt doesn't move.
+      expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
+        nextRunAt: new Date('2026-10-22T02:00:00Z'),
+        lastRunAt: null
+      });
+    });
+
+    it('creates the run before moving the schedule on, so a crash never loses a slot', async () => {
+      const { runner, tasks, responsibilities, conversations } = setup();
+      responsibilities.listDue.mockResolvedValue([due]);
+      conversations.getMember.mockResolvedValue({} as never);
+      tasks.create.mockImplementation(async (input) => ({
+        task: makeTask({ ...input } as never),
+        created: true
+      }));
+
+      await runner.startDueRuns(new Date('2026-10-22T01:10:00Z'));
+
+      expect(tasks.create.mock.invocationCallOrder[0]).toBeLessThan(
+        responsibilities.advance.mock.invocationCallOrder[0]
+      );
+    });
+
+    it('keeps going when one responsibility fails', async () => {
+      const { runner, tasks, responsibilities, conversations } = setup();
+      responsibilities.listDue.mockResolvedValue([due, { ...due, id: 'r2' }]);
+      conversations.getMember.mockResolvedValue({} as never);
+      tasks.create.mockRejectedValueOnce(new Error('boom')).mockImplementation(async (input) => ({
+        task: makeTask({ ...input } as never),
+        created: true
+      }));
+
+      await runner.startDueRuns(new Date('2026-10-22T01:10:00Z'));
+
+      expect(responsibilities.advance).toHaveBeenCalledTimes(1);
+      expect(responsibilities.advance).toHaveBeenCalledWith(
+        'r2',
+        expect.anything(),
+        expect.anything()
+      );
     });
 
     it("skips missed slots under the 'skip' policy", async () => {
