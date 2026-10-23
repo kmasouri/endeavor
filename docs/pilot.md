@@ -15,16 +15,16 @@ Each pilot agent has a monthly budget, and together they can't pass **$16**. Eac
 ## 1. Get ready (once)
 
 1. Load a small prepaid credit on your OpenAI account and make an API key.
-2. Pick two models: a cheaper one for the Researcher and Checker, and a stronger one for the Reviewer, Solo Researcher, and Investigator. Look up their prices on OpenAI's pricing page.
+2. Pick two models: a cheaper one for the Researcher and Checker, and a stronger one for the Reviewer, Solo Researcher, and Investigator. The recommendation is `gpt-6-luna` (cheaper) and `gpt-6.1-sol` (stronger). Check their prices on [OpenAI's pricing page](https://developers.openai.com/api/docs/pricing) before you start; prices change.
 3. In `.env`, set:
 
    ```bash
    OPENAI_API_KEY=sk-...
    CREDENTIALS_KEY=...            # openssl rand -base64 32
-   MODEL_PRICES={"<cheap model>":{"inputPerMillion":0.15,"outputPerMillion":0.6},"<strong model>":{"inputPerMillion":2.5,"outputPerMillion":10}}
+   MODEL_PRICES={"gpt-6-luna":{"inputPerMillion":0.1,"outputPerMillion":0.5},"gpt-6.1-sol":{"inputPerMillion":2,"outputPerMillion":10}}
    ```
 
-   Use the real prices you looked up; the numbers above are placeholders.
+   These are OpenAI's standard prices as of 2026-10-23.
 
 4. Pick five brief topics. Copy `pilot/topics.example.json` to `pilot/topics.json` and fill them in. Attach your own notes to a topic with `documents` if you like.
 
@@ -33,7 +33,7 @@ Each pilot agent has a monthly budget, and together they can't pass **$16**. Eac
 ```bash
 npm run up              # the platform, in Docker
 npm run pilot:api       # the test API for pilot 2, on http://localhost:4100
-npm run pilot:setup -- --cheap-model <cheap model> --strong-model <strong model>
+npm run pilot:setup -- --cheap-model gpt-6-luna --strong-model gpt-6.1-sol
 ```
 
 Setup creates the agents, skills, connections, the pilot 2 conversation, and its schedule. It's safe to run again: it reuses what already exists, by name. The first check runs about two minutes later. What it made is saved in `pilot/results/state.json` (git ignores `pilot/results/`).
@@ -81,9 +81,9 @@ npm run pilot:report
 
 Run it any time. It prints the report and saves it in `pilot/results/`. It covers:
 
-- **Pilot 1**: per brief, the time from your request to done, cost, tokens, how many messages you sent after the request, asks between participants, failed completion checks, and your scores. Then the team and the baseline against the CA-3 targets.
+- **Pilot 1**: per brief, the time from your request to done, cost, tokens, how many messages you sent after the request, asks between participants, failed completion checks (if turned on), and your scores. Then the team and the baseline against the CA-3 targets.
 - **Pilot 2**: per run, which window it ran in, how many endpoints it called, what it reported, which seeded failures it caught or missed, false alarms, and cost. Then totals against the targets, plus windows with two runs or none.
-- **Health**: stalled tasks, reply waits open 15+ minutes, repeated work, tasks completed without a passed completion check, blocked tasks with their reasons, model failures, and calls with no price.
+- **Health**: stalled tasks, reply waits open 15+ minutes, repeated work, tasks completed without a passed completion check (only when `COMPLETION_CHECK=true`), blocked tasks with their reasons, model failures, and calls with no price.
 
 The report reads the Checker's lines that start with `BROKEN: /path`. A report in another shape shows as "-": read it in the conversation and judge it yourself.
 

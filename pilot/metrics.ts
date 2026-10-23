@@ -111,7 +111,7 @@ export function staleReplyWaits(task: TaskLike, now: Date): WaitLike[] {
   );
 }
 
-// Completed without a passed completion check. Only meaningful while COMPLETION_CHECK is on.
+// Completed without a passed completion check. Only meaningful when COMPLETION_CHECK=true.
 export function unsupportedDone(task: TaskLike, usage: TaskUsage): boolean {
   return task.state === 'completed' && usage.checksPassed === 0;
 }

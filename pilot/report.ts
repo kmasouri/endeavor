@@ -350,8 +350,13 @@ function reportHealth(tasks: TaskReport[]): void {
   out(
     `- Repeated work (two tasks for one request): ${repeatedWork(unique.map((item) => item.task))}`
   );
+  // Completion checks are off unless COMPLETION_CHECK=true. Without them, your scores
+  // measure unsupported "done" claims instead.
+  const checksRan = unique.some((item) => item.usage.checksPassed + item.usage.checksFailed > 0);
   out(
-    `- Completed without a passed completion check: ${list(unsupported)}${unsupported.length ? ' (expected if COMPLETION_CHECK=false)' : ''}`
+    checksRan
+      ? `- Completed without a passed completion check: ${list(unsupported)}`
+      : '- Completion checks: off (COMPLETION_CHECK is not true). Your scores cover unsupported "done" claims.'
   );
   out(`- Blocked: ${blocked.length ? '' : 'none'}`);
   for (const item of blocked) {
