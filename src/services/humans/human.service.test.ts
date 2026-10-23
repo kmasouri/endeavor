@@ -48,9 +48,10 @@ describe('HumanService', () => {
 
   it('lists people with no actor, so the web interface can ask who you are', async () => {
     const { service, humans } = setup();
-    humans.list.mockResolvedValue([person('admin')]);
+    const kim = person('admin');
+    humans.list.mockResolvedValue([kim]);
 
-    await expect(service.listHumans(undefined)).resolves.toEqual([person('admin')]);
+    await expect(service.listHumans(undefined)).resolves.toEqual([kim]);
   });
 
   it('still refuses an actor who is not a known person', async () => {
