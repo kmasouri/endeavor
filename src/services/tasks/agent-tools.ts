@@ -1,7 +1,7 @@
 import { ModelToolDefinition } from '../../integrations';
 
 // The platform tools every agent gets. Agents act only through these: the runner runs them and
-// checks each one. Skills and connections will add more tools (CA-1).
+// checks each one. Connections add http_request.
 export const AGENT_TOOLS = {
   sendMessage: 'send_message',
   ask: 'ask',
@@ -10,7 +10,10 @@ export const AGENT_TOOLS = {
   reportBlocked: 'report_blocked',
   suggestParticipant: 'suggest_participant',
   httpRequest: 'http_request',
-  saveNote: 'save_note'
+  saveNote: 'save_note',
+  listFiles: 'list_files',
+  readFile: 'read_file',
+  writeFile: 'write_file'
 } as const;
 
 export type AgentToolName = (typeof AGENT_TOOLS)[keyof typeof AGENT_TOOLS];
@@ -109,6 +112,45 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
       type: 'object',
       properties: { note: { type: 'string', description: 'The note, in a sentence or two.' } },
       required: ['note'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: AGENT_TOOLS.listFiles,
+    description:
+      "List the files in your task's workspace: a private folder for this task only. It starts empty. Paths are relative, like notes/plan.md.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        folder: { type: 'string', description: 'A folder inside the workspace. Leave out for all.' }
+      },
+      additionalProperties: false
+    }
+  },
+  {
+    name: AGENT_TOOLS.readFile,
+    description:
+      'Read a text file from your workspace. Files longer than 100,000 characters are cut off.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Path inside the workspace, like notes/plan.md.' }
+      },
+      required: ['path'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: AGENT_TOOLS.writeFile,
+    description:
+      'Write a text file in your workspace, replacing it if it exists. Folders are made as needed. Use it for drafts, data, and working notes; use save_output for results people should see. At most 1 MB.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        path: { type: 'string', description: 'Path inside the workspace, like notes/plan.md.' },
+        content: { type: 'string', description: 'The whole file content.' }
+      },
+      required: ['path', 'content'],
       additionalProperties: false
     }
   },

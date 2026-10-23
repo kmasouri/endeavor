@@ -94,3 +94,14 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 | ----- | ------------------ | ---- | --------------------------------------------- | ----------------------------------------------------- |
 | 80001 | `noteNotFound`     | 404  | No note has this ID, or you can't change it.  | Check `GET /agents/:agentId/notes`.                   |
 | 80002 | `documentNotFound` | 404  | No document has this ID in this conversation. | Check `GET /conversations/:conversationId/documents`. |
+
+## Task workspaces (90xxx)
+
+Agents see these as tool results when a file tool call fails. They aren't returned by the HTTP API today.
+
+| Code  | Name                    | HTTP | What it means                                                         | How to fix it                                     |
+| ----- | ----------------------- | ---- | --------------------------------------------------------------------- | ------------------------------------------------- |
+| 90001 | `workspacePathInvalid`  | 422  | The path leaves the task's workspace, is absolute, or names a folder. | Use a relative path inside it, like `notes/a.md`. |
+| 90002 | `workspaceFileNotFound` | 404  | No file or folder at that path in this task's workspace.              | Call `list_files` to see what's there.            |
+| 90003 | `workspaceFileTooLarge` | 422  | The file is over the 1 MB write limit.                                | Split it into smaller files.                      |
+| 90004 | `workspaceFileNotText`  | 422  | The file isn't text, so it can't be read as text.                     | Only read text files.                             |

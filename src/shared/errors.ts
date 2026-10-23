@@ -131,7 +131,16 @@ export const ERRORS = {
 
   // 80xxx: saved notes and documents
   noteNotFound: { code: 80001, statusCode: 404, message: 'Note not found' },
-  documentNotFound: { code: 80002, statusCode: 404, message: 'Document not found' }
+  documentNotFound: { code: 80002, statusCode: 404, message: 'Document not found' },
+  // 90xxx: task workspaces (agents' files)
+  workspacePathInvalid: {
+    code: 90001,
+    statusCode: 422,
+    message: 'The path must be inside the task workspace'
+  },
+  workspaceFileNotFound: { code: 90002, statusCode: 404, message: 'No such file in the workspace' },
+  workspaceFileTooLarge: { code: 90003, statusCode: 422, message: 'The file is too large' },
+  workspaceFileNotText: { code: 90004, statusCode: 422, message: 'The file is not a text file' }
 } as const satisfies Record<string, ErrorDefinition>;
 
 export type ErrorName = keyof typeof ERRORS;

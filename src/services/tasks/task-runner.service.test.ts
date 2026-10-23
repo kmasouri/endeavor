@@ -12,6 +12,7 @@ import {
 } from '../../data/repositories.test-helper';
 import { ModelClient, ModelClientError, ModelTurnResult } from '../../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../../observability';
+import { AppError } from '../../shared/errors';
 import {
   Agent,
   AgentVersion,
@@ -155,6 +156,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
   const documents = mockDocumentRepository();
   const responsibilities = mockResponsibilityRepository();
   const connectionClient = { request: jest.fn() };
+  const workspaceClient = { list: jest.fn(), read: jest.fn(), write: jest.fn() };
   const client: jest.Mocked<ModelClient> = {
     provider: 'scripted',
     complete: jest.fn().mockResolvedValue(turn({}))
@@ -214,6 +216,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
     documents,
     responsibilities,
     connectionClient,
+    workspaceClient,
     options.client === null ? {} : { scripted: options.client ?? client },
     {
       onTaskCreated: jest.fn(),
@@ -249,8 +252,15 @@ function setup(options: { client?: ModelClient | null } = {}) {
     responsibilities,
     conversations,
     connectionClient,
+    workspaceClient,
     current: () => current,
     setCurrent: (task: Task) => (current = task)
+  };
+}
+
+function toolResult(tasks: ReturnType<typeof setup>['tasks']) {
+  return tasks.addEvent.mock.calls.find(([, type]) => type === 'tool.results')?.[3] as {
+    results: { content: string; isError: boolean }[];
   };
 }
 
@@ -259,6 +269,84 @@ function eventTypes(tasks: ReturnType<typeof setup>['tasks']): string[] {
 }
 
 describe('TaskRunnerService', () => {
+  describe('workspace files', () => {
+    function runCalls(calls: { name: string; input: Record<string, unknown> }[]) {
+      const ctx = setup();
+      ctx.tasks.listEvents
+        .mockResolvedValueOnce([
+          event(1, 'model.turn', {
+            raw: {},
+            toolCalls: calls.map((call, index) => ({ id: `c${index}`, ...call }))
+          })
+        ])
+        .mockResolvedValue([]);
+      return ctx;
+    }
+
+    it('writes, lists, and reads files in the task workspace', async () => {
+      const ctx = runCalls([
+        { name: 'write_file', input: { path: 'notes/plan.md', content: 'step one' } },
+        { name: 'list_files', input: {} },
+        { name: 'read_file', input: { path: 'notes/plan.md' } }
+      ]);
+      ctx.workspaceClient.write.mockResolvedValue({ bytes: 8 });
+      ctx.workspaceClient.list.mockResolvedValue({
+        entries: [
+          { path: 'notes', type: 'folder', bytes: null },
+          { path: 'notes/plan.md', type: 'file', bytes: 8 }
+        ],
+        truncated: false
+      });
+      ctx.workspaceClient.read.mockResolvedValue({
+        content: 'step one',
+        bytes: 8,
+        truncated: false
+      });
+
+      await ctx.runner.runTask(makeTask());
+
+      const taskId = makeTask().id;
+      expect(ctx.workspaceClient.write).toHaveBeenCalledWith(taskId, 'notes/plan.md', 'step one');
+      expect(ctx.workspaceClient.list).toHaveBeenCalledWith(taskId, '');
+      expect(ctx.workspaceClient.read).toHaveBeenCalledWith(taskId, 'notes/plan.md');
+      expect(toolResult(ctx.tasks).results.map((r) => r.content)).toEqual([
+        'Wrote notes/plan.md (8 bytes).',
+        'notes/\nnotes/plan.md (8 bytes)',
+        'step one'
+      ]);
+    });
+
+    it('says when the workspace is empty and when a read was cut off', async () => {
+      const ctx = runCalls([
+        { name: 'list_files', input: {} },
+        { name: 'read_file', input: { path: 'big.txt' } }
+      ]);
+      ctx.workspaceClient.list.mockResolvedValue({ entries: [], truncated: false });
+      ctx.workspaceClient.read.mockResolvedValue({ content: 'abc', bytes: 900, truncated: true });
+
+      await ctx.runner.runTask(makeTask());
+
+      expect(toolResult(ctx.tasks).results.map((r) => r.content)).toEqual([
+        'Your workspace has no files here yet.',
+        'abc\n(Cut off: the file is 900 bytes.)'
+      ]);
+    });
+
+    it('returns a refused path to the agent as a tool error', async () => {
+      const ctx = runCalls([{ name: 'read_file', input: { path: '../other/secret' } }]);
+      ctx.workspaceClient.read.mockRejectedValue(
+        new AppError('workspacePathInvalid', 'Paths must stay inside your workspace.')
+      );
+
+      await ctx.runner.runTask(makeTask());
+
+      expect(toolResult(ctx.tasks).results[0]).toMatchObject({
+        isError: true,
+        content: 'Paths must stay inside your workspace.'
+      });
+    });
+  });
+
   describe('delivery', () => {
     it('starts a new task for an addressed agent with no open task', async () => {
       const { runner, tasks, messages } = setup();
@@ -801,12 +889,6 @@ describe('TaskRunnerService', () => {
         truncated: false
       });
       return ctx;
-    }
-
-    function toolResult(tasks: ReturnType<typeof setup>['tasks']) {
-      return tasks.addEvent.mock.calls.find(([, type]) => type === 'tool.results')?.[3] as {
-        results: { content: string; isError: boolean }[];
-      };
     }
 
     it('makes an allowed call with the stored credential', async () => {

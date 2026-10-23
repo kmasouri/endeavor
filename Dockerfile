@@ -20,6 +20,10 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY db ./db
 
+# Agents' files, one folder per task. Docker Compose keeps this in a volume.
+RUN mkdir -p /app/workspaces && chown node:node /app/workspaces
+ENV WORKSPACES_DIR=/app/workspaces
+
 USER node
 
 EXPOSE 3000

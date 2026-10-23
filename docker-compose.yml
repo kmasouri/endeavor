@@ -1,7 +1,9 @@
-# Local Postgres for development. Start it with `npm run db:up`.
+# Runs the whole platform on this computer: `npm run up`, then open http://localhost:3000.
+# For development with `npm run dev`, start only Postgres: `npm run db:up`.
 services:
   postgres:
     image: postgres:16-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_USER: bold_cedar_007
       POSTGRES_PASSWORD: bold_cedar_007
@@ -10,6 +12,38 @@ services:
       - '127.0.0.1:5432:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U bold_cedar_007 -d bold_cedar_007']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    # Starts again after a crash or a reboot, once Docker is running. `npm run down` stops it.
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # API keys and other settings come from .env, if it exists. The lines under `environment`
+    # win, because inside Docker the database and folders are in different places.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      ENVIRONMENT: docker
+      HOST: 0.0.0.0
+      PORT: 3000
+      DATABASE_URL: postgres://bold_cedar_007:bold_cedar_007@postgres:5432/bold_cedar_007
+      WORKSPACES_DIR: /app/workspaces
+    # Applies new db/schema files, then starts the server.
+    command: ['sh', '-c', 'node dist/migrate.js && exec node dist/index.js']
+    # Only this computer can reach it: the API trusts x-actor-id until real sign-in exists.
+    ports:
+      - '127.0.0.1:3000:3000'
+    volumes:
+      - workspaces:/app/workspaces
 
 volumes:
   postgres-data:
+  workspaces:
