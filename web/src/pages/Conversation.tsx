@@ -4,12 +4,14 @@ import {
   ConversationDetails,
   DirectoryEntry,
   Human,
+  Task,
   Member,
   Message,
   ParticipantRef
 } from '../api';
 import { ErrorNote, Hint, when } from '../components';
 import { useAction, useLoad } from '../hooks';
+import { ContextExplainer, KnowledgeSources } from './Context';
 
 const SUGGESTION = /^Suggestion: add (.+?) \(/;
 
@@ -42,8 +44,8 @@ export function ConversationPage({ conversationId, me }: { conversationId: strin
       <section className="thread">
         <h1>{conversation.title}</h1>
         <Hint>
-          Agents answer when you mention them. Everyone here can read every message. Closing this
-          page doesn't stop agents' work.
+          Agents answer when you mention them. This is the conversation history: agents see the part
+          they're allowed to. Closing this page doesn't stop agents' work.
         </Hint>
         <ErrorNote error={messages.error} />
         <MessageList
@@ -66,14 +68,23 @@ export function ConversationPage({ conversationId, me }: { conversationId: strin
         />
       </section>
 
-      <aside className="panel">
-        <Members
-          conversationId={conversationId}
-          me={me}
-          members={conversation.members}
-          directory={directory.data ?? []}
-          onChanged={details.reload}
-        />
+      <aside>
+        <div className="panel">
+          <ConversationTasks conversationId={conversationId} />
+        </div>
+        <div className="panel">
+          <KnowledgeSources conversationId={conversationId} />
+          <ContextExplainer />
+        </div>
+        <div className="panel">
+          <Members
+            conversationId={conversationId}
+            me={me}
+            members={conversation.members}
+            directory={directory.data ?? []}
+            onChanged={details.reload}
+          />
+        </div>
       </aside>
     </div>
   );
@@ -103,6 +114,7 @@ function MessageList(props: {
             <div className="meta">
               <strong>{props.nameOf({ type: message.authorType, id: message.authorId })}</strong>
               <span className="muted">{when(message.createdAt)}</span>
+              {message.taskId && <a href={`#/tasks/${message.taskId}`}>task</a>}
               {message.mentions.length > 0 && (
                 <span className="muted">
                   to {message.mentions.map((ref) => props.nameOf(ref)).join(', ')}
@@ -319,6 +331,35 @@ function Members(props: {
         <button disabled={action.busy || !choice}>Add</button>
         <ErrorNote error={action.error} />
       </form>
+    </>
+  );
+}
+
+function ConversationTasks({ conversationId }: { conversationId: string }) {
+  const tasks = useLoad(
+    () => api.list<Task>(`/tasks?conversationId=${conversationId}&limit=20`),
+    [conversationId],
+    4000
+  );
+  const open = (tasks.data?.data ?? []).filter(
+    (t) => t.state !== 'completed' && t.state !== 'cancelled'
+  );
+  return (
+    <>
+      <h2>Work here</h2>
+      {(tasks.data?.data ?? []).length === 0 && <p className="muted">No tasks yet.</p>}
+      <ul className="list small">
+        {(open.length > 0 ? open : (tasks.data?.data ?? []).slice(0, 5)).map((task) => (
+          <li key={task.id}>
+            <a href={`#/tasks/${task.id}`}>{task.title}</a>{' '}
+            <span className={`badge state-${task.state}`}>{task.state}</span>
+            {task.pausedAt && <span className="badge"> paused</span>}
+          </li>
+        ))}
+      </ul>
+      {open.length === 0 && (tasks.data?.data ?? []).length > 0 && (
+        <p className="muted small">Nothing open. Showing the latest.</p>
+      )}
     </>
   );
 }

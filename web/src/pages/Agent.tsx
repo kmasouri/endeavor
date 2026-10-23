@@ -3,6 +3,7 @@ import { Agent, AgentVersion, api, Connection, Grant, Skill } from '../api';
 import { ErrorNote, Hint, when } from '../components';
 import { useAction, useLoad } from '../hooks';
 import { AgentConfigFields, ConfigValues, initialConfig } from './AgentConfig';
+import { SavedNotes } from './Context';
 
 export function AgentPage({ agentId }: { agentId: string }) {
   const agent = useLoad(() => api.get<Agent>(`/agents/${agentId}`), [agentId]);
@@ -35,6 +36,9 @@ export function AgentPage({ agentId }: { agentId: string }) {
         <Profile agent={a} onSaved={agent.reload} />
         {/* Remount the form when a new version is saved, so it starts from that version. */}
         <NewVersion key={a.currentVersionId ?? 'none'} agent={a} onSaved={reloadAll} />
+        <div className="panel">
+          <SavedNotes agentId={a.id} />
+        </div>
       </section>
 
       <aside>
