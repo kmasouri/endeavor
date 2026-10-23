@@ -6,7 +6,7 @@ Start at the bottom layer and work up. That way each new file can use the ones y
 
 ## 1. Table
 
-Create `db/schema/002_orders.sql`. Use the Postgres schema name from `000_schema.sql`:
+Create `apps/api/db/schema/002_orders.sql`. Use the Postgres schema name from `000_schema.sql`:
 
 ```sql
 CREATE TABLE IF NOT EXISTS <schema>.orders (
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS <schema>.orders (
 
 ## 2. Type
 
-Add an `Order` type to `src/shared/types.ts`. Use camelCase names. The database uses snake_case, and the repository converts between them.
+Add an `Order` type to `apps/api/src/shared/types.ts`. Use camelCase names. The database uses snake_case, and the repository converts between them.
 
 ```ts
 export interface Order {
@@ -34,17 +34,17 @@ export interface Order {
 
 ## 3. Repository
 
-Create these files in `src/data/orders/`:
+Create these files in `apps/api/src/data/orders/`:
 
 - `order.repository.ts`: the `OrderRepository` interface, which lists the methods the service can call, plus their input types.
 - `order-postgres.repository.ts`: the `OrderPostgresRepository` class. It runs the SQL and turns each database row into an `Order`.
 - `index.ts`: exports both.
 
-Then add `export * from './orders';` to `src/data/index.ts`.
+Then add `export * from './orders';` to `apps/api/src/data/index.ts`.
 
 ## 4. Errors
 
-Add the feature's errors to `ERRORS` in `src/shared/errors.ts`. Give the feature its own range of codes, like `30xxx` for orders:
+Add the feature's errors to `ERRORS` in `apps/api/src/shared/errors.ts`. Give the feature its own range of codes, like `30xxx` for orders:
 
 ```ts
 // 30xxx: orders
@@ -55,7 +55,7 @@ Add each one to `docs/errors.md` too, with what it means and how to fix it. A te
 
 ## 5. Logger
 
-Create `src/observability/loggers/orders/order.logger.ts`, with one method per event. Copy `item.logger.ts`:
+Create `apps/api/src/observability/loggers/orders/order.logger.ts`, with one method per event. Copy `item.logger.ts`:
 
 ```ts
 export class OrderLogger {
@@ -67,11 +67,11 @@ export class OrderLogger {
 }
 ```
 
-Add `index.ts`, and export it from `src/observability/loggers/index.ts`.
+Add `index.ts`, and export it from `apps/api/src/observability/loggers/index.ts`.
 
 ## 6. Service
 
-Create `src/services/orders/order.service.ts` with an `OrderService` class. This is where the business logic goes. It gets its repositories and logger in the constructor, and never sees the HTTP request.
+Create `apps/api/src/services/orders/order.service.ts` with an `OrderService` class. This is where the business logic goes. It gets its repositories and logger in the constructor, and never sees the HTTP request.
 
 When something goes wrong, it throws an error from the catalog. When something happens, it logs it:
 
@@ -99,13 +99,13 @@ constructor(
 
 Never import another service, like `ItemService`. Lint blocks it. Use the other feature's repository instead.
 
-If the service calls an outside system, like an email provider or the OpenAI API, add an integration in `src/integrations/<feature>/` and pass it in the same way. See "Integrations" in `docs/architecture.md`.
+If the service calls an outside system, like an email provider or the OpenAI API, add an integration in `apps/api/src/integrations/<feature>/` and pass it in the same way. See "Integrations" in `docs/architecture.md`.
 
-Add `index.ts`, and export it from `src/services/index.ts`. Add `order.service.test.ts` with the repositories and logger mocked. See `item.service.test.ts`.
+Add `index.ts`, and export it from `apps/api/src/services/index.ts`. Add `order.service.test.ts` with the repositories and logger mocked. See `item.service.test.ts`.
 
 ## 7. Plugin
 
-Create `src/plugins/order.ts` by copying `src/plugins/item.ts`. It builds everything the service needs, then attaches only the service to Fastify:
+Create `apps/api/src/plugins/order.ts` by copying `apps/api/src/plugins/item.ts`. It builds everything the service needs, then attaches only the service to Fastify:
 
 ```ts
 const orderPlugin: FastifyPluginAsync = async (fastify) => {
@@ -121,11 +121,11 @@ const orderPlugin: FastifyPluginAsync = async (fastify) => {
 
 Add `orderService` to `declare module 'fastify'`. Never attach a repository. Only services use repositories.
 
-Register the plugin in `src/app.ts`, next to `itemPlugin`.
+Register the plugin in `apps/api/src/app.ts`, next to `itemPlugin`.
 
 ## 8. Schemas
 
-Create `src/schemas/orders/orders.schemas.ts`:
+Create `apps/api/src/schemas/orders/orders.schemas.ts`:
 
 ```ts
 export const orderParamsSchema = z.object({ orderId: z.uuid() });
@@ -141,11 +141,11 @@ export type CreateOrderBody = z.infer<typeof createOrderBodySchema>;
 
 Numbers in the query string or URL arrive as strings. Use `z.coerce.number()` for those.
 
-Add `index.ts`, and export it from `src/schemas/index.ts`.
+Add `index.ts`, and export it from `apps/api/src/schemas/index.ts`.
 
 ## 9. Handlers
 
-Create `src/handlers/orders/orders.ts`. A handler reads the request, calls the service, and sends the response. Nothing else:
+Create `apps/api/src/handlers/orders/orders.ts`. A handler reads the request, calls the service, and sends the response. Nothing else:
 
 ```ts
 export async function createOrderHandler(
@@ -159,13 +159,13 @@ export async function createOrderHandler(
 
 For lists, use `paged(items, { limit, offset, total })` instead of `success`.
 
-Add `index.ts`, and export it from `src/handlers/index.ts`.
+Add `index.ts`, and export it from `apps/api/src/handlers/index.ts`.
 
 ## 10. Router
 
-Create `src/routes/orders/orders.ts`, exporting `ordersRouter`. Give every route a `description` and `tags: ['orders']`, so it shows up nicely in Swagger.
+Create `apps/api/src/routes/orders/orders.ts`, exporting `ordersRouter`. Give every route a `description` and `tags: ['orders']`, so it shows up nicely in Swagger.
 
-Add `index.ts`, export it from `src/routes/index.ts`, and register it in `src/app.ts`:
+Add `index.ts`, export it from `apps/api/src/routes/index.ts`, and register it in `apps/api/src/app.ts`:
 
 ```ts
 app.register(routes.ordersRouter);
@@ -173,6 +173,6 @@ app.register(routes.ordersRouter);
 
 ## 11. Tests and docs
 
-- Add bad-input cases to `src/app.test.ts`. Send bad params and bodies with `app.inject`, and expect a 400 `validationError`.
+- Add bad-input cases to `apps/api/src/app.test.ts`. Send bad params and bodies with `app.inject`, and expect a 400 `validationError`.
 - Add the new endpoints to the API list in `README.md`.
 - Run `npm run check`.

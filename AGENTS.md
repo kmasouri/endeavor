@@ -55,7 +55,7 @@ Several agents can work at once. The `Agent` field on the backlog keeps them out
 - **Never work on a ticket someone else has claimed**, and never change their branch.
 - **Keep the claim fresh.** Update `Claimed At` and `Last Update` when you push or reach a new step.
 - **Stale claims.** A claim is stale when `Claimed At` is more than 24 hours old and its branch has had no new commits in that time. You may take over a stale claim. Say so in the ticket's work log, then claim it as usual. Continue from its branch rather than starting over.
-- **Shared files.** Before you push, merge `main` into your branch so you pick up the other agent's work. Each agent numbers its own new `db/schema/` file. If two branches use the same number, the one that merges second renames its file to the next free number.
+- **Shared files.** Before you push, merge `main` into your branch so you pick up the other agent's work. Each agent numbers its own new `apps/api/db/schema/` file. If two branches use the same number, the one that merges second renames its file to the next free number.
 
 Put design notes, diagrams, and decision records in Notion under the Project Hub, and link them from the ticket. Keep repo docs (`docs/`) about how the code works. If the PRD changes, update the affected tickets and the coverage page.
 
@@ -63,14 +63,15 @@ Put design notes, diagrams, and decision records in Notion under the Project Hub
 
 ```bash
 npm install
-npm run dev            # runs locally with .env and restarts on changes
+npm run dev            # runs the API locally with .env and restarts on changes
+npm run dev:web        # the web interface with live reload, at http://localhost:5173/app/
 npm run lint
 npm run typecheck
-npm run build          # compiles src/ to dist/
+npm run build          # builds apps/api and apps/web
 npm test               # no database needed
 npm run check          # lint + typecheck + build + test
 npm run db:up          # start local Postgres (Docker)
-npm run db:migrate     # apply new db/schema/ files
+npm run db:migrate     # apply new apps/api/db/schema/ files
 npm run up             # run the app and Postgres in Docker (see docs/local.md)
 npm run down           # stop them
 ```
@@ -79,42 +80,46 @@ Run `npm run check` before you finish any change. Never call work done while it 
 
 ## Layers
 
-A request goes `routes -> handlers -> services -> repositories`. Services can also call integrations, which are outside systems like another company's API. Each layer only calls the one right below it. Routes and handlers both use `src/schemas/`, which imports nothing from the other layers.
+The repo has two apps, each an npm workspace with its own `package.json`: the API in `apps/api/` and the web interface in `apps/web/`. They share no code; the web interface only calls the API over HTTP. Run commands from the repo root. The layers below are the API's.
+
+A request goes `routes -> handlers -> services -> repositories`. Services can also call integrations, which are outside systems like another company's API. Each layer only calls the one right below it. Routes and handlers both use `apps/api/src/schemas/`, which imports nothing from the other layers.
 
 Put new code in the folder for its layer, then in a folder for its feature. The full folder map, who can import what, and why, are in the "Where things live" and "Who can import what" sections of `docs/architecture.md`. Lint enforces the import rules; don't turn them off.
 
-| Layer       | Folder                        | Does                                                                           | Never                                                        |
-| ----------- | ----------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
-| Route       | `src/routes/<feature>/`       | URL, method, which schema and handler to use, Swagger `description` and `tags` | Contain logic                                                |
-| Schema      | `src/schemas/<feature>/`      | Zod schemas for request input, and their types                                 | Import from any layer but `shared`                           |
-| Handler     | `src/handlers/<feature>/`     | Read the request, call one service, send the response                          | Make business decisions, use a repository, catch errors      |
-| Service     | `src/services/<feature>/`     | Business logic, logging, throwing errors                                       | Use Fastify request or reply objects, import another service |
-| Repository  | `src/data/<feature>/`         | Read and write data (SQL, cache, other stores)                                 | Make business decisions                                      |
-| Integration | `src/integrations/<feature>/` | Call an outside system (APIs, LLMs, email, payments, anything else)            | Make business decisions                                      |
-| Plugin      | `src/plugins/<feature>.ts`    | Build the repositories, integrations, logger, and service at startup           | Attach anything but the service to Fastify                   |
-| Logger      | `src/observability/loggers/`  | One method per event, called by services                                       | Be called from handlers, repositories, or integrations       |
-| Shared      | `src/shared/`                 | Types, response helpers, the error catalog                                     | Import from any other layer                                  |
+| Layer       | Folder                                 | Does                                                                           | Never                                                        |
+| ----------- | -------------------------------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| Route       | `apps/api/src/routes/<feature>/`       | URL, method, which schema and handler to use, Swagger `description` and `tags` | Contain logic                                                |
+| Schema      | `apps/api/src/schemas/<feature>/`      | Zod schemas for request input, and their types                                 | Import from any layer but `shared`                           |
+| Handler     | `apps/api/src/handlers/<feature>/`     | Read the request, call one service, send the response                          | Make business decisions, use a repository, catch errors      |
+| Service     | `apps/api/src/services/<feature>/`     | Business logic, logging, throwing errors                                       | Use Fastify request or reply objects, import another service |
+| Repository  | `apps/api/src/data/<feature>/`         | Read and write data (SQL, cache, other stores)                                 | Make business decisions                                      |
+| Integration | `apps/api/src/integrations/<feature>/` | Call an outside system (APIs, LLMs, email, payments, anything else)            | Make business decisions                                      |
+| Plugin      | `apps/api/src/plugins/<feature>.ts`    | Build the repositories, integrations, logger, and service at startup           | Attach anything but the service to Fastify                   |
+| Logger      | `apps/api/src/observability/loggers/`  | One method per event, called by services                                       | Be called from handlers, repositories, or integrations       |
+| Shared      | `apps/api/src/shared/`                 | Types, response helpers, the error catalog                                     | Import from any other layer                                  |
 
 ## Hard rules
 
-- **Only services use repositories.** A plugin builds the repository and passes it to the service's constructor. Never attach a repository to Fastify, and never use one in a route or handler. Lint fails if a route or handler imports from `src/data`. If a service needs another feature's data, give it that feature's repository in its constructor.
-- **Only services use integrations.** An integration wraps one outside system, like the OpenAI API. It goes in `src/integrations/<feature>/`, not in `src/data`, and follows the same rules as a repository: the plugin builds it and passes it to the service's constructor. Settings like API keys are passed into its constructor too; the plugin reads them from `config`. Never attach it to Fastify. Lint fails if a route or handler imports from `src/integrations`.
+- **Only services use repositories.** A plugin builds the repository and passes it to the service's constructor. Never attach a repository to Fastify, and never use one in a route or handler. Lint fails if a route or handler imports from `apps/api/src/data`. If a service needs another feature's data, give it that feature's repository in its constructor.
+- **Only services use integrations.** An integration wraps one outside system, like the OpenAI API. It goes in `apps/api/src/integrations/<feature>/`, not in `apps/api/src/data`, and follows the same rules as a repository: the plugin builds it and passes it to the service's constructor. Settings like API keys are passed into its constructor too; the plugin reads them from `config`. Never attach it to Fastify. Lint fails if a route or handler imports from `apps/api/src/integrations`.
 - **Services never import other services.** If two services need the same thing, put it in a repository or integration and give it to both. Lint enforces this, so services never import each other in a loop.
 - **Handlers get services from `request.server`**, like `request.server.itemService`. Never import a service class into a handler.
-- **Zod is the only way to check input.** Schemas go in `src/schemas/<feature>/<feature>.schemas.ts`, with the `z.infer` type right below each one. Routes use the schemas, and handlers use the types. Never import from `src/routes` in a handler. Never write a request type by hand, and never write raw JSON Schema.
+- **Zod is the only way to check input.** Schemas go in `apps/api/src/schemas/<feature>/<feature>.schemas.ts`, with the `z.infer` type right below each one. Routes use the schemas, and handlers use the types. Never import from `apps/api/src/routes` in a handler. Never write a request type by hand, and never write raw JSON Schema.
 - **Request bodies use `z.strictObject`**, so unknown fields are rejected.
 - **Numbers in the query string or URL use `z.coerce.number()`.** They arrive as strings.
-- **Errors come from the catalog.** Every error has its own entry in `ERRORS` in `src/shared/errors.ts`, with a unique code: `10xxx` for general errors, and a new range per feature. Names are camelCase. Services throw `new AppError('itemNotFound', message)`. Add every new error to `docs/errors.md` too; a test checks this. Never change or reuse a code that has shipped.
-- **Don't catch errors in handlers** just to build an error response. The error handler in `src/app.ts` does that.
-- **Responses use the helpers** in `src/shared/response.ts`: `success(data)` for one thing, `paged(items, { limit, offset, total })` for lists. Creates return `201`. If you change the response shape, update `docs/responses.md`.
+- **Errors come from the catalog.** Every error has its own entry in `ERRORS` in `apps/api/src/shared/errors.ts`, with a unique code: `10xxx` for general errors, and a new range per feature. Names are camelCase. Services throw `new AppError('itemNotFound', message)`. Add every new error to `docs/errors.md` too; a test checks this. Never change or reuse a code that has shipped.
+- **Don't catch errors in handlers** just to build an error response. The error handler in `apps/api/src/app.ts` does that.
+- **Responses use the helpers** in `apps/api/src/shared/response.ts`: `success(data)` for one thing, `paged(items, { limit, offset, total })` for lists. Creates return `201`. If you change the response shape, update `docs/responses.md`.
 - **Services log through their feature's logger**, passed in the constructor. Add one method per event. Event names are lowercase with dots, feature first (`item.created`). Method names look like `onItemCreated`.
-- **SQL uses parameters** (`$1`, `$2`), never values pasted into the query string. Tables live in the Postgres schema from `db/schema/000_schema.sql`. Each new table or change gets a new numbered file in `db/schema/`. Never edit a file that has been merged; `npm run db:migrate` runs each file once.
-- **Every environment variable** goes in the Zod schema in `src/config.ts`, in the table in `README.md`, and in `.env.example`. Read settings only from the exported `config` object.
+- **SQL uses parameters** (`$1`, `$2`), never values pasted into the query string. Tables live in the Postgres schema from `apps/api/db/schema/000_schema.sql`. Each new table or change gets a new numbered file in `apps/api/db/schema/`. Never edit a file that has been merged; `npm run db:migrate` runs each file once.
+- **Every environment variable** goes in the Zod schema in `apps/api/src/config.ts`, in the table in `README.md`, and in `.env.example`. Read settings only from the exported `config` object.
 - **Import from the layer's root `index.ts`**, like `from '../../data'`, not from a feature folder inside it. Every feature folder has an `index.ts`, and the layer's root `index.ts` re-exports it.
 - **Tests sit next to the file they test** and end in `.test.ts`. Service tests mock repositories and integrations with `jest.fn()`. Route tests use `app.inject`. Tests never need a database.
 - **Write docs and comments in plain language.** Short sentences, everyday words.
 
 ## Naming
+
+These paths are inside `apps/api/`.
 
 ```text
 src/routes/<feature>/<feature>.ts                       -> <feature>Router

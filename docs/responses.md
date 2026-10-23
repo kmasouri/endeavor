@@ -83,8 +83,8 @@ Bad input lists each bad field in `details`:
 
 ## In the code
 
-The helpers are in `src/shared/response.ts`:
+The helpers are in `apps/api/src/shared/response.ts`:
 
 - `success(data)` for one thing.
 - `paged(items, { limit, offset, total })` for lists.
-- Error responses are built for you by the error handler in `src/app.ts`. Handlers never build them.
+- Error responses are built for you by the error handler in `apps/api/src/app.ts`. Handlers never build them.

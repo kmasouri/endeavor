@@ -4,6 +4,7 @@ A starting point for a Fastify and TypeScript API. It comes with Postgres, input
 
 ## What you get
 
+- **Two apps, one repo:** the API in `apps/api` and the web interface in `apps/web`, as npm workspaces. Run every command from the repo root.
 - **Clear layers:** `routes -> handlers -> services -> repositories`, plus `integrations` for outside systems, with a working example feature called `items`.
 - **Zod schemas:** one schema per request checks the input, types the handler, and feeds the Swagger docs.
 - **Checked settings:** a bad environment variable stops the app at startup, with a clear message.
@@ -37,17 +38,17 @@ The `.env` file is only read when `ENVIRONMENT=local`. `.env.example` points at 
 
 ```bash
 npm run db:up          # starts Postgres in Docker on localhost:5432
-npm run db:migrate     # applies new files in db/schema/, in filename order
+npm run db:migrate     # applies new files in apps/api/db/schema/, in filename order
 npm run db:down        # stops it; the data stays in a Docker volume
 ```
 
-`db:migrate` records each file it applies in `schema_migrations`, so each file runs once. In the Docker image, run `node dist/migrate.js`.
+`db:migrate` records each file it applies in `schema_migrations`, so each file runs once. In the Docker image, run `node dist/migrate.js` (the image starts in `apps/api`).
 
 The service listens on `http://localhost:3000` by default. Swagger UI is at `http://localhost:3000/docs`.
 
 ## Environment variables
 
-The app checks all of these at startup, in `src/config.ts`.
+The app checks all of these at startup, in `apps/api/src/config.ts`.
 
 | Name                 | Default                     | Description                                                                                       |
 | -------------------- | --------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -81,12 +82,12 @@ npm run dev            # runs locally with .env and restarts on changes
 npm run dev:web        # the web interface with live reload, at http://localhost:5173/app/
 npm test
 npm run test:coverage
-npm run build          # compiles to dist/, and the web interface to dist/web
+npm run build          # builds the API (apps/api/dist) and the web interface (apps/web/dist)
 npm run lint
 npm run format
 npm run check          # lint + typecheck + build + test (CI runs this)
 npm run db:up          # start local Postgres
-npm run db:migrate     # apply db/schema/ files
+npm run db:migrate     # apply apps/api/db/schema/ files
 npm run up             # run the app and Postgres in Docker
 npm run logs           # follow the app's log in Docker
 npm run down           # stop the Docker containers; data stays
@@ -105,7 +106,7 @@ docker run --rm -p 3000:3000 -e DATABASE_URL=postgres://... bold-cedar-007
 
 ## API
 
-Requests that act as a person send that person's ID in the `x-actor-id` header. This is a stand-in until real sign-in. The first person added with `POST /humans` needs no header. For v1 there is one role: every person can do everything. Agents still can't do people-only things, like approving or granting access. Roles are switched off in `src/shared/access.ts` (`ROLES_ENABLED`).
+Requests that act as a person send that person's ID in the `x-actor-id` header. This is a stand-in until real sign-in. The first person added with `POST /humans` needs no header. For v1 there is one role: every person can do everything. Agents still can't do people-only things, like approving or granting access. Roles are switched off in `apps/api/src/shared/access.ts` (`ROLES_ENABLED`).
 
 - `GET /health`
 - `GET /docs`

@@ -203,8 +203,9 @@ export function setupApp(): FastifyInstance {
   app.register(routes.responsibilitiesRouter);
   app.register(routes.tasksRouter);
 
-  // In the built app this file is dist/app.js, and Vite builds the interface into dist/web.
-  registerWebApp(app, join(__dirname, 'web'));
+  // The web interface is its own app. Vite builds it into apps/web/dist, two folders up from
+  // this file in both src/ and dist/.
+  registerWebApp(app, join(__dirname, '../../web/dist'));
 
   return app;
 }

@@ -2,10 +2,11 @@
 .github
 .env
 .terraform
-coverage
-dist
+**/coverage
+**/dist
 docs
 infrastructure
-node_modules
+**/node_modules
 npm-debug.log
-workspaces
+apps/api/workspaces
+pilot

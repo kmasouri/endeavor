@@ -1,8 +1,10 @@
+import { join } from 'node:path';
 import { z } from 'zod';
 
+// .env sits at the repo root, two folders above this app (from src/ or dist/ alike).
 if (process.env.ENVIRONMENT === 'local') {
   try {
-    process.loadEnvFile();
+    process.loadEnvFile(join(__dirname, '../../../.env'));
   } catch (error) {
     if (!isMissingEnvFileError(error)) {
       throw error;

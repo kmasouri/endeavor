@@ -21,7 +21,7 @@ Permissions are a separate matter. Revoked skills, connections, and actions are 
 - An agent's **monthly budget** (`PATCH /agents/:agentId` with `monthlyBudgetUsd`) covers all its work in a calendar month. A conversation's **budget** (`PATCH /conversations/:conversationId` with `budgetUsd`) covers all agent work in it. `null` removes a budget. Neither is versioned.
 - Before each model call, the task's own cap, the agent's monthly budget, and the conversation's budget are all checked. The tightest wins. A task over any of them is blocked with the reason, and the person who asked is told. Raising the budget and resuming the task lets it go on. Budgets are checked before each call, so the last call can take spending a little over the budget.
 
-**Who sees what:** in v1 there is one role, so every person sees every task and approval. The member rules are still in the code, switched off in `src/shared/access.ts`: with roles on, members see only tasks, and their approvals, in conversations they belong to, plus tasks they asked for.
+**Who sees what:** in v1 there is one role, so every person sees every task and approval. The member rules are still in the code, switched off in `apps/api/src/shared/access.ts`: with roles on, members see only tasks, and their approvals, in conversations they belong to, plus tasks they asked for.
 
 Any person can create or change agents. Agents can't. A disabled agent takes no new tasks, but its open tasks keep going until a human pauses or cancels them.
 
@@ -65,8 +65,8 @@ You can save an agent on a provider that isn't ready. Its `providerReady` is `fa
 
 ## Adding a provider
 
-1. Add its name to `MODEL_PROVIDERS` in `src/shared/types.ts`.
-2. Write a `ModelClient` in `src/integrations/models/`. It turns a `ModelTurnRequest` into the provider's API call, and the reply into a `ModelTurnResult`. Keep the provider's own assistant message in `raw`, so it can be sent back unchanged.
-3. Add its key to `src/config.ts`, `README.md`, and `.env.example`, and turn it on in `readyProviders()` in `src/plugins/agent.ts`.
+1. Add its name to `MODEL_PROVIDERS` in `apps/api/src/shared/types.ts`.
+2. Write a `ModelClient` in `apps/api/src/integrations/models/`. It turns a `ModelTurnRequest` into the provider's API call, and the reply into a `ModelTurnResult`. Keep the provider's own assistant message in `raw`, so it can be sent back unchanged.
+3. Add its key to `apps/api/src/config.ts`, `README.md`, and `.env.example`, and turn it on in `readyProviders()` in `apps/api/src/plugins/agent.ts`.
 
 Nothing else changes: conversations and tasks only use the `ModelClient` interface.

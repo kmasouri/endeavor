@@ -12,28 +12,35 @@ Each layer has one job. Because of this split, you can test the business logic w
 ## Where things live
 
 ```text
-src/
-  index.ts                 starts the server
-  app.ts                   builds the app: plugins, error handler, routes
-  config.ts                reads and checks environment variables
-  web.ts                   serves the built web interface at /app/
+package.json               npm workspaces: apps/api and apps/web, plus scripts for both
 
-  routes/<feature>/        URLs: which method and path run which handler
-  schemas/<feature>/       Zod schemas for request input, and their types
-  handlers/<feature>/      read the request, call a service, send the response
-  services/<feature>/      business logic, errors, logging
-  data/<feature>/          repositories: read and write data
-  integrations/<feature>/  call outside systems, like another company's API
-  plugins/                 build each feature's service at startup
-  observability/loggers/   one logger per feature, one method per event
-  shared/                  types, response helpers, the error catalog
+apps/api/                  the API, runner, and scheduler (its own package.json)
+  src/
+    index.ts               starts the server
+    app.ts                 builds the app: plugins, error handler, routes
+    config.ts              reads and checks environment variables
+    web.ts                 serves the built web interface at /app/
 
-web/                       the web interface (React, built by Vite into dist/web). It only
-                           calls the HTTP API, like any other client.
-db/schema/                 SQL files that create the tables
+    routes/<feature>/        URLs: which method and path run which handler
+    schemas/<feature>/       Zod schemas for request input, and their types
+    handlers/<feature>/      read the request, call a service, send the response
+    services/<feature>/      business logic, errors, logging
+    data/<feature>/          repositories: read and write data
+    integrations/<feature>/  call outside systems, like another company's API
+    plugins/                 build each feature's service at startup
+    observability/loggers/   one logger per feature, one method per event
+    shared/                  types, response helpers, the error catalog
+  db/schema/               SQL files that create the tables
+
+apps/web/                  the web interface (React and Vite, its own package.json). Vite
+                           builds it into apps/web/dist, and the API serves that at /app/.
+                           It shares no code with the API and only calls its HTTP API.
+pilot/                     scripts for the milestone pilots (docs/pilot.md)
 docs/                      how the code works, and what the API returns
 infrastructure/            Terraform for AWS
 ```
+
+The API and the web interface are separate npm workspaces, so each has its own dependencies and config. Run commands from the repo root: `npm run check` runs lint, typecheck, build, and tests for both, and `npm run dev` and `npm run dev:web` start each one.
 
 Code is grouped by layer first, then by feature. For example, all handlers are in `handlers/`, and the item handlers are in `handlers/items/`. We chose this over one folder per feature because:
 
@@ -89,7 +96,7 @@ These rules keep each layer easy to change without breaking the ones above it. L
 
 ## Checking input with Zod
 
-Zod checks all request input. It replaces Ajv, the checker Fastify uses by default. `src/app.ts` sets this up once:
+Zod checks all request input. It replaces Ajv, the checker Fastify uses by default. `apps/api/src/app.ts` sets this up once:
 
 ```ts
 app.setValidatorCompiler(validatorCompiler);
@@ -173,7 +180,7 @@ A service never imports another service. If two services need the same thing, pu
 
 Plugins create each feature's objects when the app starts and attach them to the Fastify app. For example, `itemPlugin` creates `ItemPostgresRepository`, `WebhookHttpClient`, and `ItemLogger`, passes them to `ItemService`, and attaches only `itemService`.
 
-Only services use repositories. Routes and handlers never touch them, and lint fails if they try to import from `src/data`. If a service needs another feature's data, the plugin passes it that feature's repository too. The same goes for integrations.
+Only services use repositories. Routes and handlers never touch them, and lint fails if they try to import from `apps/api/src/data`. If a service needs another feature's data, the plugin passes it that feature's repository too. The same goes for integrations.
 
 Each plugin also tells TypeScript about these new fields (with `declare module 'fastify'`). It lists the plugins it needs (with `fp(..., { dependencies })`), so the app fails at startup if they are loaded in the wrong order.
 
@@ -191,7 +198,7 @@ Each feature has a logger with one method per event. The service gets it in its 
 this.itemLogger.onItemCreated();
 ```
 
-Every log line still gets the request ID. The `@fastify/request-context` plugin remembers which request is running, and `currentLogger()` in `src/observability/loggers/request-logger.ts` picks up that request's logger. Outside a request, such as at startup, it uses the app logger instead.
+Every log line still gets the request ID. The `@fastify/request-context` plugin remembers which request is running, and `currentLogger()` in `apps/api/src/observability/loggers/request-logger.ts` picks up that request's logger. Outside a request, such as at startup, it uses the app logger instead.
 
 Every event log has an `event` field:
 
@@ -216,9 +223,9 @@ The full response format, for API clients, is in `docs/responses.md`. In short:
 { "error": { "code": 20002, "name": "itemNotFound", "message": "...", "requestId": "8f3c..." } }
 ```
 
-Handlers use `success(data)` or `paged(items, { limit, offset, total })` from `src/shared/response.ts`. Error responses are built only by the error handler in `src/app.ts`.
+Handlers use `success(data)` or `paged(items, { limit, offset, total })` from `apps/api/src/shared/response.ts`. Error responses are built only by the error handler in `apps/api/src/app.ts`.
 
-Every error has its own `code` and `name`. The full list, with what each one means, is in `docs/errors.md`. The list itself lives in `src/shared/errors.ts`.
+Every error has its own `code` and `name`. The full list, with what each one means, is in `docs/errors.md`. The list itself lives in `apps/api/src/shared/errors.ts`.
 
 Services throw errors by name from that list:
 
@@ -226,7 +233,7 @@ Services throw errors by name from that list:
 throw new AppError('itemNotFound', `Item ${itemId} was not found`);
 ```
 
-Fastify catches any error thrown in a handler or service and passes it to the error handler in `src/app.ts`, which turns it into the error response above. It also handles errors that don't come from our code:
+Fastify catches any error thrown in a handler or service and passes it to the error handler in `apps/api/src/app.ts`, which turns it into the error response above. It also handles errors that don't come from our code:
 
 - Bad request input from Zod becomes `validationError`.
 - Fastify's own request errors become `invalidRequest`, `payloadTooLarge`, or `unsupportedMediaType`.
@@ -239,7 +246,7 @@ Every response includes the request ID in a header. The header name comes from `
 
 ## Tasks
 
-A task is one run of work by one agent. `TaskService` owns every change to a task, and the rules for which state changes are allowed are in `src/services/tasks/task-state.ts`. The product rules behind them are on the Architecture page in Notion.
+A task is one run of work by one agent. `TaskService` owns every change to a task, and the rules for which state changes are allowed are in `apps/api/src/services/tasks/task-state.ts`. The product rules behind them are on the Architecture page in Notion.
 
 - **Compare and set.** `TaskRepository.update()` only writes if the task still has the state and pause flag the service read. If another change got there first, the service throws `taskStateConflict` instead of overwriting it.
 - **History.** Every change adds a row to `task_events`, and rows there are never changed. This is the execution history the API shows. The runner will also use it to pick up where a task left off.
@@ -248,13 +255,13 @@ A task is one run of work by one agent. `TaskService` owns every change to a tas
 
 ### Sharing lifecycle rules between services
 
-Two services change tasks: `TaskService`, for the API and human actions, and `TaskRunnerService`, the runner acting for agents. Services never use each other, so both use `TaskLifecycle` (`src/services/tasks/task-lifecycle.ts`). It is a helper inside the tasks feature, not a service, and it holds the rules for state changes, waits, outputs, and completion. Put shared business rules that only one feature needs in a helper like this. Put rules several features need, like `addressedAgentIds()`, in `src/shared/`.
+Two services change tasks: `TaskService`, for the API and human actions, and `TaskRunnerService`, the runner acting for agents. Services never use each other, so both use `TaskLifecycle` (`apps/api/src/services/tasks/task-lifecycle.ts`). It is a helper inside the tasks feature, not a service, and it holds the rules for state changes, waits, outputs, and completion. Put shared business rules that only one feature needs in a helper like this. Put rules several features need, like `addressedAgentIds()`, in `apps/api/src/shared/`.
 
 How messages become work is in `docs/conversations.md`.
 
 ## Configuration
 
-Every environment variable is listed in one Zod schema in `src/config.ts`. The rest of the code reads settings from the `config` object it exports. If a value is wrong, the app stops at startup and names the bad variable.
+Every environment variable is listed in one Zod schema in `apps/api/src/config.ts`. The rest of the code reads settings from the `config` object it exports. If a value is wrong, the app stops at startup and names the bad variable.
 
 The `.env` file is loaded only when `ENVIRONMENT=local`. Everywhere else, settings come from real environment variables.
 
@@ -264,7 +271,7 @@ The app uses Postgres through `@fastify/postgres`. It only connects when the fir
 
 If `DATABASE_URL` is set, the app uses it and ignores `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD`.
 
-Table definitions are SQL files in `db/schema/`. `000_schema.sql` creates the Postgres schema, and the other files create the tables in it. `npm run db:migrate` (`src/migrate.ts`) runs them in filename order, each in its own transaction, and records each one in `schema_migrations` so it runs only once. To change a table, add a new file; never edit one that has been merged.
+Table definitions are SQL files in `apps/api/db/schema/`. `000_schema.sql` creates the Postgres schema, and the other files create the tables in it. `npm run db:migrate` (`apps/api/src/migrate.ts`) runs them in filename order, each in its own transaction, and records each one in `schema_migrations` so it runs only once. To change a table, add a new file; never edit one that has been merged.
 
 ## Tests
 

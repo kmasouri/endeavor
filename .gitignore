@@ -2,7 +2,7 @@ node_modules/
 dist/
 coverage/
 .env
-/workspaces/
+/apps/api/workspaces/
 *.log
 
 # Terraform
