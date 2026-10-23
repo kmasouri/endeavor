@@ -75,7 +75,7 @@ export class ResponsibilityService {
       brief: input.brief,
       completionCriteria: input.completionCriteria,
       intervalMinutes: input.intervalMinutes,
-      missedRunPolicy: input.missedRunPolicy ?? 'run_once',
+      missedRunPolicy: input.missedRunPolicy ?? 'ask',
       nextRunAt: input.startAt ?? new Date(),
       createdByHumanId: admin.id
     });
@@ -212,6 +212,50 @@ export class ResponsibilityService {
       );
     }
     return result;
+  }
+
+  // Answers "missed runs: run now, or wait?". Only the first answer counts, and an answer after
+  // the next run came due finds nothing to answer.
+  async resolveCatchUp(
+    actorId: string,
+    responsibilityId: string,
+    decision: 'run' | 'wait'
+  ): Promise<{ responsibility: Responsibility; task: Task | null }> {
+    const human = requireHuman(await this.humanRepository.getById(actorId));
+    const responsibility = await this.requireResponsibility(responsibilityId);
+    const pending = responsibility.catchUp;
+    if (
+      !pending ||
+      !(await this.responsibilityRepository.clearCatchUp(responsibility.id, pending.slot))
+    ) {
+      throw new AppError('catchUpNotPending');
+    }
+    this.responsibilityLogger.onCatchUpResolved(responsibility.id, decision);
+    const cleared = { ...responsibility, catchUp: null };
+    if (decision === 'wait') {
+      return { responsibility: cleared, task: null };
+    }
+    const result = await startResponsibilityRun(
+      {
+        taskRepository: this.taskRepository,
+        agentRepository: this.agentRepository,
+        conversationRepository: this.conversationRepository,
+        lifecycle: this.lifecycle
+      },
+      responsibility,
+      {
+        runKey: `catchup:${responsibility.id}:${pending.slot.toISOString()}`,
+        startedBy: { type: 'human', id: human.id },
+        note: `(Catching up: ${pending.missed} scheduled run${pending.missed === 1 ? ' was' : 's were'} missed while the platform was off. ${human.name} asked to run now.)`
+      }
+    );
+    if ('skippedReason' in result) {
+      throw new AppError(
+        result.openRunId ? 'responsibilityRunOpen' : 'agentUnavailable',
+        result.skippedReason
+      );
+    }
+    return { responsibility: cleared, task: result.task };
   }
 
   private async requireResponsibility(responsibilityId: string): Promise<Responsibility> {

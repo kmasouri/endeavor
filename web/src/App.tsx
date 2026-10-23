@@ -7,7 +7,7 @@ import { ApprovalsPage } from './pages/Approvals';
 import { SchedulesPage } from './pages/Schedules';
 import { TaskPage } from './pages/Task';
 import { TasksPage } from './pages/Tasks';
-import { Approval } from './api';
+import { Approval, Responsibility } from './api';
 import { AgentsPage } from './pages/Agents';
 import { CatalogsPage } from './pages/Catalogs';
 import { ConversationPage } from './pages/Conversation';
@@ -18,6 +18,16 @@ export function App() {
   const [actorId, setActor] = useState(getActorId());
   const people = useLoad(() => api.get<Human[]>('/humans'), []);
   const route = useRoute();
+  // Open "missed runs: run now or wait?" questions, shown as a count next to Schedules.
+  const schedules = useLoad(
+    () =>
+      actorId
+        ? api.list<Responsibility>('/responsibilities?status=enabled&limit=100')
+        : Promise.resolve(undefined),
+    [actorId],
+    15000
+  );
+  const catchUps = (schedules.data?.data ?? []).filter((s) => s.catchUp).length;
   // Shown as a count in the menu, so a waiting approval is hard to miss.
   const pending = useLoad(
     () =>
@@ -72,7 +82,7 @@ export function App() {
             {pending.data && pending.data.page.total > 0 && ` (${pending.data.page.total})`}
           </a>
           <a className={section === 'schedules' ? 'active' : ''} href="#/schedules">
-            Schedules
+            Schedules{catchUps > 0 && ` (${catchUps})`}
           </a>
           <a className={section === 'agents' ? 'active' : ''} href="#/agents">
             Agents

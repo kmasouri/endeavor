@@ -164,6 +164,7 @@ export function mockResponsibilityRepository(): jest.Mocked<ResponsibilityReposi
     count: jest.fn().mockResolvedValue(0),
     update: jest.fn(),
     listDue: jest.fn().mockResolvedValue([]),
-    advance: jest.fn().mockResolvedValue(true)
+    advance: jest.fn().mockResolvedValue(true),
+    clearCatchUp: jest.fn().mockResolvedValue(true)
   };
 }

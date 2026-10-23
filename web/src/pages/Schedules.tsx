@@ -39,6 +39,12 @@ export function SchedulesPage() {
   );
 }
 
+const POLICY_LABELS = {
+  ask: 'run one, ask if several',
+  run_once: 'run once',
+  skip: 'skip'
+} as const;
+
 function ScheduleCard(props: {
   schedule: Responsibility;
   agentName: string;
@@ -72,11 +78,33 @@ function ScheduleCard(props: {
         <strong className="grow">{s.title}</strong>
         <span className={`badge ${s.status === 'enabled' ? 'state-working' : ''}`}>{s.status}</span>
       </div>
+      {s.catchUp && (
+        <div className="callout">
+          <strong>
+            {s.catchUp.missed === 1 ? 'A run was' : `${s.catchUp.missed} runs were`} missed while
+            the platform was off.
+          </strong>{' '}
+          Run it now, or wait for the next one ({when(s.nextRunAt)})? If you don't answer, the next
+          run happens as usual.
+          <div className="row">
+            <button disabled={action.busy} onClick={() => post('/catch-up', { decision: 'run' })}>
+              Catch up now
+            </button>
+            <button
+              className="secondary"
+              disabled={action.busy}
+              onClick={() => post('/catch-up', { decision: 'wait' })}
+            >
+              Wait
+            </button>
+          </div>
+        </div>
+      )}
       <p className="muted small">
         {props.agentName} · every {s.intervalMinutes} minutes ·{' '}
         {s.status === 'enabled' ? `next ${when(s.nextRunAt)}` : 'not running'}
         {s.lastRunAt && ` · last ${when(s.lastRunAt)}`} · missed runs:{' '}
-        {s.missedRunPolicy === 'run_once' ? 'run once' : 'skip'}
+        {POLICY_LABELS[s.missedRunPolicy]}
         {s.conversationId && (
           <>
             {' '}
@@ -160,7 +188,7 @@ function NewSchedule({ onCreated }: { onCreated: () => void }) {
   const [brief, setBrief] = useState('');
   const [criteria, setCriteria] = useState('');
   const [minutes, setMinutes] = useState('60');
-  const [policy, setPolicy] = useState<'run_once' | 'skip'>('run_once');
+  const [policy, setPolicy] = useState<'ask' | 'run_once' | 'skip'>('ask');
   const action = useAction();
 
   const create = (event: FormEvent) => {
@@ -232,9 +260,10 @@ function NewSchedule({ onCreated }: { onCreated: () => void }) {
             If runs are missed
             <select
               value={policy}
-              onChange={(e) => setPolicy(e.target.value as 'run_once' | 'skip')}
+              onChange={(e) => setPolicy(e.target.value as 'ask' | 'run_once' | 'skip')}
             >
-              <option value="run_once">Run once when back</option>
+              <option value="ask">Run one; ask me if several</option>
+              <option value="run_once">Always run once when back</option>
               <option value="skip">Skip them</option>
             </select>
           </label>

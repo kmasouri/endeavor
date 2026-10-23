@@ -17,12 +17,13 @@ Each run is an ordinary task with `responsibilityId` set, so everything about ta
 
 The platform runs on this computer, so it can't run anything while the computer is asleep or the service is stopped. When it comes back, each responsibility follows its `missedRunPolicy`:
 
-- `run_once` (the default): start one run for the latest missed slot. The run's brief says how many runs were missed.
+- `ask` (the default): if only one run was missed and the next one isn't close, run it. If several were missed, or the next run is due within a quarter of the interval, don't run. Ask a person instead: the question is posted in the responsibility's conversation, mentioning its people, and shows on the Schedules page. `POST /responsibilities/:id/catch-up` with `{ "decision": "run" }` starts one run now; `"wait"` leaves it for the next scheduled run. Only the first answer counts. If nobody answers, the question lapses when the next run comes due, and that run happens as usual (`catchUpNotPending` after that).
+- `run_once`: always start one run for the latest missed slot.
 - `skip`: start no run, and wait for the next slot.
 
-Either way, the next run is the first slot after now, so missed runs never pile up. A slot that is only a little late isn't missed; it simply runs, whatever the policy. "A little late" means within half the interval, and at most 15 minutes.
+A run's brief says how many runs were missed. Either way, the next run is the first slot after now, so missed runs never pile up. A slot that is only a little late isn't missed; it simply runs, whatever the policy. "A little late" means within half the interval, and at most 15 minutes.
 
-Each run's key is its time slot (`schedule:<id>:<slot>`). The run is created first and the schedule moves on after, and only one runner can move a slot on. So a slot never runs twice, and a crash between the two steps doesn't lose it.
+Each run's key is its time slot (`schedule:<id>:<slot>`, or `catchup:<id>:<slot>` for a catch-up a person asked for). The run is created first and the schedule moves on after, and only one runner can move a slot on. So a slot never runs twice, and a crash between the two steps doesn't lose it.
 
 Only one run of a responsibility is open at a time. If the last run is still working, waiting, or blocked when the next slot comes, that slot is skipped and logged. `lastRunAt` only moves when a run really starts.
 

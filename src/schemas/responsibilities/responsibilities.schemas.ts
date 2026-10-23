@@ -10,7 +10,7 @@ export const createResponsibilityBodySchema = z.strictObject({
   brief: z.string().trim().min(1),
   completionCriteria: z.string().trim().min(1),
   intervalMinutes: z.number().int().min(5).max(525_600),
-  missedRunPolicy: z.enum(['run_once', 'skip']).optional(),
+  missedRunPolicy: z.enum(['ask', 'run_once', 'skip']).optional(),
   startAt: z.iso
     .datetime()
     .transform((value) => new Date(value))
@@ -23,7 +23,7 @@ export const updateResponsibilityBodySchema = z
     brief: z.string().trim().min(1).optional(),
     completionCriteria: z.string().trim().min(1).optional(),
     intervalMinutes: z.number().int().min(5).max(525_600).optional(),
-    missedRunPolicy: z.enum(['run_once', 'skip']).optional(),
+    missedRunPolicy: z.enum(['ask', 'run_once', 'skip']).optional(),
     nextRunAt: z.iso
       .datetime()
       .transform((value) => new Date(value))
@@ -51,6 +51,12 @@ export const startRunBodySchema = z
   })
   .nullish();
 
+// The answer to "missed runs: run now, or wait for the next one?"
+export const catchUpBodySchema = z.strictObject({
+  decision: z.enum(['run', 'wait'])
+});
+
+export type CatchUpBody = z.infer<typeof catchUpBodySchema>;
 export type ResponsibilityParams = z.infer<typeof responsibilityParamsSchema>;
 export type CreateResponsibilityBody = z.infer<typeof createResponsibilityBodySchema>;
 export type UpdateResponsibilityBody = z.infer<typeof updateResponsibilityBodySchema>;

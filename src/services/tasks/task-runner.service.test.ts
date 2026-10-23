@@ -228,6 +228,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
       onDeliveryFailed: jest.fn(),
       onModelTurn: jest.fn(),
       onCompletionChecked: jest.fn(),
+      onCatchUpAsked: jest.fn(),
       onModelFailed: jest.fn(),
       onTaskRunFailed: jest.fn(),
       onRequestChainTooDeep: jest.fn(),
@@ -1513,6 +1514,7 @@ describe('TaskRunnerService', () => {
       status: 'enabled' as const,
       nextRunAt: new Date('2026-10-22T01:00:00Z'),
       lastRunAt: null,
+      catchUp: null,
       createdByHumanId: HUMAN,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -1531,7 +1533,8 @@ describe('TaskRunnerService', () => {
 
       expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
         nextRunAt: new Date('2026-10-22T05:00:00Z'),
-        lastRunAt: new Date('2026-10-22T04:30:00Z')
+        lastRunAt: new Date('2026-10-22T04:30:00Z'),
+        catchUp: null
       });
       expect(tasks.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -1539,6 +1542,30 @@ describe('TaskRunnerService', () => {
           responsibilityId: 'r1',
           requestedByType: 'schedule',
           brief: expect.stringContaining('3 earlier scheduled runs were missed')
+        })
+      );
+    });
+
+    it('asks the people in the conversation, instead of running, when several runs were missed', async () => {
+      const { runner, tasks, responsibilities, messages, conversations } = setup();
+      responsibilities.listDue.mockResolvedValue([{ ...due, missedRunPolicy: 'ask' }]);
+
+      await runner.startDueRuns(new Date('2026-10-22T04:30:00Z'));
+
+      expect(tasks.create).not.toHaveBeenCalled();
+      expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
+        nextRunAt: new Date('2026-10-22T05:00:00Z'),
+        lastRunAt: null,
+        catchUp: { slot: new Date('2026-10-22T04:00:00Z'), missed: 4 }
+      });
+      expect(conversations.listMembers).toHaveBeenCalledWith(CONV);
+      expect(messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          authorType: 'system',
+          body: expect.stringContaining('4 scheduled runs of "Nightly QA" were missed'),
+          mentions: [{ type: 'human', id: HUMAN }],
+          deliverToAgentIds: [],
+          clientKey: 'catchup:r1:2026-10-22T04:00:00.000Z'
         })
       );
     });
@@ -1554,7 +1581,8 @@ describe('TaskRunnerService', () => {
       // The slot is still used up, and lastRunAt doesn't move.
       expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
         nextRunAt: new Date('2026-10-22T02:00:00Z'),
-        lastRunAt: null
+        lastRunAt: null,
+        catchUp: null
       });
     });
 
@@ -1602,7 +1630,8 @@ describe('TaskRunnerService', () => {
       expect(tasks.create).not.toHaveBeenCalled();
       expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
         nextRunAt: new Date('2026-10-22T05:00:00Z'),
-        lastRunAt: null
+        lastRunAt: null,
+        catchUp: null
       });
     });
   });

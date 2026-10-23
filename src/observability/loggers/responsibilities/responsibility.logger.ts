@@ -11,6 +11,13 @@ export class ResponsibilityLogger {
     );
   }
 
+  onCatchUpResolved(responsibilityId: string, decision: 'run' | 'wait'): void {
+    currentLogger(this.logger).info(
+      { event: 'responsibility.catchup.resolved', responsibilityId, decision },
+      'missed-run question answered'
+    );
+  }
+
   onResponsibilityStatusChanged(responsibilityId: string, status: string): void {
     currentLogger(this.logger).info(
       { event: 'responsibility.status.changed', responsibilityId, status },
