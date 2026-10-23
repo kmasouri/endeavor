@@ -12,7 +12,14 @@ To move open work to a newer version, a person calls `POST /tasks/:taskId/versio
 
 Permissions are a separate matter. Revoked skills, connections, and actions are checked against the current grants on every tool call, whatever version a task runs (CA-5).
 
-**Limits** (`limits` on the configuration, saved with the version): `maxModelTurns`, `maxTokens` (input plus output over the task, including completion checks; a stand-in for cost), and `maxWorkingMinutes` (time spent working; waiting and paused time don't count). When a task reaches a limit, it is blocked with the reason, and the person who asked is told. To let it go on, a person raises the limit, which saves a new version, and moves the task to it with `POST /tasks/:taskId/version`.
+**Limits** (`limits` on the configuration, saved with the version): `maxModelTurns`, `maxTokens` (input plus output over the task, including completion checks), `maxCostUsd` (US dollars over the task; without it, `TASK_BUDGET_USD` applies, $1 by default), and `maxWorkingMinutes` (time spent working; waiting and paused time don't count). When a task reaches a limit, it is blocked with the reason, and the person who asked is told. To let it go on, a person raises the limit, which saves a new version, and moves the task to it with `POST /tasks/:taskId/version`.
+
+**Costs and budgets.** Each model call's cost is worked out from `MODEL_PRICES` (US dollars per million input and output tokens, per model) and saved with the call. A model with no price has an unknown cost: its tokens are still counted, and it shows up as `unpricedCalls`, but dollar budgets can't count it.
+
+- `GET /agents/:agentId/costs`: what the agent spent in total and this month (UTC), and its costliest tasks this month.
+- `GET /conversations/:conversationId/costs`: what all agent work in a conversation spent.
+- An agent's **monthly budget** (`PATCH /agents/:agentId` with `monthlyBudgetUsd`) covers all its work in a calendar month. A conversation's **budget** (`PATCH /conversations/:conversationId` with `budgetUsd`) covers all agent work in it. `null` removes a budget. Neither is versioned.
+- Before each model call, the task's own cap, the agent's monthly budget, and the conversation's budget are all checked. The tightest wins. A task over any of them is blocked with the reason, and the person who asked is told. Raising the budget and resuming the task lets it go on. Budgets are checked before each call, so the last call can take spending a little over the budget.
 
 **Who sees what:** in v1 there is one role, so every person sees every task and approval. The member rules are still in the code, switched off in `src/shared/access.ts`: with roles on, members see only tasks, and their approvals, in conversations they belong to, plus tasks they asked for.
 

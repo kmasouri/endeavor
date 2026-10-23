@@ -4,6 +4,7 @@ import { ErrorNote, Hint, when } from '../components';
 import { useAction, useLoad } from '../hooks';
 import { AgentConfigFields, ConfigValues, initialConfig } from './AgentConfig';
 import { SavedNotes } from './Context';
+import { Spending } from './Spending';
 
 export function AgentPage({ agentId }: { agentId: string }) {
   const agent = useLoad(() => api.get<Agent>(`/agents/${agentId}`), [agentId]);
@@ -44,6 +45,9 @@ export function AgentPage({ agentId }: { agentId: string }) {
       <aside>
         <div className="panel">
           <EnableToggle agent={a} onChanged={agent.reload} />
+        </div>
+        <div className="panel">
+          <Spending kind="agent" id={a.id} />
         </div>
         <div className="panel">
           <Grants agentId={a.id} />

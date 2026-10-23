@@ -102,6 +102,24 @@ describe('CatalogService', () => {
     expect(outcome).not.toMatchObject({ name: 'forbidden' });
   });
 
+  it('makes every method but GET need approval on a new connection, unless told otherwise', async () => {
+    const { service, catalogs } = setup();
+    catalogs.createConnection.mockResolvedValue(connection);
+    const input = {
+      name: 'Issues',
+      description: 'd',
+      baseUrl: 'https://issues.test',
+      allowedMethods: ['GET', 'POST', 'DELETE'] as ('GET' | 'POST' | 'DELETE')[],
+      allowedPathPrefixes: ['/']
+    };
+
+    await service.createConnection(ADMIN, input);
+    await service.createConnection(ADMIN, { ...input, approvalMethods: [] });
+
+    expect(catalogs.createConnection.mock.calls[0][0].approvalMethods).toEqual(['POST', 'DELETE']);
+    expect(catalogs.createConnection.mock.calls[1][0].approvalMethods).toEqual([]);
+  });
+
   it('turns a name clash into catalogNameTaken', async () => {
     const { service, catalogs } = setup();
     catalogs.createConnection.mockRejectedValue(new CatalogNameConflictError('Docs'));

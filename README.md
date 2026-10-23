@@ -70,6 +70,8 @@ The app checks all of these at startup, in `src/config.ts`.
 | `RUNNER_INTERVAL_MS` | `2000`                      | How often the runner checks for work, in milliseconds.                                            |
 | `WORKSPACES_DIR`     | `workspaces`                | Folder for agents' files, one subfolder per task.                                                 |
 | `COMPLETION_CHECK`   | `true`                      | Check each result against its criteria with a separate model call before a task completes.        |
+| `MODEL_PRICES`       |                             | Model prices as JSON: `{"model":{"inputPerMillion":0.15,"outputPerMillion":0.6}}`, in US dollars. |
+| `TASK_BUDGET_USD`    | `1`                         | The most one task may spend, in US dollars, unless its agent's configuration sets `maxCostUsd`.   |
 | `CREDENTIALS_KEY`    |                             | 32 random bytes (base64 or hex) that encrypt connection credentials. Needed to save a credential. |
 
 ## Commands
@@ -110,7 +112,8 @@ Requests that act as a person send that person's ID in the `x-actor-id` header. 
 - `GET /agents/:agentId/grants`, `POST /agents/:agentId/grants`, `DELETE /agents/:agentId/grants/:type/:targetId`
 - `POST /agents`, `GET /agents`, `GET /agents/:agentId`, `PATCH /agents/:agentId`
 - `POST /agents/:agentId/config`, `GET /agents/:agentId/versions`, `POST /agents/:agentId/disable`, `/enable`
-- `POST /conversations`, `GET /conversations`, `GET /conversations/:conversationId`
+- `POST /conversations`, `GET /conversations`, `GET /conversations/:conversationId`, `PATCH /conversations/:conversationId`
+- `GET /agents/:agentId/costs`, `GET /conversations/:conversationId/costs`
 - `POST /conversations/:conversationId/members`
 - `POST /conversations/:conversationId/messages`, `GET /conversations/:conversationId/messages`
 - `POST /conversations/:conversationId/documents`, `GET .../documents`, `DELETE .../documents/:documentId`

@@ -164,6 +164,8 @@ export interface Agent {
   purpose: string;
   currentVersionId: string | null;
   disabledAt: Date | null;
+  // A cap on what this agent spends each calendar month (UTC), in US dollars. null: no cap.
+  monthlyBudgetUsd: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -171,8 +173,10 @@ export interface Agent {
 // Limits for each task an agent runs. Leaving one out means the runner's default applies.
 export interface AgentLimits {
   maxModelTurns?: number;
-  // Input plus output tokens over the whole task. A stand-in for cost.
+  // Input plus output tokens over the whole task.
   maxTokens?: number;
+  // US dollars over the whole task. Without it, TASK_BUDGET_USD applies.
+  maxCostUsd?: number;
   // Minutes spent working. Time spent waiting or paused doesn't count.
   maxWorkingMinutes?: number;
 }
@@ -196,6 +200,8 @@ export interface Conversation {
   id: string;
   title: string;
   createdByHumanId: string;
+  // A cap on what all agent work in this conversation spends, in US dollars. null: no cap.
+  budgetUsd: number | null;
   createdAt: Date;
 }
 

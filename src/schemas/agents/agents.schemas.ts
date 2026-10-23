@@ -14,6 +14,7 @@ const agentConfigFields = {
     .strictObject({
       maxModelTurns: z.number().int().min(1).max(1000).optional(),
       maxTokens: z.number().int().min(1000).optional(),
+      maxCostUsd: z.number().positive().max(1000).optional(),
       maxWorkingMinutes: z.number().int().min(1).max(10_080).optional()
     })
     .optional(),
@@ -29,7 +30,9 @@ export const createAgentBodySchema = z.strictObject({
 export const updateAgentProfileBodySchema = z
   .strictObject({
     name: z.string().trim().min(1).max(80).optional(),
-    purpose: z.string().trim().min(1).optional()
+    purpose: z.string().trim().min(1).optional(),
+    // US dollars per calendar month across all this agent's work. null removes the cap.
+    monthlyBudgetUsd: z.number().positive().max(100_000).nullable().optional()
   })
   .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
 

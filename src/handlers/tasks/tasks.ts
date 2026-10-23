@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import {
   ActorHeaders,
+  AgentCostParams,
   ApprovalParams,
   ListApprovalsQuery,
   CreateTaskBody,
@@ -64,6 +65,28 @@ export async function listTaskEventsHandler(
       request.headers['x-actor-id'],
       request.params.taskId,
       request.query
+    )
+  );
+}
+
+export async function agentCostsHandler(
+  request: FastifyRequest<{ Params: AgentCostParams; Headers: ActorHeaders }>
+): Promise<unknown> {
+  return success(
+    await request.server.taskService.agentCosts(
+      request.headers['x-actor-id'],
+      request.params.agentId
+    )
+  );
+}
+
+export async function conversationCostsHandler(
+  request: FastifyRequest<{ Params: ConversationOutputsParams; Headers: ActorHeaders }>
+): Promise<unknown> {
+  return success(
+    await request.server.taskService.conversationCosts(
+      request.headers['x-actor-id'],
+      request.params.conversationId
     )
   );
 }

@@ -14,6 +14,14 @@ export const createConversationBodySchema = z.strictObject({
   agentIds: z.array(z.uuid()).max(20).optional()
 });
 
+export const updateConversationBodySchema = z
+  .strictObject({
+    title: z.string().trim().min(1).max(200).optional(),
+    // US dollars for all agent work in this conversation. null removes the cap.
+    budgetUsd: z.number().positive().max(100_000).nullable().optional()
+  })
+  .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
+
 export const addMemberBodySchema = z.strictObject({
   type: z.enum(['human', 'agent']),
   id: z.uuid(),
@@ -54,6 +62,7 @@ export type DocumentParams = z.infer<typeof documentParamsSchema>;
 export type ConversationParams = z.infer<typeof conversationParamsSchema>;
 export type CreateConversationBody = z.infer<typeof createConversationBodySchema>;
 export type AddMemberBody = z.infer<typeof addMemberBodySchema>;
+export type UpdateConversationBody = z.infer<typeof updateConversationBodySchema>;
 export type PostMessageBody = z.infer<typeof postMessageBodySchema>;
 export type ListConversationsQuery = z.infer<typeof listConversationsQuerySchema>;
 export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;

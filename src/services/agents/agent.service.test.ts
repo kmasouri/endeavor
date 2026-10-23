@@ -19,6 +19,7 @@ const agent: Agent = {
   purpose: 'Tests the staging site',
   currentVersionId: 'v1',
   disabledAt: null,
+  monthlyBudgetUsd: null,
   createdAt: new Date(),
   updatedAt: new Date()
 };

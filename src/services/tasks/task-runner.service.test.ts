@@ -48,6 +48,7 @@ function makeAgent(id: string, name: string): Agent {
     purpose: `${name} things`,
     currentVersionId: `v-${id}`,
     disabledAt: null,
+    monthlyBudgetUsd: null,
     createdAt: new Date(),
     updatedAt: new Date()
   };
@@ -271,6 +272,70 @@ function eventTypes(tasks: ReturnType<typeof setup>['tasks']): string[] {
 }
 
 describe('TaskRunnerService', () => {
+  describe('costs and budgets', () => {
+    it('records what each model turn cost, from the price table', async () => {
+      const { runner, tasks, client } = setup();
+      (runner as unknown as { options: { prices: object } }).options.prices = {
+        script: { inputPerMillion: 1_000_000, outputPerMillion: 0 }
+      };
+      client.complete.mockResolvedValueOnce(turn({ usage: { inputTokens: 2, outputTokens: 1 } }));
+
+      await runner.runTask(makeTask());
+
+      const turnEvent = tasks.addEvent.mock.calls.find(([, type]) => type === 'model.turn');
+      expect(turnEvent?.[3]).toMatchObject({ costUsd: 2 });
+    });
+
+    it('blocks a task that reached the per-task budget', async () => {
+      const { runner, tasks, current } = setup();
+      tasks.listEvents.mockResolvedValue([
+        event(1, 'model.turn', {
+          raw: {},
+          usage: { inputTokens: 1, outputTokens: 1 },
+          costUsd: 1.2
+        })
+      ]);
+
+      await runner.runTask(makeTask());
+
+      expect(current().state).toBe('blocked');
+      expect(current().stateReason).toContain('Spent $1.20 of the $1.00 budget for one task');
+    });
+
+    it("blocks when the agent's monthly budget is used up", async () => {
+      const { runner, tasks, agentRepo, current } = setup();
+      agentRepo.getById.mockResolvedValue({ ...agents[RESEARCHER], monthlyBudgetUsd: 5 });
+      tasks.sumCost.mockResolvedValue({ costUsd: 5.5, tokens: 100, unpricedCalls: 0 });
+
+      await runner.runTask(makeTask());
+
+      expect(tasks.sumCost).toHaveBeenCalledWith({
+        agentId: RESEARCHER,
+        since: expect.any(Date)
+      });
+      expect(current().state).toBe('blocked');
+      expect(current().stateReason).toContain('reaching its $5.00 monthly budget');
+    });
+
+    it("blocks when the conversation's budget is used up", async () => {
+      const { runner, tasks, conversations, current } = setup();
+      conversations.getById.mockResolvedValue({
+        id: CONV,
+        title: 'Billing',
+        createdByHumanId: HUMAN,
+        budgetUsd: 2,
+        createdAt: new Date()
+      });
+      tasks.sumCost.mockResolvedValue({ costUsd: 2, tokens: 100, unpricedCalls: 0 });
+
+      await runner.runTask(makeTask());
+
+      expect(tasks.sumCost).toHaveBeenCalledWith({ conversationId: CONV });
+      expect(current().state).toBe('blocked');
+      expect(current().stateReason).toContain('This conversation spent $2.00');
+    });
+  });
+
   describe('completion check', () => {
     // A real provider, so the check runs. The scripted test provider skips it.
     function setupChecked(replies: string[], earlier: TaskEvent[] = []) {

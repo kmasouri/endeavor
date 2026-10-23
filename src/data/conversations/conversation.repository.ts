@@ -3,6 +3,11 @@ import { Conversation, ConversationMember, ParticipantRef } from '../../shared/t
 export interface ConversationRepository {
   create(input: { title: string; createdByHumanId: string }): Promise<Conversation>;
   getById(conversationId: string): Promise<Conversation | null>;
+  // budgetUsd: a number sets the cap, null removes it, undefined leaves it.
+  update(
+    conversationId: string,
+    changes: { title?: string; budgetUsd?: number | null }
+  ): Promise<Conversation | null>;
   // Conversations the participant belongs to, or all of them when participant is null.
   list(input: {
     participant: ParticipantRef | null;

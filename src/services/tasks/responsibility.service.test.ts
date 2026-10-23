@@ -45,6 +45,7 @@ function setup() {
     purpose: '',
     currentVersionId: 'v1',
     disabledAt: null,
+    monthlyBudgetUsd: null,
     createdAt: new Date(),
     updatedAt: new Date()
   });

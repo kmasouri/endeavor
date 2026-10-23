@@ -34,6 +34,8 @@ export function mockTaskRepository(): jest.Mocked<TaskRepository> {
     countOutputs: jest.fn().mockResolvedValue(0),
     listConversationOutputs: jest.fn().mockResolvedValue([]),
     countConversationOutputs: jest.fn().mockResolvedValue(0),
+    sumCost: jest.fn().mockResolvedValue({ costUsd: 0, tokens: 0, unpricedCalls: 0 }),
+    listTaskCosts: jest.fn().mockResolvedValue([]),
     claimRunnable: jest.fn().mockResolvedValue([]),
     releaseLease: jest.fn(),
     renewLease: jest.fn().mockResolvedValue(true),
@@ -77,6 +79,7 @@ export function mockConversationRepository(): jest.Mocked<ConversationRepository
   return {
     create: jest.fn(),
     getById: jest.fn(),
+    update: jest.fn(),
     list: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
     addMember: jest.fn(),

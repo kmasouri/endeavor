@@ -93,7 +93,9 @@ const runnerPlugin: FastifyPluginAsync = async (fastify) => {
     {
       ...DEFAULT_RUNNER_OPTIONS,
       workerId: `${hostname()}:${process.pid}`,
-      completionCheck: config.COMPLETION_CHECK
+      completionCheck: config.COMPLETION_CHECK,
+      prices: config.MODEL_PRICES,
+      taskBudgetUsd: config.TASK_BUDGET_USD
     }
   );
   fastify.decorate('taskRunnerService', runner);

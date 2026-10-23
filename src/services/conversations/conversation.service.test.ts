@@ -20,6 +20,7 @@ const conversation: Conversation = {
   id: CONV,
   title: 'Billing',
   createdByHumanId: KIM,
+  budgetUsd: null,
   createdAt: new Date()
 };
 const agent: Agent = {
@@ -28,6 +29,7 @@ const agent: Agent = {
   purpose: 'Research',
   currentVersionId: 'v1',
   disabledAt: null,
+  monthlyBudgetUsd: null,
   createdAt: new Date(),
   updatedAt: new Date()
 };

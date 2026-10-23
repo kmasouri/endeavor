@@ -26,6 +26,7 @@ const agent: Agent = {
   purpose: 'Finds and summarizes sources',
   currentVersionId: VERSION_ID,
   disabledAt: null,
+  monthlyBudgetUsd: null,
   createdAt: new Date(),
   updatedAt: new Date()
 };
@@ -832,6 +833,25 @@ describe('TaskService', () => {
         limit: 10,
         offset: 0
       });
+    });
+  });
+
+  describe('agentCosts', () => {
+    it("reports the agent's spending next to its monthly budget", async () => {
+      const { service, tasks, agents } = setup();
+      agents.getById.mockResolvedValue({ ...agent, monthlyBudgetUsd: 20 });
+      tasks.sumCost
+        .mockResolvedValueOnce({ costUsd: 12, tokens: 9000, unpricedCalls: 0 })
+        .mockResolvedValueOnce({ costUsd: 3, tokens: 2000, unpricedCalls: 1 });
+
+      const report = await service.agentCosts(HUMAN_ID, agent.id);
+
+      expect(report).toMatchObject({
+        total: { costUsd: 12 },
+        thisMonth: { costUsd: 3, unpricedCalls: 1 },
+        budgetUsd: 20
+      });
+      expect(tasks.sumCost).toHaveBeenCalledWith({ agentId: agent.id, since: expect.any(Date) });
     });
   });
 });

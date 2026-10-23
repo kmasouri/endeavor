@@ -14,6 +14,14 @@ function isMissingEnvFileError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
 }
 
+const priceTableSchema = z.record(
+  z.string(),
+  z.strictObject({
+    inputPerMillion: z.number().nonnegative(),
+    outputPerMillion: z.number().nonnegative()
+  })
+);
+
 // Every environment variable the service reads is declared here. Parsing fails fast at startup
 // with a readable message instead of letting a bad value (such as PORT=abc) become NaN later.
 const envSchema = z.object({
@@ -41,6 +49,29 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value !== 'false'),
   RUNNER_INTERVAL_MS: z.coerce.number().int().min(100).default(2000),
+  // Model prices in US dollars per million tokens, as JSON, such as
+  // {"some-model":{"inputPerMillion":0.15,"outputPerMillion":0.6}}. Models not listed have an
+  // unknown cost: their tokens are still counted, but dollar budgets can't count them.
+  MODEL_PRICES: z
+    .string()
+    .optional()
+    .transform((value, ctx) => {
+      if (!value) {
+        return {};
+      }
+      const parsed = priceTableSchema.safeParse(safeJson(value));
+      if (!parsed.success) {
+        ctx.addIssue({
+          code: 'custom',
+          message:
+            'MODEL_PRICES must be JSON like {"model":{"inputPerMillion":1,"outputPerMillion":2}}'
+        });
+        return z.NEVER;
+      }
+      return parsed.data;
+    }),
+  // The most one task may spend, in US dollars, unless its agent's configuration sets its own.
+  TASK_BUDGET_USD: z.coerce.number().positive().default(1),
   // A separate model call checks each result against its criteria before a task completes.
   COMPLETION_CHECK: z
     .enum(['true', 'false'])
@@ -53,6 +84,14 @@ const envSchema = z.object({
 });
 
 export type Env = z.infer<typeof envSchema>;
+
+function safeJson(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
 
 export function parseEnv(source: NodeJS.ProcessEnv): Env {
   const result = envSchema.safeParse(source);
@@ -80,6 +119,8 @@ export const config = {
   RUNNER_ENABLED: env.RUNNER_ENABLED && env.ENVIRONMENT !== 'test',
   RUNNER_INTERVAL_MS: env.RUNNER_INTERVAL_MS,
   COMPLETION_CHECK: env.COMPLETION_CHECK,
+  MODEL_PRICES: env.MODEL_PRICES,
+  TASK_BUDGET_USD: env.TASK_BUDGET_USD,
   WORKSPACES_DIR: env.WORKSPACES_DIR,
   CREDENTIALS_KEY: env.CREDENTIALS_KEY
 };

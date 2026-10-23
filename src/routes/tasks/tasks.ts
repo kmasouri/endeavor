@@ -8,6 +8,8 @@ import {
   createTaskHandler,
   getTaskHandler,
   listTaskEventsHandler,
+  agentCostsHandler,
+  conversationCostsHandler,
   listConversationOutputsHandler,
   listTaskOutputsHandler,
   listTasksHandler,
@@ -22,6 +24,7 @@ import {
   approvalParamsSchema,
   listApprovalsQuerySchema,
   createTaskBodySchema,
+  agentCostParamsSchema,
   conversationOutputsParamsSchema,
   listConversationOutputsQuerySchema,
   listTaskEventsQuerySchema,
@@ -86,6 +89,34 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
       }
     },
     listTaskEventsHandler
+  );
+
+  fastifyInstance.get(
+    '/agents/:agentId/costs',
+    {
+      schema: {
+        description:
+          'What an agent spent in US dollars: in total, this month (UTC), and its costliest tasks this month, next to its monthly budget. Calls to models with no price in MODEL_PRICES count as unpricedCalls.',
+        tags: ['tasks'],
+        headers: actorHeadersSchema,
+        params: agentCostParamsSchema
+      }
+    },
+    agentCostsHandler
+  );
+
+  fastifyInstance.get(
+    '/conversations/:conversationId/costs',
+    {
+      schema: {
+        description:
+          "What all agent work in a conversation spent in US dollars, and its costliest tasks, next to the conversation's budget.",
+        tags: ['tasks'],
+        headers: actorHeadersSchema,
+        params: conversationOutputsParamsSchema
+      }
+    },
+    conversationCostsHandler
   );
 
   fastifyInstance.get(
