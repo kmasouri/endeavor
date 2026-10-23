@@ -29,18 +29,29 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[], everyMs?: nu
   const [error, setError] = useState<string | null>(null);
   const loadRef = useRef(load);
   loadRef.current = load;
+  // Bumped whenever `deps` change. A slow answer for the previous page (say, another
+  // conversation) is dropped instead of replacing the current one.
+  const generation = useRef(0);
 
   const reload = useCallback(() => {
+    const asked = generation.current;
     loadRef
       .current()
       .then((value) => {
-        setData(value);
-        setError(null);
+        if (asked === generation.current) {
+          setData(value);
+          setError(null);
+        }
       })
-      .catch((caught: Error) => setError(caught.message));
+      .catch((caught: Error) => {
+        if (asked === generation.current) {
+          setError(caught.message);
+        }
+      });
   }, []);
 
   useEffect(() => {
+    generation.current += 1;
     setData(undefined);
     reload();
     if (!everyMs) {
