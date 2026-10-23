@@ -6,7 +6,7 @@ import {
   mockTaskRepository
 } from '../../data/repositories.test-helper';
 import { ResponsibilityLogger, TaskLogger } from '../../observability';
-import { Human, Responsibility } from '../../shared/types';
+import { Human, Responsibility, Task } from '../../shared/types';
 import { ResponsibilityService } from './responsibility.service';
 
 const ADMIN = '00000000-0000-4000-8000-000000000001';
@@ -216,5 +216,27 @@ describe('ResponsibilityService', () => {
     );
     expect(responsibilities.advance).not.toHaveBeenCalled();
     expect(responsibilities.update).not.toHaveBeenCalled();
+  });
+
+  it('returns the same run for a repeated runKey, even while it is still going', async () => {
+    const { service, tasks } = setup();
+    const running = { id: 't-running', state: 'working' } as unknown as Task;
+    tasks.getByRunKey.mockResolvedValue(running);
+    tasks.findOpenRun.mockResolvedValue(running);
+
+    const result = await service.startRun(ADMIN, 'r1', { runKey: 'event-42' });
+
+    expect(result).toEqual({ task: running, created: false });
+    expect(tasks.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses a new run while the last one is still going', async () => {
+    const { service, tasks } = setup();
+    tasks.findOpenRun.mockResolvedValue({ id: 't-running', state: 'waiting' } as unknown as Task);
+
+    await expect(service.startRun(ADMIN, 'r1', { runKey: 'event-43' })).rejects.toMatchObject({
+      name: 'responsibilityRunOpen'
+    });
+    expect(tasks.create).not.toHaveBeenCalled();
   });
 });

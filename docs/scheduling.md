@@ -20,10 +20,16 @@ The platform runs on this computer, so it can't run anything while the computer 
 - `run_once` (the default): start one run for the latest missed slot. The run's brief says how many runs were missed.
 - `skip`: start no run, and wait for the next slot.
 
-Either way, the next run is the first slot after now, so missed runs never pile up. A run less than one interval late isn't missed; it simply runs. Each run's key is its time slot (`schedule:<id>:<slot>`), and only the runner that moves the schedule on starts the run. So a slot never runs twice, even with several runners or after a crash.
+Either way, the next run is the first slot after now, so missed runs never pile up. A slot that is only a little late isn't missed; it simply runs, whatever the policy. "A little late" means within half the interval, and at most 15 minutes.
+
+Each run's key is its time slot (`schedule:<id>:<slot>`). The run is created first and the schedule moves on after, and only one runner can move a slot on. So a slot never runs twice, and a crash between the two steps doesn't lose it.
+
+Only one run of a responsibility is open at a time. If the last run is still working, waiting, or blocked when the next slot comes, that slot is skipped and logged. `lastRunAt` only moves when a run really starts.
+
+Changing `intervalMinutes` to a shorter one takes effect at once: the next run moves to one new interval after the last run, if that is sooner.
 
 ## Starting a run by hand or from an event
 
-`POST /responsibilities/:id/runs` starts a run now without changing the schedule. Use it for outside events, such as "a deploy finished". `note` adds details to the run's brief, and sending the same `runKey` again returns the same run. This is the supported event trigger for now: watching connections for events on their own is future work (CA-22).
+`POST /responsibilities/:id/runs` starts a run now without changing the schedule. Use it for outside events, such as "a deploy finished". `note` adds details to the run's brief, and sending the same `runKey` again returns the same run. If a different run is still going, it is refused with `responsibilityRunOpen`. This is the supported event trigger for now: watching connections for events on their own is future work (CA-22).
 
 `GET /responsibilities/:id/runs` is the run history.

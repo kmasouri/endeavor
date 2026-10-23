@@ -55,6 +55,11 @@ export const ERRORS = {
     statusCode: 409,
     message: 'This responsibility is cancelled and starts no more runs'
   },
+  responsibilityRunOpen: {
+    code: 40009,
+    statusCode: 409,
+    message: 'The last run of this responsibility is still going'
+  },
   approvalAlreadyDecided: {
     code: 40006,
     statusCode: 409,

@@ -4,7 +4,8 @@ import { TaskLifecycle } from './task-lifecycle';
 
 // Starts one run of a responsibility as a task. Used by the scheduler and by people starting a
 // run by hand. runKey makes it safe to call twice for the same run: the second call finds the
-// first task. Returns why no run was started, if one wasn't.
+// first task. Returns why no run was started, if one wasn't; openRunId is set when that's
+// because the last run is still going.
 export async function startResponsibilityRun(
   deps: {
     taskRepository: TaskRepository;
@@ -14,12 +15,20 @@ export async function startResponsibilityRun(
   },
   responsibility: Responsibility,
   input: { runKey: string; startedBy: Actor; note?: string }
-): Promise<{ task: Task; created: boolean } | { skippedReason: string }> {
-  // One run at a time. A new slot doesn't start while the last run is still open, so runs never
+): Promise<{ task: Task; created: boolean } | { skippedReason: string; openRunId?: string }> {
+  // A repeat of the same run returns it, even while it is still going.
+  const existing = await deps.taskRepository.getByRunKey(input.runKey);
+  if (existing) {
+    return { task: existing, created: false };
+  }
+  // One run at a time. A new run doesn't start while the last one is still open, so runs never
   // pile up or compete for the agent's messages in the conversation.
   const open = await deps.taskRepository.findOpenRun(responsibility.id);
   if (open) {
-    return { skippedReason: `The previous run (task ${open.id}) is still ${open.state}.` };
+    return {
+      skippedReason: `The previous run (task ${open.id}) is still ${open.state}.`,
+      openRunId: open.id
+    };
   }
   const agent = await deps.agentRepository.getById(responsibility.agentId);
   if (!agent || agent.disabledAt || !agent.currentVersionId) {

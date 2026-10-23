@@ -54,6 +54,7 @@ The list lives in `src/shared/errors.ts`. When you add an error there, add it he
 | 40006 | `approvalAlreadyDecided`  | 409  | Someone already approved or rejected it.                                     | Get the approval to see the decision.                                |
 | 40007 | `responsibilityNotFound`  | 404  | No responsibility has this ID.                                               | Check `GET /responsibilities`.                                       |
 | 40008 | `responsibilityCancelled` | 409  | The responsibility is cancelled; it can't run or resume.                     | Create a new responsibility.                                         |
+| 40009 | `responsibilityRunOpen`   | 409  | The last run is still working, waiting, or blocked. Only one runs at a time. | Wait for it to finish, or cancel that task first.                    |
 
 ## Agents (50xxx)
 

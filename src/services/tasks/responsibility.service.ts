@@ -206,7 +206,10 @@ export class ResponsibilityService {
       }
     );
     if ('skippedReason' in result) {
-      throw new AppError('agentUnavailable', result.skippedReason);
+      throw new AppError(
+        result.openRunId ? 'responsibilityRunOpen' : 'agentUnavailable',
+        result.skippedReason
+      );
     }
     return result;
   }
