@@ -12,7 +12,11 @@ describe('WorkspaceFsClient', () => {
 
   beforeEach(async () => {
     root = await mkdtemp(join(tmpdir(), 'workspaces-'));
-    client = new WorkspaceFsClient(root, { maxWriteBytes: 100, maxReadChars: 10, maxListEntries: 3 });
+    client = new WorkspaceFsClient(root, {
+      maxWriteBytes: 100,
+      maxReadChars: 10,
+      maxListEntries: 3
+    });
   });
 
   afterEach(async () => {
@@ -39,6 +43,15 @@ describe('WorkspaceFsClient', () => {
     expect((await client.list(TASK, 'notes')).entries).toEqual([
       { path: 'notes/plan.md', type: 'file', bytes: 8 }
     ]);
+  });
+
+  it('gives a plain error, without the real path, when listing a file', async () => {
+    await client.write(TASK, 'a.txt', 'hi');
+
+    const error = await client.list(TASK, 'a.txt').catch((caught: Error) => caught);
+
+    expect(error).toMatchObject({ name: 'workspaceFileNotFound' });
+    expect((error as Error).message).not.toContain(root);
   });
 
   it('shows an empty workspace before anything is written', async () => {

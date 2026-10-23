@@ -1,7 +1,12 @@
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { AppError } from '../../shared/errors';
-import { WorkspaceClient, WorkspaceEntry, WorkspaceFile, WorkspaceListing } from './workspace.client';
+import {
+  WorkspaceClient,
+  WorkspaceEntry,
+  WorkspaceFile,
+  WorkspaceListing
+} from './workspace.client';
 
 export interface WorkspaceLimits {
   maxWriteBytes: number;
@@ -41,26 +46,27 @@ export class WorkspaceFsClient implements WorkspaceClient {
         }
         throw new AppError('workspaceFileNotFound', `No folder at ${folder}.`);
       }
+      if ((error as NodeJS.ErrnoException).code === 'ENOTDIR') {
+        throw new AppError('workspaceFileNotFound', `${folder} is a file. Use read_file.`);
+      }
       throw error;
     }
 
+    // Sort and cut down first, so a huge folder doesn't mean looking up every file's size.
+    const kept = found
+      .filter((entry) => entry.isFile() || entry.isDirectory())
+      .map((entry) => ({ entry, absolute: join(entry.parentPath, entry.name) }))
+      .map((item) => ({ ...item, path: relative(root, item.absolute).split(sep).join('/') }))
+      .sort((a, b) => a.path.localeCompare(b.path));
     const entries: WorkspaceEntry[] = [];
-    for (const entry of found) {
-      if (!entry.isFile() && !entry.isDirectory()) {
-        continue;
-      }
-      const absolute = join(entry.parentPath, entry.name);
+    for (const { entry, absolute, path } of kept.slice(0, this.limits.maxListEntries)) {
       entries.push({
-        path: relative(root, absolute).split(sep).join('/'),
+        path,
         type: entry.isFile() ? 'file' : 'folder',
         bytes: entry.isFile() ? (await stat(absolute)).size : null
       });
     }
-    entries.sort((a, b) => a.path.localeCompare(b.path));
-    return {
-      entries: entries.slice(0, this.limits.maxListEntries),
-      truncated: entries.length > this.limits.maxListEntries
-    };
+    return { entries, truncated: kept.length > this.limits.maxListEntries };
   }
 
   async read(taskId: string, path: string): Promise<WorkspaceFile> {
@@ -127,7 +133,10 @@ export class WorkspaceFsClient implements WorkspaceClient {
     }
     const cleaned = path.trim();
     if (cleaned.includes('\0') || isAbsolute(cleaned) || /^[a-zA-Z]:/.test(cleaned)) {
-      throw new AppError('workspacePathInvalid', 'Use a path inside your workspace, like notes/plan.md.');
+      throw new AppError(
+        'workspacePathInvalid',
+        'Use a path inside your workspace, like notes/plan.md.'
+      );
     }
     const root = join(this.rootDir, taskId);
     const full = resolve(root, cleaned);
