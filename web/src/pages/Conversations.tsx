@@ -50,7 +50,9 @@ export function ConversationsPage() {
               You can add more later. Agents only answer when you mention them in a message.
             </Hint>
             {directory.data?.length === 0 && (
-              <p className="muted">No agents yet. Create one with the API for now.</p>
+              <p className="muted">
+                No agents yet. <a href="#/agents">Create one</a> first.
+              </p>
             )}
             {directory.data?.map((agent) => (
               <label key={agent.id} className="check">

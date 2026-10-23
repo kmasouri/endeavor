@@ -2,6 +2,9 @@ import { FormEvent, useState } from 'react';
 import { api, getActorId, Human, setActorId } from './api';
 import { ErrorNote } from './components';
 import { useAction, useLoad, useRoute } from './hooks';
+import { AgentPage } from './pages/Agent';
+import { AgentsPage } from './pages/Agents';
+import { CatalogsPage } from './pages/Catalogs';
 import { ConversationPage } from './pages/Conversation';
 import { ConversationsPage } from './pages/Conversations';
 import { SetupPage } from './pages/Setup';
@@ -47,6 +50,12 @@ export function App() {
           <a className={!section || section === 'conversations' ? 'active' : ''} href="#/">
             Conversations
           </a>
+          <a className={section === 'agents' ? 'active' : ''} href="#/agents">
+            Agents
+          </a>
+          <a className={section === 'catalogs' ? 'active' : ''} href="#/catalogs">
+            Skills and connections
+          </a>
           <a className={section === 'setup' ? 'active' : ''} href="#/setup">
             Setup
           </a>
@@ -65,6 +74,12 @@ export function App() {
       <main>
         {section === 'setup' ? (
           <SetupPage people={people.data} onPeopleChanged={people.reload} />
+        ) : section === 'agents' && id ? (
+          <AgentPage agentId={id} />
+        ) : section === 'agents' ? (
+          <AgentsPage />
+        ) : section === 'catalogs' ? (
+          <CatalogsPage />
         ) : section === 'conversations' && id ? (
           <ConversationPage conversationId={id} me={me} />
         ) : (
