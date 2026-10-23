@@ -318,3 +318,50 @@ button:disabled {
 code {
   font-size: 0.9em;
 }
+
+.stack.tight {
+  gap: 0.25rem;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 0.5rem;
+  color: var(--muted);
+}
+
+.badge.warn {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--line);
+}
+
+textarea.tall {
+  min-height: 9rem;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.6rem;
+}
+
+details summary {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.narrow.wide {
+  max-width: 900px;
+}
+
+.row > .grow {
+  min-width: 0;
+}

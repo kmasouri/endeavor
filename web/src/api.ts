@@ -114,3 +114,81 @@ export interface DirectoryEntry {
   purpose: string;
   capabilities: { provider: string; model: string; skillCount: number; connectionCount: number };
 }
+
+export type Provider = 'openai' | 'anthropic' | 'scripted';
+export const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const;
+export type HttpMethod = (typeof HTTP_METHODS)[number];
+
+export interface ProviderStatus {
+  provider: Provider;
+  ready: boolean;
+  setup: string;
+}
+
+export interface AgentLimits {
+  maxModelTurns?: number;
+  maxTokens?: number;
+  maxWorkingMinutes?: number;
+}
+
+export interface AgentVersion {
+  id: string;
+  version: number;
+  instructions: string;
+  provider: Provider;
+  model: string;
+  skillVersionIds: string[];
+  connectionIds: string[];
+  limits: AgentLimits;
+  createdAt: string;
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  purpose: string;
+  currentVersionId: string | null;
+  disabledAt: string | null;
+  currentVersion: AgentVersion | null;
+  providerReady: boolean;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  currentVersionId: string | null;
+  disabledAt: string | null;
+}
+
+export interface SkillVersion {
+  id: string;
+  version: number;
+  instructions: string;
+  connectionIds: string[];
+  createdAt: string;
+}
+
+export interface SkillDetails extends Skill {
+  currentVersion: SkillVersion | null;
+}
+
+export interface Connection {
+  id: string;
+  name: string;
+  description: string;
+  baseUrl: string;
+  authHeader: string;
+  hasCredential: boolean;
+  allowedMethods: HttpMethod[];
+  allowedPathPrefixes: string[];
+  approvalMethods: HttpMethod[];
+  disabledAt: string | null;
+}
+
+export interface Grant {
+  targetType: 'skill' | 'connection';
+  targetId: string;
+  grantedAt: string;
+  revokedAt: string | null;
+}
