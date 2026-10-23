@@ -36,7 +36,11 @@ export interface AgentRepository {
   // The directory: enabled agents with a configuration, minus excludeIds, by name.
   listDirectory(input: { excludeIds: string[]; limit: number; offset: number }): Promise<Agent[]>;
   countDirectory(input: { excludeIds: string[] }): Promise<number>;
-  update(agentId: string, changes: { name?: string; purpose?: string }): Promise<Agent | null>;
+  // monthlyBudgetUsd: a number sets the cap, null removes it, undefined leaves it.
+  update(
+    agentId: string,
+    changes: { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
+  ): Promise<Agent | null>;
   setDisabled(agentId: string, disabled: boolean): Promise<Agent | null>;
 
   // Saves the next version number for the agent and makes it current.

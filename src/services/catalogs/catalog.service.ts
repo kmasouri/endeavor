@@ -168,7 +168,9 @@ export class CatalogService {
         credential: input.credential ?? null,
         allowedMethods: input.allowedMethods,
         allowedPathPrefixes: input.allowedPathPrefixes,
-        approvalMethods: input.approvalMethods ?? [],
+        // Reading is free; anything that changes something waits for a person, unless set.
+        approvalMethods:
+          input.approvalMethods ?? input.allowedMethods.filter((method) => method !== 'GET'),
         createdByHumanId: admin.id
       })
       .catch(toNameTaken);

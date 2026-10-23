@@ -65,6 +65,25 @@ export interface CreateTaskOutputInput {
   metadata: Record<string, unknown>;
 }
 
+export interface CostFilter {
+  agentId?: string;
+  conversationId?: string;
+  since?: Date;
+}
+
+export interface CostSummary {
+  costUsd: number;
+  tokens: number;
+  unpricedCalls: number;
+}
+
+export interface TaskCost {
+  taskId: string;
+  title: string;
+  costUsd: number;
+  tokens: number;
+}
+
 export interface TaskRepository {
   // Creates the task, or returns the existing one with the same runKey. created says which.
   create(input: CreateTaskInput): Promise<{ task: Task; created: boolean }>;
@@ -105,6 +124,11 @@ export interface TaskRepository {
     options: { limit: number; offset: number }
   ): Promise<TaskOutput[]>;
   countConversationOutputs(conversationId: string): Promise<number>;
+  // What model calls cost, for an agent or a conversation, since a moment if given. costUsd only
+  // counts calls with a known price; unpricedCalls says how many had none.
+  sumCost(filter: CostFilter): Promise<CostSummary>;
+  // The costliest tasks, for the same filters.
+  listTaskCosts(filter: CostFilter, limit: number): Promise<TaskCost[]>;
 
   // Leases up to limit working, unpaused tasks that no live worker holds. A lease that runs out,
   // such as after a crash, makes the task claimable again.

@@ -88,6 +88,16 @@ export class ConversationService {
     return { conversations, total };
   }
 
+  async updateConversation(
+    actorId: string,
+    conversationId: string,
+    changes: { title?: string; budgetUsd?: number | null }
+  ): Promise<ConversationDetails> {
+    const { conversation } = await this.requireAccess(actorId, conversationId);
+    const updated = await this.conversationRepository.update(conversation.id, changes);
+    return this.loadDetails(updated ?? conversation);
+  }
+
   async getConversation(actorId: string, conversationId: string): Promise<ConversationDetails> {
     const { conversation } = await this.requireAccess(actorId, conversationId);
     return this.loadDetails(conversation);

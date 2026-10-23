@@ -121,7 +121,7 @@ export class AgentService {
   async updateProfile(
     actorId: string,
     agentId: string,
-    changes: { name?: string; purpose?: string }
+    changes: { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
   ): Promise<AgentDetails> {
     requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     const agent = await this.requireAgent(agentId);

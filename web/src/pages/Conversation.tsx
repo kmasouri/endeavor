@@ -13,6 +13,7 @@ import {
 import { ErrorNote, Hint, when } from '../components';
 import { useAction, useLoad } from '../hooks';
 import { ContextExplainer, KnowledgeSources } from './Context';
+import { Spending } from './Spending';
 
 const SUGGESTION = /^Suggestion: add (.+?) \(/;
 
@@ -75,6 +76,9 @@ export function ConversationPage({ conversationId, me }: { conversationId: strin
         </div>
         <div className="panel">
           <ConversationOutputs conversationId={conversationId} />
+        </div>
+        <div className="panel">
+          <Spending kind="conversation" id={conversationId} />
         </div>
         <div className="panel">
           <KnowledgeSources conversationId={conversationId} />

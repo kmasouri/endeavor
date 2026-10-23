@@ -30,7 +30,7 @@ So a revoke, a disabled connection, or a narrower path list applies on the very 
 
 ## Approvals
 
-A connection's `approvalMethods` (for example `["POST", "DELETE"]`) are methods that need a person's approval before each call. A matching call is never made right away:
+A connection's `approvalMethods` (for example `["POST", "DELETE"]`) are methods that need a person's approval before each call. If you leave it out when creating a connection, every allowed method except GET needs approval: reading is free, and changing anything waits for a person. Send `[]` to need no approvals. A matching call is never made right away:
 
 1. The runner saves a pending approval with the exact request, the task waits, and the agent's turn ends.
 2. `GET /approvals?status=pending` lists it for every person, since v1 has one role. Agents can never approve.

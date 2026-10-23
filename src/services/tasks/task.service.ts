@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
   AgentRepository,
+  CostSummary,
+  TaskCost,
   ApprovalRepository,
   ConversationRepository,
   CreateTaskOutputInput,
@@ -22,6 +24,7 @@ import {
   TaskEvent,
   TaskOutput
 } from '../../shared/types';
+import { startOfMonth } from './pricing';
 import {
   describeState,
   ignoreWaitAlreadyResolved,
@@ -43,6 +46,13 @@ export interface CreateTaskRequest {
 // Owns the task lifecycle: creating tasks, moving them between states, waits, outputs, and the
 // execution history. Human actions check the acting person. Lifecycle actions (wait, complete,
 // block) are for the runner, which acts for the agent that owns the task.
+export interface CostReport {
+  total: CostSummary;
+  thisMonth: CostSummary;
+  budgetUsd: number | null;
+  tasks: TaskCost[];
+}
+
 export class TaskService {
   constructor(
     private readonly taskRepository: TaskRepository,
@@ -149,6 +159,46 @@ export class TaskService {
       this.taskRepository.countConversationOutputs(conversationId)
     ]);
     return { outputs, total };
+  }
+
+  // What an agent spent: in total, this month (UTC), and its costliest tasks, next to its
+  // monthly budget.
+  async agentCosts(actorId: string, agentId: string): Promise<CostReport> {
+    requireHuman(await this.humanRepository.getById(actorId));
+    const agent = await this.agentRepository.getById(agentId);
+    if (!agent) {
+      throw new AppError('agentNotFound', `Agent ${agentId} was not found`);
+    }
+    const month = startOfMonth(new Date());
+    const [total, thisMonth, tasks] = await Promise.all([
+      this.taskRepository.sumCost({ agentId }),
+      this.taskRepository.sumCost({ agentId, since: month }),
+      this.taskRepository.listTaskCosts({ agentId, since: month }, 10)
+    ]);
+    return { total, thisMonth, budgetUsd: agent.monthlyBudgetUsd, tasks };
+  }
+
+  // What all agent work in a conversation spent, next to the conversation's budget.
+  async conversationCosts(actorId: string, conversationId: string): Promise<CostReport> {
+    const human = requireHuman(await this.humanRepository.getById(actorId));
+    const conversation = await this.conversationRepository.getById(conversationId);
+    const member =
+      conversation &&
+      (hasFullAccess(human) ||
+        (await this.conversationRepository.getMember(conversationId, {
+          type: 'human',
+          id: human.id
+        })));
+    if (!conversation || !member) {
+      throw new AppError('conversationNotFound', `Conversation ${conversationId} was not found`);
+    }
+    const month = startOfMonth(new Date());
+    const [total, thisMonth, tasks] = await Promise.all([
+      this.taskRepository.sumCost({ conversationId }),
+      this.taskRepository.sumCost({ conversationId, since: month }),
+      this.taskRepository.listTaskCosts({ conversationId }, 10)
+    ]);
+    return { total, thisMonth, budgetUsd: conversation.budgetUsd, tasks };
   }
 
   // Human actions

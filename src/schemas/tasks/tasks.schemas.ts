@@ -49,6 +49,7 @@ export const reviewTaskBodySchema = z.strictObject({
 });
 
 export const conversationOutputsParamsSchema = z.object({ conversationId: z.uuid() });
+export const agentCostParamsSchema = z.object({ agentId: z.uuid() });
 
 export const listConversationOutputsQuerySchema = z.strictObject({
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -63,6 +64,7 @@ export const listApprovalsQuerySchema = z.strictObject({
   offset: z.coerce.number().int().min(0).default(0)
 });
 
+export type AgentCostParams = z.infer<typeof agentCostParamsSchema>;
 export type ConversationOutputsParams = z.infer<typeof conversationOutputsParamsSchema>;
 export type ListConversationOutputsQuery = z.infer<typeof listConversationOutputsQuerySchema>;
 export type ApprovalParams = z.infer<typeof approvalParamsSchema>;

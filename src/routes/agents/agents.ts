@@ -102,7 +102,8 @@ export async function agentsRouter(fastifyInstance: FastifyInstance): Promise<vo
     '/agents/:agentId',
     {
       schema: {
-        description: "Change an agent's name or purpose. These are not versioned. Admins only.",
+        description:
+          "Change an agent's name, purpose, or monthly budget (monthlyBudgetUsd, null for none). These are not versioned.",
         tags: ['agents'],
         headers: actorHeadersSchema,
         params: agentParamsSchema,

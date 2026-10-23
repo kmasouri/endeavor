@@ -15,6 +15,9 @@ import {
   TaskWaitKind
 } from '../../shared/types';
 import {
+  CostFilter,
+  CostSummary,
+  TaskCost,
   CreateTaskInput,
   CreateTaskOutputInput,
   CreateTaskWaitInput,
@@ -374,6 +377,58 @@ export class TaskPostgresRepository implements TaskRepository {
     return result.rows[0]?.total ?? 0;
   }
 
+  async sumCost(filter: CostFilter): Promise<CostSummary> {
+    const { where, values } = costWhere(filter);
+    const result = await this.db.query<{
+      cost: string | null;
+      tokens: string | null;
+      unpriced: number;
+    }>(
+      `SELECT sum((e.data->>'costUsd')::numeric) AS cost,
+              sum(coalesce((e.data->'usage'->>'inputTokens')::bigint, 0)
+                + coalesce((e.data->'usage'->>'outputTokens')::bigint, 0)) AS tokens,
+              count(*) FILTER (WHERE e.data->>'costUsd' IS NULL)::int AS unpriced
+       FROM bold_cedar_007.task_events e
+       JOIN bold_cedar_007.tasks t ON t.id = e.task_id
+       WHERE ${where}`,
+      values
+    );
+    const row = result.rows[0];
+    return {
+      costUsd: Number(row?.cost ?? 0),
+      tokens: Number(row?.tokens ?? 0),
+      unpricedCalls: row?.unpriced ?? 0
+    };
+  }
+
+  async listTaskCosts(filter: CostFilter, limit: number): Promise<TaskCost[]> {
+    const { where, values } = costWhere(filter);
+    const result = await this.db.query<{
+      id: string;
+      title: string;
+      cost: string | null;
+      tokens: string | null;
+    }>(
+      `SELECT t.id, t.title,
+              sum((e.data->>'costUsd')::numeric) AS cost,
+              sum(coalesce((e.data->'usage'->>'inputTokens')::bigint, 0)
+                + coalesce((e.data->'usage'->>'outputTokens')::bigint, 0)) AS tokens
+       FROM bold_cedar_007.task_events e
+       JOIN bold_cedar_007.tasks t ON t.id = e.task_id
+       WHERE ${where}
+       GROUP BY t.id, t.title
+       ORDER BY cost DESC NULLS LAST, tokens DESC
+       LIMIT $${values.length + 1}`,
+      [...values, limit]
+    );
+    return result.rows.map((row) => ({
+      taskId: row.id,
+      title: row.title,
+      costUsd: Number(row.cost ?? 0),
+      tokens: Number(row.tokens ?? 0)
+    }));
+  }
+
   async countOutputs(taskId: string): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
@@ -613,4 +668,24 @@ function toTaskOutput(row: TaskOutputRow): TaskOutput {
     metadata: row.metadata,
     createdAt: row.created_at
   };
+}
+
+// The WHERE clause for cost queries. Only fixed column names are written into the SQL; every
+// value is a parameter.
+function costWhere(filter: CostFilter): { where: string; values: unknown[] } {
+  const clauses = [`e.type IN ('model.turn', 'completion.checked')`];
+  const values: unknown[] = [];
+  if (filter.agentId) {
+    values.push(filter.agentId);
+    clauses.push(`t.owner_agent_id = $${values.length}`);
+  }
+  if (filter.conversationId) {
+    values.push(filter.conversationId);
+    clauses.push(`t.conversation_id = $${values.length}`);
+  }
+  if (filter.since) {
+    values.push(filter.since);
+    clauses.push(`e.created_at >= $${values.length}`);
+  }
+  return { where: clauses.join(' AND '), values };
 }

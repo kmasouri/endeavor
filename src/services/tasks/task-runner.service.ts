@@ -57,6 +57,7 @@ import {
   HTTP_REQUEST_TOOL,
   STOPPING_TOOLS
 } from './agent-tools';
+import { costUsd, dollars, PriceTable, startOfMonth } from './pricing';
 import { planRun } from './schedule';
 import { startResponsibilityRun } from './scheduled-runs';
 import { ignoreStateConflict, ignoreWaitAlreadyResolved, TaskLifecycle } from './task-lifecycle';
@@ -76,6 +77,10 @@ export interface TaskRunnerOptions {
   // Before a task completes, a separate model call checks the result against its criteria, so
   // the agent's own word isn't enough. Skipped for the scripted test provider.
   completionCheck: boolean;
+  // Model prices, to turn token usage into dollars. Models not listed have an unknown cost.
+  prices: PriceTable;
+  // The most one task may spend, unless its agent's configuration sets maxCostUsd.
+  taskBudgetUsd: number;
 }
 
 export const DEFAULT_RUNNER_OPTIONS: Omit<TaskRunnerOptions, 'workerId'> = {
@@ -85,7 +90,9 @@ export const DEFAULT_RUNNER_OPTIONS: Omit<TaskRunnerOptions, 'workerId'> = {
   maxTurnsPerTask: 40,
   maxTokens: 16_000,
   historyLimit: 30,
-  completionCheck: true
+  completionCheck: true,
+  prices: {},
+  taskBudgetUsd: 1
 };
 
 // After this many failed completion checks, the task is blocked for a person instead of
@@ -478,12 +485,24 @@ export class TaskRunnerService {
         continue;
       }
 
-      const overBudget = budgetExceeded(task, version, events, this.options.maxTurnsPerTask);
+      const overBudget = budgetExceeded(
+        task,
+        version,
+        events,
+        this.options.maxTurnsPerTask,
+        new Date(),
+        this.options.taskBudgetUsd
+      );
       if (overBudget) {
         await this.block(
           task,
-          `${overBudget} An admin can raise the agent's limits and move this task to the new version.`
+          `${overBudget} A person can raise the agent's limits and move this task to the new version.`
         );
+        return 0;
+      }
+      const overSpending = await this.spendingBudgetReached(task);
+      if (overSpending) {
+        await this.block(task, overSpending);
         return 0;
       }
 
@@ -560,6 +579,7 @@ export class TaskRunnerService {
         toolCalls: result.toolCalls,
         stopReason: result.stopReason,
         usage: result.usage,
+        costUsd: costUsd(this.options.prices, version.model, result.usage),
         servedModel: result.servedModel
       });
       this.runnerLogger.onModelTurn(task.id, version.provider, result.servedModel, result.usage);
@@ -1192,6 +1212,34 @@ export class TaskRunnerService {
     });
   }
 
+  // Agent and conversation budgets cover all their work, not one task. Raising the budget and
+  // resuming the task lets it go on.
+  private async spendingBudgetReached(task: Task): Promise<string | null> {
+    const agent = await this.agentRepository.getById(task.ownerAgentId);
+    if (agent?.monthlyBudgetUsd != null) {
+      const now = new Date();
+      const { costUsd: spent } = await this.taskRepository.sumCost({
+        agentId: agent.id,
+        since: startOfMonth(now)
+      });
+      if (spent >= agent.monthlyBudgetUsd) {
+        return `${agent.name} spent ${dollars(spent)} this month, reaching its ${dollars(agent.monthlyBudgetUsd)} monthly budget. A person can raise the budget and resume this task.`;
+      }
+    }
+    if (task.conversationId) {
+      const conversation = await this.conversationRepository.getById(task.conversationId);
+      if (conversation?.budgetUsd != null) {
+        const { costUsd: spent } = await this.taskRepository.sumCost({
+          conversationId: conversation.id
+        });
+        if (spent >= conversation.budgetUsd) {
+          return `This conversation spent ${dollars(spent)}, reaching its ${dollars(conversation.budgetUsd)} budget. A person can raise the budget and resume this task.`;
+        }
+      }
+    }
+    return null;
+  }
+
   // Asks the agent's model, in a separate call with no tools, whether the result meets the
   // task's criteria. The verdict is saved with the tool call, so a replay after a crash reuses
   // it. Returns null when the check is off or the provider is the scripted test fake.
@@ -1251,7 +1299,8 @@ export class TaskRunnerService {
       callId,
       met,
       summary,
-      usage: reply.usage
+      usage: reply.usage,
+      costUsd: costUsd(this.options.prices, version.model, reply.usage)
     });
     this.runnerLogger.onCompletionChecked(task.id, met);
     return { met, summary, failures: failuresBefore + (met ? 0 : 1) };
@@ -1621,7 +1670,8 @@ export function budgetExceeded(
   version: AgentVersion,
   events: TaskEvent[],
   defaultMaxTurns: number,
-  now: Date = new Date()
+  now: Date = new Date(),
+  defaultMaxCostUsd?: number
 ): string | null {
   // A version can lower the runner's turn limit, never raise it.
   const maxTurns = Math.min(version.limits.maxModelTurns ?? defaultMaxTurns, defaultMaxTurns);
@@ -1643,6 +1693,15 @@ export function budgetExceeded(
     }
   }
 
+  // Only known costs count: a model with no price can't be held to a dollar budget.
+  const maxCost = version.limits.maxCostUsd ?? defaultMaxCostUsd;
+  if (maxCost !== undefined) {
+    const spent = taskCostUsd(events);
+    if (spent >= maxCost) {
+      return `Spent ${dollars(spent)} of the ${dollars(maxCost)} budget for one task.`;
+    }
+  }
+
   if (version.limits.maxWorkingMinutes !== undefined) {
     const minutes = workingMs(task, events, now) / 60_000;
     if (minutes >= version.limits.maxWorkingMinutes) {
@@ -1650,6 +1709,16 @@ export function budgetExceeded(
     }
   }
   return null;
+}
+
+// What a task has spent so far, counting only model calls with a known price.
+export function taskCostUsd(events: TaskEvent[]): number {
+  return events
+    .filter((event) => event.type === EVENTS.modelTurn || event.type === EVENTS.completionChecked)
+    .reduce(
+      (sum, event) => sum + (typeof event.data.costUsd === 'number' ? event.data.costUsd : 0),
+      0
+    );
 }
 
 // Time the task spent working and not paused, from its history. Waiting doesn't count.

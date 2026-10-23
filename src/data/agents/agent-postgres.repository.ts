@@ -14,6 +14,8 @@ interface AgentRow {
   purpose: string;
   current_version_id: string | null;
   disabled_at: Date | null;
+  // numeric comes back from Postgres as a string.
+  monthly_budget_usd: string | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -149,15 +151,25 @@ export class AgentPostgresRepository implements AgentRepository {
 
   async update(
     agentId: string,
-    changes: { name?: string; purpose?: string }
+    changes: { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
   ): Promise<Agent | null> {
+    // $4 says whether the budget is being changed, since null (no cap) is a real value.
     const result = await this.db
       .query<AgentRow>(
         `UPDATE bold_cedar_007.agents
-       SET name = coalesce($2, name), purpose = coalesce($3, purpose), updated_at = now()
+       SET name = coalesce($2, name),
+           purpose = coalesce($3, purpose),
+           monthly_budget_usd = CASE WHEN $4 THEN $5 ELSE monthly_budget_usd END,
+           updated_at = now()
        WHERE id = $1
        RETURNING *`,
-        [agentId, changes.name ?? null, changes.purpose ?? null]
+        [
+          agentId,
+          changes.name ?? null,
+          changes.purpose ?? null,
+          changes.monthlyBudgetUsd !== undefined,
+          changes.monthlyBudgetUsd ?? null
+        ]
       )
       .catch((error) => rethrowNameConflict(error, changes.name ?? ''));
 
@@ -297,6 +309,7 @@ function toAgent(row: AgentRow): Agent {
     purpose: row.purpose,
     currentVersionId: row.current_version_id,
     disabledAt: row.disabled_at,
+    monthlyBudgetUsd: row.monthly_budget_usd === null ? null : Number(row.monthly_budget_usd),
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };

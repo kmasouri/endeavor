@@ -7,6 +7,7 @@ interface ConversationRow {
   id: string;
   title: string;
   created_by_human_id: string;
+  budget_usd: string | null;
   created_at: Date;
 }
 
@@ -31,6 +32,26 @@ export class ConversationPostgresRepository implements ConversationRepository {
     );
 
     return toConversation(result.rows[0]);
+  }
+
+  async update(
+    conversationId: string,
+    changes: { title?: string; budgetUsd?: number | null }
+  ): Promise<Conversation | null> {
+    const result = await this.db.query<ConversationRow>(
+      `UPDATE bold_cedar_007.conversations
+       SET title = coalesce($2, title),
+           budget_usd = CASE WHEN $3 THEN $4 ELSE budget_usd END
+       WHERE id = $1
+       RETURNING *`,
+      [
+        conversationId,
+        changes.title ?? null,
+        changes.budgetUsd !== undefined,
+        changes.budgetUsd ?? null
+      ]
+    );
+    return result.rows[0] ? toConversation(result.rows[0]) : null;
   }
 
   async getById(conversationId: string): Promise<Conversation | null> {
@@ -157,6 +178,7 @@ function toConversation(row: ConversationRow): Conversation {
     id: row.id,
     title: row.title,
     createdByHumanId: row.created_by_human_id,
+    budgetUsd: row.budget_usd === null ? null : Number(row.budget_usd),
     createdAt: row.created_at
   };
 }

@@ -5,6 +5,7 @@ import {
   DocumentParams,
   AddMemberBody,
   ConversationParams,
+  UpdateConversationBody,
   CreateConversationBody,
   ListConversationsQuery,
   ListMessagesQuery,
@@ -32,6 +33,22 @@ export async function listConversationsHandler(
     request.query
   );
   return paged(conversations, { limit, offset, total });
+}
+
+export async function updateConversationHandler(
+  request: FastifyRequest<{
+    Params: ConversationParams;
+    Body: UpdateConversationBody;
+    Headers: ActorHeaders;
+  }>
+): Promise<unknown> {
+  return success(
+    await request.server.conversationService.updateConversation(
+      request.headers['x-actor-id'],
+      request.params.conversationId,
+      request.body
+    )
+  );
 }
 
 export async function getConversationHandler(

@@ -128,6 +128,7 @@ export interface ProviderStatus {
 export interface AgentLimits {
   maxModelTurns?: number;
   maxTokens?: number;
+  maxCostUsd?: number;
   maxWorkingMinutes?: number;
 }
 
@@ -299,4 +300,17 @@ export interface ConversationDocument {
   title: string;
   content: string;
   createdAt: string;
+}
+
+export interface CostSummary {
+  costUsd: number;
+  tokens: number;
+  unpricedCalls: number;
+}
+
+export interface CostReport {
+  total: CostSummary;
+  thisMonth: CostSummary;
+  budgetUsd: number | null;
+  tasks: { taskId: string; title: string; costUsd: number; tokens: number }[];
 }

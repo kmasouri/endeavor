@@ -8,7 +8,8 @@ import {
   getConversationHandler,
   listConversationsHandler,
   listMessagesHandler,
-  postMessageHandler
+  postMessageHandler,
+  updateConversationHandler
 } from '../../handlers';
 import {
   actorHeadersSchema,
@@ -19,7 +20,8 @@ import {
   createConversationBodySchema,
   listConversationsQuerySchema,
   listMessagesQuerySchema,
-  postMessageBodySchema
+  postMessageBodySchema,
+  updateConversationBodySchema
 } from '../../schemas';
 
 export async function conversationsRouter(fastifyInstance: FastifyInstance): Promise<void> {
@@ -47,6 +49,21 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
       }
     },
     listConversationsHandler
+  );
+
+  fastifyInstance.patch(
+    '/conversations/:conversationId',
+    {
+      schema: {
+        description:
+          'Change a conversation: its title, or its budget for all agent work in it (budgetUsd, null for none).',
+        tags: ['conversations'],
+        headers: actorHeadersSchema,
+        params: conversationParamsSchema,
+        body: updateConversationBodySchema
+      }
+    },
+    updateConversationHandler
   );
 
   fastifyInstance.get(

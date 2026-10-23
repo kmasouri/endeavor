@@ -9,7 +9,12 @@ export interface ConfigValues {
   model: string;
   skillIds?: string[];
   connectionIds?: string[];
-  limits: { maxModelTurns?: number; maxTokens?: number; maxWorkingMinutes?: number };
+  limits: {
+    maxModelTurns?: number;
+    maxTokens?: number;
+    maxCostUsd?: number;
+    maxWorkingMinutes?: number;
+  };
 }
 
 // The versioned part of an agent: instructions, model, skills, connections, and limits. Used
@@ -32,6 +37,7 @@ export function AgentConfigFields(props: {
   const [turns, setTurns] = useState(String(current?.limits.maxModelTurns ?? ''));
   const [tokens, setTokens] = useState(String(current?.limits.maxTokens ?? ''));
   const [minutes, setMinutes] = useState(String(current?.limits.maxWorkingMinutes ?? ''));
+  const [cost, setCost] = useState(String(current?.limits.maxCostUsd ?? ''));
 
   const enabledSkills = (skills.data?.data ?? []).filter((skill) => !skill.disabledAt);
   const enabledConnections = (connections.data?.data ?? []).filter((c) => !c.disabledAt);
@@ -56,6 +62,7 @@ export function AgentConfigFields(props: {
       turns,
       tokens,
       minutes,
+      cost,
       ...changes
     } as {
       instructions: string;
@@ -66,6 +73,7 @@ export function AgentConfigFields(props: {
       turns: string;
       tokens: string;
       minutes: string;
+      cost: string;
     };
     props.onChange({
       instructions: next.instructions,
@@ -76,7 +84,8 @@ export function AgentConfigFields(props: {
       limits: {
         maxModelTurns: toLimit(next.turns),
         maxTokens: toLimit(next.tokens),
-        maxWorkingMinutes: toLimit(next.minutes)
+        maxWorkingMinutes: toLimit(next.minutes),
+        maxCostUsd: Number(next.cost) > 0 ? Number(next.cost) : undefined
       }
     });
   };
@@ -206,6 +215,18 @@ export function AgentConfigFields(props: {
               onChange={(event) => (
                 setTokens(event.target.value),
                 report({ tokens: event.target.value })
+              )}
+            />
+          </label>
+          <label>
+            Cost, $
+            <input
+              inputMode="decimal"
+              value={cost}
+              placeholder="1.00"
+              onChange={(event) => (
+                setCost(event.target.value),
+                report({ cost: event.target.value })
               )}
             />
           </label>
