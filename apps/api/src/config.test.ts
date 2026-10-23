@@ -12,6 +12,12 @@ describe('parseEnv', () => {
     });
   });
 
+  it('leaves the completion check off unless COMPLETION_CHECK is true', () => {
+    expect(parseEnv({}).COMPLETION_CHECK).toBe(false);
+    expect(parseEnv({ COMPLETION_CHECK: 'false' }).COMPLETION_CHECK).toBe(false);
+    expect(parseEnv({ COMPLETION_CHECK: 'true' }).COMPLETION_CHECK).toBe(true);
+  });
+
   it('coerces numeric variables', () => {
     expect(parseEnv({ PORT: '8080', DATABASE_PORT: '6543' })).toMatchObject({
       PORT: 8080,

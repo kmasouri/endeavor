@@ -70,7 +70,7 @@ The app checks all of these at startup, in `apps/api/src/config.ts`.
 | `RUNNER_ENABLED`     | `true`                      | Run the runner, which delivers messages and runs agents' work. Always off in tests.               |
 | `RUNNER_INTERVAL_MS` | `2000`                      | How often the runner checks for work, in milliseconds.                                            |
 | `WORKSPACES_DIR`     | `workspaces`                | Folder for agents' files, one subfolder per task.                                                 |
-| `COMPLETION_CHECK`   | `true`                      | Check each result against its criteria with a separate model call before a task completes.        |
+| `COMPLETION_CHECK`   | `false`                     | Check each result against its criteria with a separate model call before a task completes.        |
 | `MODEL_PRICES`       |                             | Model prices as JSON: `{"model":{"inputPerMillion":0.15,"outputPerMillion":0.6}}`, in US dollars. |
 | `TASK_BUDGET_USD`    | `1`                         | The most one task may spend, in US dollars, unless its agent's configuration sets `maxCostUsd`.   |
 | `CREDENTIALS_KEY`    |                             | 32 random bytes (base64 or hex) that encrypt connection credentials. Needed to save a credential. |

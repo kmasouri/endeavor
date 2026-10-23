@@ -75,10 +75,11 @@ const envSchema = z.object({
   // The most one task may spend, in US dollars, unless its agent's configuration sets its own.
   TASK_BUDGET_USD: z.coerce.number().positive().default(1),
   // A separate model call checks each result against its criteria before a task completes.
+  // Off unless set to true: people and other agents review results instead (Kayvan's answer).
   COMPLETION_CHECK: z
     .enum(['true', 'false'])
     .optional()
-    .transform((value) => value !== 'false'),
+    .transform((value) => value === 'true'),
   // Where each task's files go: one folder per task. Relative paths start from where the app runs.
   WORKSPACES_DIR: z.string().min(1).default('workspaces'),
   // 32 random bytes, as base64 or hex. Encrypts connection credentials at rest.
