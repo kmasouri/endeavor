@@ -21,7 +21,7 @@ npm run down             # stops everything; your data stays
 
 Without npm, use `docker compose up -d --build`, `docker compose logs -f app`, and `docker compose down`.
 
-When it's up, open `http://localhost:3000` for the web interface. The API is at the same address, and Swagger is at `http://localhost:3000/docs`. Only this computer can reach it. Nobody signs in yet, so anyone who could reach the API could act as anyone.
+When it's up, open `http://localhost:3000` for the web interface. The API is at the same address, and Swagger is at `http://localhost:3000/docs`. If port 3000 is already taken on your computer, set `APP_PORT` in `.env`, such as `APP_PORT=3100`, and use that port instead. Only this computer can reach it. Nobody signs in yet, so anyone who could reach the API could act as anyone.
 
 `npm run up` applies new database changes (`apps/api/db/schema/`) before the server starts.
 

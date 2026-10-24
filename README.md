@@ -66,7 +66,7 @@ The app checks all of these at startup, in `apps/api/src/config.ts`.
 | `WEBHOOK_URL`        |                             | Where to send events like `item.created`. If not set, webhooks are off.                           |
 | `ANTHROPIC_API_KEY`  |                             | Turns on the `anthropic` provider for agents.                                                     |
 | `OPENAI_API_KEY`     |                             | Turns on the `openai` provider for agents.                                                        |
-| `OPENAI_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible API address.                                                                    |
+| `OPENAI_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible API address. It must support the Responses API.                                 |
 | `RUNNER_ENABLED`     | `true`                      | Run the runner, which delivers messages and runs agents' work. Always off in tests.               |
 | `RUNNER_INTERVAL_MS` | `2000`                      | How often the runner checks for work, in milliseconds.                                            |
 | `WORKSPACES_DIR`     | `workspaces`                | Folder for agents' files, one subfolder per task.                                                 |

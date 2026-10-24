@@ -53,11 +53,13 @@ These are examples, not built-in roles. Create them with `POST /agents`.
 
 `GET /providers` lists each provider and whether it is ready.
 
-| Provider    | Ready when                 | Notes                                                                                           |
-| ----------- | -------------------------- | ----------------------------------------------------------------------------------------------- |
-| `anthropic` | `ANTHROPIC_API_KEY` is set | Uses `@anthropic-ai/sdk`. Turns on the server-side refusal fallback for models that support it. |
-| `openai`    | `OPENAI_API_KEY` is set    | Calls the Chat Completions API with `fetch`. `OPENAI_BASE_URL` can point at a compatible API.   |
-| `scripted`  | Always                     | A fake that answers from a script. For tests and demos; no model is called.                     |
+| Provider    | Ready when                 | Notes                                                                                                                                                                                       |
+| ----------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `anthropic` | `ANTHROPIC_API_KEY` is set | Turns on the server-side refusal fallback for models that support it.                                                                                                                       |
+| `openai`    | `OPENAI_API_KEY` is set    | Calls the Responses API. Nothing is stored at OpenAI: reasoning comes back encrypted in each turn, and we save it. `OPENAI_BASE_URL` can point at a compatible API that supports Responses. |
+| `scripted`  | Always                     | A fake that answers from a script. For tests and demos; no model is called.                                                                                                                 |
+
+`anthropic` and `openai` both go through one client, `ModelAiSdkClient`, built on the [Vercel AI SDK](https://ai-sdk.dev) (`ai`). It runs one model turn per call and returns the tool calls without running them, so the runner keeps its own loop, checks, and records (CA-29). Saved turns are in the SDK's message format, the same for every provider. Turns saved before this client, or from another provider, are shown to the model as text.
 
 You can save an agent on a provider that isn't ready. Its `providerReady` is `false`, and its tasks can't run until the key is set.
 
@@ -66,7 +68,7 @@ You can save an agent on a provider that isn't ready. Its `providerReady` is `fa
 ## Adding a provider
 
 1. Add its name to `MODEL_PROVIDERS` in `apps/api/src/shared/types.ts`.
-2. Write a `ModelClient` in `apps/api/src/integrations/models/`. It turns a `ModelTurnRequest` into the provider's API call, and the reply into a `ModelTurnResult`. Keep the provider's own assistant message in `raw`, so it can be sent back unchanged.
+2. Add the AI SDK's package for it (`@ai-sdk/<provider>`, pinned to an exact version), and a small `AiSdkProvider` next to `openAiProvider()` in `apps/api/src/integrations/models/model-ai-sdk.client.ts`, with any provider options it needs. Build it in `buildModelClients()` in `apps/api/src/plugins/runner.ts`.
 3. Add its key to `apps/api/src/config.ts`, `README.md`, and `.env.example`, and turn it on in `readyProviders()` in `apps/api/src/plugins/agent.ts`.
 
-Nothing else changes: conversations and tasks only use the `ModelClient` interface.
+Nothing else changes: conversations and tasks only use the `ModelClient` interface. A provider the AI SDK doesn't cover can still get its own `ModelClient`; give it its own `transcriptFormat`.

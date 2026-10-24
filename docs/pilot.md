@@ -116,7 +116,7 @@ These are for the pilot scripts only, not the platform. Each can be a flag or an
 | `--strong-model`     | `PILOT_STRONG_MODEL`           | none                        | Model for the Reviewer, Solo Researcher, and Investigator. |
 | `--provider`         |                                | `openai`                    | Provider for all pilot agents.                             |
 | `--interval`         | `PILOT_CHECK_INTERVAL_MINUTES` | `10`                        | Minutes between checks. 5 or more.                         |
-| `--api`              | `PILOT_API_URL`                | `http://localhost:3000`     | Where the scripts reach the platform.                      |
+| `--api`              | `PILOT_API_URL`                | `http://localhost:3000`     | Where the scripts reach the platform. Follows `APP_PORT`.  |
 | `--target-url`       | `PILOT_TARGET_URL`             | `http://pilot-api:4100`     | Where the platform reaches the test API.                   |
 | `--target-admin-url` | `PILOT_TARGET_ADMIN_URL`       | `http://localhost:4100`     | Where the scripts reach the test API.                      |
 |                      | `PILOT_STATE_FILE`             | `pilot/results/state.json`  | What setup made and which briefs started.                  |

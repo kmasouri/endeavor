@@ -56,6 +56,9 @@ export interface ModelTurnResult {
 
 export interface ModelClient {
   readonly provider: ModelProvider;
+  // The format of the raw assistant turns it returns and accepts back. Saved turns in another
+  // format, such as from before a client change, are shown to the model as text instead.
+  readonly transcriptFormat: string;
   complete(request: ModelTurnRequest): Promise<ModelTurnResult>;
 }
 

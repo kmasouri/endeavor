@@ -39,8 +39,9 @@ services:
     # Applies new apps/api/db/schema files, then starts the server.
     command: ['sh', '-c', 'node dist/migrate.js && exec node dist/index.js']
     # Only this computer can reach it: the API trusts x-actor-id until real sign-in exists.
+    # APP_PORT in .env changes the port on this computer, if 3000 is taken.
     ports:
-      - '127.0.0.1:3000:3000'
+      - '127.0.0.1:${APP_PORT:-3000}:3000'
     volumes:
       - workspaces:/app/workspaces
 
