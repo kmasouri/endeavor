@@ -1,4 +1,5 @@
-import { MissedRunPolicy } from '../../shared/types';
+import { CalendarRecurrence, MissedRunPolicy } from '../../shared/types';
+import { nextCalendarRun } from './calendar';
 
 export interface RunPlan {
   // Whether to start a run now, and for which time slot (the run's key).
@@ -24,18 +25,34 @@ export function graceMs(intervalMinutes: number): number {
 // - 'run_once' always runs it once. 'skip' never does.
 // Either way the next run is the first slot after now, so missed runs never pile up.
 export function planRun(
-  input: { nextRunAt: Date; intervalMinutes: number; missedRunPolicy: MissedRunPolicy },
+  input: {
+    nextRunAt: Date;
+    intervalMinutes: number | null;
+    recurrence?: CalendarRecurrence | null;
+    missedRunPolicy: MissedRunPolicy;
+  },
   now: Date
 ): RunPlan | null {
-  const intervalMs = input.intervalMinutes * 60_000;
-  const lateMs = now.getTime() - input.nextRunAt.getTime();
-  if (lateMs < 0) {
-    return null;
+  if (now < input.nextRunAt) return null;
+  let latestSlot = input.nextRunAt;
+  let extraSlots = 0;
+  let nextRunAt: Date;
+  let intervalMs: number;
+  if (input.recurrence) {
+    nextRunAt = nextCalendarRun(input.recurrence, latestSlot);
+    while (nextRunAt <= now) {
+      latestSlot = nextRunAt;
+      extraSlots++;
+      nextRunAt = nextCalendarRun(input.recurrence, latestSlot);
+    }
+    intervalMs = nextRunAt.getTime() - latestSlot.getTime();
+  } else {
+    intervalMs = input.intervalMinutes! * 60_000;
+    extraSlots = Math.floor((now.getTime() - latestSlot.getTime()) / intervalMs);
+    latestSlot = new Date(latestSlot.getTime() + extraSlots * intervalMs);
+    nextRunAt = new Date(latestSlot.getTime() + intervalMs);
   }
-  const extraSlots = Math.floor(lateMs / intervalMs);
-  const latestSlot = new Date(input.nextRunAt.getTime() + extraSlots * intervalMs);
-  const nextRunAt = new Date(latestSlot.getTime() + intervalMs);
-  const onTime = now.getTime() - latestSlot.getTime() <= graceMs(input.intervalMinutes);
+  const onTime = now.getTime() - latestSlot.getTime() <= graceMs(intervalMs / 60_000);
 
   if (onTime || input.missedRunPolicy === 'run_once') {
     return { start: true, ask: false, slot: latestSlot, skipped: extraSlots, nextRunAt };

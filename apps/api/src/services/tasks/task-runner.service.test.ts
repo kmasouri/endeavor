@@ -1658,6 +1658,7 @@ describe('TaskRunnerService', () => {
       brief: 'Test checkout',
       completionCriteria: 'Report',
       intervalMinutes: 60,
+      recurrence: null,
       missedRunPolicy: 'run_once' as const,
       status: 'enabled' as const,
       nextRunAt: new Date('2026-10-22T01:00:00Z'),
@@ -1667,6 +1668,60 @@ describe('TaskRunnerService', () => {
       createdAt: new Date(),
       updatedAt: new Date()
     };
+
+    it('recovers a persisted calendar slot after a crash without creating a second run', async () => {
+      const { runner, tasks, responsibilities, conversations } = setup();
+      const slot = new Date('2026-11-01T05:30:00Z');
+      responsibilities.listDue.mockResolvedValue([
+        {
+          ...due,
+          intervalMinutes: null,
+          recurrence: { frequency: 'daily', time: '01:30', timeZone: 'America/New_York' },
+          nextRunAt: slot
+        }
+      ]);
+      conversations.getMember.mockResolvedValue({} as never);
+      let persisted: Task | null = null;
+      tasks.getByRunKey.mockImplementation(async () => persisted);
+      tasks.create.mockImplementation(async (input) => {
+        persisted = makeTask({ ...input } as never);
+        return { task: persisted, created: true };
+      });
+      responsibilities.advance
+        .mockRejectedValueOnce(new Error('Crash after task insert'))
+        .mockResolvedValue(true);
+      await runner.startDueRuns(new Date('2026-11-01T05:31:00Z'));
+      await runner.startDueRuns(new Date('2026-11-01T05:32:00Z'));
+      expect(tasks.create).toHaveBeenCalledTimes(1);
+      expect(tasks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ runKey: 'schedule:r1:2026-11-01T05:30:00.000Z' })
+      );
+      expect(responsibilities.advance).toHaveBeenLastCalledWith(
+        'r1',
+        slot,
+        expect.objectContaining({ nextRunAt: new Date('2026-11-02T06:30:00Z') })
+      );
+    });
+
+    it('skips a calendar slot while an earlier run is waiting, without moving lastRunAt', async () => {
+      const { runner, tasks, responsibilities } = setup();
+      responsibilities.listDue.mockResolvedValue([
+        {
+          ...due,
+          intervalMinutes: null,
+          recurrence: { frequency: 'daily', time: '09:00', timeZone: 'America/New_York' },
+          nextRunAt: new Date('2026-03-08T13:00:00Z')
+        }
+      ]);
+      tasks.findOpenRun.mockResolvedValue(makeTask({ state: 'waiting' }));
+      await runner.startDueRuns(new Date('2026-03-08T13:01:00Z'));
+      expect(tasks.create).not.toHaveBeenCalled();
+      expect(responsibilities.advance).toHaveBeenCalledWith(
+        'r1',
+        new Date('2026-03-08T13:00:00Z'),
+        { nextRunAt: new Date('2026-03-09T13:00:00Z'), lastRunAt: null, catchUp: null }
+      );
+    });
 
     it('starts one run for missed slots, keyed by the slot, and moves to the next future slot', async () => {
       const { runner, tasks, responsibilities, conversations } = setup();

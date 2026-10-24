@@ -15,6 +15,6 @@ cancel confirmation. Build those states in the app; the mockups show the resting
 The agreed design and storage decisions live in [Schedules design in Notion](https://app.notion.com/p/4031a83d088f8127b751ce0d99e066f7).
 [CA-39](https://app.notion.com/p/4031a83d088f8162bc7de6978989c398) tracks implementation, including API,
 persistence, local-time recurrence, daylight saving handling, migration compatibility, and tests.
-The current app still supports intervals only; see [scheduling.md](../../scheduling.md).
+The app now implements calendar and interval recurrence; see [scheduling.md](../../scheduling.md).
 
 The page uses the shared shell from the chat design, so it already has no Work item; see CA-35 and CA-40.

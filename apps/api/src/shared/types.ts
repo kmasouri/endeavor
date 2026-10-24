@@ -332,6 +332,14 @@ export interface Approval {
 export type ResponsibilityStatus = 'enabled' | 'paused' | 'cancelled';
 export type MissedRunPolicy = 'ask' | 'run_once' | 'skip';
 
+export interface CalendarRecurrence {
+  frequency: 'daily' | 'weekdays' | 'weekly';
+  // ISO weekdays: Monday = 1, Sunday = 7. Only weekly rules use this field.
+  days?: number[];
+  time: string;
+  timeZone: string;
+}
+
 // A recurring piece of work for one agent. Each run is a task with this responsibilityId.
 export interface Responsibility {
   id: string;
@@ -340,7 +348,8 @@ export interface Responsibility {
   title: string;
   brief: string;
   completionCriteria: string;
-  intervalMinutes: number;
+  intervalMinutes: number | null;
+  recurrence: CalendarRecurrence | null;
   missedRunPolicy: MissedRunPolicy;
   status: ResponsibilityStatus;
   nextRunAt: Date;

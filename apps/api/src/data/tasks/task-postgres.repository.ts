@@ -106,7 +106,7 @@ export class TaskPostgresRepository implements TaskRepository {
          request_message_id, parent_task_id, restarted_from_task_id, responsibility_id
        )
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'working', $10, $11, $12, $13, $14, $15)
-       ON CONFLICT (run_key) DO NOTHING
+       ON CONFLICT DO NOTHING
        RETURNING *`,
       [
         randomUUID(),
@@ -131,7 +131,9 @@ export class TaskPostgresRepository implements TaskRepository {
       return { task: toTask(result.rows[0]), created: true };
     }
 
-    const existing = await this.getByRunKey(input.runKey);
+    const existing =
+      (await this.getByRunKey(input.runKey)) ??
+      (input.responsibilityId ? await this.findOpenRun(input.responsibilityId) : null);
     if (!existing) {
       throw new Error(`Task with run key ${input.runKey} conflicted but was not found`);
     }

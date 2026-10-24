@@ -1,4 +1,9 @@
-import { MissedRunPolicy, Responsibility, ResponsibilityStatus } from '../../shared/types';
+import {
+  CalendarRecurrence,
+  MissedRunPolicy,
+  Responsibility,
+  ResponsibilityStatus
+} from '../../shared/types';
 
 export interface CreateResponsibilityInput {
   agentId: string;
@@ -6,7 +11,8 @@ export interface CreateResponsibilityInput {
   title: string;
   brief: string;
   completionCriteria: string;
-  intervalMinutes: number;
+  intervalMinutes: number | null;
+  recurrence: CalendarRecurrence | null;
   missedRunPolicy: MissedRunPolicy;
   nextRunAt: Date;
   createdByHumanId: string;
@@ -16,7 +22,8 @@ export interface ResponsibilityChanges {
   title?: string;
   brief?: string;
   completionCriteria?: string;
-  intervalMinutes?: number;
+  intervalMinutes?: number | null;
+  recurrence?: CalendarRecurrence | null;
   missedRunPolicy?: MissedRunPolicy;
   nextRunAt?: Date;
   status?: ResponsibilityStatus;

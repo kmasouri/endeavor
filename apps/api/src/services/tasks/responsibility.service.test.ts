@@ -28,6 +28,7 @@ const responsibility: Responsibility = {
   brief: 'Test checkout',
   completionCriteria: 'Report results',
   intervalMinutes: 60,
+  recurrence: null,
   missedRunPolicy: 'run_once',
   status: 'enabled',
   nextRunAt: new Date(Date.now() + 60_000),
@@ -305,6 +306,95 @@ describe('ResponsibilityService', () => {
       await expect(service.resolveCatchUp(ADMIN, 'r1', 'wait')).rejects.toMatchObject({
         name: 'catchUpNotPending'
       });
+    });
+  });
+});
+
+describe('calendar schedule controls', () => {
+  const rule = { frequency: 'daily' as const, time: '09:00', timeZone: 'America/New_York' };
+  const paused = {
+    ...responsibility,
+    intervalMinutes: null,
+    recurrence: rule,
+    status: 'paused' as const,
+    nextRunAt: new Date('2026-03-07T14:00:00Z')
+  };
+  beforeEach(() => jest.useFakeTimers().setSystemTime(new Date('2026-03-08T15:00:00Z')));
+  afterEach(() => jest.useRealTimers());
+
+  it('creates the first matching source-time slot in UTC', async () => {
+    const { service, responsibilities } = setup();
+    await service.create(ADMIN, {
+      agentId: AGENT,
+      title: 'Daily QA',
+      brief: 'Test',
+      completionCriteria: 'Report',
+      recurrence: rule
+    });
+    expect(responsibilities.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intervalMinutes: null,
+        recurrence: rule,
+        nextRunAt: new Date('2026-03-09T13:00:00Z')
+      })
+    );
+  });
+  it('resumes at the next matching slot, without running paused time', async () => {
+    const { service, responsibilities, tasks } = setup();
+    responsibilities.getById.mockResolvedValue(paused);
+    await service.setStatus(ADMIN, 'r1', 'enabled');
+    expect(responsibilities.update).toHaveBeenCalledWith('r1', {
+      status: 'enabled',
+      nextRunAt: new Date('2026-03-09T13:00:00Z')
+    });
+    expect(tasks.create).not.toHaveBeenCalled();
+  });
+  it('allows a manual run while paused and leaves the recurring slot untouched', async () => {
+    const { service, responsibilities, tasks } = setup();
+    responsibilities.getById.mockResolvedValue(paused);
+    await service.startRun(ADMIN, 'r1', { runKey: 'manual-dst' });
+    expect(tasks.create).toHaveBeenCalledWith(
+      expect.objectContaining({ runKey: 'manual:r1:manual-dst' })
+    );
+    expect(responsibilities.advance).not.toHaveBeenCalled();
+    expect(responsibilities.update).not.toHaveBeenCalled();
+  });
+  it('switches an interval to calendar recurrence without a synthetic interval', async () => {
+    const { service, responsibilities } = setup();
+    await service.update(ADMIN, 'r1', { recurrence: rule });
+    expect(responsibilities.update).toHaveBeenCalledWith(
+      'r1',
+      expect.objectContaining({
+        recurrence: rule,
+        intervalMinutes: null,
+        nextRunAt: new Date('2026-03-09T13:00:00Z')
+      })
+    );
+  });
+  it('switches back to a real interval and rejects arbitrary calendar slots', async () => {
+    const { service, responsibilities } = setup();
+    responsibilities.getById.mockResolvedValue(paused);
+    await expect(service.update(ADMIN, 'r1', { nextRunAt: new Date() })).rejects.toMatchObject({
+      name: 'validationError'
+    });
+    await service.update(ADMIN, 'r1', { intervalMinutes: 60 });
+    expect(responsibilities.update).toHaveBeenCalledWith(
+      'r1',
+      expect.objectContaining({
+        recurrence: null,
+        intervalMinutes: 60,
+        nextRunAt: new Date('2026-03-08T16:00:00Z')
+      })
+    );
+  });
+  it('reports an open run when a competing start wins the database constraint', async () => {
+    const { service, tasks } = setup();
+    tasks.create.mockResolvedValue({
+      task: { id: 'other', runKey: 'schedule:r1:slot', state: 'working' } as Task,
+      created: false
+    });
+    await expect(service.startRun(ADMIN, 'r1', { runKey: 'manual-race' })).rejects.toMatchObject({
+      name: 'responsibilityRunOpen'
     });
   });
 });

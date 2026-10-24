@@ -1,187 +1,71 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
-  import { api, type Responsibility, type Task } from '../api';
+  import { api, type Responsibility, type Task, type Conversation } from '../api';
+  import Avatar from '../Avatar.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import StateBadge from '../StateBadge.svelte';
-  import { when } from '../components';
+  import ScheduleBadge from './ScheduleBadge.svelte';
+  import { policyLabels, recurrenceSummary, scheduleInstant } from '../schedules';
+  import { timeDisplay } from '../time-display.svelte';
   import { createAction, createLoad } from '../state.svelte';
 
-  const POLICY_LABELS = {
-    ask: 'run one, ask if several',
-    run_once: 'run once',
-    skip: 'skip'
-  } as const;
-
-  let props: {
-    schedule: Responsibility;
-    agentName: string;
-    onChanged: () => void;
+  let { schedule: s, agentName, onChanged }: {
+    schedule: Responsibility; agentName: string; onChanged: () => void;
   } = $props();
-  let s = $derived(props.schedule);
-  let showRuns = $state(false);
-  let interval = $state(untrack(() => String(s.intervalMinutes)));
-  const runs = createLoad(
-    () =>
-      showRuns
-        ? api.list<Task>(`/responsibilities/${s.id}/runs?limit=20`)
-        : Promise.resolve({ data: [] as Task[], page: { limit: 0, offset: 0, total: 0 } }),
-    () => [showRuns]
-  );
+  let offset = $state(0);
+  const runs = createLoad(() => api.list<Task>(`/responsibilities/${s.id}/runs?limit=20&offset=${offset}`), () => [s.id, offset], 10000);
+  const conversation = createLoad(() => s.conversationId
+    ? api.get<Conversation>(`/conversations/${s.conversationId}`) : Promise.resolve(null), () => [s.conversationId]);
   const action = createAction();
-  const post = (path: string, body: unknown = {}) =>
-    void action
-      .run(() => api.post(`/responsibilities/${s.id}${path}`, body))
-      .then((ok) => ok && (props.onChanged(), runs.reload()));
-  const saveInterval = (event: SubmitEvent) => {
-    event.preventDefault();
-    void action
-      .run(() => api.patch(`/responsibilities/${s.id}`, { intervalMinutes: Number(interval) }))
-      .then((ok) => ok && props.onChanged());
-  };
-
-
+  let notice = $state('');
+  const instant = (value: string) => scheduleInstant(value, undefined, timeDisplay.format === '12h');
+  async function post(path: string, body: unknown = {}) {
+    let task: Task | undefined;
+    const ok = await action.run(async () => {
+      const result = await api.post<Task>(`/responsibilities/${s.id}${path}`, body);
+      if (path === '/runs') task = result;
+    });
+    if (ok) {
+      notice = task ? 'Run started. It appears in recent runs below.'
+        : path === '/pause' ? 'Schedule paused.' : path === '/resume' ? 'Schedule resumed.' : 'Schedule cancelled.';
+      onChanged(); runs.reload();
+    }
+  }
 </script>
 
-<div class="panel">
-  <div class="row">
-    <strong class="grow">
-      {s.title}
-    </strong>
-
-    <span class={`badge ${s.status === 'enabled' ? 'state-working' : ''}`}>
-      {s.status}
-    </span>
+<div class="row wrap"><h2 class="grow" tabindex="-1">{s.title}</h2><ScheduleBadge status={s.status} /></div>
+<p class="schedule-meta"><Avatar name={agentName} id={s.agentId} agent size="sm" /> {agentName} <span class="agent-label">agent</span> · {recurrenceSummary(s, timeDisplay.format === '12h')}</p>
+{#if s.status !== 'cancelled'}
+  <div class="row wrap schedule-actions">
+    <button class="secondary" disabled={action.busy} onclick={() => post(s.status === 'enabled' ? '/pause' : '/resume')}>{s.status === 'enabled' ? 'Pause schedule' : 'Resume schedule'}</button>
+    <button class="secondary" disabled={action.busy} onclick={() => post('/runs')}>Run once now</button>
   </div>
-
-  {#if s.catchUp}
-    <div class="callout">
-      <strong>
-        {#if s.catchUp.missed === 1}
-          A run was
-        {:else}
-          {`${s.catchUp.missed} runs were`}
-        {/if}
-
-        missed while the platform was off.
-      </strong>
-
-      Run it now, or wait for the next one ({when(s.nextRunAt)})? If you don't answer, the next run
-      happens as usual.
-
-      <div class="row">
-        <button disabled={action.busy} onclick={() => post('/catch-up', { decision: 'run' })}>
-          Catch up now
-        </button>
-
-        <button
-          class="secondary"
-          disabled={action.busy}
-          onclick={() => post('/catch-up', { decision: 'wait' })}
-        >
-          Wait
-        </button>
-      </div>
-    </div>
-  {/if}
-
-  <p class="muted small">
-    {props.agentName} · every {s.intervalMinutes} minutes ·
-
-    {#if s.status === 'enabled'}
-      {`next ${when(s.nextRunAt)}`}
-    {:else}
-      not running
-    {/if}
-
-    {#if s.lastRunAt}
-      {` · last ${when(s.lastRunAt)}`}
-    {/if}
-
-    · missed runs:
-    {POLICY_LABELS[s.missedRunPolicy]}
-
-    {#if s.conversationId}
-      ·
-
-      <a href={`#/conversations/${s.conversationId}`}> results go here </a>
-    {/if}
-  </p>
-
-  <details>
-    <summary> Brief and criteria </summary>
-
-    <p class="body small">
-      {s.brief}
-    </p>
-
-    <p class="body small">
-      <strong> Done when: </strong>
-
-      {s.completionCriteria}
-    </p>
-  </details>
-
-  {#if s.status !== 'cancelled'}
-    <div class="row wrap">
-      {#if s.status === 'enabled'}
-        <button class="secondary" disabled={action.busy} onclick={() => post('/pause')}>
-          Pause
-        </button>
-      {:else}
-        <button disabled={action.busy} onclick={() => post('/resume')}> Resume </button>
-      {/if}
-
-      <button class="secondary" disabled={action.busy} onclick={() => post('/runs', {})}>
-        Run now
-      </button>
-
-      <button
-        class="secondary"
-        disabled={action.busy}
-        onclick={() =>
-          confirm('Cancel this schedule for good? Running work keeps going.') && post('/cancel')}
-      >
-        Cancel schedule
-      </button>
-
-      <form onsubmit={saveInterval} class="row">
-        <input
-          inputmode="numeric"
-          bind:value={interval}
-          style="width: 5rem"
-          aria-label="Interval in minutes"
-        />
-
-        <button class="secondary" disabled={action.busy || interval === String(s.intervalMinutes)}>
-          Set minutes
-        </button>
-      </form>
-    </div>
-  {/if}
-
-  <ErrorNote error={action.error} />
-
-  <label class="check">
-    <input type="checkbox" bind:checked={showRuns} />
-
-    Show runs
-  </label>
-
-  {#if showRuns}
-    <ul class="list small">
-      {#if (runs.data?.data ?? []).length === 0}
-        <li class="muted">No runs yet.</li>
-      {/if}
-
-      {#each runs.data?.data ?? [] as run (run.id)}
-        <li>
-          <a href={`#/tasks/${run.id}`}>
-            {when(run.createdAt)}
-          </a>
-
-          <StateBadge state={run.state} paused={Boolean(run.pausedAt)} />
-        </li>
-      {/each}
-    </ul>
-  {/if}
+{/if}
+<p class="muted small">Pausing or cancelling stops future starts. A run that has already started keeps going. Run once now leaves the recurring schedule unchanged.</p>
+<ErrorNote error={action.error} />
+<p role="status" class="schedule-notice">{notice}</p>
+<div class="schedule-facts">
+  <div><h3>What to do each time</h3><p class="body">{s.brief}</p></div>
+  <div><h3>Done when</h3><p class="body">{s.completionCriteria}</p></div>
+  <div class="grid2">
+    <div><h3>Next run</h3><p>{s.status === 'enabled' ? instant(s.nextRunAt) : 'No new runs'}</p></div>
+    <div><h3>Post results in</h3><p>{#if s.conversationId}<a href={`#/conversations/${s.conversationId}`}># {conversation.data?.title ?? 'Result conversation'}</a>{:else}Run history only{/if}</p></div>
+  </div>
+  <div><h3>If runs are missed</h3><p>{policyLabels[s.missedRunPolicy]}.</p></div>
 </div>
+<h3>Recent runs</h3>
+<ErrorNote error={runs.error} />
+{#if !runs.data && !runs.error}<p class="muted">Loading runs…</p>{/if}
+<ul class="schedule-runs">
+  {#if runs.data?.data.length === 0}<li class="muted">No runs yet.</li>{/if}
+  {#each runs.data?.data ?? [] as run (run.id)}
+    <li><time datetime={run.createdAt} class="grow">{instant(run.createdAt)}</time><StateBadge state={run.state} paused={Boolean(run.pausedAt)} /><a href={`#/tasks/${run.id}`}>See what it did</a></li>
+  {/each}
+</ul>
+{#if offset > 0 || (runs.data?.page.total ?? 0) > offset + 20}
+  <div class="row wrap"><button class="secondary" disabled={offset === 0} onclick={() => (offset = Math.max(0, offset - 20))}>Newer runs</button><button class="secondary" disabled={(runs.data?.page.total ?? 0) <= offset + 20} onclick={() => (offset += 20)}>Older runs</button></div>
+{/if}
+{#if s.status !== 'cancelled'}
+  <button class="secondary schedule-cancel" disabled={action.busy} onclick={() => {
+    if (confirm(`Cancel “${s.title}” permanently? It cannot be resumed. Work already running keeps going.`)) void post('/cancel');
+  }}>Cancel schedule…</button>
+{/if}

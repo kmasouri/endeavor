@@ -60,6 +60,14 @@ export async function startResponsibilityRun(
     restartedFromTaskId: null,
     responsibilityId: responsibility.id
   });
+  // A different slot or manual request may have won the database's open-run constraint
+  // after the check above. Return a skip instead of attributing that task to this slot.
+  if (!created && task.runKey !== input.runKey) {
+    return {
+      skippedReason: `The previous run (task ${task.id}) is still ${task.state}.`,
+      openRunId: task.id
+    };
+  }
   if (created) {
     await deps.lifecycle.recordCreated(task, input.startedBy);
   }

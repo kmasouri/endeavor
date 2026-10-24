@@ -54,7 +54,13 @@ format, defaulting to system
 appearance and 12-hour time. The browser keeps a theme copy for startup and restores authoritative
 preferences from the API on reload or person switch. System appearance follows changes to the
 computer's theme. `time-display.svelte.ts` formats message and run timestamps in the device timezone.
-It changes no stored instants or schedule rules. `profile-state.svelte.ts` keeps separate drafts for
+It changes no stored instants or schedule rules. Schedules separates source calendar summaries
+from viewer-local next-run and history instants. Calendar recurrence stores a named source timezone,
+local time, frequency, and optional ISO weekdays alongside durable UTC slots. The task service
+computes source dates through clock changes, skipping gaps and choosing the earlier repeated instant.
+The existing scheduler and run keys retain restart recovery and missed-run handling; a partial
+unique index also prevents different starts from creating competing open runs for one responsibility.
+See `docs/scheduling.md` for API compatibility and migration steps. `profile-state.svelte.ts` keeps separate drafts for
 the two settings tabs, retains failed saves for retry, and guards navigation and person switching
 until edits are saved or discarded. `PATCH /humans/me` updates only the selected person's profile
 and preferences, preserving identity and message ownership.

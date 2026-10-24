@@ -1,6 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
-import { MissedRunPolicy, Responsibility, ResponsibilityStatus } from '../../shared/types';
+import {
+  CalendarRecurrence,
+  MissedRunPolicy,
+  Responsibility,
+  ResponsibilityStatus
+} from '../../shared/types';
 import {
   CreateResponsibilityInput,
   ResponsibilityChanges,
@@ -14,7 +19,8 @@ interface ResponsibilityRow {
   title: string;
   brief: string;
   completion_criteria: string;
-  interval_minutes: number;
+  interval_minutes: number | null;
+  recurrence: CalendarRecurrence | null;
   missed_run_policy: MissedRunPolicy;
   status: ResponsibilityStatus;
   next_run_at: Date;
@@ -31,6 +37,7 @@ const CHANGE_COLUMNS: Record<keyof ResponsibilityChanges, string> = {
   brief: 'brief',
   completionCriteria: 'completion_criteria',
   intervalMinutes: 'interval_minutes',
+  recurrence: 'recurrence',
   missedRunPolicy: 'missed_run_policy',
   nextRunAt: 'next_run_at',
   status: 'status'
@@ -43,9 +50,9 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
     const result = await this.db.query<ResponsibilityRow>(
       `INSERT INTO bold_cedar_007.responsibilities (
          id, agent_id, conversation_id, title, brief, completion_criteria, interval_minutes,
-         missed_run_policy, next_run_at, created_by_human_id
+         missed_run_policy, next_run_at, created_by_human_id, recurrence
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         randomUUID(),
@@ -57,7 +64,8 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
         input.intervalMinutes,
         input.missedRunPolicy,
         input.nextRunAt,
-        input.createdByHumanId
+        input.createdByHumanId,
+        input.recurrence
       ]
     );
     return toResponsibility(result.rows[0]);
@@ -106,6 +114,9 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
   ): Promise<Responsibility | null> {
     const values: unknown[] = [responsibilityId];
     const sets = ['updated_at = now()'];
+    if (changes.status !== undefined || changes.nextRunAt !== undefined) {
+      sets.push('catch_up_slot = NULL', 'catch_up_missed = NULL');
+    }
     for (const [field, column] of Object.entries(CHANGE_COLUMNS)) {
       const value = changes[field as keyof ResponsibilityChanges];
       if (value !== undefined) {
@@ -177,7 +188,9 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
            catch_up_missed = NULL,
            updated_at = now()
        WHERE id = $1
-         AND catch_up_slot = $2`,
+         AND catch_up_slot = $2
+         AND status = 'enabled'
+         AND next_run_at > now()`,
       [responsibilityId, slot]
     );
     return (result.rowCount ?? 0) > 0;
@@ -193,6 +206,7 @@ function toResponsibility(row: ResponsibilityRow): Responsibility {
     brief: row.brief,
     completionCriteria: row.completion_criteria,
     intervalMinutes: row.interval_minutes,
+    recurrence: row.recurrence,
     missedRunPolicy: row.missed_run_policy,
     catchUp:
       row.catch_up_slot && row.catch_up_missed !== null

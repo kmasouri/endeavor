@@ -9,7 +9,14 @@ import {
 import { ResponsibilityLogger, TaskLogger } from '../../observability';
 import { ADMIN_ONLY, requireHuman } from '../../shared/access';
 import { AppError } from '../../shared/errors';
-import { MissedRunPolicy, Responsibility, ResponsibilityStatus, Task } from '../../shared/types';
+import {
+  CalendarRecurrence,
+  MissedRunPolicy,
+  Responsibility,
+  ResponsibilityStatus,
+  Task
+} from '../../shared/types';
+import { nextCalendarRun } from './calendar';
 import { startResponsibilityRun } from './scheduled-runs';
 import { TaskLifecycle } from './task-lifecycle';
 
@@ -19,7 +26,8 @@ export interface ResponsibilityInput {
   title: string;
   brief: string;
   completionCriteria: string;
-  intervalMinutes: number;
+  intervalMinutes?: number;
+  recurrence?: CalendarRecurrence;
   missedRunPolicy?: MissedRunPolicy;
   // When the first run is due. Defaults to now.
   startAt?: Date;
@@ -74,9 +82,12 @@ export class ResponsibilityService {
       title: input.title,
       brief: input.brief,
       completionCriteria: input.completionCriteria,
-      intervalMinutes: input.intervalMinutes,
+      intervalMinutes: input.intervalMinutes ?? null,
+      recurrence: input.recurrence ?? null,
       missedRunPolicy: input.missedRunPolicy ?? 'ask',
-      nextRunAt: input.startAt ?? new Date(),
+      nextRunAt: input.recurrence
+        ? nextCalendarRun(input.recurrence, new Date())
+        : (input.startAt ?? new Date()),
       createdByHumanId: admin.id
     });
     this.responsibilityLogger.onResponsibilityCreated(responsibility.id, agent.id);
@@ -124,6 +135,7 @@ export class ResponsibilityService {
       brief?: string;
       completionCriteria?: string;
       intervalMinutes?: number;
+      recurrence?: CalendarRecurrence;
       missedRunPolicy?: MissedRunPolicy;
       nextRunAt?: Date;
     }
@@ -132,14 +144,33 @@ export class ResponsibilityService {
     const responsibility = await this.requireResponsibility(responsibilityId);
     // A shorter interval takes effect at once, not after the old, longer wait.
     let nextRunAt = changes.nextRunAt;
+    const recurrence =
+      changes.recurrence ??
+      (changes.intervalMinutes !== undefined ? null : responsibility.recurrence);
+    if (recurrence && changes.nextRunAt) {
+      throw new AppError(
+        'validationError',
+        'Calendar rules compute their next slot; omit nextRunAt'
+      );
+    }
+    if (changes.recurrence) {
+      nextRunAt = nextCalendarRun(changes.recurrence, new Date());
+    }
     if (!nextRunAt && changes.intervalMinutes !== undefined) {
       const sooner = new Date(
-        (responsibility.lastRunAt ?? new Date()).getTime() + changes.intervalMinutes * 60_000
+        (responsibility.recurrence
+          ? new Date()
+          : (responsibility.lastRunAt ?? new Date())
+        ).getTime() +
+          changes.intervalMinutes * 60_000
       );
-      nextRunAt = sooner < responsibility.nextRunAt ? sooner : undefined;
+      nextRunAt =
+        responsibility.recurrence || sooner < responsibility.nextRunAt ? sooner : undefined;
     }
     const updated = await this.responsibilityRepository.update(responsibility.id, {
       ...changes,
+      ...(changes.recurrence && { intervalMinutes: null }),
+      ...(changes.intervalMinutes !== undefined && { recurrence: null }),
       nextRunAt
     });
     if (!updated) {
@@ -163,7 +194,13 @@ export class ResponsibilityService {
     }
     // Resuming after a pause starts from now; the paused time doesn't count as missed runs.
     const nextRunAt =
-      status === 'enabled' && responsibility.nextRunAt < new Date() ? new Date() : undefined;
+      status === 'enabled'
+        ? responsibility.recurrence
+          ? nextCalendarRun(responsibility.recurrence, new Date())
+          : responsibility.nextRunAt < new Date()
+            ? new Date()
+            : undefined
+        : undefined;
     // The repository never changes a cancelled responsibility, so a cancel racing a resume
     // can't bring it back.
     const updated = await this.responsibilityRepository.update(responsibility.id, {
