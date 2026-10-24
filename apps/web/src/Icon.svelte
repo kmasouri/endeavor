@@ -9,6 +9,7 @@
     setup: 'M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2',
     panel: 'M3 4h18v16H3zM9 4v16',
     plus: 'M12 5v14M5 12h14',
+    switch: 'M4 7h16m-4-4l4 4-4 4M20 17H4m4-4l-4 4 4 4',
     close: 'M6 6l12 12M18 6L6 18',
     send: 'M5 12h14M13 6l6 6-6 6',
     reply: 'M9 5l-6 6 6 6M3 11h11a6 6 0 016 6',
