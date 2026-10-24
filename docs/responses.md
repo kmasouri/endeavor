@@ -94,3 +94,32 @@ The helpers are in `apps/api/src/shared/response.ts`:
 Skill versions return `id`, `skillId`, `version`, `instructions`, `createdByHumanId`, and `createdAt`. The retired skill `connectionIds` field is omitted from both current and historical responses. Skill creation accepts name, description, and instructions; a new version accepts instructions only. Structured connection fields are rejected as unknown input.
 
 Agent versions still return explicit `connectionIds`. They also return `legacyConnectionIds`, a read-only list of inherited-only selections from old pinned skill versions that need human review. It grants no access and is rejected in configuration requests. Existing pins and grants are unchanged; see [the rollout steps](catalogs.md#moving-from-inherited-connections-ca-37).
+
+## Person profiles
+
+`GET /humans` and `POST /humans` return each person's `id`, `name`, `role`, `createdAt`, and
+`preferences`: `{ "theme": "system", "timeFormat": "12h" }`. The theme is `system`, `dark`, or
+`light`; the time format is `12h` or `24h`. Existing and new people default to `system` and `12h`.
+
+`PATCH /humans/me` requires `x-actor-id` and updates only that person. Send a nonempty subset:
+
+```json
+{
+  "name": "Kayvan",
+  "preferences": { "theme": "light", "timeFormat": "24h" }
+}
+```
+
+The response is `200` with `success(person)`, including the saved preferences. The name is trimmed
+and must be 1–100 characters. Preference fields may be updated individually. Omitted fields keep
+their saved values. Empty updates, empty preference objects, unknown fields, and invalid choices
+return `validationError`. An unknown acting person returns `actorNotFound`. IDs, roles, message
+ownership, and history do not change. There is still no sign-in; the header identifies the person
+selected in the local app.
+
+Profile and settings opens from the sidebar name. Each tab has its own Save and Discard actions;
+changing tabs keeps drafts. Failed saves keep edits for retry. Leaving with edits prompts before
+discarding, and navigation waits for an active save to finish. The browser remembers only the
+selected person and a theme copy for startup. The server remains the source for preferences on
+reload or person switch. System theme follows the computer's appearance. Times use the device's
+IANA timezone and the person's saved hour format, without changing stored instants or schedules.

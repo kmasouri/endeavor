@@ -2,7 +2,7 @@
   import { type Task, type TaskOutput } from '../api';
   import { safeLink } from '../message-format';
   import FormattedText from '../FormattedText.svelte';
-  import { when } from '../components';
+  import { when, shortTime } from '../components';
   import Icon from '../Icon.svelte';
   import ReviewPanel from './ReviewPanel.svelte';
   let {
@@ -36,12 +36,7 @@
     {#if output.content}<div class="artifact-preview" class:reading>
         <FormattedText text={reading ? output.content : output.content.slice(0, 300)} />
       </div>{/if}
-    <time class="caption muted" title={when(output.createdAt)}
-      >{new Date(output.createdAt).toLocaleTimeString([], {
-        hour: 'numeric',
-        minute: '2-digit'
-      })}</time
-    >
+    <time class="caption muted" title={when(output.createdAt)}>{shortTime(output.createdAt)}</time>
   </div>
   <div class="artifact-actions row wrap">
     <button class:secondary={pendingReview} onclick={() => (reading = !reading)}

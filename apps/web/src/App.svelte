@@ -25,11 +25,17 @@
 
   import Avatar from './Avatar.svelte';
   import Icon from './Icon.svelte';
-  import { applyTheme, readTheme, conversationName } from './appearance';
+  import SettingsPage from './pages/SettingsPage.svelte';
+  import { timeDisplay } from './time-display.svelte';
+  import { applyTheme, conversationName } from './appearance';
 
-  let theme = $state(readTheme());
+  let guard = $state<() => boolean>(() => true);
+  let dirty = $state(false);
+  let savedPerson = $state<Human | null>(null);
   let collapsed = $state(window.innerWidth < 700);
   let picking = $state(false);
+  let switching = $state(false);
+  let switchError = $state<string | null>(null);
   let actorId = $state(getActorId());
   const people = createLoad(
     () => api.get<Human[]>('/humans'),
@@ -60,16 +66,66 @@
     () => [actorId],
     10000
   );
-  const choose = (id: string | null) => {
-    setActorId(id);
-    actorId = id;
+  const choose = async (id: string | null) => {
+    if (id === actorId || switching || !guard()) return;
+    switching = true;
+    switchError = null;
+    try {
+      // Refresh before mounting the person's editor, including changes from another browser.
+      const current = await api.get<Human[]>('/humans');
+      const person = current.find((person) => person.id === id);
+      if (!person) throw new Error('This person is no longer available. Reload and choose again.');
+      dirty = false;
+      guard = () => true;
+      savedPerson = person;
+      setActorId(id);
+      actorId = id;
+      people.reload();
+    } catch (caught) {
+      switchError = caught instanceof Error ? caught.message : String(caught);
+    } finally {
+      switching = false;
+    }
   };
-  let me = $derived(people.data?.find((person) => person.id === actorId));
+  let me = $derived(
+    savedPerson?.id === actorId ? savedPerson : people.data?.find((person) => person.id === actorId)
+  );
+  $effect(() => {
+    const theme = me?.preferences.theme;
+    if (!theme) return;
+    applyTheme(theme);
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const sync = () => {
+      if (theme === 'system') applyTheme(theme);
+    };
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  });
+  $effect(() => {
+    timeDisplay.format = me?.preferences.timeFormat ?? '12h';
+  });
   let [section, id] = $derived(route);
 </script>
 
 <svelte:window
+  onbeforeunload={(event) => {
+    if (dirty) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  }}
   onhashchange={() => {
+    if (window.location.hash === hash) return;
+    if (!guard()) {
+      window.history.replaceState(
+        null,
+        '',
+        window.location.pathname + window.location.search + hash
+      );
+      return;
+    }
+    dirty = false;
+    guard = () => true;
     hash = window.location.hash;
   }}
 />
@@ -88,6 +144,7 @@
   <FirstPerson onCreated={(human) => (choose(human.id), people.reload())} />
 {:else if !me}
   <PickPerson people={people.data} onPick={choose} />
+  <ErrorNote error={switchError} />
 {:else}
   <div class="shell" class:sidebar-collapsed={collapsed}>
     <button
@@ -149,20 +206,34 @@
         <div class="sidebar-footer">
           <button
             class="quiet row profile-button"
+            class:active={section === 'settings'}
             aria-label="Profile and settings"
-            onclick={() => (picking = !picking)}
+            onclick={() => {
+              window.location.hash = '/settings';
+              if (window.innerWidth < 700) collapsed = true;
+            }}
             ><Avatar name={me.name} id={me.id} /><span
               ><strong>{me.name}</strong><span class="caption muted">Profile and settings</span
               ></span
             ></button
           >
+          <button
+            class="quiet small"
+            disabled={switching}
+            aria-expanded={picking}
+            onclick={() => (picking = !picking)}>Switch person</button
+          >
+          <ErrorNote error={switchError} />
+          {#if switching}<span class="caption muted" role="status">Switching person…</span>{/if}
           {#if picking}<label
               >Choose a person<select
                 aria-label="Acting as"
+                disabled={switching}
                 value={me.id}
                 onchange={(event) => {
                   choose(event.currentTarget.value);
-                  picking = false;
+                  event.currentTarget.value = actorId ?? '';
+                  // Keep the picker open so switching back remains easy.
                 }}
               >
                 {#each people.data ?? [] as person (person.id)}<option value={person.id}
@@ -170,20 +241,23 @@
                   >{/each}
               </select></label
             >{/if}
-          <button
-            class="quiet row"
-            onclick={() => {
-              theme = theme === 'dark' ? 'light' : 'dark';
-              applyTheme(theme);
-            }}><Icon name="moon" />{theme === 'dark' ? 'Light theme' : 'Dark theme'}</button
-          >
         </div>
       </aside>
     {/if}
 
     <main class:conversation-main={section === 'conversations' && Boolean(id)}>
       {#key `${actorId}:${hash}`}
-        {#if section === 'setup'}
+        {#if section === 'settings'}
+          <SettingsPage
+            person={me}
+            onSaved={(person) => {
+              savedPerson = person;
+              people.reload();
+            }}
+            onGuard={(next) => (guard = next)}
+            onDirty={(next) => (dirty = next)}
+          />
+        {:else if section === 'setup'}
           <SetupPage people={people.data} onPeopleChanged={people.reload} />
         {:else if section === 'tasks' && id}
           <TaskPage taskId={id} />

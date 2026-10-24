@@ -1,6 +1,4 @@
-export function when(value: string): string {
-  return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-}
+export { when, shortTime } from './time-display.svelte';
 export function toLimit(value: string): number | undefined {
   const number = Number.parseInt(value, 10);
   return Number.isFinite(number) && number > 0 ? number : undefined;

@@ -69,10 +69,16 @@ export const api = {
 
 // The shapes the API sends back. They mirror src/shared/types.ts; dates arrive as strings.
 
+export interface HumanPreferences {
+  theme: 'system' | 'dark' | 'light';
+  timeFormat: '12h' | '24h';
+}
+
 export interface Human {
   id: string;
   name: string;
   role: 'admin' | 'member';
+  preferences: HumanPreferences;
 }
 
 export interface ParticipantRef {

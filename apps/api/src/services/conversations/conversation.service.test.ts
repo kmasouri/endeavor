@@ -15,7 +15,13 @@ const LEE = '00000000-0000-4000-8000-000000000002';
 const AGENT = '00000000-0000-4000-8000-0000000000a1';
 const OTHER_AGENT = '00000000-0000-4000-8000-0000000000a2';
 
-const kim: Human = { id: KIM, name: 'Kim', role: 'member', createdAt: new Date() };
+const kim: Human = {
+  id: KIM,
+  name: 'Kim',
+  role: 'member',
+  preferences: { theme: 'system', timeFormat: '12h' },
+  createdAt: new Date()
+};
 const conversation: Conversation = {
   id: CONV,
   title: 'Billing',
@@ -159,6 +165,7 @@ describe('ConversationService', () => {
       id: LEE,
       name: 'Lee',
       role: 'admin',
+      preferences: { theme: 'system', timeFormat: '12h' },
       createdAt: new Date()
     });
 
@@ -173,6 +180,7 @@ describe('ConversationService', () => {
       id: LEE,
       name: 'Lee',
       role: 'admin',
+      preferences: { theme: 'system', timeFormat: '12h' },
       createdAt: new Date()
     });
 
@@ -218,6 +226,7 @@ describe('ConversationService', () => {
       id: LEE,
       name: 'Lee',
       role: 'member',
+      preferences: { theme: 'system', timeFormat: '12h' },
       createdAt: new Date()
     });
     await expect(

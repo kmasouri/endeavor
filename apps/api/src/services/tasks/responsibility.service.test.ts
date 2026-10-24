@@ -13,7 +13,13 @@ const ADMIN = '00000000-0000-4000-8000-000000000001';
 const AGENT = '00000000-0000-4000-8000-0000000000a1';
 const CONV = '00000000-0000-4000-8000-0000000000f1';
 
-const admin: Human = { id: ADMIN, name: 'Kim', role: 'admin', createdAt: new Date() };
+const admin: Human = {
+  id: ADMIN,
+  name: 'Kim',
+  role: 'admin',
+  preferences: { theme: 'system', timeFormat: '12h' },
+  createdAt: new Date()
+};
 const responsibility: Responsibility = {
   id: 'r1',
   agentId: AGENT,

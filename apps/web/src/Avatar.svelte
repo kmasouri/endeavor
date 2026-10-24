@@ -5,7 +5,7 @@
     id = name,
     agent = false,
     size = 'md'
-  }: { name: string; id?: string; agent?: boolean; size?: 'sm' | 'md' | 'lg' } = $props();
+  }: { name: string; id?: string; agent?: boolean; size?: 'sm' | 'md' | 'lg' | 'xl' } = $props();
   let tint = $derived(
     1 + (Array.from(id).reduce((n, c) => n + c.charCodeAt(0), 0) % (agent ? 3 : 4))
   );

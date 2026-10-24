@@ -1,8 +1,26 @@
 import { FastifyInstance } from 'fastify';
-import { createHumanHandler, listHumansHandler } from '../../handlers';
-import { createHumanBodySchema, optionalActorHeadersSchema } from '../../schemas';
+import { createHumanHandler, listHumansHandler, updateHumanHandler } from '../../handlers';
+import {
+  createHumanBodySchema,
+  optionalActorHeadersSchema,
+  actorHeadersSchema,
+  updateHumanBodySchema
+} from '../../schemas';
 
 export async function humansRouter(fastifyInstance: FastifyInstance): Promise<void> {
+  fastifyInstance.patch(
+    '/humans/me',
+    {
+      schema: {
+        description: 'Update the acting person’s display name or personal display preferences.',
+        tags: ['humans'],
+        headers: actorHeadersSchema,
+        body: updateHumanBodySchema
+      }
+    },
+    updateHumanHandler
+  );
+
   fastifyInstance.post(
     '/humans',
     {

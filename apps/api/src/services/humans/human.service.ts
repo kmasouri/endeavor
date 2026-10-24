@@ -1,4 +1,4 @@
-import { HumanRepository } from '../../data';
+import { HumanRepository, UpdateHumanInput } from '../../data';
 import { HumanLogger } from '../../observability';
 import { ADMIN_ONLY, requireHuman } from '../../shared/access';
 import { Human, HumanRole } from '../../shared/types';
@@ -27,6 +27,13 @@ export class HumanService {
     requireHuman(actorId ? await this.humanRepository.getById(actorId) : null, ADMIN_ONLY);
     const human = await this.humanRepository.create(input);
     this.humanLogger.onHumanCreated(human.id, human.role);
+    return human;
+  }
+
+  async updateProfile(actorId: string, input: UpdateHumanInput): Promise<Human> {
+    const actor = requireHuman(await this.humanRepository.getById(actorId));
+    const human = requireHuman(await this.humanRepository.update(actor.id, input));
+    this.humanLogger.onHumanUpdated(human.id);
     return human;
   }
 

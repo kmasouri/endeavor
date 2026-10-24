@@ -46,10 +46,17 @@ The web interface uses one Svelte component per page or form. Shared request and
 
 The web app imports `apps/web/src/design-tokens.css`, an exact copy of
 `docs/design/style-guide/tokens.css`. A test checks that the copy stays in sync, so the Docker image
-can build without the design documentation. Dark is the default. `appearance.ts` applies the browser's
+can build without the design documentation. `appearance.ts` applies the browser's
 remembered theme before mounting the app. Shared avatars, icons, and page headers keep the shell
-and feature pages consistent. The sidebar collapses and keeps the current person picker under
-Profile and settings until the profile feature ships.
+and feature pages consistent. The sidebar name opens Profile and settings; Switch person keeps
+the existing picker available. Person records store theme and hour format, defaulting to system
+appearance and 12-hour time. The browser keeps a theme copy for startup and restores authoritative
+preferences from the API on reload or person switch. System appearance follows changes to the
+computer's theme. `time-display.svelte.ts` formats message and run timestamps in the device timezone.
+It changes no stored instants or schedule rules. `profile-state.svelte.ts` keeps separate drafts for
+the two settings tabs, retains failed saves for retry, and guards navigation and person switching
+until edits are saved or discarded. `PATCH /humans/me` updates only the selected person's profile
+and preferences, preserving identity and message ownership.
 
 The conversation page owns its messages, tasks, outputs, approval requests, and spending resources.
 Details starts closed. Messages render a small Markdown subset as Svelte text nodes, including

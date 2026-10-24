@@ -12,7 +12,13 @@ const MEMBER = '00000000-0000-4000-8000-000000000002';
 const AGENT = '00000000-0000-4000-8000-0000000000a1';
 const CONV = '00000000-0000-4000-8000-0000000000f1';
 
-const member: Human = { id: MEMBER, name: 'Lee', role: 'member', createdAt: new Date() };
+const member: Human = {
+  id: MEMBER,
+  name: 'Lee',
+  role: 'member',
+  preferences: { theme: 'system', timeFormat: '12h' },
+  createdAt: new Date()
+};
 const note: AgentNote = {
   id: 'n1',
   agentId: AGENT,

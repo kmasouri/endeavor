@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
-import { Human, HumanRole } from '../../shared/types';
-import { CreateHumanInput, HumanRepository } from './human.repository';
+import { Human, HumanRole, HumanPreferences } from '../../shared/types';
+import { CreateHumanInput, HumanRepository, UpdateHumanInput } from './human.repository';
 
 interface HumanRow {
   id: string;
   name: string;
   role: HumanRole;
+  theme: HumanPreferences['theme'];
+  time_format: HumanPreferences['timeFormat'];
   created_at: Date;
 }
 
@@ -57,6 +59,22 @@ export class HumanPostgresRepository implements HumanRepository {
     return result.rows.map((row) => this.toHuman(row));
   }
 
+  async update(humanId: string, input: UpdateHumanInput): Promise<Human | null> {
+    const result = await this.db.query<HumanRow>(
+      `UPDATE bold_cedar_007.humans
+       SET name = COALESCE($2, name), theme = COALESCE($3, theme),
+           time_format = COALESCE($4, time_format)
+       WHERE id = $1 RETURNING *`,
+      [
+        humanId,
+        input.name ?? null,
+        input.preferences?.theme ?? null,
+        input.preferences?.timeFormat ?? null
+      ]
+    );
+    return result.rows[0] ? this.toHuman(result.rows[0]) : null;
+  }
+
   async count(): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
@@ -67,6 +85,12 @@ export class HumanPostgresRepository implements HumanRepository {
   }
 
   private toHuman(row: HumanRow): Human {
-    return { id: row.id, name: row.name, role: row.role, createdAt: row.created_at };
+    return {
+      id: row.id,
+      name: row.name,
+      role: row.role,
+      preferences: { theme: row.theme, timeFormat: row.time_format },
+      createdAt: row.created_at
+    };
   }
 }
