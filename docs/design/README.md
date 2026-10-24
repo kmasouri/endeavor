@@ -1,6 +1,6 @@
 # Design
 
-The design for the web app (`apps/web`): every screen designed so far, and the shared style guide. The original screens live on the "Collaborative Agents app design" board on claude.ai, and this folder contains their exports. Codex first drafted the skills, access request, schedules, agent history, and profile screens; they were rebuilt on the board on October 24 so every screen shares one shell and the style guide. The separately approved `conversation-workspace/` follow-up was made in Codex and refines navigation and creation only. When the board and this folder disagree outside that recorded refinement, ask Kayvan which one is current.
+The design for the web app (`apps/web`): every screen designed so far, and the shared style guide. The original screens live on the "Collaborative Agents app design" board on claude.ai, and this folder contains their exports. Codex first drafted the skills, access request, schedules, agent history, and profile screens; they were rebuilt on the board on October 24 so every screen shares one shell and the style guide. The separately approved `conversation-workspace/` and `schedules-centered/` follow-ups were made in Codex. They refine conversation navigation/creation and the Schedules page frame/empty state, respectively. When the board and this folder disagree outside those recorded refinements, ask Kayvan which one is current.
 
 Everything here is a picture of the app, not app code. Build it in Svelte, using the tokens in `style-guide/tokens.css`.
 
@@ -17,6 +17,7 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 | `skills-and-connections/connections.html` + `.png`  | The Connections tab, with what each one allows and whether it has a credential                                      |
 | `skills-and-connections/skill-editor.html` + `.png` | The full-width instructions editor                                                                                  |
 | `approvals/access-request.html` + `.png`            | An agent asks for connection access in the conversation: for this task, or ongoing                                  |
+| `schedules-centered/`                            | Approved 1220px centered Schedules frame, empty/populated views, editable preview, and theme/phone screenshots |
 | `schedules/schedules.html` + `.png`                 | The schedules list, with a missed-runs card and each schedule's state                                               |
 | `schedules/schedule-details.html` + `.png`          | One schedule, with Pause, Run once now, and recent runs                                                             |
 | `schedules/new-schedule.html` + `.png`              | The new schedule form: days, local time, and what to do about missed runs                                           |

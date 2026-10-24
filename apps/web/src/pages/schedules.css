@@ -1,8 +1,39 @@
+.schedules-page {
+  max-width: 1220px;
+  margin-inline: auto;
+  padding-top: 18px;
+  container: schedules / inline-size;
+}
 .schedules-view {
-  max-width: 900px;
-  margin: 0;
   padding-bottom: 32px;
 }
+.schedule-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 58px 20px 52px;
+  text-align: center;
+}
+.schedule-empty > button {
+  align-self: center;
+}
+.schedule-empty-clock {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 18px;
+  border: 1px solid var(--border-200);
+  border-radius: var(--radius-xl);
+  color: var(--text-300);
+}
+.schedules-view .schedule-empty p {
+  max-width: 380px;
+  margin: 10px auto 22px;
+  color: var(--text-300);
+  font-size: 14px;
+}
+
 .schedules-view h2 {
   font-size: 18px;
   margin: 0;
@@ -54,7 +85,8 @@
   margin-bottom: 12px !important;
 }
 .schedule-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 210px 90px 14px;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -105,9 +137,10 @@
 .schedule-next {
   font-size: 13px;
   color: var(--text-200);
-  max-width: 210px;
+  text-align: right;
 }
 .schedule-badge {
+  justify-self: end;
   flex-shrink: 0;
   display: inline-flex;
   gap: 4px;
@@ -119,7 +152,9 @@
   color: var(--text-200);
 }
 .schedule-cancelled {
-  margin-top: 20px;
+  margin-top: 18px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border-100);
 }
 .schedule-cancelled summary {
   color: var(--text-200);
@@ -146,6 +181,7 @@
   margin: 12px 0;
 }
 .schedule-form {
+  max-width: 820px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -268,8 +304,9 @@
 .schedule-cancel {
   margin-top: 4px;
 }
-@media (max-width: 650px) {
+@container schedules (max-width: 650px) {
   .schedule-row {
+    display: flex;
     flex-wrap: wrap;
     gap: 8px;
     padding-block: 14px;
@@ -281,10 +318,18 @@
     margin-left: 46px;
     flex: 1;
     max-width: none;
+    text-align: left;
   }
   .schedule-row > :last-child {
     display: none;
   }
+}
+@media (max-width: 800px) {
+  .schedules-page {
+    padding-top: 0;
+  }
+}
+@media (max-width: 650px) {
   .schedule-form .grid2,
   .schedule-facts .grid2 {
     grid-template-columns: minmax(0, 1fr);

@@ -54,7 +54,9 @@ format, defaulting to system
 appearance and 12-hour time. The browser keeps a theme copy for startup and restores authoritative
 preferences from the API on reload or person switch. System appearance follows changes to the
 computer's theme. `time-display.svelte.ts` formats message and run timestamps in the device timezone.
-It changes no stored instants or schedule rules. Schedules separates source calendar summaries
+It changes no stored instants or schedule rules. Schedules uses one centered 1,220px page frame
+for its header, actions, and content. An empty state provides the creation action while cancelled schedules stay folded below; populated rows
+align their metadata and reflow based on the page width. It separates source calendar summaries
 from viewer-local next-run and history instants. Calendar recurrence stores a named source timezone,
 local time, frequency, and optional ISO weekdays alongside durable UTC slots. The task service
 computes source dates through clock changes, skipping gaps and choosing the earlier repeated instant.

@@ -18,3 +18,8 @@ persistence, local-time recurrence, daylight saving handling, migration compatib
 The app now implements calendar and interval recurrence; see [scheduling.md](../../scheduling.md).
 
 The page uses the shared shell from the chat design, so it already has no Work item; see CA-35 and CA-40.
+
+The approved [centered workspace follow-up](../schedules-centered/README.md) refines the page frame,
+row alignment, and empty state for large screens. Use its 1,220px shared header/content frame
+and saved empty/populated views when implementing those parts. These original board exports
+still define the detailed form, history, and scheduling controls.
