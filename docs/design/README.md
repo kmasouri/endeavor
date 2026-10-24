@@ -16,6 +16,8 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 | `skills-and-connections/connections.html` + `.png`            | The Connections tab, with credential state and read-only scope summaries                                            |
 | `skills-and-connections/skill-editor.html` + `.png`           | The full-width instructions editor, without connection dependencies                                                 |
 | `approvals/access-request.html` + `.png`                      | An agent's connection access request in the conversation, with task-only and ongoing choices                        |
+| `schedules/schedules.html` + `.png`                           | The agreed Quiet list, visible schedule states, full-width details, and local preview actions                       |
+| `schedules/new-schedule.png`                                  | The creation form: weekday picker, local time, detected timezone, and always-visible missed-run policy              |
 | `style-guide/README.md`                                       | The style guide: principles, color roles, type, spacing, words, icons, layout                                       |
 | `style-guide/tokens.json`                                     | Every token, with a note on when to use it                                                                          |
 | `style-guide/tokens.css`                                      | The same tokens as CSS custom properties, ready to import. Generated from `tokens.json`                             |
@@ -81,5 +83,17 @@ These cards appear in the conversation itself, not only on other pages:
 - This is the agreed target design for [CA-38](https://app.notion.com/p/4031a83d088f81999042d1aadfd02466), which also covers filtered discovery, skill requests, and revocation. The saved screen shows a connection request; it is not an implemented app feature.
 
 ## Gaps to check against the API
+
+### Schedules
+
+The approved [Schedules preview](schedules/README.md) follows the Skills and connections list pattern.
+It uses explicit **Pause schedule**, **Resume schedule**, **Run once now**, and **Cancel schedule**
+labels. The form offers calendar recurrence and minute intervals, detects the local timezone, and
+keeps **If runs are missed** visible. [CA-39](https://app.notion.com/p/4031a83d088f8162bc7de6978989c398)
+tracks the UI and backend work. Calendar rules need their source IANA timezone as well as UTC run
+instants; the current interval-only API cannot implement the new picker yet. See the linked Notion
+design for the agreed behavior.
+
+### Conversation data
 
 Some of these need data the API may not expose yet: the live "what is it doing now" line, who paused a task, a per-agent split of conversation spending, and whether an artifact is a draft or final. List each gap as its own ticket rather than faking it in the web app.
