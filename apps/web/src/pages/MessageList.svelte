@@ -1,17 +1,38 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { type DirectoryEntry, type Member, type Message } from '../api';
+  import {
+    type CostReport,
+    type DirectoryEntry,
+    type Member,
+    type Message,
+    type Task,
+    type TaskOutput
+  } from '../api';
   import { when } from '../components';
+  import FormattedText from '../FormattedText.svelte';
+  import Avatar from '../Avatar.svelte';
+  import Icon from '../Icon.svelte';
   import Suggestion from './Suggestion.svelte';
-
+  import TaskStatus from './TaskStatus.svelte';
+  import RunSteps from './RunSteps.svelte';
+  import ArtifactCard from './ArtifactCard.svelte';
   let props: {
     messages: Message[];
     nameOf: (ref: { type: string; id: string | null }) => string;
     members: Member[];
     directory: DirectoryEntry[];
+    meId: string;
+    tasks: Task[];
+    outputs: (TaskOutput & { taskId: string })[];
+    costs?: CostReport;
     onAdd: (agentId: string) => Promise<unknown>;
+    onReply: (message: Message) => void;
+    onRevise: (output: TaskOutput & { taskId: string }) => void;
+    onChanged: () => void;
   } = $props();
   let end = $state<HTMLDivElement | null>(null);
+  let copied = $state('');
+  let copyError = $state('');
   let count = $derived(props.messages.length);
   $effect(() => {
     count;
@@ -20,51 +41,126 @@
     });
   });
   let byId = $derived.by(() => new Map(props.messages.map((m) => [m.id, m])));
+  let lastForTask = $derived.by(
+    () => new Map(props.messages.filter((m) => m.taskId).map((m) => [m.taskId, m.id]))
+  );
+  let lastForAgent = $derived.by(
+    () =>
+      new Map(props.messages.filter((m) => m.authorType === 'agent').map((m) => [m.authorId, m.id]))
+  );
+  let names = $derived(
+    props.members.map((m) => ({ name: m.name, you: m.participant.id === props.meId }))
+  );
+  const copy = async (message: Message) => {
+    try {
+      await navigator.clipboard.writeText(message.body);
+      copied = message.id;
+      copyError = '';
+    } catch {
+      copyError = 'Could not copy. Select the message text to copy it.';
+    }
+  };
 </script>
 
-{#if count === 0}
-  <p class="muted">No messages yet. Say hello, and mention an agent to ask it.</p>
-{:else}
-  <ol class="messages">
-    {#each props.messages ?? [] as message (message.id)}
-      {@const replyTo = message.inReplyToMessageId ? byId.get(message.inReplyToMessageId) : null}
-
-      <li id={`m-${message.id}`} class={`message ${message.authorType}`}>
-        <div class="meta">
-          <strong>
-            {props.nameOf({ type: message.authorType, id: message.authorId })}
-          </strong>
-
-          <span class="muted">
-            {when(message.createdAt)}
-          </span>
-
-          {#if message.taskId}
-            <a href={`#/tasks/${message.taskId}`}> task </a>
-          {/if}
-
-          {#if message.mentions.length > 0}
-            <span class="muted">
-              to {message.mentions.map((ref) => props.nameOf(ref)).join(', ')}
-            </span>
-          {/if}
-        </div>
-
-        {#if replyTo}
-          <div class="reply-to muted">
-            Replying to {props.nameOf({ type: replyTo.authorType, id: replyTo.authorId })}:
-            {replyTo.body.slice(0, 80)}
-          </div>
+{#if !count}<p class="empty-conversation muted">
+    No messages yet. Say hello, and mention an agent to ask it.
+  </p>{/if}
+<ol class="messages">
+  {#each props.messages as message, i (message.id)}
+    {@const previous = props.messages[i - 1]}
+    {@const grouped =
+      previous &&
+      previous.authorType === message.authorType &&
+      previous.authorId === message.authorId &&
+      new Date(previous.createdAt).toDateString() === new Date(message.createdAt).toDateString() &&
+      Date.parse(message.createdAt) - Date.parse(previous.createdAt) < 300000}
+    {@const replyTo = message.inReplyToMessageId ? byId.get(message.inReplyToMessageId) : null}
+    {@const name = props.nameOf({ type: message.authorType, id: message.authorId })}
+    {@const you = message.mentions.some((m) => m.id === props.meId && m.type === 'human')}
+    {#if !previous || new Date(previous.createdAt).toDateString() !== new Date(message.createdAt).toDateString()}<li
+        class="date-divider"
+      >
+        <span
+          >{new Date(message.createdAt).toLocaleDateString([], {
+            weekday: 'long',
+            month: 'long',
+            day: 'numeric'
+          })}</span
+        >
+      </li>{/if}
+    <li id={`m-${message.id}`} class="message" class:grouped class:mentioned-you={you}>
+      <div class="message-avatar">
+        {#if !grouped}<Avatar
+            {name}
+            id={message.authorId ?? 'platform'}
+            agent={message.authorType === 'agent'}
+            size="lg"
+          />{/if}
+      </div>
+      <div class="message-content">
+        {#if !grouped}<div class="meta">
+            <strong>{name}</strong>{#if message.authorType === 'agent'}<span class="agent-label"
+                >agent</span
+              >{/if}<time class="caption muted" title={when(message.createdAt)}
+              >{new Date(message.createdAt).toLocaleTimeString([], {
+                hour: 'numeric',
+                minute: '2-digit'
+              })}</time
+            >
+          </div>{:else}<time class="group-time caption muted" title={when(message.createdAt)}
+            >{new Date(message.createdAt).toLocaleTimeString([], {
+              hour: 'numeric',
+              minute: '2-digit'
+            })}</time
+          >{/if}
+        {#if replyTo}<a
+            class="reply-to muted"
+            href={`#m-${replyTo.id}`}
+            onclick={(e) => {
+              e.preventDefault();
+              document.getElementById(`m-${replyTo.id}`)?.scrollIntoView({ block: 'center' });
+            }}
+            >Replying to {props.nameOf({ type: replyTo.authorType, id: replyTo.authorId })}: {replyTo.body.slice(
+              0,
+              80
+            )}</a
+          >{/if}
+        <div class="message-body"><FormattedText text={message.body} {names} /></div>
+        {#if message.taskId && lastForTask.get(message.taskId) === message.id}
+          <RunSteps taskId={message.taskId} />
+          {#each props.outputs.filter((o) => o.taskId === message.taskId) as output (output.id)}<ArtifactCard
+              {output}
+              task={props.tasks.find((t) => t.id === message.taskId)}
+              cost={props.costs?.tasks.find((t) => t.taskId === message.taskId)?.costUsd}
+              onReply={() => props.onRevise(output)}
+              onChanged={props.onChanged}
+            />{/each}
         {/if}
-
-        <div class="body">
-          {message.body}
-        </div>
-
+        {#if lastForAgent.get(message.authorId) === message.id}
+          {#each props.tasks.filter((t) => t.ownerAgentId === message.authorId && !['completed', 'cancelled'].includes(t.state)) as task (task.id)}<TaskStatus
+              {task}
+              costs={props.costs}
+              onChanged={props.onChanged}
+            />{/each}
+        {/if}
         <Suggestion {message} {...props} />
-      </li>
-    {/each}
-
-    <div bind:this={end}></div>
-  </ol>
-{/if}
+      </div>
+      <div class="message-actions" aria-label="Message actions">
+        <button class="quiet icon-button" aria-label="Reply" onclick={() => props.onReply(message)}
+          ><Icon name="reply" /></button
+        ><button
+          class="quiet icon-button"
+          aria-label={copied === message.id ? 'Copied' : 'Copy'}
+          onclick={() => void copy(message)}
+          ><Icon name={copied === message.id ? 'check' : 'copy'} /></button
+        >{#if message.authorType === 'agent' && message.taskId}<a
+            class="quiet icon-button"
+            aria-label="See what this agent did"
+            href={`#/tasks/${message.taskId}`}><Icon name="history" /></a
+          >{/if}
+      </div>
+    </li>
+  {/each}
+</ol>
+{#if copyError}<p class="error">{copyError}</p>{/if}
+<div bind:this={end}></div>

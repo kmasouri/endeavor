@@ -36,10 +36,10 @@
   <input bind:value={reason} placeholder="Reason (optional)" />
 
   <div class="row">
-    <button disabled={action.busy} onclick={() => decide('approve')}> Approve </button>
+    <button disabled={action.busy} onclick={() => decide('approve')}> Allow once </button>
 
     <button class="secondary" disabled={action.busy} onclick={() => decide('reject')}>
-      Reject
+      Don't allow
     </button>
   </div>
 

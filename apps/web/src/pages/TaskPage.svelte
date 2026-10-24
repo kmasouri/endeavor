@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '../PageHeader.svelte';
   import {
     type AgentVersion,
     api,
@@ -56,16 +57,10 @@
 {:else if !task.data}
   <p>Loading…</p>
 {:else}
+  <PageHeader title={t.title} subtitle="Work, outputs, and execution history." />
   <div class="columns">
     <section>
-      <p>
-        <a href="#/tasks">← Work</a>
-      </p>
-
-      <h1>
-        {t.title}
-        <StateBadge state={t.state} paused={Boolean(t.pausedAt)} />
-      </h1>
+      <StateBadge state={t.state} paused={Boolean(t.pausedAt)} />
 
       {#if t.stateReason}
         <p class={t.state === 'blocked' ? 'error' : 'muted'}>

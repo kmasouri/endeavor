@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Avatar from '../Avatar.svelte';
+  import PageHeader from '../PageHeader.svelte';
   import { api, type Task, TASK_STATES, type TaskState } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
@@ -7,18 +9,24 @@
   import { createLoad } from '../state.svelte';
   import { createNames } from '../names.svelte';
 
+  const filters = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
+  const conversationFilter = filters.get('conversationId');
+  const agentFilter = filters.get('agentId');
   let state = $state<TaskState | ''>('');
   const tasks = createLoad(
-    () => api.list<Task>(`/tasks?limit=100${state ? `&state=${state}` : ''}`),
+    () =>
+      api.list<Task>(
+        `/tasks?limit=100${state ? `&state=${state}` : ''}${conversationFilter ? `&conversationId=${encodeURIComponent(conversationFilter)}` : ''}${agentFilter ? `&ownerAgentId=${encodeURIComponent(agentFilter)}` : ''}`
+      ),
     () => [state],
     5000
   );
   const name = createNames();
 </script>
 
-<div class="narrow wide">
-  <h1>Work</h1>
+<PageHeader title="Work" subtitle="Inspect agent work, results, and execution history." />
 
+<div class="narrow wide">
   <Hint>
     Every piece of work is a task owned by one agent. Working, Waiting (for a reply, an approval, or
     a result), Blocked (needs a person), Completed, or Cancelled.
@@ -55,7 +63,16 @@
         <StateBadge state={task.state} paused={Boolean(task.pausedAt)} />
 
         <div class="muted small">
-          {name({ type: 'agent', id: task.ownerAgentId })} · asked by
+          <span class="row"
+            ><Avatar
+              name={name({ type: 'agent', id: task.ownerAgentId })}
+              id={task.ownerAgentId}
+              agent
+              size="sm"
+            />{name({ type: 'agent', id: task.ownerAgentId })}<span class="agent-label">agent</span
+            ></span
+          >
+          asked by
           {name({ type: task.requestedByType, id: task.requestedById })} ·
           {when(task.createdAt)}
           {#if task.stateReason}{` · ${task.stateReason}`}{/if}

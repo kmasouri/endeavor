@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Avatar from '../Avatar.svelte';
+  import PageHeader from '../PageHeader.svelte';
   import { type Agent, api } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
@@ -23,10 +25,17 @@
   };
 </script>
 
+<PageHeader title="Agents" subtitle="Configure the people-like participants that do your work.">
+  {#snippet actions()}<button
+      onclick={() =>
+        document
+          .getElementById('new-agent')
+          ?.scrollIntoView({ block: 'start', behavior: 'smooth' })}>New agent</button
+    >{/snippet}
+</PageHeader>
+
 <div class="columns">
   <section>
-    <h1>Agents</h1>
-
     <Hint>
       An agent is a configured participant. A QA agent and a research agent are the same kind of
       thing with different settings, and no agent is in charge of another.
@@ -42,9 +51,11 @@
       {#each agents.data?.data ?? [] as agent (agent.id)}
         <li>
           <a href={`#/agents/${agent.id}`}>
-            <strong>
-              {agent.name}
-            </strong>
+            <span class="row"
+              ><Avatar name={agent.name} id={agent.id} agent /><strong>{agent.name}</strong><span
+                class="agent-label">agent</span
+              ></span
+            >
           </a>
 
           {#if agent.disabledAt}
@@ -67,7 +78,7 @@
     </ul>
   </section>
 
-  <aside class="panel">
+  <aside class="panel" id="new-agent">
     <h2>New agent</h2>
 
     <form onsubmit={create} class="stack">

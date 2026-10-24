@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '../PageHeader.svelte';
   import { api, type Connection, type Skill } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
@@ -22,54 +23,71 @@
   let connectionList = $derived(connections.data?.data ?? []);
 </script>
 
+<PageHeader
+  title="Skills and connections"
+  subtitle="Reusable instructions and API connections for your agents."
+>
+  {#snippet actions()}<button
+      onclick={() => {
+        const area = document.getElementById(`new-${tab}`);
+        const disclosure = area?.querySelector('details');
+        if (disclosure) disclosure.open = true;
+        area?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      }}>New {tab === 'skills' ? 'skill' : 'connection'}</button
+    >{/snippet}
+</PageHeader>
+
 <div class="catalogs narrow wide">
-  <h1>Skills and connections</h1>
-
-  <p class="muted">Reusable instructions and API connections for your agents.</p>
-
   <nav class="catalog-tabs" aria-label="Catalog">
-    <button class:active={tab === 'skills'} aria-current={tab === 'skills' ? 'page' : undefined} onclick={() => (tab = 'skills')}>Skills</button>
-    <button class:active={tab === 'connections'} aria-current={tab === 'connections' ? 'page' : undefined} onclick={() => (tab = 'connections')}>Connections</button>
+    <button
+      class:active={tab === 'skills'}
+      aria-current={tab === 'skills' ? 'page' : undefined}
+      onclick={() => (tab = 'skills')}>Skills</button
+    >
+    <button
+      class:active={tab === 'connections'}
+      aria-current={tab === 'connections' ? 'page' : undefined}
+      onclick={() => (tab = 'connections')}>Connections</button
+    >
   </nav>
 
   {#if tab === 'skills'}
-  <section class="panel">
-    <h2>Skills</h2>
+    <section class="panel">
+      <h2>Skills</h2>
 
-    <Hint>
-      Skills are reusable instructions only. Choose skills and connection access independently on
-      each agent. Editing a skill saves a new version and never changes API access.
-    </Hint>
+      <Hint>
+        Skills are reusable instructions only. Choose skills and connection access independently on
+        each agent. Editing a skill saves a new version and never changes API access.
+      </Hint>
 
-    <ErrorNote error={skills.error} />
+      <ErrorNote error={skills.error} />
 
-    <ul class="list">
-      {#each skills.data?.data ?? [] as skill (skill.id)}
-        <SkillRow {skill} onChanged={skills.reload} />
-      {/each}
-    </ul>
+      <ul class="list">
+        {#each skills.data?.data ?? [] as skill (skill.id)}
+          <SkillRow {skill} onChanged={skills.reload} />
+        {/each}
+      </ul>
 
-    <NewSkill onCreated={skills.reload} />
-  </section>
-
+      <div id="new-skills"><NewSkill onCreated={skills.reload} /></div>
+    </section>
   {:else}
-  <section class="panel">
-    <h2>Connections</h2>
+    <section class="panel">
+      <h2>Connections</h2>
 
-    <Hint>
-      A connection is an outside API agents can call. The platform adds the credential and checks
-      every call's method and path. Credentials are stored encrypted and never shown again.
-    </Hint>
+      <Hint>
+        A connection is an outside API agents can call. The platform adds the credential and checks
+        every call's method and path. Credentials are stored encrypted and never shown again.
+      </Hint>
 
-    <ErrorNote error={connections.error} />
+      <ErrorNote error={connections.error} />
 
-    <ul class="list">
-      {#each connectionList ?? [] as connection (connection.id)}
-        <ConnectionRow {connection} onChanged={connections.reload} />
-      {/each}
-    </ul>
+      <ul class="list">
+        {#each connectionList ?? [] as connection (connection.id)}
+          <ConnectionRow {connection} onChanged={connections.reload} />
+        {/each}
+      </ul>
 
-    <NewConnection onCreated={connections.reload} />
-  </section>
+      <div id="new-connections"><NewConnection onCreated={connections.reload} /></div>
+    </section>
   {/if}
 </div>

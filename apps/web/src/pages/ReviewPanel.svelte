@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type TaskDetails } from '../api';
+  import { api, type Task } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
   import { createAction } from '../state.svelte';
@@ -8,7 +8,7 @@
     task,
     onDone
   }: {
-    task: TaskDetails;
+    task: Task;
     onDone: () => void;
   } = $props();
   let notes = $state('');
@@ -31,7 +31,7 @@
     <textarea bind:value={notes} placeholder="Notes (optional)" rows={2}></textarea>
 
     <div class="row">
-      <button disabled={action.busy} onclick={() => review(true)}> Approve </button>
+      <button disabled={action.busy} onclick={() => review(true)}> Accept </button>
 
       <button class="secondary" disabled={action.busy} onclick={() => review(false)}>
         Send back

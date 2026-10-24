@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '../PageHeader.svelte';
   import { type Agent, type AgentVersion, api } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
@@ -33,20 +34,9 @@
 {:else if !agent.data}
   <p>Loading…</p>
 {:else}
+  <PageHeader title={a.name} subtitle={a.purpose} />
   <div class="columns">
     <section>
-      <p>
-        <a href="#/agents"> ← Agents </a>
-      </p>
-
-      <h1>
-        {a.name}
-
-        {#if a.disabledAt}
-          <span class="badge"> disabled </span>
-        {/if}
-      </h1>
-
       {#if !a.providerReady}
         <p class="error">
           This agent's provider isn't set up, so its tasks can't run. Add the API key to .env and
@@ -103,8 +93,10 @@
               </div>
 
               {#if version.legacyConnectionIds?.length}
-                <p class="error small">This version relied on inherited connections. Calls now require
-                  explicit connection selection. Save a reviewed configuration and move open tasks to it.</p>
+                <p class="error small">
+                  This version relied on inherited connections. Calls now require explicit
+                  connection selection. Save a reviewed configuration and move open tasks to it.
+                </p>
               {/if}
 
               <details>

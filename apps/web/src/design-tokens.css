@@ -1,0 +1,190 @@
+/* Collaborative Agents style guide: generated from tokens.json. Do not edit by hand. */
+/* Dark is the default. Set data-theme="light" on <html> for the light theme. */
+
+:root,
+[data-theme="dark"] {
+  --bg-000: #141517;
+  --bg-100: #1a1b1e;
+  --bg-150: #17181b;
+  --bg-200: #1f2023;
+  --bg-300: #23252a;
+  --bg-selected: #2b2d33;
+  --border-100: #26282c;
+  --border-200: #3a3d43;
+  --text-100: #e8e9eb;
+  --text-200: #c9ccd1;
+  --text-300: #9a9da3;
+  --accent: #f59e0b;
+  --accent-ink: #2a1600;
+  --link: #fbbf5a;
+  --mention-bg: #f59e0b24;
+  --mention-ink: #fbbf5a;
+  --you-bg: #f59e0b47;
+  --you-ink: #ffd28a;
+  --you-row: #2a2416;
+  --agent: #7dd3fc;
+  --agent-ink: #06243a;
+  --agent-label: #7dd3fc;
+  --notify: #d93036;
+  --notify-ink: #ffffff;
+  --success: #bef264;
+  --success-bg: #bef26424;
+  --waiting: #fbbf5a;
+  --waiting-bg: #231d12;
+  --waiting-border: #4d3d1f;
+  --danger: #f08a8a;
+  --danger-bg: #231b1b;
+  --danger-border: #4d2e2e;
+  --person-1-bg: #1e2a44;
+  --person-1-ink: #a5b4fc;
+  --person-2-bg: #2e2346;
+  --person-2-ink: #c4b5fd;
+  --person-3-bg: #3a2231;
+  --person-3-ink: #f9a8d4;
+  --person-4-bg: #2b2e35;
+  --person-4-ink: #cbd5e1;
+  --agent-1-bg: #26301a;
+  --agent-1-ink: #bef264;
+  --agent-2-bg: #12303d;
+  --agent-2-ink: #7dd3fc;
+  --agent-3-bg: #133330;
+  --agent-3-ink: #5eead4;
+  --shadow-pop: 0 8px 24px #00000066;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg-000: #f3f4f6;
+  --bg-100: #ffffff;
+  --bg-150: #f7f8fa;
+  --bg-200: #f7f8fa;
+  --bg-300: #eef0f3;
+  --bg-selected: #e9eaee;
+  --border-100: #e4e6ea;
+  --border-200: #c2c7cf;
+  --text-100: #16181c;
+  --text-200: #3d4148;
+  --text-300: #5f646c;
+  --accent: #e08e00;
+  --accent-ink: #2a1600;
+  --link: #8a4f00;
+  --mention-bg: #e08e002e;
+  --mention-ink: #8a4f00;
+  --you-bg: #e08e0047;
+  --you-ink: #6b3d00;
+  --you-row: #fff8e6;
+  --agent: #0ea5e9;
+  --agent-ink: #ffffff;
+  --agent-label: #0369a1;
+  --notify: #dc2626;
+  --notify-ink: #ffffff;
+  --success: #4d7c0f;
+  --success-bg: #65a30d1f;
+  --waiting: #8a4f00;
+  --waiting-bg: #fff8e6;
+  --waiting-border: #e8c77e;
+  --danger: #b91c1c;
+  --danger-bg: #fef2f2;
+  --danger-border: #f3b4b4;
+  --person-1-bg: #e0e7ff;
+  --person-1-ink: #3730a3;
+  --person-2-bg: #ede9fe;
+  --person-2-ink: #5b21b6;
+  --person-3-bg: #fce7f3;
+  --person-3-ink: #9d174d;
+  --person-4-bg: #e2e8f0;
+  --person-4-ink: #334155;
+  --agent-1-bg: #ecfccb;
+  --agent-1-ink: #4d7c0f;
+  --agent-2-bg: #dff3fd;
+  --agent-2-ink: #0369a1;
+  --agent-3-bg: #ccfbf1;
+  --agent-3-ink: #0f766e;
+  --shadow-pop: 0 8px 24px #1018281f;
+  color-scheme: light;
+}
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+  --radius-full: 9999px;
+  --avatar-sm: 20px;
+  --avatar-md: 28px;
+  --avatar-lg: 36px;
+  --control: 36px;
+  --touch: 44px;
+  --font-sans: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+.title-lg {
+  font-family: var(--font-sans);
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
+}
+
+.title {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 22px;
+  font-weight: 400;
+}
+
+.body-sm {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+
+.meta {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+
+.caption {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+}
+
+.label {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.badge {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+}
+
+.code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+}

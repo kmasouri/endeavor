@@ -8,10 +8,6 @@
   } = $props();
 </script>
 
-<span class={`badge state-${state}`}>
-  {state}
-</span>
-
-{#if paused}
-  <span class="badge"> paused </span>
-{/if}
+<span class={`badge state-${paused ? 'paused' : state}`}
+  >{paused ? 'Paused' : state === 'completed' ? 'Done' : state}</span
+>

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '../PageHeader.svelte';
   import { api, type Responsibility } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
@@ -15,10 +16,17 @@
   const name = createNames();
 </script>
 
+<PageHeader title="Schedules" subtitle="Recurring work and its next run.">
+  {#snippet actions()}<button
+      onclick={() =>
+        document
+          .getElementById('new-schedule')
+          ?.scrollIntoView({ block: 'start', behavior: 'smooth' })}>New schedule</button
+    >{/snippet}
+</PageHeader>
+
 <div class="columns">
   <section>
-    <h1>Schedules</h1>
-
     <Hint>
       A schedule is work an agent does again and again, with nobody asking each time. Each run is an
       ordinary task. Pausing or cancelling a schedule never stops a run that's already going; cancel
@@ -40,7 +48,7 @@
     {/each}
   </section>
 
-  <aside class="panel">
+  <aside class="panel" id="new-schedule">
     <NewSchedule onCreated={schedules.reload} />
   </aside>
 </div>

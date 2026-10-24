@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '../PageHeader.svelte';
   import { api, type Human } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import { createAction } from '../state.svelte';
@@ -20,9 +21,9 @@
   };
 </script>
 
-<div class="narrow">
-  <h1>Setup</h1>
+<PageHeader title="Setup" subtitle="People, providers, and this computer." />
 
+<div class="narrow">
   <section class="panel">
     <h2>How this runs</h2>
 
