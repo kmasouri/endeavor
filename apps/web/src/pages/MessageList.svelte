@@ -8,6 +8,7 @@
     type Task,
     type TaskOutput
   } from '../api';
+  import { messagePreview } from '../message-format';
   import { when } from '../components';
   import FormattedText from '../FormattedText.svelte';
   import Avatar from '../Avatar.svelte';
@@ -69,6 +70,7 @@
   {#each props.messages as message, i (message.id)}
     {@const previous = props.messages[i - 1]}
     {@const grouped =
+      !message.inReplyToMessageId &&
       previous &&
       previous.authorType === message.authorType &&
       previous.authorId === message.authorId &&
@@ -88,7 +90,46 @@
           })}</span
         >
       </li>{/if}
-    <li id={`m-${message.id}`} class="message" class:grouped class:mentioned-you={you}>
+    <li
+      id={`m-${message.id}`}
+      class="message"
+      class:grouped
+      class:mentioned-you={you}
+      class:has-reply={Boolean(replyTo)}
+    >
+      {#if replyTo}
+        {@const replyName = props.nameOf({ type: replyTo.authorType, id: replyTo.authorId })}
+        <a
+          class="reply-preview"
+          href={`#m-${replyTo.id}`}
+          aria-label={`Reply to ${replyName}: ${messagePreview(replyTo.body)}`}
+          onclick={(e) => {
+            e.preventDefault();
+            document.getElementById(`m-${replyTo.id}`)?.scrollIntoView({ block: 'center' });
+          }}
+        >
+          <svg
+            class="reply-connector"
+            width="22"
+            height="12"
+            viewBox="0 0 22 12"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            aria-hidden="true"><path d="M1 12V6a5 5 0 015-5h16" /></svg
+          >
+          <Avatar
+            name={replyName}
+            id={replyTo.authorId ?? 'platform'}
+            agent={replyTo.authorType === 'agent'}
+            size="sm"
+          />
+          <strong class="reply-name">{replyName}</strong>{#if replyTo.authorType === 'agent'}<span
+              class="agent-label">agent</span
+            >{/if}
+          <span class="reply-excerpt">{messagePreview(replyTo.body)}</span>
+        </a>
+      {/if}
       <div class="message-avatar">
         {#if !grouped}<Avatar
             {name}
@@ -112,18 +153,6 @@
               hour: 'numeric',
               minute: '2-digit'
             })}</time
-          >{/if}
-        {#if replyTo}<a
-            class="reply-to muted"
-            href={`#m-${replyTo.id}`}
-            onclick={(e) => {
-              e.preventDefault();
-              document.getElementById(`m-${replyTo.id}`)?.scrollIntoView({ block: 'center' });
-            }}
-            >Replying to {props.nameOf({ type: replyTo.authorType, id: replyTo.authorId })}: {replyTo.body.slice(
-              0,
-              80
-            )}</a
           >{/if}
         <div class="message-body"><FormattedText text={message.body} {names} /></div>
         {#if message.taskId && lastForTask.get(message.taskId) === message.id}

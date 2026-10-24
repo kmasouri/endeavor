@@ -100,3 +100,12 @@ export function formatMessage(
   if (code) blocks.push({ kind: 'code', items: [[{ kind: 'text', text: buffer.join('\n') }]] });
   return blocks;
 }
+
+// Reply context stays one line and shows the words rather than Markdown markers.
+export function messagePreview(text: string): string {
+  return formatMessage(text)
+    .flatMap((block) => block.items.map((item) => item.map((token) => token.text).join('')))
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

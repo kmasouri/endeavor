@@ -12,6 +12,7 @@
   import Avatar from '../Avatar.svelte';
   import Icon from '../Icon.svelte';
   import { createAction } from '../state.svelte';
+  import { messagePreview } from '../message-format';
   import { conversationName } from '../appearance';
   let {
     conversationId,
@@ -121,8 +122,9 @@
 <div class="composer-area">
   {#if replyTo}<div class="reply-bar row">
       <Icon name="reply" /><span class="grow ellipsis"
-        >Replying to… {members.find((m) => m.participant.id === replyTo?.authorId)?.name ??
-          'Platform'}: {replyTo.body.slice(0, 100)}</span
+        >Replying to <strong
+          >{members.find((m) => m.participant.id === replyTo?.authorId)?.name ?? 'Platform'}</strong
+        >: {messagePreview(replyTo.body)}</span
       ><button class="quiet icon-button" aria-label="Cancel reply" onclick={() => (replyTo = null)}
         ><Icon name="close" /></button
       >

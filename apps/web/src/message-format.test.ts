@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatMessage, safeLink } from './message-format.ts';
+import { formatMessage, safeLink, messagePreview } from './message-format.ts';
 test('message formatting retains HTML as inert text and rejects script links', () => {
   const blocks = formatMessage(
     '<img src=x onerror=alert(1)> [click](javascript:evil) **<script>** `</code><script>`'
@@ -34,4 +34,13 @@ test('lists, code blocks and links have separate structures', () => {
   assert.equal(blocks[2].kind, 'code');
   assert.equal(blocks[2].items[0][0].text, '<a>');
   assert.equal(blocks[3].items[0][0].href, 'https://example.com/');
+});
+
+test('reply previews flatten formatting and line breaks into readable context', () => {
+  assert.equal(
+    messagePreview(
+      'Saved **Why bees matter**\n\n1. *Food* and [sources](https://example.com)\n```\nresults\n```'
+    ),
+    'Saved Why bees matter Food and sources results'
+  );
 });
