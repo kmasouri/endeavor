@@ -142,7 +142,7 @@ Requests that act as a person send that person's ID in the `x-actor-id` header. 
 - `docs/errors.md`: every error code the API can return.
 - `docs/local.md`: running the platform on your computer, and what agents' tools can touch.
 - `docs/pilot.md`: running the two milestone pilots and collecting their measures.
-- `docs/design/`: the web app's design: the chat view redesign, screenshots, and the style guide with its tokens.
+- `docs/design/`: the web app's design: every screen as a page and a picture, and the style guide with its tokens.
 - `AGENTS.md`: the rules every change must follow. Written for AI agents, but they apply to everyone.
 
 ## Infrastructure

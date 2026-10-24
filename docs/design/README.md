@@ -51,6 +51,8 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 - **Selected is neutral, never yolk:** the open tab (light text, light underline), chosen days (light fill, dark letter), a chosen option card (graphite fill, light border). Yolk stays for actions and for things waiting on you.
 - **Waiting on you is yolk:** "Researcher is waiting for your OK" in the status line, and the "Needs your OK" card.
 - **Status chips:** Enabled and Done are lime (`success`), with an icon. Disabled and Paused are neutral, with an icon.
+- **Only tokens:** every color in these screens is a token in `style-guide/tokens.json`. If you need a color that isn't there, add a token rather than a new hex value.
+- **Headers never wrap their buttons:** the title and the line under it shorten with "…" instead.
 - **Agents in lists** show their small avatar, their name, and the word "agent" in sky, like in messages.
 
 ### Who's who
@@ -118,7 +120,15 @@ design for the agreed behavior.
 
 ### Conversation data
 
-Some of these need data the API may not expose yet: the live "what is it doing now" line, who paused a task, a per-agent split of conversation spending, and whether an artifact is a draft or final. List each gap as its own ticket rather than faking it in the web app.
+The conversation screens need data the API doesn't give yet. Each gap has a ticket; until it ships, show nothing rather than fake data:
+
+- Unread counts in the sidebar: [CA-47](https://app.notion.com/p/4031a83d088f81469bb1f2e6dfb1db8e).
+- The live "what is it doing now" status line, and people typing: [CA-48](https://app.notion.com/p/4031a83d088f81c7ab53c8e8e38ded70).
+- Who paused a task: [CA-49](https://app.notion.com/p/4031a83d088f812a8ba2d4fc729ec39c).
+- A per-agent split of conversation spending: [CA-50](https://app.notion.com/p/4031a83d088f8144b394e8e936cf1064).
+- Whether an artifact is a draft or final: [CA-51](https://app.notion.com/p/4031a83d088f81bf80cbd48fa33c7441).
+
+List any other gap as its own ticket.
 
 ### Agent history and run inspection
 
