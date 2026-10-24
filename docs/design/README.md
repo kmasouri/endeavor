@@ -18,6 +18,8 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 | `approvals/access-request.html` + `.png`                      | An agent's connection access request in the conversation, with task-only and ongoing choices                        |
 | `schedules/schedules.html` + `.png`                           | The agreed Quiet list, visible schedule states, full-width details, and local preview actions                       |
 | `schedules/new-schedule.png`                                  | The creation form: weekday picker, local time, detected timezone, and always-visible missed-run policy              |
+| `agent-history/agent-history.html` + `.fragment.html`         | The approved conversation-first history preview, with separate histories for each agent                             |
+| `agent-history/*.png`                                         | Conversation Details, each agent's scoped history, and the selected run's details                                   |
 | `style-guide/README.md`                                       | The style guide: principles, color roles, type, spacing, words, icons, layout                                       |
 | `style-guide/tokens.json`                                     | Every token, with a note on when to use it                                                                          |
 | `style-guide/tokens.css`                                      | The same tokens as CSS custom properties, ready to import. Generated from `tokens.json`                             |
@@ -97,3 +99,13 @@ design for the agreed behavior.
 ### Conversation data
 
 Some of these need data the API may not expose yet: the live "what is it doing now" line, who paused a task, a per-agent split of conversation spending, and whether an artifact is a draft or final. List each gap as its own ticket rather than faking it in the web app.
+
+### Agent history and run inspection
+
+The approved [Agent history preview](agent-history/README.md) keeps inspection in the conversation:
+**Details → selected agent → History → run**. History is scoped to that agent and conversation.
+**See what this agent did** opens the specific run associated with a message. Directing agents and
+requesting changes stay in chat. Remove Work from main navigation without a global Activity or Run
+history replacement. [CA-40](https://app.notion.com/p/4031a83d088f81be8b37ca3c556e539b) implements
+this after CA-35. The saved reference is not application code; task records and existing inspection
+links must remain available. Earlier mockups that show Work do not override this navigation decision.
