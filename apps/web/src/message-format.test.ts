@@ -44,3 +44,39 @@ test('reply previews flatten formatting and line breaks into readable context', 
     'Saved Why bees matter Food and sources results'
   );
 });
+
+test('plain source URLs become links without losing underscores, queries, or fragments', () => {
+  const source = 'https://en.wikipedia.org/wiki/List_of_crop_plants_pollinated_by_bees';
+  const links = formatMessage(
+    `[1] ${source}\n[2] https://example.com/search?q=bees&lang=en#sources`
+  )
+    .flatMap((b) => b.items.flat())
+    .filter((t) => t.kind === 'link');
+  assert.deepEqual(
+    links.map((t) => t.href),
+    [source, 'https://example.com/search?q=bees&lang=en#sources']
+  );
+});
+
+test('autolinks exclude surrounding punctuation and keep balanced parentheses', () => {
+  const links = formatMessage(
+    '(https://example.com/bee). https://en.wikipedia.org/wiki/Bee_(insect), <https://example.com/reference> www.example.com!'
+  )[0].items[0].filter((t) => t.kind === 'link');
+  assert.deepEqual(
+    links.map((t) => t.href),
+    [
+      'https://example.com/bee',
+      'https://en.wikipedia.org/wiki/Bee_(insect)',
+      'https://example.com/reference',
+      'https://www.example.com/'
+    ]
+  );
+});
+
+test('autolinks do not change code samples or accept unsafe protocols', () => {
+  const blocks = formatMessage(
+    '`https://example.com` javascript:alert(1) data:text/html,test\n```\nhttps://example.com\n```'
+  );
+  assert.equal(blocks[0].items[0][0].kind, 'code');
+  assert.ok(blocks.every((b) => b.items.flat().every((t) => t.kind !== 'link')));
+});

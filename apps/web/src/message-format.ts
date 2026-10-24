@@ -28,6 +28,32 @@ export function formatMessage(
       let buffer = '';
       let i = 0;
       while (i < part.length) {
+        // Keep sentence punctuation outside links, but retain balanced URL parentheses.
+        const candidate = /^(?:https?:\/\/|www\.)[^\s<>"`]+/i.exec(part.slice(i))?.[0];
+        if (candidate && (i === 0 || !/[\p{L}\p{N}_]/u.test(part[i - 1]))) {
+          let label = candidate;
+          let previous = '';
+          while (label !== previous) {
+            previous = label;
+            label = label.replace(/[.,!?;:]+$/, '');
+            for (const [open, close] of [
+              ['(', ')'],
+              ['[', ']'],
+              ['{', '}']
+            ]) {
+              while (label.endsWith(close) && label.split(close).length > label.split(open).length)
+                label = label.slice(0, -1);
+            }
+          }
+          const href = safeLink(/^www\./i.test(label) ? `https://${label}` : label);
+          if (href) {
+            if (buffer) tokens.push({ kind: 'text', text: buffer });
+            buffer = '';
+            tokens.push({ kind: 'link', text: label, href });
+            i += label.length;
+            continue;
+          }
+        }
         const mention =
           part[i] === '@' &&
           sorted.find(
