@@ -8,6 +8,8 @@ This is the runbook for the milestone check: the two pilots chosen on CA-3, plus
 | 1. Baseline                | Solo Researcher (stronger model)                       | The same request, one agent alone, with the same tools.                                                                        |
 | 2. Scheduled website check | Checker (cheaper model), Investigator (stronger model) | Every 10 minutes the Checker calls a test API, asks the Investigator about each broken endpoint, and posts a report. 20 runs.  |
 
+Endeavor is the current product name. See [rebrand compatibility](rebranding.md) for retained identifiers and design provenance.
+
 ## What it costs
 
 Each pilot agent has a monthly budget, and together they can't pass **$16**. Each brief's conversation stops at $1, and each task has its own cap. The targets are lower: $0.50 per brief and $0.10 per check run. Budgets only work when the model has a price, so setup refuses to start without one.

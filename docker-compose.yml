@@ -1,5 +1,9 @@
 # Runs the whole platform on this computer: `npm run up`, then open http://localhost:3000.
 # For development with `npm run dev`, start only Postgres: `npm run db:up`.
+# Keep the existing Compose namespace and volumes even when the checkout folder is renamed.
+# See docs/rebranding.md before changing this compatibility identifier.
+name: bold-cedar-007
+
 services:
   postgres:
     image: postgres:16-alpine

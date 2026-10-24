@@ -171,7 +171,7 @@ export function setupApp(): FastifyInstance {
   app.register(swagger, {
     openapi: {
       info: {
-        title: 'Bold Cedar 007 API',
+        title: 'Endeavor API',
         version: '0.1.0'
       }
     },

@@ -1,7 +1,9 @@
+# New stacks only. Existing stacks must keep their current project_name and image URI.
+project_name            = "endeavor"
 aws_region              = "us-east-1"
 environment             = "sandbox"
-github_repository       = "kmasouri/bold-cedar-007"
-service_container_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/bold-cedar-007-sandbox-service:latest"
+github_repository       = "kmasouri/endeavor"
+service_container_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/endeavor-sandbox-service:latest"
 
 service_environment_variables = {
   ENVIRONMENT = "production"

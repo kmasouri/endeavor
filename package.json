@@ -1,8 +1,8 @@
 {
-  "name": "bold-cedar-007",
+  "name": "endeavor",
   "version": "0.1.0",
   "private": true,
-  "description": "Collaborative Agents: the API (apps/api) and the web interface (apps/web).",
+  "description": "Endeavor: the API (apps/api) and the web interface (apps/web).",
   "workspaces": [
     "apps/api",
     "apps/web"

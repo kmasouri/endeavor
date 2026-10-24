@@ -1,6 +1,7 @@
 import type { HumanPreferences } from './api';
 
 type Theme = HumanPreferences['theme'];
+// Keep the original storage key so the Endeavor rebrand preserves saved preferences.
 const THEME_KEY = 'collaborative-agents.theme';
 export function readTheme(): Theme {
   try {

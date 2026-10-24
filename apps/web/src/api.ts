@@ -1,6 +1,7 @@
 // Talks to the platform's API. Every request names the person acting (x-actor-id), because
 // there is no sign-in yet. The chosen person is remembered in this browser.
 
+// Keep the original storage key so the Endeavor rebrand preserves saved preferences.
 const ACTOR_KEY = 'collaborative-agents.actorId';
 
 export function getActorId(): string | null {

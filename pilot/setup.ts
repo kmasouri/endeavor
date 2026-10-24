@@ -133,7 +133,7 @@ async function main(): Promise<void> {
     approvalMethods: [],
     // Wikipedia asks API clients to name themselves.
     authHeader: 'Api-User-Agent',
-    credential: 'bold-cedar-007 pilot (local test)'
+    credential: 'Endeavor pilot (local test)'
   });
   const testApi = await findOrCreateConnection(api, {
     name: NAMES.testApi,

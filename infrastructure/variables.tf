@@ -1,6 +1,8 @@
 variable "project_name" {
   description = "Short project name used in AWS resource names. Keep it short: ALB and target group names are limited to 32 characters."
   type        = string
+  # Compatibility default: existing state must not recreate resources during a rebrand.
+  # New stacks set project_name = "endeavor"; see ../docs/rebranding.md.
   default     = "bold-cedar-007"
 }
 

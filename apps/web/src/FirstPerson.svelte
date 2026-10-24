@@ -17,10 +17,10 @@
 </script>
 
 <main class="narrow">
-  <h1>Welcome</h1>
+  <h1>Welcome to Endeavor</h1>
 
   <p>
-    This platform runs on your computer. Agents' tools run here too, but the AI models they use are
+    Endeavor runs on your computer. Agents' tools run here too, but the AI models they use are
     called over the internet with your API key. Agents only make progress while this computer is
     awake and the platform is running.
   </p>
