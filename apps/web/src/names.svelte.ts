@@ -1,10 +1,16 @@
-import { Agent, api, Human } from './api';
-import { useLoad } from './hooks';
+import { type Agent, api, type Human } from './api';
+import { createLoad } from './state.svelte';
 
 // Names for agents and people by ID, for pages that only have IDs (tasks, approvals, notes).
-export function useNames(): (actor: { type: string; id: string | null }) => string {
-  const agents = useLoad(() => api.list<Agent>('/agents?includeDisabled=true&limit=100'), []);
-  const people = useLoad(() => api.get<Human[]>('/humans'), []);
+export function createNames(): (actor: { type: string; id: string | null }) => string {
+  const agents = createLoad(
+    () => api.list<Agent>('/agents?includeDisabled=true&limit=100'),
+    () => []
+  );
+  const people = createLoad(
+    () => api.get<Human[]>('/humans'),
+    () => []
+  );
   return (actor) => {
     if (actor.type === 'system' || actor.type === 'schedule') {
       return actor.type === 'schedule' ? 'Schedule' : 'Platform';

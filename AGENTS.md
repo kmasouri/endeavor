@@ -80,7 +80,7 @@ Run `npm run check` before you finish any change. Never call work done while it 
 
 ## Layers
 
-The repo has two apps, each an npm workspace with its own `package.json`: the API in `apps/api/` and the web interface in `apps/web/`. They share no code; the web interface only calls the API over HTTP. Run commands from the repo root. The layers below are the API's.
+The repo has two apps, each an npm workspace with its own `package.json`: the API in `apps/api/` and the Svelte 5 web interface in `apps/web/`. They share no code; the web interface only calls the API over HTTP. Run commands from the repo root. The layers below are the API's.
 
 A request goes `routes -> handlers -> services -> repositories`. Services can also call integrations, which are outside systems like another company's API. Each layer only calls the one right below it. Routes and handlers both use `apps/api/src/schemas/`, which imports nothing from the other layers.
 
