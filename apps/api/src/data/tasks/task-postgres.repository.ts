@@ -100,7 +100,7 @@ export class TaskPostgresRepository implements TaskRepository {
 
   async create(input: CreateTaskInput): Promise<{ task: Task; created: boolean }> {
     const result = await this.db.query<TaskRow>(
-      `INSERT INTO bold_cedar_007.tasks (
+      `INSERT INTO endeavor.tasks (
          id, run_key, conversation_id, owner_agent_id, agent_version_id, title, brief,
          completion_criteria, review_required, state, requested_by_type, requested_by_id,
          request_message_id, parent_task_id, restarted_from_task_id, responsibility_id
@@ -143,7 +143,7 @@ export class TaskPostgresRepository implements TaskRepository {
   async getById(taskId: string): Promise<Task | null> {
     const result = await this.db.query<TaskRow>(
       `SELECT *
-       FROM bold_cedar_007.tasks
+       FROM endeavor.tasks
        WHERE id = $1`,
       [taskId]
     );
@@ -154,7 +154,7 @@ export class TaskPostgresRepository implements TaskRepository {
   async getByRunKey(runKey: string): Promise<Task | null> {
     const result = await this.db.query<TaskRow>(
       `SELECT *
-       FROM bold_cedar_007.tasks
+       FROM endeavor.tasks
        WHERE run_key = $1`,
       [runKey]
     );
@@ -166,7 +166,7 @@ export class TaskPostgresRepository implements TaskRepository {
     const { where, values } = listFilters(input);
     const result = await this.db.query<TaskRow>(
       `SELECT *
-       FROM bold_cedar_007.tasks
+       FROM endeavor.tasks
        ${where}
        ORDER BY created_at DESC, id
        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
@@ -180,7 +180,7 @@ export class TaskPostgresRepository implements TaskRepository {
     const { where, values } = listFilters(input);
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
-       FROM bold_cedar_007.tasks
+       FROM endeavor.tasks
        ${where}`,
       values
     );
@@ -215,7 +215,7 @@ export class TaskPostgresRepository implements TaskRepository {
     }
 
     const result = await this.db.query<TaskRow>(
-      `UPDATE bold_cedar_007.tasks
+      `UPDATE endeavor.tasks
        SET ${sets.join(', ')}
        WHERE id = $1
          AND state = $2
@@ -232,7 +232,7 @@ export class TaskPostgresRepository implements TaskRepository {
     const created: TaskWait[] = [];
     for (const wait of waits) {
       const result = await this.db.query<TaskWaitRow>(
-        `INSERT INTO bold_cedar_007.task_waits (id, task_id, kind, target_id, description)
+        `INSERT INTO endeavor.task_waits (id, task_id, kind, target_id, description)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING *`,
         [randomUUID(), taskId, wait.kind, wait.targetId, wait.description]
@@ -245,7 +245,7 @@ export class TaskPostgresRepository implements TaskRepository {
   async listWaits(taskId: string, options: { openOnly: boolean }): Promise<TaskWait[]> {
     const result = await this.db.query<TaskWaitRow>(
       `SELECT *
-       FROM bold_cedar_007.task_waits
+       FROM endeavor.task_waits
        WHERE task_id = $1
          AND ($2::boolean = false OR resolved_at IS NULL)
        ORDER BY created_at, id`,
@@ -258,7 +258,7 @@ export class TaskPostgresRepository implements TaskRepository {
   async findOpenWaits(kind: TaskWaitKind, targetId: string): Promise<TaskWait[]> {
     const result = await this.db.query<TaskWaitRow>(
       `SELECT *
-       FROM bold_cedar_007.task_waits
+       FROM endeavor.task_waits
        WHERE kind = $1
          AND target_id = $2
          AND resolved_at IS NULL
@@ -271,7 +271,7 @@ export class TaskPostgresRepository implements TaskRepository {
 
   async resolveWait(waitId: string, resolution: Record<string, unknown>): Promise<TaskWait | null> {
     const result = await this.db.query<TaskWaitRow>(
-      `UPDATE bold_cedar_007.task_waits
+      `UPDATE endeavor.task_waits
        SET resolved_at = now(), resolution = $2
        WHERE id = $1
          AND resolved_at IS NULL
@@ -284,7 +284,7 @@ export class TaskPostgresRepository implements TaskRepository {
 
   async resolveOpenWaits(taskId: string, resolution: Record<string, unknown>): Promise<number> {
     const result = await this.db.query(
-      `UPDATE bold_cedar_007.task_waits
+      `UPDATE endeavor.task_waits
        SET resolved_at = now(), resolution = $2
        WHERE task_id = $1
          AND resolved_at IS NULL`,
@@ -301,7 +301,7 @@ export class TaskPostgresRepository implements TaskRepository {
     data: Record<string, unknown>
   ): Promise<TaskEvent> {
     const result = await this.db.query<TaskEventRow>(
-      `INSERT INTO bold_cedar_007.task_events (task_id, type, actor_type, actor_id, data)
+      `INSERT INTO endeavor.task_events (task_id, type, actor_type, actor_id, data)
        VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
       [taskId, type, actor.type, actor.id, data]
@@ -316,7 +316,7 @@ export class TaskPostgresRepository implements TaskRepository {
   ): Promise<TaskEvent[]> {
     const result = await this.db.query<TaskEventRow>(
       `SELECT *
-       FROM bold_cedar_007.task_events
+       FROM endeavor.task_events
        WHERE task_id = $1
          AND id > $2
        ORDER BY id
@@ -329,7 +329,7 @@ export class TaskPostgresRepository implements TaskRepository {
 
   async addOutput(taskId: string, input: CreateTaskOutputInput): Promise<TaskOutput> {
     const result = await this.db.query<TaskOutputRow>(
-      `INSERT INTO bold_cedar_007.task_outputs (id, task_id, kind, title, content, uri, metadata)
+      `INSERT INTO endeavor.task_outputs (id, task_id, kind, title, content, uri, metadata)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [randomUUID(), taskId, input.kind, input.title, input.content, input.uri, input.metadata]
@@ -341,7 +341,7 @@ export class TaskPostgresRepository implements TaskRepository {
   async listOutputs(taskId: string): Promise<TaskOutput[]> {
     const result = await this.db.query<TaskOutputRow>(
       `SELECT *
-       FROM bold_cedar_007.task_outputs
+       FROM endeavor.task_outputs
        WHERE task_id = $1
        ORDER BY created_at, id`,
       [taskId]
@@ -356,8 +356,8 @@ export class TaskPostgresRepository implements TaskRepository {
   ): Promise<TaskOutput[]> {
     const result = await this.db.query<TaskOutputRow>(
       `SELECT o.*
-       FROM bold_cedar_007.task_outputs o
-       JOIN bold_cedar_007.tasks t ON t.id = o.task_id
+       FROM endeavor.task_outputs o
+       JOIN endeavor.tasks t ON t.id = o.task_id
        WHERE t.conversation_id = $1
        ORDER BY o.created_at DESC, o.id
        LIMIT $2 OFFSET $3`,
@@ -370,8 +370,8 @@ export class TaskPostgresRepository implements TaskRepository {
   async countConversationOutputs(conversationId: string): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
-       FROM bold_cedar_007.task_outputs o
-       JOIN bold_cedar_007.tasks t ON t.id = o.task_id
+       FROM endeavor.task_outputs o
+       JOIN endeavor.tasks t ON t.id = o.task_id
        WHERE t.conversation_id = $1`,
       [conversationId]
     );
@@ -390,8 +390,8 @@ export class TaskPostgresRepository implements TaskRepository {
               sum(coalesce((e.data->'usage'->>'inputTokens')::bigint, 0)
                 + coalesce((e.data->'usage'->>'outputTokens')::bigint, 0)) AS tokens,
               count(*) FILTER (WHERE e.data->>'costUsd' IS NULL)::int AS unpriced
-       FROM bold_cedar_007.task_events e
-       JOIN bold_cedar_007.tasks t ON t.id = e.task_id
+       FROM endeavor.task_events e
+       JOIN endeavor.tasks t ON t.id = e.task_id
        WHERE ${where}`,
       values
     );
@@ -415,8 +415,8 @@ export class TaskPostgresRepository implements TaskRepository {
               sum((e.data->>'costUsd')::numeric) AS cost,
               sum(coalesce((e.data->'usage'->>'inputTokens')::bigint, 0)
                 + coalesce((e.data->'usage'->>'outputTokens')::bigint, 0)) AS tokens
-       FROM bold_cedar_007.task_events e
-       JOIN bold_cedar_007.tasks t ON t.id = e.task_id
+       FROM endeavor.task_events e
+       JOIN endeavor.tasks t ON t.id = e.task_id
        WHERE ${where}
        GROUP BY t.id, t.title
        ORDER BY cost DESC NULLS LAST, tokens DESC
@@ -434,7 +434,7 @@ export class TaskPostgresRepository implements TaskRepository {
   async countOutputs(taskId: string): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
-       FROM bold_cedar_007.task_outputs
+       FROM endeavor.task_outputs
        WHERE task_id = $1`,
       [taskId]
     );
@@ -445,12 +445,12 @@ export class TaskPostgresRepository implements TaskRepository {
   async claimRunnable(workerId: string, leaseMs: number, limit: number): Promise<Task[]> {
     // SKIP LOCKED lets several workers claim at once without taking the same task.
     const result = await this.db.query<TaskRow>(
-      `UPDATE bold_cedar_007.tasks
+      `UPDATE endeavor.tasks
        SET lease_owner = $1,
            lease_expires_at = now() + ($2::text || ' milliseconds')::interval
        WHERE id IN (
          SELECT id
-         FROM bold_cedar_007.tasks
+         FROM endeavor.tasks
          WHERE state = 'working'
            AND paused_at IS NULL
            AND (lease_expires_at IS NULL OR lease_expires_at < now())
@@ -467,7 +467,7 @@ export class TaskPostgresRepository implements TaskRepository {
 
   async releaseLease(taskId: string, workerId: string, delayMs = 0): Promise<void> {
     await this.db.query(
-      `UPDATE bold_cedar_007.tasks
+      `UPDATE endeavor.tasks
        SET lease_owner = NULL,
            lease_expires_at = CASE
              WHEN $3::int > 0 THEN now() + $3::int * interval '1 millisecond'
@@ -481,7 +481,7 @@ export class TaskPostgresRepository implements TaskRepository {
 
   async renewLease(taskId: string, workerId: string, leaseMs: number): Promise<boolean> {
     const result = await this.db.query(
-      `UPDATE bold_cedar_007.tasks
+      `UPDATE endeavor.tasks
        SET lease_expires_at = now() + ($3::text || ' milliseconds')::interval
        WHERE id = $1
          AND lease_owner = $2`,
@@ -494,7 +494,7 @@ export class TaskPostgresRepository implements TaskRepository {
   async findOpenRun(responsibilityId: string): Promise<Task | null> {
     const result = await this.db.query<TaskRow>(
       `SELECT *
-       FROM bold_cedar_007.tasks
+       FROM endeavor.tasks
        WHERE responsibility_id = $1
          AND state IN ('working', 'waiting', 'blocked')
        ORDER BY created_at DESC
@@ -508,7 +508,7 @@ export class TaskPostgresRepository implements TaskRepository {
   async findOpenTask(conversationId: string, agentId: string): Promise<Task | null> {
     const result = await this.db.query<TaskRow>(
       `SELECT *
-       FROM bold_cedar_007.tasks
+       FROM endeavor.tasks
        WHERE conversation_id = $1
          AND owner_agent_id = $2
          AND state IN ('working', 'waiting', 'blocked')
@@ -523,11 +523,11 @@ export class TaskPostgresRepository implements TaskRepository {
   async listWaitingWithoutOpenWaits(limit: number): Promise<Task[]> {
     const result = await this.db.query<TaskRow>(
       `SELECT t.*
-       FROM bold_cedar_007.tasks t
+       FROM endeavor.tasks t
        WHERE t.state = 'waiting'
          AND NOT EXISTS (
            SELECT 1
-           FROM bold_cedar_007.task_waits w
+           FROM endeavor.task_waits w
            WHERE w.task_id = t.id
              AND w.resolved_at IS NULL
          )
@@ -541,12 +541,12 @@ export class TaskPostgresRepository implements TaskRepository {
   async listFinishedWithoutEvent(eventType: string, limit: number): Promise<Task[]> {
     const result = await this.db.query<TaskRow>(
       `SELECT t.*
-       FROM bold_cedar_007.tasks t
+       FROM endeavor.tasks t
        WHERE t.state = 'completed'
          AND t.request_message_id IS NOT NULL
          AND NOT EXISTS (
            SELECT 1
-           FROM bold_cedar_007.task_events e
+           FROM endeavor.task_events e
            WHERE e.task_id = t.id
              AND e.type = $1
          )
@@ -561,7 +561,7 @@ export class TaskPostgresRepository implements TaskRepository {
   async countEvents(taskId: string, type: string): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
-       FROM bold_cedar_007.task_events
+       FROM endeavor.task_events
        WHERE task_id = $1
          AND type = $2`,
       [taskId, type]
@@ -595,7 +595,7 @@ function listFilters(input: Omit<ListTasksInput, 'limit' | 'offset'>): {
     conditions.push(
       `(conversation_id IN (
           SELECT conversation_id
-          FROM bold_cedar_007.conversation_members
+          FROM endeavor.conversation_members
           WHERE participant_type = 'human' AND participant_id = $${n} AND removed_at IS NULL
         )
         OR (requested_by_type = 'human' AND requested_by_id = $${n}))`

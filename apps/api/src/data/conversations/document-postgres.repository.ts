@@ -22,7 +22,7 @@ export class DocumentPostgresRepository implements DocumentRepository {
     addedByHumanId: string;
   }): Promise<ConversationDocument> {
     const result = await this.db.query<DocumentRow>(
-      `INSERT INTO bold_cedar_007.conversation_documents (
+      `INSERT INTO endeavor.conversation_documents (
          id, conversation_id, title, content, added_by_human_id
        )
        VALUES ($1, $2, $3, $4, $5)
@@ -39,7 +39,7 @@ export class DocumentPostgresRepository implements DocumentRepository {
     const result = await this.db.query<DocumentRow>(
       `SELECT id, conversation_id, title, added_by_human_id, created_at,
               CASE WHEN $3::int IS NULL THEN content ELSE left(content, $3::int) END AS content
-       FROM bold_cedar_007.conversation_documents
+       FROM endeavor.conversation_documents
        WHERE conversation_id = $1
          AND deleted_at IS NULL
        ORDER BY created_at DESC, id
@@ -51,7 +51,7 @@ export class DocumentPostgresRepository implements DocumentRepository {
 
   async get(documentId: string): Promise<ConversationDocument | null> {
     const result = await this.db.query<DocumentRow>(
-      `SELECT * FROM bold_cedar_007.conversation_documents WHERE id = $1 AND deleted_at IS NULL`,
+      `SELECT * FROM endeavor.conversation_documents WHERE id = $1 AND deleted_at IS NULL`,
       [documentId]
     );
     return result.rows[0] ? toDocument(result.rows[0]) : null;
@@ -59,7 +59,7 @@ export class DocumentPostgresRepository implements DocumentRepository {
 
   async delete(documentId: string): Promise<boolean> {
     const result = await this.db.query(
-      `UPDATE bold_cedar_007.conversation_documents
+      `UPDATE endeavor.conversation_documents
        SET deleted_at = now()
        WHERE id = $1
          AND deleted_at IS NULL`,

@@ -30,7 +30,7 @@ export class NotePostgresRepository implements NoteRepository {
     clientKey: string | null;
   }): Promise<AgentNote> {
     const result = await this.db.query<NoteRow>(
-      `INSERT INTO bold_cedar_007.agent_notes (
+      `INSERT INTO endeavor.agent_notes (
          id, agent_id, body, source_task_id, source_conversation_id, scope, created_by_type,
          created_by_id, client_key
        )
@@ -53,7 +53,7 @@ export class NotePostgresRepository implements NoteRepository {
       return toNote(result.rows[0]);
     }
     const existing = await this.db.query<NoteRow>(
-      `SELECT * FROM bold_cedar_007.agent_notes WHERE client_key = $1`,
+      `SELECT * FROM endeavor.agent_notes WHERE client_key = $1`,
       [input.clientKey]
     );
     return toNote(existing.rows[0]);
@@ -61,7 +61,7 @@ export class NotePostgresRepository implements NoteRepository {
 
   async getById(noteId: string): Promise<AgentNote | null> {
     const result = await this.db.query<NoteRow>(
-      `SELECT * FROM bold_cedar_007.agent_notes WHERE id = $1 AND deleted_at IS NULL`,
+      `SELECT * FROM endeavor.agent_notes WHERE id = $1 AND deleted_at IS NULL`,
       [noteId]
     );
     return result.rows[0] ? toNote(result.rows[0]) : null;
@@ -76,7 +76,7 @@ export class NotePostgresRepository implements NoteRepository {
     const { where, values } = visibilityFilter(input.agentId, input.visibility);
     const result = await this.db.query<NoteRow>(
       `SELECT *
-       FROM bold_cedar_007.agent_notes
+       FROM endeavor.agent_notes
        WHERE ${where}
        ORDER BY created_at DESC, id
        LIMIT $${values.length + 1} OFFSET $${values.length + 2}`,
@@ -88,7 +88,7 @@ export class NotePostgresRepository implements NoteRepository {
   async count(input: { agentId: string; visibility: NoteVisibility }): Promise<number> {
     const { where, values } = visibilityFilter(input.agentId, input.visibility);
     const result = await this.db.query<{ total: number }>(
-      `SELECT count(*)::int AS total FROM bold_cedar_007.agent_notes WHERE ${where}`,
+      `SELECT count(*)::int AS total FROM endeavor.agent_notes WHERE ${where}`,
       values
     );
     return result.rows[0].total;
@@ -100,7 +100,7 @@ export class NotePostgresRepository implements NoteRepository {
     humanId: string
   ): Promise<AgentNote | null> {
     const result = await this.db.query<NoteRow>(
-      `UPDATE bold_cedar_007.agent_notes
+      `UPDATE endeavor.agent_notes
        SET body = coalesce($2, body),
            scope = coalesce($3, scope),
            updated_by_human_id = $4,
@@ -115,7 +115,7 @@ export class NotePostgresRepository implements NoteRepository {
 
   async softDelete(noteId: string, humanId: string): Promise<boolean> {
     const result = await this.db.query(
-      `UPDATE bold_cedar_007.agent_notes
+      `UPDATE endeavor.agent_notes
        SET deleted_at = now(), deleted_by_human_id = $2
        WHERE id = $1
          AND deleted_at IS NULL`,
@@ -142,7 +142,7 @@ function visibilityFilter(
   return {
     where: `${base} AND (scope = 'agent' OR (scope = 'conversation' AND source_conversation_id IN (
       SELECT conversation_id
-      FROM bold_cedar_007.conversation_members
+      FROM endeavor.conversation_members
       WHERE participant_type = 'human' AND participant_id = $2 AND removed_at IS NULL
     )))`,
     values: [agentId, visibility.visibleToHumanId]

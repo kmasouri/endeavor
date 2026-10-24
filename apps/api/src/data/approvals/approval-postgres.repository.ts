@@ -33,7 +33,7 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
     request: ConnectionCallRequest;
   }): Promise<{ approval: Approval; created: boolean }> {
     const result = await this.db.query<ApprovalRow>(
-      `INSERT INTO bold_cedar_007.approvals (id, client_key, task_id, agent_id, kind, request)
+      `INSERT INTO endeavor.approvals (id, client_key, task_id, agent_id, kind, request)
        VALUES ($1, $2, $3, $4, 'connection_call', $5)
        ON CONFLICT (client_key) DO NOTHING
        RETURNING *`,
@@ -43,7 +43,7 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
       return { approval: toApproval(result.rows[0]), created: true };
     }
     const existing = await this.db.query<ApprovalRow>(
-      `SELECT * FROM bold_cedar_007.approvals WHERE client_key = $1`,
+      `SELECT * FROM endeavor.approvals WHERE client_key = $1`,
       [input.clientKey]
     );
     return { approval: toApproval(existing.rows[0]), created: false };
@@ -51,7 +51,7 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
 
   async getById(approvalId: string): Promise<Approval | null> {
     const result = await this.db.query<ApprovalRow>(
-      `SELECT * FROM bold_cedar_007.approvals WHERE id = $1`,
+      `SELECT * FROM endeavor.approvals WHERE id = $1`,
       [approvalId]
     );
     return result.rows[0] ? toApproval(result.rows[0]) : null;
@@ -65,7 +65,7 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
   }): Promise<Approval[]> {
     const result = await this.db.query<ApprovalRow>(
       `SELECT a.*
-       FROM bold_cedar_007.approvals a
+       FROM endeavor.approvals a
        ${VISIBLE_JOIN}
        ORDER BY a.created_at DESC, a.id
        LIMIT $3 OFFSET $4`,
@@ -77,7 +77,7 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
   async count(input: { status?: ApprovalStatus; visibleToHumanId?: string }): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
-       FROM bold_cedar_007.approvals a
+       FROM endeavor.approvals a
        ${VISIBLE_JOIN}`,
       [input.status ?? null, input.visibleToHumanId ?? null]
     );
@@ -91,7 +91,7 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
     reason: string | null;
   }): Promise<Approval | null> {
     const result = await this.db.query<ApprovalRow>(
-      `UPDATE bold_cedar_007.approvals
+      `UPDATE endeavor.approvals
        SET status = $2, decided_by_human_id = $3, decided_at = now(), reason = $4
        WHERE id = $1
          AND status = 'pending'
@@ -104,7 +104,7 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
   async listApprovedNotExecuted(limit: number): Promise<Approval[]> {
     const result = await this.db.query<ApprovalRow>(
       `SELECT *
-       FROM bold_cedar_007.approvals
+       FROM endeavor.approvals
        WHERE status = 'approved'
          AND executed_at IS NULL
        ORDER BY decided_at
@@ -117,12 +117,12 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
   async listExecutedAwaitingWake(limit: number): Promise<Approval[]> {
     const result = await this.db.query<ApprovalRow>(
       `SELECT a.*
-       FROM bold_cedar_007.approvals a
+       FROM endeavor.approvals a
        WHERE a.executed_at IS NOT NULL
          AND a.executed_at < now() - interval '2 minutes'
          AND EXISTS (
            SELECT 1
-           FROM bold_cedar_007.task_waits w
+           FROM endeavor.task_waits w
            WHERE w.kind = 'approval'
              AND w.target_id = a.id
              AND w.resolved_at IS NULL
@@ -136,7 +136,7 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
 
   async markExecuted(approvalId: string, approvalResult: ApprovalResult): Promise<boolean> {
     const result = await this.db.query(
-      `UPDATE bold_cedar_007.approvals
+      `UPDATE endeavor.approvals
        SET executed_at = now(), result = $2
        WHERE id = $1
          AND executed_at IS NULL`,
@@ -146,7 +146,7 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
   }
 
   async saveResult(approvalId: string, approvalResult: ApprovalResult): Promise<void> {
-    await this.db.query(`UPDATE bold_cedar_007.approvals SET result = $2 WHERE id = $1`, [
+    await this.db.query(`UPDATE endeavor.approvals SET result = $2 WHERE id = $1`, [
       approvalId,
       approvalResult
     ]);
@@ -155,14 +155,14 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
 
 // $1: status or null for any. $2: a person's ID to limit to tasks they may see, or null.
 const VISIBLE_JOIN = `
-  JOIN bold_cedar_007.tasks t ON t.id = a.task_id
+  JOIN endeavor.tasks t ON t.id = a.task_id
   WHERE ($1::text IS NULL OR a.status = $1)
     AND (
       $2::uuid IS NULL
       OR (t.requested_by_type = 'human' AND t.requested_by_id = $2)
       OR t.conversation_id IN (
         SELECT conversation_id
-        FROM bold_cedar_007.conversation_members
+        FROM endeavor.conversation_members
         WHERE participant_type = 'human' AND participant_id = $2 AND removed_at IS NULL
       )
     )`;

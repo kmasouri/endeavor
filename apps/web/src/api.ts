@@ -1,27 +1,14 @@
 // Talks to the platform's API. Every request names the person acting (x-actor-id), because
 // there is no sign-in yet. The chosen person is remembered in this browser.
 
-// Keep the original storage key so the Endeavor rebrand preserves saved preferences.
-const ACTOR_KEY = 'collaborative-agents.actorId';
+import { readPreference, writePreference } from './preferences-storage';
 
 export function getActorId(): string | null {
-  try {
-    return localStorage.getItem(ACTOR_KEY);
-  } catch {
-    return null;
-  }
+  return readPreference('actorId');
 }
 
 export function setActorId(id: string | null): void {
-  try {
-    if (id) {
-      localStorage.setItem(ACTOR_KEY, id);
-    } else {
-      localStorage.removeItem(ACTOR_KEY);
-    }
-  } catch {
-    // Private windows can block storage. The choice then lasts until the page reloads.
-  }
+  writePreference('actorId', id);
 }
 
 export class ApiError extends Error {

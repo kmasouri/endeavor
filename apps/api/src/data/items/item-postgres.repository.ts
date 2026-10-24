@@ -17,7 +17,7 @@ export class ItemPostgresRepository implements ItemRepository {
 
   async create(input: CreateItemInput): Promise<Item> {
     const result = await this.db.query<ItemRow>(
-      `INSERT INTO bold_cedar_007.items (id, name, description, metadata)
+      `INSERT INTO endeavor.items (id, name, description, metadata)
        VALUES ($1, $2, $3, $4)
        RETURNING *`,
       [randomUUID(), input.name, input.description, input.metadata]
@@ -29,7 +29,7 @@ export class ItemPostgresRepository implements ItemRepository {
   async list(input: ListItemsInput): Promise<Item[]> {
     const result = await this.db.query<ItemRow>(
       `SELECT *
-       FROM bold_cedar_007.items
+       FROM endeavor.items
        ORDER BY name
        LIMIT $1 OFFSET $2`,
       [input.limit, input.offset]
@@ -41,7 +41,7 @@ export class ItemPostgresRepository implements ItemRepository {
   async count(): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
-       FROM bold_cedar_007.items`
+       FROM endeavor.items`
     );
 
     return result.rows[0].total;
@@ -50,7 +50,7 @@ export class ItemPostgresRepository implements ItemRepository {
   async getById(itemId: string): Promise<Item | null> {
     const result = await this.db.query<ItemRow>(
       `SELECT *
-       FROM bold_cedar_007.items
+       FROM endeavor.items
        WHERE id = $1`,
       [itemId]
     );
@@ -61,7 +61,7 @@ export class ItemPostgresRepository implements ItemRepository {
   async getByName(name: string): Promise<Item | null> {
     const result = await this.db.query<ItemRow>(
       `SELECT *
-       FROM bold_cedar_007.items
+       FROM endeavor.items
        WHERE lower(name) = lower($1)`,
       [name]
     );

@@ -19,8 +19,22 @@ const schedules = [
 ];
 
 type Mode = 'populated' | 'cancelled' | 'empty' | 'error';
-async function mockApi(page: Page, theme: 'dark' | 'light', mode: Mode = 'populated') {
-  await page.addInitScript(() => localStorage.setItem('collaborative-agents.actorId', 'person-1'));
+async function mockApi(
+  page: Page,
+  theme: 'dark' | 'light',
+  mode: Mode = 'populated',
+  legacy = false
+) {
+  await page.addInitScript(
+    ({ theme, legacy }) => {
+      if (sessionStorage.getItem('identity-seeded')) return;
+      sessionStorage.setItem('identity-seeded', 'true');
+      const prefix = legacy ? 'collaborative-agents' : 'endeavor';
+      localStorage.setItem(`${prefix}.actorId`, 'person-1');
+      localStorage.setItem(`${prefix}.theme`, theme);
+    },
+    { theme, legacy }
+  );
   await page.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -180,20 +194,27 @@ for (const theme of ['dark', 'light'] as const) {
     page
   }) => {
     await page.setViewportSize({ width: 1100, height: 800 });
-    await mockApi(page, theme);
+    await mockApi(page, theme, 'populated', true);
     await page.goto('/app/#/schedules');
     await expect(page).toHaveTitle('Endeavor');
     await expect(page.getByRole('link', { name: 'Endeavor', exact: true })).toBeVisible();
     await page.getByRole('link', { name: 'Setup', exact: true }).click();
     await expect(page.getByText('People, providers, and Endeavor on this computer.')).toBeVisible();
     await page.reload();
-    await expect(page.getByRole('button', { name: 'Profile and settings' })).toContainText('Kayvan');
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    expect(await page.evaluate(() => localStorage.getItem('collaborative-agents.actorId'))).toBe(
-      'person-1'
+    await expect(page.getByRole('button', { name: 'Profile and settings' })).toContainText(
+      'Kayvan'
     );
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    expect(await page.evaluate(() => localStorage.getItem('endeavor.actorId'))).toBe('person-1');
     await page.getByRole('link', { name: 'Schedules', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Schedules', exact: true })).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem('endeavor.theme'))).toBe(theme);
+    expect(
+      await page.evaluate(() => localStorage.getItem('collaborative-agents.actorId'))
+    ).toBeNull();
+    expect(
+      await page.evaluate(() => localStorage.getItem('collaborative-agents.theme'))
+    ).toBeNull();
     await expect(page.locator('.brand')).not.toContainText('Collaborative Agents');
   });
 }

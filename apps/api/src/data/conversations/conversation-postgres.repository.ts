@@ -25,7 +25,7 @@ export class ConversationPostgresRepository implements ConversationRepository {
 
   async create(input: { title: string; createdByHumanId: string }): Promise<Conversation> {
     const result = await this.db.query<ConversationRow>(
-      `INSERT INTO bold_cedar_007.conversations (id, title, created_by_human_id)
+      `INSERT INTO endeavor.conversations (id, title, created_by_human_id)
        VALUES ($1, $2, $3)
        RETURNING *`,
       [randomUUID(), input.title, input.createdByHumanId]
@@ -39,7 +39,7 @@ export class ConversationPostgresRepository implements ConversationRepository {
     changes: { title?: string; budgetUsd?: number | null }
   ): Promise<Conversation | null> {
     const result = await this.db.query<ConversationRow>(
-      `UPDATE bold_cedar_007.conversations
+      `UPDATE endeavor.conversations
        SET title = coalesce($2, title),
            budget_usd = CASE WHEN $3 THEN $4 ELSE budget_usd END
        WHERE id = $1
@@ -57,7 +57,7 @@ export class ConversationPostgresRepository implements ConversationRepository {
   async getById(conversationId: string): Promise<Conversation | null> {
     const result = await this.db.query<ConversationRow>(
       `SELECT *
-       FROM bold_cedar_007.conversations
+       FROM endeavor.conversations
        WHERE id = $1`,
       [conversationId]
     );
@@ -72,11 +72,11 @@ export class ConversationPostgresRepository implements ConversationRepository {
   }): Promise<Conversation[]> {
     const result = await this.db.query<ConversationRow>(
       `SELECT c.*
-       FROM bold_cedar_007.conversations c
+       FROM endeavor.conversations c
        WHERE $1::text IS NULL
           OR EXISTS (
             SELECT 1
-            FROM bold_cedar_007.conversation_members m
+            FROM endeavor.conversation_members m
             WHERE m.conversation_id = c.id
               AND m.participant_type = $1
               AND m.participant_id = $2
@@ -93,11 +93,11 @@ export class ConversationPostgresRepository implements ConversationRepository {
   async count(input: { participant: ParticipantRef | null }): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
-       FROM bold_cedar_007.conversations c
+       FROM endeavor.conversations c
        WHERE $1::text IS NULL
           OR EXISTS (
             SELECT 1
-            FROM bold_cedar_007.conversation_members m
+            FROM endeavor.conversation_members m
             WHERE m.conversation_id = c.id
               AND m.participant_type = $1
               AND m.participant_id = $2
@@ -116,7 +116,7 @@ export class ConversationPostgresRepository implements ConversationRepository {
     historyFrom: Date | null;
   }): Promise<ConversationMember> {
     await this.db.query(
-      `INSERT INTO bold_cedar_007.conversation_members (
+      `INSERT INTO endeavor.conversation_members (
          conversation_id, participant_type, participant_id, added_by_human_id, history_from
        )
        VALUES ($1, $2, $3, $4, $5)
@@ -145,7 +145,7 @@ export class ConversationPostgresRepository implements ConversationRepository {
   async listMembers(conversationId: string): Promise<ConversationMember[]> {
     const result = await this.db.query<MemberRow>(
       `SELECT *
-       FROM bold_cedar_007.conversation_members
+       FROM endeavor.conversation_members
        WHERE conversation_id = $1
          AND removed_at IS NULL
        ORDER BY added_at, participant_id`,
@@ -161,7 +161,7 @@ export class ConversationPostgresRepository implements ConversationRepository {
   ): Promise<ConversationMember | null> {
     const result = await this.db.query<MemberRow>(
       `SELECT *
-       FROM bold_cedar_007.conversation_members
+       FROM endeavor.conversation_members
        WHERE conversation_id = $1
          AND participant_type = $2
          AND participant_id = $3
