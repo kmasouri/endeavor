@@ -20,3 +20,7 @@ coverage/
 # Pilot runs (docs/pilot.md)
 /pilot/results/
 /pilot/topics.json
+
+# Browser test reports and traces
+playwright-report/
+test-results/

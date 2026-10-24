@@ -17,7 +17,7 @@
     "lint": "npm run lint --workspaces --if-present",
     "format": "prettier --write \"**/*.{ts,json,md,yml,yaml}\"",
     "typecheck": "npm run typecheck --workspaces && tsc -p pilot/tsconfig.json",
-    "check": "npm run lint && npm run typecheck && npm run build && npm test",
+    "check": "npm run lint && npm run typecheck && npm run build && npm test && npm run test:e2e --workspace=apps/web",
     "up": "docker compose up -d --build",
     "down": "docker compose down",
     "logs": "docker compose logs -f app",
@@ -27,7 +27,8 @@
     "pilot:api": "docker compose --profile pilot up -d pilot-api",
     "pilot:setup": "node --env-file-if-exists=.env pilot/setup.ts",
     "pilot:brief": "node pilot/brief.ts",
-    "pilot:report": "node pilot/report.ts"
+    "pilot:report": "node pilot/report.ts",
+    "test:e2e": "npm run build --workspace=apps/web && npm run test:e2e --workspace=apps/web"
   },
   "engines": {
     "node": ">=26"
