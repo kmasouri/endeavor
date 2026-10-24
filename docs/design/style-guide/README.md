@@ -20,7 +20,7 @@ Two themes, picked per person, with the same token names, so a component never n
 | Dark (default) | Neutral graphite | Deep yolk `#f59e0b`, dark text on it | Sky `#7dd3fc` |
 | Light | White and soft grays | Deep yolk `#e08e00`, dark text on it | Sky `#0ea5e9` |
 
-The palette was picked on the "Chat view redesign" board (5C + Sky agents, deep yolk). Text meets 4.5:1 contrast on its ground in both themes; control borders and icons meet 3:1. Text on yolk is always dark (`accent-ink`): white is not readable on it.
+The palette was picked on the "Collaborative Agents app design" board (5C + Sky agents, deep yolk). Text meets 4.5:1 contrast on its ground in both themes; control borders and icons meet 3:1. Text on yolk is always dark (`accent-ink`): white is not readable on it.
 
 ## Color, by role
 
