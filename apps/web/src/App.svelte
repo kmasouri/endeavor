@@ -207,29 +207,33 @@
           {/each}
         </div>
         <div class="sidebar-footer">
-          <button
-            class="quiet row profile-button"
-            class:active={section === 'settings'}
-            aria-label="Profile and settings"
-            onclick={() => {
-              window.location.hash = '/settings';
-              if (window.innerWidth < 700) collapsed = true;
-            }}
-            ><Avatar name={me.name} id={me.id} /><span
-              ><strong>{me.name}</strong><span class="caption muted">Profile and settings</span
-              ></span
-            ></button
-          >
-          <button
-            class="quiet switch-person"
-            disabled={switching}
-            aria-haspopup="dialog"
-            aria-expanded={picking}
-            onclick={() => {
-              switchError = null;
-              picking = true;
-            }}>Switch person</button
-          >
+          <div class="sidebar-profile">
+            <button
+              class="quiet row profile-button"
+              class:active={section === 'settings'}
+              aria-label="Profile and settings"
+              onclick={() => {
+                window.location.hash = '/settings';
+                if (window.innerWidth < 700) collapsed = true;
+              }}
+              ><Avatar name={me.name} id={me.id} /><span
+                ><strong>{me.name}</strong><span class="caption muted">Profile and settings</span
+                ></span
+              ></button
+            >
+            <button
+              class="quiet switch-person"
+              aria-label="Switch person"
+              title="Switch person"
+              disabled={switching}
+              aria-haspopup="dialog"
+              aria-expanded={picking}
+              onclick={() => {
+                switchError = null;
+                picking = true;
+              }}><Icon name="switch" size={16} /></button
+            >
+          </div>
         </div>
       </aside>
     {/if}
