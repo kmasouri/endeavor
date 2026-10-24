@@ -48,16 +48,14 @@ export class CatalogService {
 
   async createSkill(
     actorId: string,
-    input: { name: string; description: string; instructions: string; connectionIds?: string[] }
+    input: { name: string; description: string; instructions: string }
   ): Promise<SkillDetails> {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
-    await this.requireConnections(input.connectionIds ?? []);
     const { skill, version } = await this.catalogRepository
       .createSkill(
         { name: input.name, description: input.description },
         {
           instructions: input.instructions,
-          connectionIds: input.connectionIds ?? [],
           createdByHumanId: admin.id
         }
       )
@@ -108,23 +106,20 @@ export class CatalogService {
   async addSkillVersion(
     actorId: string,
     skillId: string,
-    changes: { instructions?: string; connectionIds?: string[] }
+    changes: { instructions?: string }
   ): Promise<SkillDetails> {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     const skill = await this.getSkill(skillId);
     const instructions = changes.instructions ?? skill.currentVersion?.instructions;
-    const connectionIds = changes.connectionIds ?? skill.currentVersion?.connectionIds ?? [];
     if (instructions === undefined) {
       throw new AppError(
         'validationError',
         'This skill has no version yet, so instructions are needed'
       );
     }
-    await this.requireConnections(connectionIds);
 
     const version = await this.catalogRepository.addSkillVersion(skill.id, {
       instructions,
-      connectionIds,
       createdByHumanId: admin.id
     });
     this.catalogLogger.onSkillSaved(skill.id, version.version);
@@ -291,14 +286,6 @@ export class CatalogService {
       throw new AppError('connectionNotFound', `Connection ${connectionId} was not found`);
     }
     return connection;
-  }
-
-  private async requireConnections(connectionIds: string[]): Promise<void> {
-    const found = await this.catalogRepository.getConnections(connectionIds);
-    const missing = connectionIds.filter((id) => !found.some((connection) => connection.id === id));
-    if (missing.length > 0) {
-      throw new AppError('connectionNotFound', `Connections not found: ${missing.join(', ')}`);
-    }
   }
 
   private async requireAgent(agentId: string): Promise<void> {

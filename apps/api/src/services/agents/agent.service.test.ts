@@ -260,7 +260,7 @@ describe('AgentService', () => {
         updatedAt: new Date()
       }
     ]);
-    // version1 pinned nothing yet; the new version pins sv7, which uses connection c9.
+    // A legacy skill may still carry retired metadata. Assignment must ignore it.
     catalogs.getSkillVersions.mockImplementation(async (ids) =>
       ids.includes('sv7')
         ? [
@@ -288,7 +288,47 @@ describe('AgentService', () => {
       ([input]) => `${input.targetType}:${input.targetId}`
     );
     // c1 was already chosen in version 1, so it is not granted again.
-    expect(granted).toEqual(['skill:s1', 'connection:c9']);
+    expect(granted).toEqual(['skill:s1']);
+    expect(agents.addVersion.mock.calls[0][1].connectionIds).toEqual(['c1']);
+  });
+
+  it('keeps connections independent when upgrading a skill and preserves revoked legacy grants', async () => {
+    const { service, catalogs, agents } = setup();
+    agents.getVersion.mockResolvedValue({ ...version1, legacyConnectionIds: ['c9'] });
+    catalogs.listGrants.mockResolvedValue([
+      { targetType: 'connection', targetId: 'c9', revokedAt: new Date() } as never
+    ]);
+    catalogs.getSkills.mockResolvedValue([
+      { id: 's1', currentVersionId: 'sv8', disabledAt: null } as never
+    ]);
+    catalogs.getSkillVersions.mockImplementation(async (ids) =>
+      ids.includes('sv8')
+        ? [{ id: 'sv8', skillId: 's1' } as never]
+        : [{ id: 's1', skillId: 's1' } as never]
+    );
+    catalogs.getConnections.mockResolvedValue([
+      { id: 'c1', disabledAt: null },
+      { id: 'c9', disabledAt: null }
+    ] as never);
+    await service.updateConfig(ADMIN_ID, AGENT_ID, {
+      skillIds: ['s1'],
+      connectionIds: ['c1', 'c9']
+    });
+    expect(agents.addVersion.mock.calls[0][1].connectionIds).toEqual(['c1', 'c9']);
+    expect(catalogs.grant).not.toHaveBeenCalled();
+  });
+
+  it('grants an explicitly selected new connection without needing a skill', async () => {
+    const { service, catalogs, agents } = setup();
+    catalogs.getConnections.mockResolvedValue([{ id: 'c2', disabledAt: null }] as never);
+    await service.updateConfig(ADMIN_ID, AGENT_ID, { skillIds: [], connectionIds: ['c2'] });
+    expect(agents.addVersion.mock.calls[0][1]).toMatchObject({
+      skillVersionIds: [],
+      connectionIds: ['c2']
+    });
+    expect(catalogs.grant).toHaveBeenCalledWith(
+      expect.objectContaining({ targetType: 'connection', targetId: 'c2', restoreRevoked: false })
+    );
   });
 
   it('never re-grants an entry that was already chosen, so revokes stick', async () => {

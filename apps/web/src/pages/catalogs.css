@@ -1,0 +1,75 @@
+@import '../../../../docs/design/style-guide/tokens.css' layer(catalog-tokens);
+
+.catalogs {
+  --bg: var(--bg-100);
+  --surface: var(--bg-200);
+  --text: var(--text-100);
+  --muted: var(--text-300);
+  --line: var(--border-200);
+  --error: var(--danger);
+  color: var(--text-100);
+  background: var(--bg-100);
+  border-radius: 12px;
+  padding: 24px;
+  font-family: Inter, system-ui, sans-serif;
+}
+.catalogs .panel {
+  background: transparent;
+  border: 0;
+  padding: 20px 0;
+}
+.catalog-tabs {
+  display: flex;
+  gap: 24px;
+  border-bottom: 1px solid var(--border-100);
+}
+.catalog-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-300);
+  padding: 12px 0;
+}
+.catalog-tabs button.active {
+  color: var(--text-100);
+  border-bottom-color: var(--text-100);
+}
+.catalogs button {
+  color: var(--text-100);
+  background: var(--bg-selected);
+}
+.catalogs .catalog-tabs button {
+  background: transparent;
+}
+.catalogs .badge {
+  color: var(--text-300);
+  border-color: var(--border-200);
+}
+.catalogs .badge.enabled {
+  color: var(--success);
+  background: var(--success-bg);
+}
+.catalogs .stack {
+  width: 100%;
+}
+.catalogs .skill-instructions {
+  min-height: 300px;
+  font-family: inherit;
+}
+@media (max-width: 600px) {
+  .catalogs {
+    padding: 16px;
+  }
+}
+
+.catalogs button.secondary,
+.catalogs summary {
+  color: var(--text-200);
+}
+.catalogs input,
+.catalogs textarea,
+.catalogs select {
+  color: var(--text-100);
+  background: var(--bg-200);
+}

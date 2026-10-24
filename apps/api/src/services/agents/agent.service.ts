@@ -272,8 +272,8 @@ export class AgentService {
     return unique;
   }
 
-  // Choosing a skill or connection grants it, along with the connections a chosen skill
-  // uses. Only newly chosen entries are granted, and only once the version is saved. Saving
+  // Skills grant instructions only. Connections must be selected independently.
+  // Only newly chosen entries are granted, once the version is saved. Saving
   // again with the same choices never brings back a grant an admin revoked; use the grants API.
   private async grantNewlyChosen(
     agentId: string,
@@ -285,14 +285,22 @@ export class AgentService {
       this.chosenTargets(previous),
       this.chosenTargets(next)
     ]);
+    // A configuration save never restores a revoked grant, including a connection that
+    // used to be inherited or was removed and later selected again. Use the grants API.
+    const existingGrants = new Set(
+      (await this.catalogRepository.listGrants(agentId, { activeOnly: false })).map(
+        (grant) => `${grant.targetType}:${grant.targetId}`
+      )
+    );
     for (const key of after) {
-      if (!before.has(key)) {
+      if (!before.has(key) && !existingGrants.has(key)) {
         const [targetType, targetId] = key.split(':') as ['skill' | 'connection', string];
         await this.catalogRepository.grant({
           agentId,
           grantedByHumanId: adminId,
           targetType,
-          targetId
+          targetId,
+          restoreRevoked: false
         });
       }
     }
@@ -305,9 +313,7 @@ export class AgentService {
     const skillVersions = await this.catalogRepository.getSkillVersions(version.skillVersionIds);
     return new Set([
       ...skillVersions.map((skillVersion) => `skill:${skillVersion.skillId}`),
-      ...[...version.connectionIds, ...skillVersions.flatMap((sv) => sv.connectionIds)].map(
-        (id) => `connection:${id}`
-      )
+      ...version.connectionIds.map((id) => `connection:${id}`)
     ]);
   }
 

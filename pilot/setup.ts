@@ -149,26 +149,22 @@ async function main(): Promise<void> {
     name: 'Research brief',
     description:
       'How to research a topic and write a one-page brief with a source for every claim.',
-    instructions: RESEARCH_SKILL,
-    connectionIds: [wikipedia]
+    instructions: RESEARCH_SKILL
   });
   const reviewSkill = await findOrCreate<Named>(api, '/skills', {
     name: 'Claim review',
     description: 'How to check a brief claim by claim against its sources.',
-    instructions: REVIEW_SKILL,
-    connectionIds: [wikipedia]
+    instructions: REVIEW_SKILL
   });
   const checkSkill = await findOrCreate<Named>(api, '/skills', {
     name: 'API check',
     description: 'How to check the test API endpoints and report broken ones.',
-    instructions: checkSkillText(),
-    connectionIds: [testApi]
+    instructions: checkSkillText()
   });
   const diagnoseSkill = await findOrCreate<Named>(api, '/skills', {
     name: 'Failure diagnosis',
     description: 'How to find the likely cause of a broken API endpoint.',
-    instructions: DIAGNOSE_SKILL,
-    connectionIds: [testApi]
+    instructions: DIAGNOSE_SKILL
   });
 
   // Agents. Peers on different models; none is in charge of another.
@@ -179,6 +175,7 @@ async function main(): Promise<void> {
       instructions: RESEARCHER,
       model: cheapModel,
       skillIds: [researchSkill],
+      connectionIds: [wikipedia],
       budget: BUDGETS.researcher
     }),
     reviewer: await findOrCreateAgent(api, {
@@ -187,6 +184,7 @@ async function main(): Promise<void> {
       instructions: REVIEWER,
       model: strongModel,
       skillIds: [reviewSkill],
+      connectionIds: [wikipedia],
       budget: BUDGETS.reviewer
     }),
     solo: await findOrCreateAgent(api, {
@@ -195,6 +193,7 @@ async function main(): Promise<void> {
       instructions: SOLO,
       model: strongModel,
       skillIds: [researchSkill],
+      connectionIds: [wikipedia],
       budget: BUDGETS.solo
     }),
     checker: await findOrCreateAgent(api, {
@@ -203,6 +202,7 @@ async function main(): Promise<void> {
       instructions: CHECKER,
       model: cheapModel,
       skillIds: [checkSkill],
+      connectionIds: [testApi],
       budget: BUDGETS.checker
     }),
     investigator: await findOrCreateAgent(api, {
@@ -211,6 +211,7 @@ async function main(): Promise<void> {
       instructions: INVESTIGATOR,
       model: strongModel,
       skillIds: [diagnoseSkill],
+      connectionIds: [testApi],
       budget: BUDGETS.investigator
     })
   };
@@ -381,6 +382,7 @@ async function findOrCreateAgent(
     instructions: string;
     model: string;
     skillIds: string[];
+    connectionIds: string[];
     budget: { perTask: number; monthly: number };
   }
 ): Promise<string> {
@@ -394,6 +396,7 @@ async function findOrCreateAgent(
       provider,
       model: input.model,
       skillIds: input.skillIds,
+      connectionIds: input.connectionIds,
       limits: { maxCostUsd: input.budget.perTask, maxWorkingMinutes: 30, maxModelTurns: 40 }
     },
     'name',

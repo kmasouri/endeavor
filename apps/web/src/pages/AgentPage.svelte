@@ -102,6 +102,11 @@
                 {version.model} · {when(version.createdAt)}
               </div>
 
+              {#if version.legacyConnectionIds?.length}
+                <p class="error small">This version relied on inherited connections. Calls now require
+                  explicit connection selection. Save a reviewed configuration and move open tasks to it.</p>
+              {/if}
+
               <details>
                 <summary> Instructions </summary>
 

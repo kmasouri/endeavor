@@ -7,6 +7,9 @@
   import NewSkill from './NewSkill.svelte';
   import ConnectionRow from './ConnectionRow.svelte';
   import NewConnection from './NewConnection.svelte';
+  import './catalogs.css';
+
+  let tab = $state<'skills' | 'connections'>('skills');
 
   const skills = createLoad(
     () => api.list<Skill>('/skills?limit=100'),
@@ -19,33 +22,37 @@
   let connectionList = $derived(connections.data?.data ?? []);
 </script>
 
-<div class="narrow wide">
+<div class="catalogs narrow wide">
   <h1>Skills and connections</h1>
 
-  <Hint>
-    These are shared catalogs. Adding something here gives no agent access: choose it in an agent's
-    configuration, or grant it on the agent's page.
-  </Hint>
+  <p class="muted">Reusable instructions and API connections for your agents.</p>
 
+  <nav class="catalog-tabs" aria-label="Catalog">
+    <button class:active={tab === 'skills'} aria-current={tab === 'skills' ? 'page' : undefined} onclick={() => (tab = 'skills')}>Skills</button>
+    <button class:active={tab === 'connections'} aria-current={tab === 'connections' ? 'page' : undefined} onclick={() => (tab = 'connections')}>Connections</button>
+  </nav>
+
+  {#if tab === 'skills'}
   <section class="panel">
     <h2>Skills</h2>
 
     <Hint>
-      A skill is a named set of instructions plus the connections it may use. Editing one saves a
-      new version; agents keep the version they were set up with.
+      Skills are reusable instructions only. Choose skills and connection access independently on
+      each agent. Editing a skill saves a new version and never changes API access.
     </Hint>
 
     <ErrorNote error={skills.error} />
 
     <ul class="list">
       {#each skills.data?.data ?? [] as skill (skill.id)}
-        <SkillRow {skill} connections={connectionList} onChanged={skills.reload} />
+        <SkillRow {skill} onChanged={skills.reload} />
       {/each}
     </ul>
 
-    <NewSkill connections={connectionList} onCreated={skills.reload} />
+    <NewSkill onCreated={skills.reload} />
   </section>
 
+  {:else}
   <section class="panel">
     <h2>Connections</h2>
 
@@ -64,4 +71,5 @@
 
     <NewConnection onCreated={connections.reload} />
   </section>
+  {/if}
 </div>

@@ -1,12 +1,11 @@
 <script lang="ts">
-  import { api, type Connection, type Skill, type SkillDetails } from '../api';
+  import { api, type Skill, type SkillDetails } from '../api';
   import { createLoad } from '../state.svelte';
   import EnableButton from './EnableButton.svelte';
   import SkillVersionForm from './SkillVersionForm.svelte';
 
   let props: {
     skill: Skill;
-    connections: Connection[];
     onChanged: () => void;
   } = $props();
   let open = $state(false);
@@ -23,9 +22,9 @@
         {props.skill.name}
       </strong>
 
-      {#if props.skill.disabledAt}
-        <span class="badge"> disabled </span>
-      {/if}
+      <span class:enabled={!props.skill.disabledAt} class="badge">
+        {props.skill.disabledAt ? 'Disabled' : 'Enabled'}
+      </span>
 
       <div class="muted small">
         {props.skill.description}
@@ -51,7 +50,6 @@
     {#key details.data.currentVersionId}
       <SkillVersionForm
         skill={details.data}
-        connections={props.connections}
         onSaved={() => (details.reload(), props.onChanged())}
       />
     {/key}

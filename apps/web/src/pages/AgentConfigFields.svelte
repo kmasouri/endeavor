@@ -139,7 +139,7 @@
 <fieldset>
   <legend> Skills </legend>
 
-  <Hint>Choosing a skill gives this agent its instructions and tools, and grants access.</Hint>
+  <Hint>Skills add reusable instructions. They never select connections or grant API access.</Hint>
 
   <CheckGroup
     options={enabledSkills.map((skill) => ({
@@ -163,6 +163,16 @@
   <legend> Connections </legend>
 
   <Hint>Outside APIs the agent may call. Each call is still checked, and some need approval.</Hint>
+
+  {#if current?.legacyConnectionIds?.length}
+    <p class="error" role="status">
+      An older skill version listed connections that are not selected here:
+      {current.legacyConnectionIds.map((id) => connections.data?.data.find((c) => c.id === id)?.name ?? id).join(', ')}.
+      Select any you still need below. Save the configuration, then move open tasks to the new
+      version from their task page. Existing grants stay as they are; restore revoked grants
+      separately on the agent page.
+    </p>
+  {/if}
 
   <CheckGroup
     options={enabledConnections.map((connection) => ({

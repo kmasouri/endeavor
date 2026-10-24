@@ -29,10 +29,22 @@ interface AgentVersionRow {
   model: string;
   skill_version_ids: string[];
   connection_ids: string[];
+  legacy_connection_ids?: string[];
   limits: AgentLimits;
   created_by_human_id: string | null;
   created_at: Date;
 }
+
+// Retired skill metadata is read only to warn people about legacy configurations.
+// It is never copied into connection_ids or used to authorize a tool call.
+const VERSION_COLUMNS = `av.*, ARRAY(
+  SELECT DISTINCT connection_id
+  FROM bold_cedar_007.skill_versions sv,
+       unnest(sv.connection_ids) AS connection_id
+  WHERE sv.id = ANY(av.skill_version_ids)
+    AND NOT (connection_id = ANY(av.connection_ids))
+  ORDER BY connection_id
+) AS legacy_connection_ids`;
 
 const UNIQUE_VIOLATION = '23505';
 
@@ -60,8 +72,8 @@ export class AgentPostgresRepository implements AgentRepository {
            FROM agent
            RETURNING *
          )
-         SELECT row_to_json(agent.*) AS agent, row_to_json(version.*) AS version
-         FROM agent, version`,
+         SELECT row_to_json(agent.*) AS agent, row_to_json(v.*) AS version
+         FROM agent, LATERAL (SELECT ${VERSION_COLUMNS} FROM version av) v`,
         [
           agentId,
           input.name,
@@ -212,7 +224,7 @@ export class AgentPostgresRepository implements AgentRepository {
              SET current_version_id = (SELECT id FROM saved), updated_at = now()
              WHERE id = $2
            )
-           SELECT * FROM saved`,
+           SELECT ${VERSION_COLUMNS} FROM saved av`,
           [
             randomUUID(),
             agentId,
@@ -239,9 +251,9 @@ export class AgentPostgresRepository implements AgentRepository {
       return [];
     }
     const result = await this.db.query<AgentVersionRow>(
-      `SELECT *
-       FROM bold_cedar_007.agent_versions
-       WHERE id = ANY($1::uuid[])`,
+      `SELECT ${VERSION_COLUMNS}
+       FROM bold_cedar_007.agent_versions av
+       WHERE av.id = ANY($1::uuid[])`,
       [versionIds]
     );
 
@@ -250,10 +262,10 @@ export class AgentPostgresRepository implements AgentRepository {
 
   async listVersions(agentId: string): Promise<AgentVersion[]> {
     const result = await this.db.query<AgentVersionRow>(
-      `SELECT *
-       FROM bold_cedar_007.agent_versions
-       WHERE agent_id = $1
-       ORDER BY version DESC`,
+      `SELECT ${VERSION_COLUMNS}
+       FROM bold_cedar_007.agent_versions av
+       WHERE av.agent_id = $1
+       ORDER BY av.version DESC`,
       [agentId]
     );
 
@@ -273,9 +285,9 @@ export class AgentPostgresRepository implements AgentRepository {
 
   async getVersion(versionId: string): Promise<AgentVersion | null> {
     const result = await this.db.query<AgentVersionRow>(
-      `SELECT *
-       FROM bold_cedar_007.agent_versions
-       WHERE id = $1`,
+      `SELECT ${VERSION_COLUMNS}
+       FROM bold_cedar_007.agent_versions av
+       WHERE av.id = $1`,
       [versionId]
     );
 
@@ -325,6 +337,7 @@ function toAgentVersion(row: AgentVersionRow): AgentVersion {
     model: row.model,
     skillVersionIds: row.skill_version_ids,
     connectionIds: row.connection_ids,
+    legacyConnectionIds: row.legacy_connection_ids ?? [],
     limits: row.limits ?? {},
     createdByHumanId: row.created_by_human_id,
     createdAt: row.created_at

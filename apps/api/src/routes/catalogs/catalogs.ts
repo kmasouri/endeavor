@@ -41,7 +41,7 @@ export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<
     {
       schema: {
         description:
-          'Add a skill to the shared catalog, with version 1. This gives no agent access. Admins only.',
+          'Add an instructions-only skill with version 1. Skills never select connections or grant API access. Admins only.',
         tags,
         headers,
         body: createSkillBodySchema
@@ -78,7 +78,8 @@ export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<
     '/skills/:skillId/versions',
     {
       schema: {
-        description: 'Every version of a skill, newest first.',
+        description:
+          'Every instructions-only skill version, newest first. Retired connection associations are omitted.',
         tags,
         params: skillParamsSchema
       }
@@ -91,7 +92,7 @@ export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<
     {
       schema: {
         description:
-          'Save a new version of a skill. Agent configurations saved before keep the version they pinned. Admins only.',
+          'Save instructions as a new skill version. Connection selections and grants are unchanged. Agent configurations keep their pinned skill versions. Admins only.',
         tags,
         headers,
         params: skillParamsSchema,

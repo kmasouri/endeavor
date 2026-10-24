@@ -191,6 +191,8 @@ export interface AgentVersion {
   model: string;
   skillVersionIds: string[];
   connectionIds: string[];
+  // Historical inherited selections for human review only. Never authorize calls.
+  legacyConnectionIds?: string[];
   limits: AgentLimits;
   createdByHumanId: string | null;
   createdAt: Date;
@@ -252,7 +254,6 @@ export interface SkillVersion {
   skillId: string;
   version: number;
   instructions: string;
-  connectionIds: string[];
   createdByHumanId: string | null;
   createdAt: Date;
 }

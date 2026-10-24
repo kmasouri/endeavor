@@ -7,14 +7,12 @@ export const connectionParamsSchema = z.object({ connectionId: z.uuid() });
 export const createSkillBodySchema = z.strictObject({
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().min(1),
-  instructions: z.string().trim().min(1),
-  connectionIds: z.array(z.uuid()).max(20).optional()
+  instructions: z.string().trim().min(1)
 });
 
 export const addSkillVersionBodySchema = z
   .strictObject({
-    instructions: z.string().trim().min(1).optional(),
-    connectionIds: z.array(z.uuid()).max(20).optional()
+    instructions: z.string().trim().min(1)
   })
   .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
 
