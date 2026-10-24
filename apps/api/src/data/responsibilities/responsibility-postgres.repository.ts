@@ -48,7 +48,7 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
 
   async create(input: CreateResponsibilityInput): Promise<Responsibility> {
     const result = await this.db.query<ResponsibilityRow>(
-      `INSERT INTO bold_cedar_007.responsibilities (
+      `INSERT INTO endeavor.responsibilities (
          id, agent_id, conversation_id, title, brief, completion_criteria, interval_minutes,
          missed_run_policy, next_run_at, created_by_human_id, recurrence
        )
@@ -73,7 +73,7 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
 
   async getById(responsibilityId: string): Promise<Responsibility | null> {
     const result = await this.db.query<ResponsibilityRow>(
-      `SELECT * FROM bold_cedar_007.responsibilities WHERE id = $1`,
+      `SELECT * FROM endeavor.responsibilities WHERE id = $1`,
       [responsibilityId]
     );
     return result.rows[0] ? toResponsibility(result.rows[0]) : null;
@@ -87,7 +87,7 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
   }): Promise<Responsibility[]> {
     const result = await this.db.query<ResponsibilityRow>(
       `SELECT *
-       FROM bold_cedar_007.responsibilities
+       FROM endeavor.responsibilities
        WHERE ($1::uuid IS NULL OR agent_id = $1)
          AND ($2::text IS NULL OR status = $2)
        ORDER BY created_at DESC, id
@@ -100,7 +100,7 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
   async count(input: { agentId?: string; status?: ResponsibilityStatus }): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
-       FROM bold_cedar_007.responsibilities
+       FROM endeavor.responsibilities
        WHERE ($1::uuid IS NULL OR agent_id = $1)
          AND ($2::text IS NULL OR status = $2)`,
       [input.agentId ?? null, input.status ?? null]
@@ -125,7 +125,7 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
       }
     }
     const result = await this.db.query<ResponsibilityRow>(
-      `UPDATE bold_cedar_007.responsibilities
+      `UPDATE endeavor.responsibilities
        SET ${sets.join(', ')}
        WHERE id = $1
          AND status <> 'cancelled'
@@ -138,7 +138,7 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
   async listDue(now: Date, limit: number): Promise<Responsibility[]> {
     const result = await this.db.query<ResponsibilityRow>(
       `SELECT *
-       FROM bold_cedar_007.responsibilities
+       FROM endeavor.responsibilities
        WHERE status = 'enabled'
          AND next_run_at <= $1
        ORDER BY next_run_at
@@ -160,7 +160,7 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
     // Moving on always replaces the open catch-up question: a new one, or none. So an
     // unanswered question lapses when the next run comes due.
     const result = await this.db.query(
-      `UPDATE bold_cedar_007.responsibilities
+      `UPDATE endeavor.responsibilities
        SET next_run_at = $3,
            last_run_at = coalesce($4, last_run_at),
            catch_up_slot = $5,
@@ -183,7 +183,7 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
 
   async clearCatchUp(responsibilityId: string, slot: Date): Promise<boolean> {
     const result = await this.db.query(
-      `UPDATE bold_cedar_007.responsibilities
+      `UPDATE endeavor.responsibilities
        SET catch_up_slot = NULL,
            catch_up_missed = NULL,
            updated_at = now()

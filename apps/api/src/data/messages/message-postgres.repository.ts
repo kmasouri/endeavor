@@ -29,7 +29,7 @@ export class MessagePostgresRepository implements MessageRepository {
   async create(input: CreateMessageInput): Promise<{ message: Message; created: boolean }> {
     const result = await this.db.query<MessageRow>(
       `WITH saved AS (
-         INSERT INTO bold_cedar_007.messages (
+         INSERT INTO endeavor.messages (
            id, conversation_id, author_type, author_id, body, mentions, in_reply_to_message_id,
            task_id, client_key
          )
@@ -37,7 +37,7 @@ export class MessagePostgresRepository implements MessageRepository {
          ON CONFLICT (client_key) WHERE client_key IS NOT NULL DO NOTHING
          RETURNING *
        ), delivered AS (
-         INSERT INTO bold_cedar_007.message_deliveries (message_id, agent_id)
+         INSERT INTO endeavor.message_deliveries (message_id, agent_id)
          SELECT saved.id, agent_id
          FROM saved, unnest($10::uuid[]) AS agent_id
        )
@@ -63,7 +63,7 @@ export class MessagePostgresRepository implements MessageRepository {
 
     const existing = await this.db.query<MessageRow>(
       `SELECT *
-       FROM bold_cedar_007.messages
+       FROM endeavor.messages
        WHERE client_key = $1`,
       [input.clientKey]
     );
@@ -73,7 +73,7 @@ export class MessagePostgresRepository implements MessageRepository {
   async getById(messageId: string): Promise<Message | null> {
     const result = await this.db.query<MessageRow>(
       `SELECT *
-       FROM bold_cedar_007.messages
+       FROM endeavor.messages
        WHERE id = $1`,
       [messageId]
     );
@@ -87,7 +87,7 @@ export class MessagePostgresRepository implements MessageRepository {
   ): Promise<Message[]> {
     const result = await this.db.query<MessageRow>(
       `SELECT *
-       FROM bold_cedar_007.messages
+       FROM endeavor.messages
        WHERE conversation_id = $1
          AND ($2::timestamptz IS NULL OR created_at >= $2)
        ORDER BY created_at, id
@@ -106,7 +106,7 @@ export class MessagePostgresRepository implements MessageRepository {
       `SELECT *
        FROM (
          SELECT *
-         FROM bold_cedar_007.messages
+         FROM endeavor.messages
          WHERE conversation_id = $1
            AND ($2::timestamptz IS NULL OR created_at >= $2)
          ORDER BY created_at DESC, id DESC
@@ -121,11 +121,11 @@ export class MessagePostgresRepository implements MessageRepository {
 
   async claimDeliveries(limit: number, leaseMs: number): Promise<MessageDelivery[]> {
     const result = await this.db.query<DeliveryRow>(
-      `UPDATE bold_cedar_007.message_deliveries d
+      `UPDATE endeavor.message_deliveries d
        SET claimed_until = now() + $2::int * interval '1 millisecond'
        FROM (
          SELECT message_id, agent_id
-         FROM bold_cedar_007.message_deliveries
+         FROM endeavor.message_deliveries
          WHERE delivered_at IS NULL
            AND failed_at IS NULL
            AND (claimed_until IS NULL OR claimed_until < now())
@@ -155,7 +155,7 @@ export class MessagePostgresRepository implements MessageRepository {
     maxAttempts: number
   ): Promise<void> {
     await this.db.query(
-      `UPDATE bold_cedar_007.message_deliveries
+      `UPDATE endeavor.message_deliveries
        SET attempts = attempts + 1,
            last_error = $3,
            claimed_until = NULL,
@@ -168,7 +168,7 @@ export class MessagePostgresRepository implements MessageRepository {
 
   async markDelivered(messageId: string, agentId: string, taskId: string | null): Promise<void> {
     await this.db.query(
-      `UPDATE bold_cedar_007.message_deliveries
+      `UPDATE endeavor.message_deliveries
        SET delivered_at = now(), task_id = $3
        WHERE message_id = $1
          AND agent_id = $2`,

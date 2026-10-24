@@ -69,9 +69,9 @@ The app checks all of these at startup, in `apps/api/src/config.ts`.
 | `DATABASE_URL`       |                             | Full Postgres connection URL. If set, the other `DATABASE_*` are ignored.                         |
 | `DATABASE_HOST`      | `localhost`                 | Postgres host, if `DATABASE_URL` isn't set.                                                       |
 | `DATABASE_PORT`      | `5432`                      | Postgres port, if `DATABASE_URL` isn't set.                                                       |
-| `DATABASE_NAME`      | `bold_cedar_007`            | Database name, if `DATABASE_URL` isn't set.                                                       |
-| `DATABASE_USER`      | `bold_cedar_007`            | Username, if `DATABASE_URL` isn't set.                                                            |
-| `DATABASE_PASSWORD`  | `bold_cedar_007`            | Password, if `DATABASE_URL` isn't set.                                                            |
+| `DATABASE_NAME`      | `endeavor`            | Database name, if `DATABASE_URL` isn't set.                                                       |
+| `DATABASE_USER`      | `endeavor`            | Username, if `DATABASE_URL` isn't set.                                                            |
+| `DATABASE_PASSWORD`  | `endeavor`            | Password, if `DATABASE_URL` isn't set.                                                            |
 | `LOGGER_LEVEL`       | `info`                      | How much to log. Tests use `silent`.                                                              |
 | `REQUEST_ID_HEADER`  | `x-request-id`              | Header that carries the request ID, in and out.                                                   |
 | `WEBHOOK_URL`        |                             | Where to send events like `item.created`. If not set, webhooks are off.                           |

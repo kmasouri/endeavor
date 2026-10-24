@@ -39,7 +39,7 @@ interface AgentVersionRow {
 // It is never copied into connection_ids or used to authorize a tool call.
 const VERSION_COLUMNS = `av.*, ARRAY(
   SELECT DISTINCT connection_id
-  FROM bold_cedar_007.skill_versions sv,
+  FROM endeavor.skill_versions sv,
        unnest(sv.connection_ids) AS connection_id
   WHERE sv.id = ANY(av.skill_version_ids)
     AND NOT (connection_id = ANY(av.connection_ids))
@@ -60,11 +60,11 @@ export class AgentPostgresRepository implements AgentRepository {
     const result = await this.db
       .query<{ agent: AgentRow; version: AgentVersionRow }>(
         `WITH agent AS (
-           INSERT INTO bold_cedar_007.agents (id, name, purpose, current_version_id)
+           INSERT INTO endeavor.agents (id, name, purpose, current_version_id)
            VALUES ($1, $2, $3, $4)
            RETURNING *
          ), version AS (
-           INSERT INTO bold_cedar_007.agent_versions (
+           INSERT INTO endeavor.agent_versions (
              id, agent_id, version, instructions, provider, model, skill_version_ids, connection_ids,
              created_by_human_id, limits
            )
@@ -97,7 +97,7 @@ export class AgentPostgresRepository implements AgentRepository {
   async getByName(name: string): Promise<Agent | null> {
     const result = await this.db.query<AgentRow>(
       `SELECT *
-       FROM bold_cedar_007.agents
+       FROM endeavor.agents
        WHERE lower(name) = lower($1)`,
       [name]
     );
@@ -108,7 +108,7 @@ export class AgentPostgresRepository implements AgentRepository {
   async list(input: { limit: number; offset: number; includeDisabled: boolean }): Promise<Agent[]> {
     const result = await this.db.query<AgentRow>(
       `SELECT *
-       FROM bold_cedar_007.agents
+       FROM endeavor.agents
        WHERE $1::boolean OR disabled_at IS NULL
        ORDER BY lower(name)
        LIMIT $2 OFFSET $3`,
@@ -125,7 +125,7 @@ export class AgentPostgresRepository implements AgentRepository {
   }): Promise<Agent[]> {
     const result = await this.db.query<AgentRow>(
       `SELECT *
-       FROM bold_cedar_007.agents
+       FROM endeavor.agents
        WHERE disabled_at IS NULL
          AND current_version_id IS NOT NULL
          AND NOT (id = ANY($1::uuid[]))
@@ -140,7 +140,7 @@ export class AgentPostgresRepository implements AgentRepository {
   async countDirectory(input: { excludeIds: string[] }): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
-       FROM bold_cedar_007.agents
+       FROM endeavor.agents
        WHERE disabled_at IS NULL
          AND current_version_id IS NOT NULL
          AND NOT (id = ANY($1::uuid[]))`,
@@ -153,7 +153,7 @@ export class AgentPostgresRepository implements AgentRepository {
   async count(input: { includeDisabled: boolean }): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
-       FROM bold_cedar_007.agents
+       FROM endeavor.agents
        WHERE $1::boolean OR disabled_at IS NULL`,
       [input.includeDisabled]
     );
@@ -168,7 +168,7 @@ export class AgentPostgresRepository implements AgentRepository {
     // $4 says whether the budget is being changed, since null (no cap) is a real value.
     const result = await this.db
       .query<AgentRow>(
-        `UPDATE bold_cedar_007.agents
+        `UPDATE endeavor.agents
        SET name = coalesce($2, name),
            purpose = coalesce($3, purpose),
            monthly_budget_usd = CASE WHEN $4 THEN $5 ELSE monthly_budget_usd END,
@@ -190,7 +190,7 @@ export class AgentPostgresRepository implements AgentRepository {
 
   async setDisabled(agentId: string, disabled: boolean): Promise<Agent | null> {
     const result = await this.db.query<AgentRow>(
-      `UPDATE bold_cedar_007.agents
+      `UPDATE endeavor.agents
        SET disabled_at = CASE WHEN $2 THEN coalesce(disabled_at, now()) ELSE NULL END,
            updated_at = now()
        WHERE id = $1
@@ -209,10 +209,10 @@ export class AgentPostgresRepository implements AgentRepository {
         const result = await this.db.query<AgentVersionRow>(
           `WITH next AS (
              SELECT coalesce(max(version), 0) + 1 AS version
-             FROM bold_cedar_007.agent_versions
+             FROM endeavor.agent_versions
              WHERE agent_id = $2
            ), saved AS (
-             INSERT INTO bold_cedar_007.agent_versions (
+             INSERT INTO endeavor.agent_versions (
                id, agent_id, version, instructions, provider, model, skill_version_ids, connection_ids,
                created_by_human_id, limits
              )
@@ -220,7 +220,7 @@ export class AgentPostgresRepository implements AgentRepository {
              FROM next
              RETURNING *
            ), current AS (
-             UPDATE bold_cedar_007.agents
+             UPDATE endeavor.agents
              SET current_version_id = (SELECT id FROM saved), updated_at = now()
              WHERE id = $2
            )
@@ -252,7 +252,7 @@ export class AgentPostgresRepository implements AgentRepository {
     }
     const result = await this.db.query<AgentVersionRow>(
       `SELECT ${VERSION_COLUMNS}
-       FROM bold_cedar_007.agent_versions av
+       FROM endeavor.agent_versions av
        WHERE av.id = ANY($1::uuid[])`,
       [versionIds]
     );
@@ -263,7 +263,7 @@ export class AgentPostgresRepository implements AgentRepository {
   async listVersions(agentId: string): Promise<AgentVersion[]> {
     const result = await this.db.query<AgentVersionRow>(
       `SELECT ${VERSION_COLUMNS}
-       FROM bold_cedar_007.agent_versions av
+       FROM endeavor.agent_versions av
        WHERE av.agent_id = $1
        ORDER BY av.version DESC`,
       [agentId]
@@ -275,7 +275,7 @@ export class AgentPostgresRepository implements AgentRepository {
   async getById(agentId: string): Promise<Agent | null> {
     const result = await this.db.query<AgentRow>(
       `SELECT *
-       FROM bold_cedar_007.agents
+       FROM endeavor.agents
        WHERE id = $1`,
       [agentId]
     );
@@ -286,7 +286,7 @@ export class AgentPostgresRepository implements AgentRepository {
   async getVersion(versionId: string): Promise<AgentVersion | null> {
     const result = await this.db.query<AgentVersionRow>(
       `SELECT ${VERSION_COLUMNS}
-       FROM bold_cedar_007.agent_versions av
+       FROM endeavor.agent_versions av
        WHERE av.id = $1`,
       [versionId]
     );

@@ -86,11 +86,11 @@ export class CatalogPostgresRepository implements CatalogRepository {
     const result = await this.db
       .query<{ skill: SkillRow; version: SkillVersionRow }>(
         `WITH skill AS (
-           INSERT INTO bold_cedar_007.skills (id, name, description, current_version_id)
+           INSERT INTO endeavor.skills (id, name, description, current_version_id)
            VALUES ($1, $2, $3, $4)
            RETURNING *
          ), version AS (
-           INSERT INTO bold_cedar_007.skill_versions (
+           INSERT INTO endeavor.skill_versions (
              id, skill_id, version, instructions, created_by_human_id
            )
            SELECT $4, skill.id, 1, $5, $6
@@ -116,7 +116,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
 
   async getSkill(skillId: string): Promise<Skill | null> {
     const result = await this.db.query<SkillRow>(
-      `SELECT * FROM bold_cedar_007.skills WHERE id = $1`,
+      `SELECT * FROM endeavor.skills WHERE id = $1`,
       [skillId]
     );
     return result.rows[0] ? toSkill(result.rows[0]) : null;
@@ -127,7 +127,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
       return [];
     }
     const result = await this.db.query<SkillRow>(
-      `SELECT * FROM bold_cedar_007.skills WHERE id = ANY($1::uuid[])`,
+      `SELECT * FROM endeavor.skills WHERE id = ANY($1::uuid[])`,
       [skillIds]
     );
     return result.rows.map(toSkill);
@@ -136,7 +136,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
   async listSkills(input: { limit: number; offset: number }): Promise<Skill[]> {
     const result = await this.db.query<SkillRow>(
       `SELECT *
-       FROM bold_cedar_007.skills
+       FROM endeavor.skills
        ORDER BY lower(name)
        LIMIT $1 OFFSET $2`,
       [input.limit, input.offset]
@@ -146,7 +146,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
 
   async countSkills(): Promise<number> {
     const result = await this.db.query<{ total: number }>(
-      `SELECT count(*)::int AS total FROM bold_cedar_007.skills`
+      `SELECT count(*)::int AS total FROM endeavor.skills`
     );
     return result.rows[0].total;
   }
@@ -158,17 +158,17 @@ export class CatalogPostgresRepository implements CatalogRepository {
         const result = await this.db.query<SkillVersionRow>(
           `WITH next AS (
              SELECT coalesce(max(version), 0) + 1 AS version
-             FROM bold_cedar_007.skill_versions
+             FROM endeavor.skill_versions
              WHERE skill_id = $2
            ), saved AS (
-             INSERT INTO bold_cedar_007.skill_versions (
+             INSERT INTO endeavor.skill_versions (
                id, skill_id, version, instructions, created_by_human_id
              )
              SELECT $1, $2, next.version, $3, $4
              FROM next
              RETURNING *
            ), current AS (
-             UPDATE bold_cedar_007.skills
+             UPDATE endeavor.skills
              SET current_version_id = (SELECT id FROM saved), updated_at = now()
              WHERE id = $2
            )
@@ -189,7 +189,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
       return [];
     }
     const result = await this.db.query<SkillVersionRow>(
-      `SELECT * FROM bold_cedar_007.skill_versions WHERE id = ANY($1::uuid[])`,
+      `SELECT * FROM endeavor.skill_versions WHERE id = ANY($1::uuid[])`,
       [versionIds]
     );
     return result.rows.map(toSkillVersion);
@@ -198,7 +198,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
   async listSkillVersions(skillId: string): Promise<SkillVersion[]> {
     const result = await this.db.query<SkillVersionRow>(
       `SELECT *
-       FROM bold_cedar_007.skill_versions
+       FROM endeavor.skill_versions
        WHERE skill_id = $1
        ORDER BY version DESC`,
       [skillId]
@@ -208,7 +208,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
 
   async setSkillDisabled(skillId: string, disabled: boolean): Promise<Skill | null> {
     const result = await this.db.query<SkillRow>(
-      `UPDATE bold_cedar_007.skills
+      `UPDATE endeavor.skills
        SET disabled_at = CASE WHEN $2 THEN coalesce(disabled_at, now()) ELSE NULL END,
            updated_at = now()
        WHERE id = $1
@@ -221,7 +221,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
   async createConnection(input: ConnectionInput): Promise<Connection> {
     const result = await this.db
       .query<ConnectionRow>(
-        `INSERT INTO bold_cedar_007.connections (
+        `INSERT INTO endeavor.connections (
            id, name, description, base_url, auth_header, credential_ciphertext, allowed_methods,
            allowed_path_prefixes, created_by_human_id, approval_methods
          )
@@ -246,7 +246,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
 
   async getConnection(connectionId: string): Promise<Connection | null> {
     const result = await this.db.query<ConnectionRow>(
-      `SELECT * FROM bold_cedar_007.connections WHERE id = $1`,
+      `SELECT * FROM endeavor.connections WHERE id = $1`,
       [connectionId]
     );
     return result.rows[0] ? toConnection(result.rows[0]) : null;
@@ -257,7 +257,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
       return [];
     }
     const result = await this.db.query<ConnectionRow>(
-      `SELECT * FROM bold_cedar_007.connections WHERE id = ANY($1::uuid[])`,
+      `SELECT * FROM endeavor.connections WHERE id = ANY($1::uuid[])`,
       [connectionIds]
     );
     return result.rows.map(toConnection);
@@ -266,7 +266,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
   async listConnections(input: { limit: number; offset: number }): Promise<Connection[]> {
     const result = await this.db.query<ConnectionRow>(
       `SELECT *
-       FROM bold_cedar_007.connections
+       FROM endeavor.connections
        ORDER BY lower(name)
        LIMIT $1 OFFSET $2`,
       [input.limit, input.offset]
@@ -276,7 +276,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
 
   async countConnections(): Promise<number> {
     const result = await this.db.query<{ total: number }>(
-      `SELECT count(*)::int AS total FROM bold_cedar_007.connections`
+      `SELECT count(*)::int AS total FROM endeavor.connections`
     );
     return result.rows[0].total;
   }
@@ -301,7 +301,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
 
     const result = await this.db
       .query<ConnectionRow>(
-        `UPDATE bold_cedar_007.connections
+        `UPDATE endeavor.connections
          SET ${sets.join(', ')}
          WHERE id = $1
          RETURNING *`,
@@ -313,7 +313,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
 
   async setConnectionDisabled(connectionId: string, disabled: boolean): Promise<Connection | null> {
     const result = await this.db.query<ConnectionRow>(
-      `UPDATE bold_cedar_007.connections
+      `UPDATE endeavor.connections
        SET disabled_at = CASE WHEN $2 THEN coalesce(disabled_at, now()) ELSE NULL END,
            updated_at = now()
        WHERE id = $1
@@ -325,7 +325,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
 
   async getConnectionCredential(connectionId: string): Promise<string | null> {
     const result = await this.db.query<{ credential_ciphertext: string | null }>(
-      `SELECT credential_ciphertext FROM bold_cedar_007.connections WHERE id = $1`,
+      `SELECT credential_ciphertext FROM endeavor.connections WHERE id = $1`,
       [connectionId]
     );
     const stored = result.rows[0]?.credential_ciphertext;
@@ -341,7 +341,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
     restoreRevoked?: boolean;
   }): Promise<AgentGrant> {
     const result = await this.db.query<GrantRow>(
-      `INSERT INTO bold_cedar_007.agent_grants (agent_id, target_type, target_id, granted_by_human_id)
+      `INSERT INTO endeavor.agent_grants (agent_id, target_type, target_id, granted_by_human_id)
        VALUES ($1, $2, $3, $4)
        ON CONFLICT (agent_id, target_type, target_id) DO UPDATE
        SET granted_by_human_id = EXCLUDED.granted_by_human_id,
@@ -363,7 +363,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
     }
     // Existing grant stays unchanged when active, or when this save cannot restore it.
     const existing = await this.db.query<GrantRow>(
-      `SELECT * FROM bold_cedar_007.agent_grants
+      `SELECT * FROM endeavor.agent_grants
        WHERE agent_id = $1 AND target_type = $2 AND target_id = $3`,
       [input.agentId, input.targetType, input.targetId]
     );
@@ -377,7 +377,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
     revokedByHumanId: string;
   }): Promise<boolean> {
     const result = await this.db.query(
-      `UPDATE bold_cedar_007.agent_grants
+      `UPDATE endeavor.agent_grants
        SET revoked_at = now(), revoked_by_human_id = $4
        WHERE agent_id = $1
          AND target_type = $2
@@ -391,7 +391,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
   async listGrants(agentId: string, options: { activeOnly: boolean }): Promise<AgentGrant[]> {
     const result = await this.db.query<GrantRow>(
       `SELECT *
-       FROM bold_cedar_007.agent_grants
+       FROM endeavor.agent_grants
        WHERE agent_id = $1
          AND ($2::boolean = false OR revoked_at IS NULL)
        ORDER BY target_type, granted_at`,

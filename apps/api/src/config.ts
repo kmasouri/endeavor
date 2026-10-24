@@ -33,9 +33,9 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
   DATABASE_HOST: z.string().min(1).default('localhost'),
   DATABASE_PORT: z.coerce.number().int().min(1).max(65535).default(5432),
-  DATABASE_NAME: z.string().min(1).default('bold_cedar_007'),
-  DATABASE_USER: z.string().min(1).default('bold_cedar_007'),
-  DATABASE_PASSWORD: z.string().default('bold_cedar_007'),
+  DATABASE_NAME: z.string().min(1).default('endeavor'),
+  DATABASE_USER: z.string().min(1).default('endeavor'),
+  DATABASE_PASSWORD: z.string().default('endeavor'),
   LOGGER_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),

@@ -1,11 +1,10 @@
 import type { HumanPreferences } from './api';
+import { readPreference, writePreference } from './preferences-storage';
 
 type Theme = HumanPreferences['theme'];
-// Keep the original storage key so the Endeavor rebrand preserves saved preferences.
-const THEME_KEY = 'collaborative-agents.theme';
 export function readTheme(): Theme {
   try {
-    const stored = localStorage.getItem(THEME_KEY);
+    const stored = readPreference('theme');
     return stored === 'light' || stored === 'dark' ? stored : 'system';
   } catch {
     return 'system';
@@ -19,7 +18,7 @@ export function applyTheme(theme: Theme): void {
         : 'light'
       : theme;
   try {
-    localStorage.setItem(THEME_KEY, theme);
+    writePreference('theme', theme);
   } catch {
     /* The choice still works for this page. */
   }

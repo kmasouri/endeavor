@@ -17,7 +17,7 @@ export class HumanPostgresRepository implements HumanRepository {
 
   async create(input: CreateHumanInput): Promise<Human> {
     const result = await this.db.query<HumanRow>(
-      `INSERT INTO bold_cedar_007.humans (id, name, role)
+      `INSERT INTO endeavor.humans (id, name, role)
        VALUES ($1, $2, $3)
        RETURNING *`,
       [randomUUID(), input.name, input.role]
@@ -28,7 +28,7 @@ export class HumanPostgresRepository implements HumanRepository {
 
   async createFirst(input: CreateHumanInput): Promise<Human | null> {
     const result = await this.db.query<HumanRow>(
-      `INSERT INTO bold_cedar_007.humans (id, name, role, is_first)
+      `INSERT INTO endeavor.humans (id, name, role, is_first)
        VALUES ($1, $2, $3, true)
        ON CONFLICT (is_first) WHERE is_first DO NOTHING
        RETURNING *`,
@@ -41,7 +41,7 @@ export class HumanPostgresRepository implements HumanRepository {
   async getById(humanId: string): Promise<Human | null> {
     const result = await this.db.query<HumanRow>(
       `SELECT *
-       FROM bold_cedar_007.humans
+       FROM endeavor.humans
        WHERE id = $1`,
       [humanId]
     );
@@ -52,7 +52,7 @@ export class HumanPostgresRepository implements HumanRepository {
   async list(): Promise<Human[]> {
     const result = await this.db.query<HumanRow>(
       `SELECT *
-       FROM bold_cedar_007.humans
+       FROM endeavor.humans
        ORDER BY created_at`
     );
 
@@ -61,7 +61,7 @@ export class HumanPostgresRepository implements HumanRepository {
 
   async update(humanId: string, input: UpdateHumanInput): Promise<Human | null> {
     const result = await this.db.query<HumanRow>(
-      `UPDATE bold_cedar_007.humans
+      `UPDATE endeavor.humans
        SET name = COALESCE($2, name), theme = COALESCE($3, theme),
            time_format = COALESCE($4, time_format)
        WHERE id = $1 RETURNING *`,
@@ -78,7 +78,7 @@ export class HumanPostgresRepository implements HumanRepository {
   async count(): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
-       FROM bold_cedar_007.humans`
+       FROM endeavor.humans`
     );
 
     return result.rows[0].total;
