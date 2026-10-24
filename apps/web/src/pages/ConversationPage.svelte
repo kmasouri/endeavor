@@ -10,6 +10,7 @@
     type Task,
     type TaskOutput
   } from '../api';
+  import { conversationArtifacts } from '../conversation-artifacts';
   import ErrorNote from '../ErrorNote.svelte';
   import Avatar from '../Avatar.svelte';
   import Icon from '../Icon.svelte';
@@ -72,10 +73,11 @@
   let memberIds = $derived(new Set(taskList.map((t) => t.id)));
   let mine = $derived((approvals.data?.data ?? []).filter((a) => memberIds.has(a.taskId)));
   let busy = $derived(taskList.filter((t) => !['completed', 'cancelled'].includes(t.state)));
+  let artifacts = $derived(
+    conversationArtifacts(outputs.data?.data ?? [], messages.data?.data ?? [], taskList)
+  );
   let unattached = $derived(
-    (outputs.data?.data ?? []).filter(
-      (o) => !(messages.data?.data ?? []).some((m) => m.taskId === o.taskId)
-    )
+    artifacts.filter((o) => !(messages.data?.data ?? []).some((m) => m.taskId === o.taskId))
   );
   const nameOf = (ref: { type: string; id: string | null }) =>
     conversation.members.find((m) => m.participant.type === ref.type && m.participant.id === ref.id)
@@ -286,7 +288,7 @@
         />
         <section>
           <h2 class="label">Artifacts</h2>
-          {#each outputs.data?.data ?? [] as output (output.id)}<a
+          {#each artifacts as output (output.id)}<a
               class="artifact-line row"
               href={`#/tasks/${output.taskId}`}
               ><Icon name="file" /><span class="grow ellipsis">{output.title}</span><time
@@ -297,7 +299,7 @@
                   minute: '2-digit'
                 })}</time
               ></a
-            >{/each}{#if !outputs.data?.data.length}<p class="caption muted">None yet.</p>{/if}
+            >{/each}{#if !artifacts.length}<p class="caption muted">None yet.</p>{/if}
         </section>
         <section>
           <Spending kind="conversation" id={conversationId} onBudgetSaved={costs.reload} />
