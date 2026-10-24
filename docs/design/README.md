@@ -20,6 +20,8 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 | `schedules/new-schedule.png`                                  | The creation form: weekday picker, local time, detected timezone, and always-visible missed-run policy              |
 | `agent-history/agent-history.html` + `.fragment.html`         | The approved conversation-first history preview, with separate histories for each agent                             |
 | `agent-history/*.png`                                         | Conversation Details, each agent's scoped history, and the selected run's details                                   |
+| `profile-settings/profile-settings.html` + `.fragment.html`  | User Profile and Preferences tabs, with local name editing, appearance, and time display choices                     |
+| `profile-settings/profile.png` + `preferences.png`           | The two desktop settings screens as reviewed in chat                                                               |
 | `style-guide/README.md`                                       | The style guide: principles, color roles, type, spacing, words, icons, layout                                       |
 | `style-guide/tokens.json`                                     | Every token, with a note on when to use it                                                                          |
 | `style-guide/tokens.css`                                      | The same tokens as CSS custom properties, ready to import. Generated from `tokens.json`                             |
@@ -87,6 +89,14 @@ These cards appear in the conversation itself, not only on other pages:
 - This is the agreed target design for [CA-38](https://app.notion.com/p/4031a83d088f81999042d1aadfd02466), which also covers filtered discovery, skill requests, and revocation. The saved screen shows a connection request; it is not an implemented app feature.
 
 ## Gaps to check against the API
+
+### User profile and settings
+
+The [Profile and settings reference](profile-settings/README.md) shows a person's display name and
+personal appearance and time display choices. It is separate from agent configuration.
+[CA-43](https://app.notion.com/p/4031a83d088f81a4b909f0e5b34b5fd3) tracks persistence, save/error
+states, and integration with the current person picker. The archived images preserve the reviewed
+avatar; implementation follows the current tinted-avatar tokens. Sign-in and roles stay deferred.
 
 ### Schedules
 
