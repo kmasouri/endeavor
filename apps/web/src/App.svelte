@@ -22,6 +22,7 @@
   import SetupPage from './pages/SetupPage.svelte';
   import FirstPerson from './FirstPerson.svelte';
   import PickPerson from './PickPerson.svelte';
+  import SwitchPerson from './SwitchPerson.svelte';
 
   import Avatar from './Avatar.svelte';
   import Icon from './Icon.svelte';
@@ -80,6 +81,8 @@
       savedPerson = person;
       setActorId(id);
       actorId = id;
+      picking = false;
+      if (window.innerWidth < 700) collapsed = true;
       people.reload();
     } catch (caught) {
       switchError = caught instanceof Error ? caught.message : String(caught);
@@ -220,27 +223,13 @@
           <button
             class="quiet small"
             disabled={switching}
+            aria-haspopup="dialog"
             aria-expanded={picking}
-            onclick={() => (picking = !picking)}>Switch person</button
+            onclick={() => {
+              switchError = null;
+              picking = true;
+            }}>Switch person</button
           >
-          <ErrorNote error={switchError} />
-          {#if switching}<span class="caption muted" role="status">Switching person…</span>{/if}
-          {#if picking}<label
-              >Choose a person<select
-                aria-label="Acting as"
-                disabled={switching}
-                value={me.id}
-                onchange={(event) => {
-                  choose(event.currentTarget.value);
-                  event.currentTarget.value = actorId ?? '';
-                  // Keep the picker open so switching back remains easy.
-                }}
-              >
-                {#each people.data ?? [] as person (person.id)}<option value={person.id}
-                    >{person.name}</option
-                  >{/each}
-              </select></label
-            >{/if}
         </div>
       </aside>
     {/if}
@@ -280,5 +269,15 @@
         {/if}
       {/key}
     </main>
+    {#if picking}
+      <SwitchPerson
+        people={people.data}
+        currentId={me.id}
+        busy={switching}
+        error={switchError}
+        onPick={choose}
+        onClose={() => (picking = false)}
+      />
+    {/if}
   </div>
 {/if}
