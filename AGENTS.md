@@ -47,6 +47,10 @@ Every change starts from a ticket in the Project Backlog and ends with the ticke
 
 Backlog fields: `Ticket ID` (CA-n), `Status` (Backlog, Blocked, In Progress, In Review, Done), `Agent` and `Claimed At` (who is working on it now, and since when), `Priority`, `Scope`, `Blocked By` and `Blocks`, `Branch`, `PR`, `Needs Input`, `Last Update`, and `Questions`, which links to rows in Questions for Kayvan.
 
+### Starting a new session
+
+If the first request in a new session asks for design, coding, documentation changes, or other work and does not reference a ticket, create a ticket in the Project Backlog before starting the work. Use the request to write its scope and acceptance criteria, then follow the ticket workflow. This rule authorizes creating that ticket without asking for separate confirmation. Questions, explanations, and discussion that do not request changes or deliverables do not need a ticket.
+
 ### When the request changes scope
 
 If a new request differs substantially from the work originally shared in the session, offer to create a separate ticket in the Project Backlog. Wait for the user's agreement before creating it, unless they have already asked for the ticket. Keep ordinary follow-ups, refinements, and fixes under the existing ticket.
