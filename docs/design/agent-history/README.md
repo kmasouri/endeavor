@@ -1,18 +1,15 @@
 # Agent history
 
-The conversation-first history design Kayvan agreed on October 24, 2026. This is a preview with
-sample data, not the application. It does not call the API or start agents.
+The conversation-first history design Kayvan agreed on October 24, 2026. These are fixed mockups
+with sample data, exported from the "Chat view redesign" board on claude.ai. They do not call the API or start agents.
 
-- Open `agent-history.html` directly in a browser. In **Details**, choose **History** under
-  Researcher or Reviewer, then **View run**. Each agent has a separate history in this conversation.
-- **See what this agent did** on a message opens that message's run directly. **Ask for changes**
-  puts the feedback in the conversation composer.
-- `agent-history.fragment.html` is the editable source. `agent-history.html` is its standalone
-  export from the visualization skill's `scripts/render.py`. Export again after editing the source;
-  do not edit the generated wrapper by hand. It works without Codex and follows the browser theme.
-- `conversation-details.png` shows the entry points. `researcher-history.png` and
-  `reviewer-history.png` show the separate histories. `run-details.png` shows a selected run.
-  Screenshots use the dark theme.
+- `conversation-details.html` + `.png`: the conversation with Details open. Researcher is expanded,
+  with its last run and **History**. Hovering the final message shows **See what this agent did**.
+- `researcher-history.html` + `.png` and `reviewer-history.html` + `.png`: each agent's own runs in
+  this conversation.
+- `run-details.html` + `.png`: one run. Its message stays marked in the chat while you look.
+
+The board is the source. Change the board, then export again; don't edit these pages by hand.
 
 ## Agreed behavior
 
@@ -31,7 +28,7 @@ sample data, not the application. It does not call the API or start agents.
 
 This reference refines history and run inspection. The existing [chat design](../README.md) still
 defines compact agent rows, expanding only the selected agent, folding free agents, and hiding Details
-by default. This preview leaves Details open to demonstrate the entry points. Use the shared
+by default. These mockups leave Details open to show the entry points. Use the shared
 [style guide](../style-guide/README.md) when implementing it.
 
 [CA-40](https://app.notion.com/p/4031a83d088f81be8b37ca3c556e539b) tracks implementation after

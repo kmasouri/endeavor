@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chat view</title>
-<!-- Design mockup, exported from the "Chat view redesign" board. Not app code. -->
+<!-- Design mockup, exported from the "Chat view redesign" board on claude.ai. Not app code. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <style>
@@ -32,10 +32,6 @@ button{font:inherit}
         Conversations
       </a>
       <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; color: #B4B7BD; text-decoration: none">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"></rect><path d="M8 12l3 3 5-6"></path></svg>
-        Work
-      </a>
-      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; color: #B4B7BD; text-decoration: none">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z" stroke-linejoin="round"></path></svg>
         <span style="flex-grow: 1">Approvals</span>
         <span style="min-width: 20px; height: 20px; border-radius: 10px; background: #D93036; color: #FFFFFF; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center">1</span>
@@ -47,6 +43,10 @@ button{font:inherit}
       <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; color: #B4B7BD; text-decoration: none">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="7" width="14" height="11" rx="3"></rect><path d="M12 4v3M9 12h.01M15 12h.01"></path></svg>
         Agents
+      </a>
+      <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; color: #B4B7BD; text-decoration: none">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="7" height="7" rx="1.5"></rect><rect x="13" y="4" width="7" height="7" rx="1.5"></rect><rect x="4" y="13" width="7" height="7" rx="1.5"></rect><path d="M16.5 13v7M13 16.5h7"></path></svg>
+        Skills and connections
       </a>
       <a href="#" style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 8px; color: #B4B7BD; text-decoration: none">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"></path></svg>
@@ -79,13 +79,14 @@ button{font:inherit}
       </a>
     </div>
 
-    <div style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 8px; border-top: 1px solid #26282C; padding-top: 14px">
+    <a href="#" aria-label="Profile and settings" style="margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 8px; border-top: 1px solid #26282C; padding-top: 14px; color: #E8E9EB; text-decoration: none">
       <div style="width: 32px; height: 32px; border-radius: 9px; background: #1E2A44; color: #A5B4FC; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px">K</div>
       <div style="display: flex; flex-direction: column; line-height: 1.25">
         <span style="font-weight: 600; font-size: 14px">Kayvan</span>
-        <span style="font-size: 12px; color: #9A9DA3">That's you</span>
+        <span style="font-size: 12px; color: #9A9DA3">Profile and settings</span>
       </div>
-    </div>
+      <span style="margin-left: auto; color: #9A9DA3; display: flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></span>
+    </a>
   </nav>
 
   <!-- Conversation -->

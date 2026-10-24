@@ -1,24 +1,15 @@
 # Profile and settings
 
-The desktop Profile and Preferences designs reviewed with Kayvan on October 24, 2026.
-These are previews with sample data, not application code. They do not call the API or change a
-person's real profile. The images preserve the desktop design shown in chat.
+The Profile and Preferences designs reviewed with Kayvan on October 24, 2026. These are fixed
+mockups with sample data, exported from the "Chat view redesign" board on claude.ai. They do not call the API or change a person's
+real profile.
 
-- Open `profile-settings.html` directly in a browser. It starts on Profile. Choose Preferences
-  to see appearance and time display settings.
-- `profile-settings.fragment.html` is the editable source. `profile-settings.html` is its
-  standalone export from the visualization skill's `scripts/render.py`. Export again after editing
-  the fragment; do not edit the generated wrapper by hand.
-- `profile.png` and `preferences.png` show the two desktop tabs in the dark theme, with an Eastern
-  Time browser context. They make the design viewable without the interactive chat preview.
-- The live preview follows the browser's theme. Appearance choices change the preview immediately.
-  Editing the name updates the initials and conversation example. Save and Discard work locally;
-  reload to reset. Sample navigation in the sidebar is only context.
+- `profile.html` + `.png`: the display name, and how you appear in a conversation.
+- `preferences.html` + `.png`: the theme (match this computer, dark, or light) and how times show.
+- You open this page from your name at the bottom of the sidebar.
 
-The archived screens use the solid blue avatar shown in the review. CA-41 changed the shared style
-guide to tinted avatars afterward. Build the feature with the current
-[style guide](../style-guide/README.md) and `person-1-bg` / `person-1-ink` tokens; these pictures do not
-override that decision.
+The board is the source. Change the board, then export again; don't edit these pages by hand.
+In the app, editing the name updates the preview, and Save and Discard turn on once something changes.
 
 [Profile and settings in Notion](https://app.notion.com/p/4031a83d088f8137a038fdbb99d877b0)
 records the behavior and storage default.
