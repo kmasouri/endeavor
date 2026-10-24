@@ -1101,7 +1101,7 @@ export class TaskRunnerService {
   }
 
   // What the agent may use right now: skills chosen in the version that are still granted and
-  // enabled, and connections chosen directly or through those skills that are still granted and
+  // enabled, and explicitly selected connections that are still granted and
   // enabled. Grants are read fresh each time, so a revoke applies at once.
   private async usableCatalog(
     agentId: string,
@@ -1124,10 +1124,7 @@ export class TaskRunnerService {
         : [];
     });
 
-    const wanted = new Set([
-      ...version.connectionIds,
-      ...skills.flatMap(({ version: skillVersion }) => skillVersion.connectionIds)
-    ]);
+    const wanted = new Set(version.connectionIds);
     const connections = (await this.catalogRepository.getConnections([...wanted])).filter(
       (connection) => grantedConnections.has(connection.id) && !connection.disabledAt
     );

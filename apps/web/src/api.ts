@@ -140,6 +140,7 @@ export interface AgentVersion {
   model: string;
   skillVersionIds: string[];
   connectionIds: string[];
+  legacyConnectionIds?: string[];
   limits: AgentLimits;
   createdAt: string;
 }
@@ -166,7 +167,6 @@ export interface SkillVersion {
   id: string;
   version: number;
   instructions: string;
-  connectionIds: string[];
   createdAt: string;
 }
 

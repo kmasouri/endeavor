@@ -17,7 +17,6 @@ export class CatalogNameConflictError extends Error {
 
 export interface CreateSkillVersionInput {
   instructions: string;
-  connectionIds: string[];
   createdByHumanId: string | null;
 }
 
@@ -70,6 +69,8 @@ export interface CatalogRepository {
     targetType: GrantTargetType;
     targetId: string;
     grantedByHumanId: string;
+    // Configuration saves set false so concurrent revocation cannot be undone.
+    restoreRevoked?: boolean;
   }): Promise<AgentGrant>;
   // Returns false when there was no active grant.
   revoke(input: {

@@ -26,7 +26,6 @@ const skillVersion: SkillVersion = {
   skillId: 's1',
   version: 1,
   instructions: 'Cite every claim.',
-  connectionIds: [],
   createdByHumanId: ADMIN,
   createdAt: new Date()
 };
@@ -88,7 +87,7 @@ describe('CatalogService', () => {
     expect(created.currentVersion?.version).toBe(1);
     expect(catalogs.createSkill).toHaveBeenCalledWith(
       { name: 'Citations', description: 'Cite sources' },
-      { instructions: 'Cite every claim.', connectionIds: [], createdByHumanId: ADMIN }
+      { instructions: 'Cite every claim.', createdByHumanId: ADMIN }
     );
   });
 
@@ -163,22 +162,27 @@ describe('CatalogService', () => {
   it('saves a new skill version from the current one', async () => {
     const { service, catalogs } = setup();
 
-    const updated = await service.addSkillVersion(ADMIN, 's1', { connectionIds: ['c1'] });
+    const updated = await service.addSkillVersion(ADMIN, 's1', {
+      instructions: 'Cite each source.'
+    });
 
     expect(catalogs.addSkillVersion).toHaveBeenCalledWith('s1', {
-      instructions: 'Cite every claim.',
-      connectionIds: ['c1'],
+      instructions: 'Cite each source.',
       createdByHumanId: ADMIN
     });
     expect(updated.currentVersion?.version).toBe(2);
   });
 
-  it('rejects unknown connections on a skill', async () => {
-    const { service } = setup();
-
-    await expect(
-      service.addSkillVersion(ADMIN, 's1', { connectionIds: ['missing'] })
-    ).rejects.toMatchObject({ name: 'connectionNotFound' });
+  it('never checks connections or grants access when creating or versioning instructions', async () => {
+    const { service, catalogs } = setup();
+    await service.createSkill(ADMIN, {
+      name: 'Billing',
+      description: 'Billing',
+      instructions: 'Use Billing API.'
+    });
+    await service.addSkillVersion(ADMIN, 's1', { instructions: 'Use another API.' });
+    expect(catalogs.getConnections).not.toHaveBeenCalled();
+    expect(catalogs.grant).not.toHaveBeenCalled();
   });
 
   it('grants only things that exist', async () => {

@@ -4,11 +4,12 @@ People keep two shared catalogs. Being in a catalog gives no agent access: acces
 
 ## Skills
 
-A skill is a named piece of guidance for a kind of work, such as "Billing lookup: use the Billing connection for invoice counts". Each skill has versions that never change once saved, and each version can list connections the skill uses.
+A skill is a named piece of guidance for a kind of work, such as "Billing lookup: use the Billing connection for invoice counts". Each skill has versions that never change once saved. A version contains instructions only. Mentioning an outside service in those instructions grants no access.
 
 - A skill's instructions aren't the agent's own instructions, and they aren't a knowledge source. The prompt labels them `## Skills`.
 - Choosing a skill in an agent's configuration (`skillIds` on `POST /agents` or `/agents/:id/config`) pins the skill's current version into the agent's configuration version. Later skill edits don't change running work; save the agent's configuration again to pick them up.
-- Choosing a skill also grants it to the agent.
+- Choosing a skill grants its instructions to the agent. It never selects or grants connections. Creating, editing, or upgrading a skill leaves connection choices and grants unchanged.
+- `POST /skills` accepts `name`, `description`, and `instructions`. `POST /skills/:id/versions` accepts `instructions`. Both reject the retired `connectionIds` field, including an empty array. Skill responses and version history omit it.
 
 ## Connections
 
@@ -21,12 +22,28 @@ A connection is an outside HTTP API: a base URL, an auth header, an optional cre
 
 `POST /agents/:id/grants` grants a skill or connection; `DELETE /agents/:id/grants/:type/:targetId` revokes it. Every `http_request` call is checked at the moment it runs. The connection must be:
 
-1. chosen in the task's configuration version, directly or through a chosen skill,
+1. explicitly chosen in the task's configuration version (`connectionIds`),
 2. granted to the agent right now,
 3. enabled, and
 4. allow the method and path (`apps/api/src/shared/connection-access.ts`).
 
 So a revoke, a disabled connection, or a narrower path list applies on the very next call. That holds even for tasks on an older configuration version. Revoked or disabled skills drop out of the prompt on the task's next run.
+
+## Moving from inherited connections (CA-37)
+
+Deploy the API and web interface together. No data migration is required: new skill versions leave the retired database column at its empty default. Older `skill_versions.connection_ids` remain stored as immutable history. They never authorize calls and are omitted from skill API responses.
+
+Stored agent versions, task pins, credentials, and grants stay unchanged. There are no bulk grants, revokes, or automatic task migrations. Explicit connections continue to work, subject to live checks. An old task that depended only on an inherited connection cannot call it after rollout. The model is told to explain the missing capability and ask a person through the existing conversation flow; it must never claim it used unavailable access.
+
+Agent version responses include `legacyConnectionIds`: distinct connections listed by old pinned skill versions but absent from the explicit connection list. This is review information only, including disabled or revoked entries. The configuration form names these connections and version history flags affected versions. This field is never accepted as configuration input or used to authorize calls. No dependency checklist or consent flow is added to skill assignment.
+
+Before resuming affected work, a person should:
+
+1. Review the warning on the agent's configuration and explicitly select any connections still needed. Disabled connections must be enabled separately first.
+2. Save a new agent configuration. A save preserves existing grants and never restores a previously revoked grant, even when removing and reselecting an entry. Restore an intended grant separately with `POST /agents/:id/grants`.
+3. Move each affected open task to the reviewed version with `POST /tasks/:taskId/version`. Until then, its original pin stays unchanged and inherited-only calls remain unavailable. Restart finished tasks to use the current version.
+
+New skill versions contain no associations, so upgrading skills can remove historical review information. Review the old agent version in history when transitioning. Connection choices still never change automatically. The pilot setup selects each agent's connections explicitly; existing pilot agents must be reviewed using the steps above.
 
 ## Approvals
 

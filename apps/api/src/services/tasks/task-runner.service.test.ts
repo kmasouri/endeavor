@@ -1108,6 +1108,72 @@ describe('TaskRunnerService', () => {
       return ctx;
     }
 
+    it('refuses inherited-only calls on a pinned task even with live grants and legacy metadata', async () => {
+      const { runner, tasks, client, agentRepo, catalogs, connectionClient } =
+        setupWithConnection();
+      agentRepo.getVersion.mockResolvedValue({
+        ...version,
+        skillVersionIds: ['sv-old'],
+        legacyConnectionIds: ['conn-1']
+      });
+      catalogs.getSkillVersions.mockResolvedValue([
+        {
+          id: 'sv-old',
+          skillId: 'billing-skill',
+          version: 1,
+          instructions: 'Use Billing API to read invoices.',
+          connectionIds: ['conn-1'],
+          createdByHumanId: HUMAN,
+          createdAt: new Date()
+        } as never
+      ]);
+      catalogs.getSkills.mockResolvedValue([
+        { id: 'billing-skill', name: 'Billing instructions', disabledAt: null } as never
+      ]);
+      catalogs.listGrants.mockResolvedValue([
+        grant('skill', 'billing-skill'),
+        grant('connection', 'conn-1')
+      ]);
+      catalogs.getConnections.mockImplementation(async (ids) =>
+        ids.includes('conn-1') ? [billing] : []
+      );
+      tasks.listEvents
+        .mockResolvedValueOnce([
+          event(1, 'model.turn', { raw: {}, toolCalls: [callBilling('/invoices')] })
+        ])
+        .mockResolvedValue([]);
+      await runner.runTask(makeTask());
+      expect(connectionClient.request).not.toHaveBeenCalled();
+      expect(toolResult(tasks).results[0].isError).toBe(true);
+      expect(client.complete.mock.calls[0][0].system).toContain(
+        'inherited selections no longer authorize calls'
+      );
+      expect(client.complete.mock.calls[0][0].tools.map((t) => t.name)).not.toContain(
+        'http_request'
+      );
+      expect(agentRepo.addVersion).not.toHaveBeenCalled();
+      expect(catalogs.grant).not.toHaveBeenCalled();
+      expect(catalogs.revoke).not.toHaveBeenCalled();
+    });
+
+    it('keeps explicit connections available when a skill is disabled or revoked', async () => {
+      const { runner, tasks, agentRepo, catalogs, connectionClient } = setupWithConnection();
+      agentRepo.getVersion.mockResolvedValue({ ...withConnection, skillVersionIds: ['sv-old'] });
+      catalogs.getSkillVersions.mockResolvedValue([
+        { id: 'sv-old', skillId: 'billing-skill' } as never
+      ]);
+      catalogs.getSkills.mockResolvedValue([
+        { id: 'billing-skill', disabledAt: new Date() } as never
+      ]);
+      tasks.listEvents
+        .mockResolvedValueOnce([
+          event(1, 'model.turn', { raw: {}, toolCalls: [callBilling('/invoices')] })
+        ])
+        .mockResolvedValue([]);
+      await runner.runTask(makeTask());
+      expect(connectionClient.request).toHaveBeenCalledTimes(1);
+    });
+
     it('makes an allowed call with the stored credential', async () => {
       const { runner, tasks, connectionClient } = setupWithConnection();
       tasks.listEvents
@@ -1150,6 +1216,19 @@ describe('TaskRunnerService', () => {
         isError: true,
         content: expect.stringContaining("can't use a connection")
       });
+    });
+
+    it('refuses the next call when an explicit connection is disabled on an old task', async () => {
+      const { runner, tasks, catalogs, connectionClient } = setupWithConnection();
+      catalogs.getConnections.mockResolvedValue([{ ...billing, disabledAt: new Date() }]);
+      tasks.listEvents
+        .mockResolvedValueOnce([
+          event(1, 'model.turn', { raw: {}, toolCalls: [callBilling('/invoices')] })
+        ])
+        .mockResolvedValue([]);
+      await runner.runTask(makeTask());
+      expect(connectionClient.request).not.toHaveBeenCalled();
+      expect(toolResult(tasks).results[0].isError).toBe(true);
     });
 
     it("refuses a method the connection doesn't allow", async () => {
@@ -1443,7 +1522,6 @@ describe('TaskRunnerService', () => {
           skillId: 's1',
           version: 1,
           instructions: 'Cite every claim.',
-          connectionIds: [],
           createdByHumanId: null,
           createdAt: new Date()
         },
@@ -1452,7 +1530,6 @@ describe('TaskRunnerService', () => {
           skillId: 's2',
           version: 1,
           instructions: 'Secret skill.',
-          connectionIds: [],
           createdByHumanId: null,
           createdAt: new Date()
         }

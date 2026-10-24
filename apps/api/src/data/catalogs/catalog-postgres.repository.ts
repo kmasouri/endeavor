@@ -31,7 +31,6 @@ interface SkillVersionRow {
   skill_id: string;
   version: number;
   instructions: string;
-  connection_ids: string[];
   created_by_human_id: string | null;
   created_at: Date | string;
 }
@@ -92,9 +91,9 @@ export class CatalogPostgresRepository implements CatalogRepository {
            RETURNING *
          ), version AS (
            INSERT INTO bold_cedar_007.skill_versions (
-             id, skill_id, version, instructions, connection_ids, created_by_human_id
+             id, skill_id, version, instructions, created_by_human_id
            )
-           SELECT $4, skill.id, 1, $5, $6, $7
+           SELECT $4, skill.id, 1, $5, $6
            FROM skill
            RETURNING *
          )
@@ -106,7 +105,6 @@ export class CatalogPostgresRepository implements CatalogRepository {
           input.description,
           versionId,
           firstVersion.instructions,
-          firstVersion.connectionIds,
           firstVersion.createdByHumanId
         ]
       )
@@ -164,9 +162,9 @@ export class CatalogPostgresRepository implements CatalogRepository {
              WHERE skill_id = $2
            ), saved AS (
              INSERT INTO bold_cedar_007.skill_versions (
-               id, skill_id, version, instructions, connection_ids, created_by_human_id
+               id, skill_id, version, instructions, created_by_human_id
              )
-             SELECT $1, $2, next.version, $3, $4, $5
+             SELECT $1, $2, next.version, $3, $4
              FROM next
              RETURNING *
            ), current AS (
@@ -175,7 +173,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
              WHERE id = $2
            )
            SELECT * FROM saved`,
-          [randomUUID(), skillId, input.instructions, input.connectionIds, input.createdByHumanId]
+          [randomUUID(), skillId, input.instructions, input.createdByHumanId]
         );
         return toSkillVersion(result.rows[0]);
       } catch (error) {
@@ -339,6 +337,8 @@ export class CatalogPostgresRepository implements CatalogRepository {
     targetType: GrantTargetType;
     targetId: string;
     grantedByHumanId: string;
+    // Configuration saves set false so concurrent revocation cannot be undone.
+    restoreRevoked?: boolean;
   }): Promise<AgentGrant> {
     const result = await this.db.query<GrantRow>(
       `INSERT INTO bold_cedar_007.agent_grants (agent_id, target_type, target_id, granted_by_human_id)
@@ -348,14 +348,20 @@ export class CatalogPostgresRepository implements CatalogRepository {
            granted_at = now(),
            revoked_at = NULL,
            revoked_by_human_id = NULL
-       WHERE agent_grants.revoked_at IS NOT NULL
+       WHERE agent_grants.revoked_at IS NOT NULL AND $5::boolean
        RETURNING *`,
-      [input.agentId, input.targetType, input.targetId, input.grantedByHumanId]
+      [
+        input.agentId,
+        input.targetType,
+        input.targetId,
+        input.grantedByHumanId,
+        input.restoreRevoked ?? true
+      ]
     );
     if (result.rows[0]) {
       return toGrant(result.rows[0]);
     }
-    // Already active: return it unchanged.
+    // Existing grant stays unchanged when active, or when this save cannot restore it.
     const existing = await this.db.query<GrantRow>(
       `SELECT * FROM bold_cedar_007.agent_grants
        WHERE agent_id = $1 AND target_type = $2 AND target_id = $3`,
@@ -426,7 +432,6 @@ function toSkillVersion(row: SkillVersionRow): SkillVersion {
     skillId: row.skill_id,
     version: row.version,
     instructions: row.instructions,
-    connectionIds: row.connection_ids,
     createdByHumanId: row.created_by_human_id,
     createdAt: toDate(row.created_at)
   };

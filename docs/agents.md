@@ -6,7 +6,7 @@ An agent is a configured participant. It is not a built-in role: a QA agent and 
 
 - **Name and purpose.** What the agent is for, shown in the directory. Changing these doesn't create a new version.
 - **Configuration (versioned).** Instructions, provider, and model. Saving any change creates a new version, and versions never change once saved. Each task records the version it started with, so editing an agent never changes work that is already running or waiting. Only new tasks use the new version.
-- **Skills and connections.** Chosen from the shared catalogs (coming with CA-1). They are saved with the configuration version.
+- **Skills and connections.** Chosen independently from the shared catalogs and saved with the configuration version. Skills add instructions only. `connectionIds` explicitly selects API access; every call also needs a live grant. Skill edits and upgrades never change these selections. A configuration save never restores revoked grants.
 
 To move open work to a newer version, a person calls `POST /tasks/:taskId/version`. It defaults to the agent's current version. The change is recorded as a `task.version.migrated` event with who did it and why. Tasks never change version on their own, including after a restart. Finished tasks aren't moved: restart them instead, and the new run uses the current version.
 
@@ -24,6 +24,8 @@ Permissions are a separate matter. Revoked skills, connections, and actions are 
 **Who sees what:** in v1 there is one role, so every person sees every task and approval. The member rules are still in the code, switched off in `apps/api/src/shared/access.ts`: with roles on, members see only tasks, and their approvals, in conversations they belong to, plus tasks they asked for.
 
 Any person can create or change agents. Agents can't. A disabled agent takes no new tasks, but its open tasks keep going until a human pauses or cancels them.
+
+Older versions may report review-only `legacyConnectionIds`. These inherited selections no longer authorize calls. The configuration form and version history flag affected versions. Review explicit connections, save, and migrate open tasks yourself; existing grants and pins are preserved. See [the rollout steps](catalogs.md#moving-from-inherited-connections-ca-37).
 
 ## Example configurations
 

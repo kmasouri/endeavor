@@ -283,3 +283,9 @@ Each test file sits next to the file it tests and ends in `.test.ts`. Shared tes
 - Route tests build the app with `setupApp()` and send requests with `app.inject()`. They check input validation, error responses, request IDs, and Swagger, all without a database.
 
 For building, releases, and deployment, see `README.md` and `infrastructure/README.md`.
+
+## Skills and connection access
+
+Skill versions store reusable instructions only. The catalog API rejects structured connection associations. Agent configurations select skill versions and connection IDs independently. The runner builds its connection list from the task's explicit configuration and checks live grants, enabled state, method/path limits, and action approvals on every call. Skill instructions and retired metadata cannot authorize tools.
+
+Legacy skill-to-connection columns remain as immutable history, outside the skill API contract. Agent repositories report inherited-only IDs as `legacyConnectionIds` for human review, never for authorization. No grants or task pins are changed during rollout. A person explicitly reviews connection selections and migrates affected work. See [catalog compatibility](catalogs.md#moving-from-inherited-connections-ca-37).

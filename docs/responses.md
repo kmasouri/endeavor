@@ -88,3 +88,9 @@ The helpers are in `apps/api/src/shared/response.ts`:
 - `success(data)` for one thing.
 - `paged(items, { limit, offset, total })` for lists.
 - Error responses are built for you by the error handler in `apps/api/src/app.ts`. Handlers never build them.
+
+## Skills and agent connection selections
+
+Skill versions return `id`, `skillId`, `version`, `instructions`, `createdByHumanId`, and `createdAt`. The retired skill `connectionIds` field is omitted from both current and historical responses. Skill creation accepts name, description, and instructions; a new version accepts instructions only. Structured connection fields are rejected as unknown input.
+
+Agent versions still return explicit `connectionIds`. They also return `legacyConnectionIds`, a read-only list of inherited-only selections from old pinned skill versions that need human review. It grants no access and is rejected in configuration requests. Existing pins and grants are unchanged; see [the rollout steps](catalogs.md#moving-from-inherited-connections-ca-37).
