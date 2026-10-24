@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import {
     api,
     type Approval,
@@ -26,7 +27,11 @@
   import ApprovalCard from './ApprovalCard.svelte';
   import TaskStatus from './TaskStatus.svelte';
   import ArtifactCard from './ArtifactCard.svelte';
-  let { conversationId, me }: { conversationId: string; me: Human } = $props();
+  let { conversationId, me, onReady }: {
+    conversationId: string;
+    me: Human;
+    onReady?: (conversation: ConversationDetails) => boolean;
+  } = $props();
   let draft = $state('');
   let showDetails = $state(false);
   let adding = $state(false);
@@ -68,6 +73,11 @@
     () => [],
     4000
   );
+  $effect(() => {
+    if (details.data && onReady?.(details.data)) {
+      void tick().then(() => document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus());
+    }
+  });
   let conversation = $derived(details.data!);
   let taskList = $derived(tasks.data?.data ?? []);
   let memberIds = $derived(new Set(taskList.map((t) => t.id)));
@@ -115,7 +125,7 @@
     <section class="thread">
       <header class="conversation-header">
         <div class="heading">
-          <h1 title={conversation.title}># {conversationName(conversation.title)}</h1>
+          <h1 title={conversation.title}>{conversationName(conversation.title)}</h1>
           <p>
             {conversation.members.filter((m) => m.participant.type === 'human').length} people · {conversation.members.filter(
               (m) => m.participant.type === 'agent'

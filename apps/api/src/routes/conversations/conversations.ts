@@ -29,7 +29,8 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     '/conversations',
     {
       schema: {
-        description: 'Start a conversation. You become a member; agentIds adds agents too.',
+        description:
+          'Start a conversation. You become a member; agentIds and humanIds add chosen members.',
         tags: ['conversations'],
         headers: actorHeadersSchema,
         body: createConversationBodySchema

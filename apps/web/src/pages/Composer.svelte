@@ -189,7 +189,7 @@
       bind:value={body}
       aria-label="Message"
       aria-controls={picker ? 'mention-picker' : undefined}
-      placeholder={`Message #${conversationName(title)}`}
+      placeholder={`Message ${conversationName(title)}`}
       rows={1}
       oninput={(e) => {
         caret = e.currentTarget.selectionStart;

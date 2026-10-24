@@ -43,10 +43,15 @@ export class ConversationService {
 
   async createConversation(
     actorId: string,
-    input: { title: string; agentIds?: string[] }
+    input: { title: string; agentIds?: string[]; humanIds?: string[] }
   ): Promise<ConversationDetails> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
-    for (const agentId of input.agentIds ?? []) {
+    const humanIds = [...new Set(input.humanIds ?? [])].filter((id) => id !== human.id);
+    const agentIds = [...new Set(input.agentIds ?? [])];
+    for (const humanId of humanIds) {
+      await this.requireParticipant({ type: 'human', id: humanId });
+    }
+    for (const agentId of agentIds) {
       await this.requireParticipant({ type: 'agent', id: agentId });
     }
 
@@ -60,7 +65,15 @@ export class ConversationService {
       addedByHumanId: human.id,
       historyFrom: null
     });
-    for (const agentId of input.agentIds ?? []) {
+    for (const humanId of humanIds) {
+      await this.conversationRepository.addMember({
+        conversationId: conversation.id,
+        participant: { type: 'human', id: humanId },
+        addedByHumanId: human.id,
+        historyFrom: null
+      });
+    }
+    for (const agentId of agentIds) {
       await this.conversationRepository.addMember({
         conversationId: conversation.id,
         participant: { type: 'agent', id: agentId },

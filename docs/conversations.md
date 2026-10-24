@@ -22,6 +22,23 @@ Delivering the same message twice finds the same task (its run key is `message:<
 
 ## Membership
 
+The web interface calls conversations **Endeavors**. Existing conversation URLs and APIs remain
+compatible. Endeavors opens the last accessible selection saved for the current person in this
+browser, falling back to another accessible endeavor or a first-endeavor prompt. Recent lists
+endeavors without channel hashes or forced dashes. The app header and Cmd/Ctrl K open search across
+all accessible endeavors, including older API pages. The list is refreshed when the person changes.
+
+**+ New** opens a native modal with a required name and optional searchable people and agents.
+No agents are selected by default. Cancel, Close, and Escape restore the opener; saving disables
+those actions until the request finishes. Errors retain the form values. Success updates Recent,
+selects the new endeavor, and focuses its message box. Creating an endeavor never posts a message
+or starts agent work. The full chat, Details, member controls, and history remain available.
+
+`POST /conversations` accepts `title` (1–200 characters after trimming), optional `agentIds`, and
+optional `humanIds` (up to 20 each). It validates every chosen participant before creating the
+conversation, adds the creator automatically, and ignores duplicate selections. Only humans can
+create conversations or add members. Initial members can access the full history.
+
 Only people add members. Adding a member with `history: "from_now"` hides older messages from them. An agent can't add anyone.
 
 `GET /directory` lists the enabled agents a person can discover: name, purpose, and capabilities (provider, model, and how many skills and connections). It never shows instructions, saved notes, credentials, or conversations. Agents also see directory agents that aren't in the conversation, by name and purpose only. If one could help, the agent calls `suggest_participant`. That posts a suggestion to the people in the conversation; it doesn't add the agent or contact it. Seeing an agent in the directory doesn't let anyone message it outside a conversation.
