@@ -63,7 +63,7 @@ The conversation page owns its messages, tasks, outputs, approval requests, and 
 Details starts closed. Messages render a small Markdown subset as Svelte text nodes, including
 safe HTTP links (including plain URLs and www addresses), emphasis, code, lists, and highlighted mentions. Raw HTML stays text. Typing `@`
 opens the member picker; adding a directory agent uses the membership API before sending a mention.
-Reply actions preserve the source message ID. Run steps load on expansion. Generic Result records that repeat an agent message stay in task
+Reply actions preserve the source message ID. Run steps load on the first expansion and remain cached when folded. The chat shows a short list of recorded actions, with all steps and manual refresh available on demand. Raw event names and tool response bodies remain in the full run inspector. Step lists use the conversation scroll area rather than a nested scroller. Generic Result records that repeat an agent message stay in task
 inspection; the conversation shows the answer once, without a duplicate card or steps control.
 Named outputs, files, links, distinct content, and pending reviews keep their artifact cards. Artifact cards use task
 review when review is pending; requests for changes return to the conversation composer.
