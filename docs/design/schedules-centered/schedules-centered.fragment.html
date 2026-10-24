@@ -1,0 +1,221 @@
+<style>
+#ca-reference-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 12px 0 16px; font: 13px system-ui, sans-serif; }
+#ca-reference-controls button, #ca-reference-controls select { font: inherit; padding: 7px 10px; border: 1px solid light-dark(#c2c7cf, #3a3d43); border-radius: 6px; color: light-dark(#16181c, #e8e9eb); background: light-dark(#f7f8fa, #1f2023); }
+#ca-reference-controls button[aria-pressed="true"] { background: light-dark(#e9eaee, #2b2d33); }
+#ca-reference-controls label { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+</style>
+<div id="ca-reference-controls" aria-label="Reference preview controls">
+  <button type="button" data-preview="empty" aria-pressed="false">Empty state</button>
+  <button type="button" data-preview="populated" aria-pressed="true">With schedules</button>
+  <label>Appearance <select aria-label="Preview appearance"><option value="light dark">System</option><option value="dark">Dark</option><option value="light">Light</option></select></label>
+</div>
+<style>
+#ca-schedule-mock {
+  --ca-bg: light-dark(#ffffff, #1a1b1e);
+  --ca-sidebar: light-dark(#f3f4f6, #141517);
+  --ca-surface: light-dark(#f7f8fa, #1f2023);
+  --ca-selected: light-dark(#e9eaee, #2b2d33);
+  --ca-line: light-dark(#e4e6ea, #26282c);
+  --ca-control-line: light-dark(#c2c7cf, #3a3d43);
+  --ca-text: light-dark(#16181c, #e8e9eb);
+  --ca-secondary: light-dark(#3d4148, #c9ccd1);
+  --ca-muted: light-dark(#5f646c, #9a9da3);
+  --ca-action: light-dark(#e08e00, #f59e0b);
+  --ca-action-ink: #2a1600;
+  --ca-agent: light-dark(#0369a1, #7dd3fc);
+  --ca-agent-bg: light-dark(#dff3fd, #12303d);
+  --ca-success: light-dark(#4d7c0f, #bef264);
+  --ca-success-bg: light-dark(#65a30d1f, #bef26424);
+  font: 14px/1.5 Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  color: var(--ca-text); background: var(--ca-bg);
+  display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 650px;
+  --ca-frame: 1220px;
+}
+#ca-schedule-mock * { box-sizing: border-box; }
+#ca-schedule-mock [hidden] { display: none !important; }
+#ca-schedule-mock button, #ca-schedule-mock input, #ca-schedule-mock textarea, #ca-schedule-mock select { font: inherit; }
+#ca-schedule-mock button {  }
+#ca-schedule-mock svg { width: 17px; height: 17px; flex-shrink: 0; }
+#ca-schedule-mock h1, #ca-schedule-mock h2, #ca-schedule-mock h3, #ca-schedule-mock p { margin: 0; }
+#ca-schedule-mock h1 { font-size: 18px; line-height: 1.4; font-weight: 600; }
+#ca-schedule-mock h2 { font-size: 18px; line-height: 1.4; font-weight: 600; }
+#ca-schedule-mock h3 { font-size: 14px; font-weight: 600; }
+#ca-schedule-mock .ca-aside { background: var(--ca-sidebar); border-right: 1px solid var(--ca-line); padding: 20px 12px 12px; display: flex; flex-direction: column; gap: 26px; }
+#ca-schedule-mock .ca-brand { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+#ca-schedule-mock .ca-logo { background: var(--ca-action); color: var(--ca-action-ink); border-radius: 8px; width: 28px; height: 28px; display: grid; place-items: center; font-size: 12px; }
+#ca-schedule-mock .ca-nav { display: grid; gap: 4px; }
+#ca-schedule-mock .ca-nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; color: var(--ca-secondary); }
+#ca-schedule-mock .ca-nav-item.ca-current { background: var(--ca-selected); color: var(--ca-text); }
+#ca-schedule-mock .ca-label { color: var(--ca-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+#ca-schedule-mock .ca-conversation-label { margin: 0 12px 12px; }
+#ca-schedule-mock .ca-conversation { display: flex; gap: 9px; color: var(--ca-muted); padding: 9px 12px; font-size: 13px; }
+#ca-schedule-mock .ca-profile { display: flex; align-items: center; gap: 10px; margin-top: auto; border-top: 1px solid var(--ca-line); padding: 16px 4px 0; }
+#ca-schedule-mock .ca-avatar { display: grid; place-items: center; width: 30px; height: 30px; flex-shrink: 0; border-radius: 8px; background: light-dark(#e0e7ff,#1e2a44); color: light-dark(#3730a3,#a5b4fc); }
+#ca-schedule-mock .ca-profile small { display: block; color: var(--ca-muted); font-size: 11px; }
+#ca-schedule-mock .ca-main { min-width: 0; padding: 42px clamp(24px, 4%, 72px) 64px; }
+#ca-schedule-mock .ca-frame { max-width: var(--ca-frame); margin-inline: auto; }
+#ca-schedule-mock .ca-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--ca-line); padding-bottom: 24px; }
+#ca-schedule-mock .ca-subtitle { margin-top: 5px; color: var(--ca-muted); font-size: 13px; }
+#ca-schedule-mock .ca-primary, #ca-schedule-mock .ca-secondary-button { border-radius: 8px; padding: 9px 14px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; }
+#ca-schedule-mock .ca-primary { color: var(--ca-action-ink); background: var(--ca-action); border: 1px solid var(--ca-action); font-weight: 500; }
+#ca-schedule-mock .ca-secondary-button { background: transparent; border: 1px solid var(--ca-control-line); color: var(--ca-secondary); }
+#ca-schedule-mock .ca-empty { padding: 58px 20px 52px; text-align: center; }
+#ca-schedule-mock .ca-empty-clock { margin: 0 auto 18px; width: 42px; height: 42px; display: grid; place-items: center; color: var(--ca-muted); border: 1px solid var(--ca-control-line); border-radius: 12px; }
+#ca-schedule-mock .ca-empty p { max-width: 380px; margin: 10px auto 22px; color: var(--ca-muted); font-size: 14px; }
+#ca-schedule-mock .ca-cancelled { margin-top: 18px; padding-top: 20px; border-top: 1px solid var(--ca-line); }
+#ca-schedule-mock .ca-cancelled summary { color: var(--ca-muted); font-size: 13px;  }
+#ca-schedule-mock .ca-list { padding-top: 28px; }
+#ca-schedule-mock .ca-list-label { margin-bottom: 12px; }
+#ca-schedule-mock .ca-row { display: grid; grid-template-columns: 36px minmax(0,1fr) 145px 82px 14px; align-items: center; gap: 12px; padding: 20px 4px; border-top: 1px solid var(--ca-line); }
+#ca-schedule-mock .ca-row:last-child { border-bottom: 1px solid var(--ca-line); }
+#ca-schedule-mock .ca-clock { width: 36px; height: 36px; border: 1px solid var(--ca-control-line); border-radius: 10px; display: grid; place-items: center; color: var(--ca-muted); }
+#ca-schedule-mock .ca-row-meta { color: var(--ca-muted); display: flex; flex-wrap: wrap; align-items: center; gap: 5px; font-size: 12px; margin-top: 5px; }
+#ca-schedule-mock .ca-agent-mark { color: var(--ca-agent); background: var(--ca-agent-bg); width: 19px; height: 19px; border-radius: 5px; display: inline-grid; place-items: center; }
+#ca-schedule-mock .ca-agent-mark svg { width: 12px; height: 12px; }
+#ca-schedule-mock .ca-agent-label { color: var(--ca-agent); }
+#ca-schedule-mock .ca-next { color: var(--ca-secondary); font-size: 12px; text-align: right; }
+#ca-schedule-mock .ca-status { font-size: 11px; color: var(--ca-success); background: var(--ca-success-bg); padding: 3px 7px; border-radius: 6px; justify-self: end; white-space: nowrap; }
+#ca-schedule-mock .ca-status.ca-paused { color: var(--ca-secondary); background: var(--ca-selected); }
+#ca-schedule-mock .ca-row > svg { color: var(--ca-muted); width: 14px; }
+#ca-schedule-mock .ca-back { color: var(--ca-secondary); background: transparent; border: 0; padding: 0; margin: 24px 0; display: flex; align-items: center; gap: 6px; }
+#ca-schedule-mock .ca-form { max-width: 820px; display: grid; gap: 20px; }
+#ca-schedule-mock label { display: grid; gap: 7px; font-size: 13px; font-weight: 500; }
+#ca-schedule-mock input, #ca-schedule-mock textarea, #ca-schedule-mock select { width: 100%; min-width: 0; color: var(--ca-text); background: var(--ca-surface); border: 1px solid var(--ca-control-line); padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+#ca-schedule-mock .ca-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+#ca-schedule-mock .ca-form small { color: var(--ca-muted); font-size: 12px; font-weight: 400; }
+#ca-schedule-mock .ca-form-actions { display: flex; gap: 8px; border-top: 1px solid var(--ca-line); padding-top: 20px; }
+@media (max-width: 780px) {
+ #ca-schedule-mock { grid-template-columns: 62px minmax(0,1fr); }
+ #ca-schedule-mock .ca-aside { padding-inline: 10px; }
+ #ca-schedule-mock .ca-brand > span:last-child, #ca-schedule-mock .ca-nav-item span, #ca-schedule-mock .ca-conversations, #ca-schedule-mock .ca-profile > div:last-child { display: none; }
+ #ca-schedule-mock .ca-nav-item { padding: 12px; }
+ #ca-schedule-mock .ca-main { padding: 28px 24px 48px; }
+ #ca-schedule-mock .ca-row { grid-template-columns: 32px minmax(0,1fr) 75px; gap: 9px; }
+ #ca-schedule-mock .ca-row > .ca-next { grid-column: 2; grid-row: 2; text-align: left; }
+ #ca-schedule-mock .ca-row > .ca-status { grid-column: 3; grid-row: 1; }
+ #ca-schedule-mock .ca-row > svg { display: none; }
+}
+@media (max-width: 480px) {
+ #ca-schedule-mock { grid-template-columns: minmax(0,1fr); }
+ #ca-schedule-mock .ca-aside { display: none; }
+ #ca-schedule-mock .ca-main { padding: 24px 18px 40px; }
+ #ca-schedule-mock .ca-header { gap: 12px; flex-wrap: wrap; }
+ #ca-schedule-mock .ca-form-grid { grid-template-columns: 1fr; }
+ #ca-schedule-mock .ca-empty { padding: 42px 0; }
+}
+</style>
+<div id="ca-schedule-mock" aria-label="Centered Schedules layout proposal">
+  <aside class="ca-aside" aria-label="Application sidebar">
+    <div class="ca-brand"><span class="ca-logo">CA</span><span>Collaborative Agents</span></div>
+    <nav class="ca-nav" aria-label="Main navigation">
+      <div class="ca-nav-item"><i data-lucide="message-square" aria-hidden="true"></i><span>Conversations</span></div>
+      <div class="ca-nav-item"><i data-lucide="shield-check" aria-hidden="true"></i><span>Approvals</span></div>
+      <div class="ca-nav-item ca-current" aria-current="page"><i data-lucide="clock-3" aria-hidden="true"></i><span>Schedules</span></div>
+      <div class="ca-nav-item"><i data-lucide="bot" aria-hidden="true"></i><span>Agents</span></div>
+      <div class="ca-nav-item"><i data-lucide="layout-grid" aria-hidden="true"></i><span>Skills and connections</span></div>
+      <div class="ca-nav-item"><i data-lucide="settings" aria-hidden="true"></i><span>Setup</span></div>
+      <div class="ca-nav-item"><i data-lucide="briefcase-business" aria-hidden="true"></i><span>Work</span></div>
+    </nav>
+    <div class="ca-conversations"><div class="ca-label ca-conversation-label">Conversations</div>
+      <div class="ca-conversation"><span>#</span> website-check</div>
+      <div class="ca-conversation"><span>#</span> research</div>
+      <div class="ca-conversation"><span>#</span> shipping-containers</div>
+      <div class="ca-conversation"><span>#</span> heat-pumps</div>
+    </div>
+    <div class="ca-profile"><div class="ca-avatar">K</div><div><strong>Kayvan Masouri</strong><small>Profile and settings</small></div></div>
+  </aside>
+  <main class="ca-main"><div class="ca-frame">
+    <header class="ca-header"><div><h1>Schedules</h1><p class="ca-subtitle">Recurring work for your agents.</p></div>
+      <button type="button" class="cursor-interaction ca-primary ca-new" data-header-new hidden><i data-lucide="plus" aria-hidden="true"></i>New schedule</button>
+    </header>
+    <div data-list-view>
+      <section class="ca-empty" data-empty aria-label="No active schedules">
+        <div class="ca-empty-clock"><i data-lucide="clock-3" aria-hidden="true"></i></div>
+        <h2>No active schedules</h2>
+        <p>Set up recurring work for an agent.<br>Choose when it runs and where it posts results.</p>
+        <button type="button" class="cursor-interaction ca-primary ca-new"><i data-lucide="plus" aria-hidden="true"></i>Create schedule</button>
+      </section>
+      <section class="ca-list" data-populated hidden aria-label="Active schedules">
+        <div class="ca-label ca-list-label">Schedules · <span data-count>3</span></div>
+        <div data-rows></div>
+      </section>
+      <details class="ca-cancelled"><summary class="cursor-interaction">Cancelled schedules · 2</summary>
+        <div class="ca-row"><div class="ca-clock"><i data-lucide="clock-3" aria-hidden="true"></i></div><div><h3>Check the test API</h3><div class="ca-row-meta">Checker <span class="ca-agent-label">agent</span> · Every 10 minutes</div></div><span class="ca-next">No new runs</span><span class="ca-status ca-paused">⊘ Cancelled</span><i data-lucide="chevron-right" aria-hidden="true"></i></div>
+        <div class="ca-row"><div class="ca-clock"><i data-lucide="clock-3" aria-hidden="true"></i></div><div><h3>CA-34 schedule</h3><div class="ca-row-meta">Browser test <span class="ca-agent-label">agent</span> · Every day</div></div><span class="ca-next">No new runs</span><span class="ca-status ca-paused">⊘ Cancelled</span><i data-lucide="chevron-right" aria-hidden="true"></i></div>
+      </details>
+    </div>
+    <section data-form-view hidden aria-label="Create a schedule">
+      <button type="button" class="cursor-interaction ca-back" data-back><i data-lucide="arrow-left" aria-hidden="true"></i>Back to schedules</button>
+      <form class="ca-form"><div><h2>New schedule</h2><p class="ca-subtitle">Creating a schedule sets up future runs.</p></div>
+        <label>Title<input name="title" required placeholder="For example, Review research" maxlength="200"></label>
+        <label>What to do each time<textarea name="brief" rows="2" placeholder="Tell the agent what to do on every run"></textarea></label>
+        <label>Done when<input name="criteria" placeholder="How the agent knows a run is finished"></label>
+        <div class="ca-form-grid"><label>Agent<select name="agent"><option>Researcher</option><option>Checker</option></select></label><label>Post results in<select><option># research</option><option># website-check</option></select></label></div>
+        <div class="ca-form-grid"><label>Repeat<select name="repeat"><option>Every day</option><option>Every weekday</option></select></label><label>Time<input name="time" type="time" value="09:00"></label></div>
+        <label>If runs are missed<select><option>Run one, and ask me if several were missed</option><option>Always run once when back</option><option>Skip missed runs</option></select></label>
+        <small>Times are in Eastern Time. Schedules need this computer awake and the app running.</small>
+        <div class="ca-form-actions"><button class="cursor-interaction ca-primary" type="button" data-create>Create schedule</button><button type="button" class="cursor-interaction ca-secondary-button" data-back>Discard</button></div>
+      </form>
+    </section>
+  </div></main>
+</div>
+<script>
+(() => {
+  const root = document.getElementById('ca-schedule-mock');
+  const state = { examples: true, frameWidth: 1220 };
+  let added = [];
+  let formOpen = false;
+  const samples = [
+    {title:'Check the test API',agent:'Checker',rule:'Every 10 minutes',next:'Today, 10:40 AM',paused:false},
+    {title:'Review research',agent:'Researcher',rule:'Every weekday at 9:00 AM',next:'Tomorrow, 9:00 AM',paused:false},
+    {title:'Test the checkout flow',agent:'Checker',rule:'Every hour',next:'No new runs',paused:true}
+  ];
+  function remember() {
+    if (window.openai?.setWidgetState) window.openai.setWidgetState({modelContent:{exampleSchedules:state.examples,pageWidth:state.frameWidth},privateContent:null}).catch(()=>{});
+  }
+  function row(item) {
+    const el=document.createElement('div');el.className='ca-row';
+    el.innerHTML='<div class="ca-clock"><i data-lucide="clock-3" aria-hidden="true"></i></div><div><h3></h3><div class="ca-row-meta"><span class="ca-agent-mark"><i data-lucide="bot" aria-hidden="true"></i></span><span data-agent></span><span class="ca-agent-label">agent</span><span data-rule></span></div></div><span class="ca-next"></span><span class="ca-status"></span><i data-lucide="chevron-right" aria-hidden="true"></i>';
+    el.querySelector('h3').textContent=item.title;
+    el.querySelector('[data-agent]').textContent=item.agent;
+    el.querySelector('[data-rule]').textContent='· '+item.rule;
+    el.querySelector('.ca-next').textContent=item.next;
+    const status=el.querySelector('.ca-status');status.textContent=item.paused?'Ⅱ Paused':'⊙ Enabled';status.classList.toggle('ca-paused',!!item.paused);
+    return el;
+  }
+  function render() {
+    root.style.setProperty('--ca-frame',state.frameWidth+'px');
+    const items=[...added,...(state.examples?samples:[])];
+    document.querySelectorAll('[data-preview]').forEach(button => button.setAttribute('aria-pressed', String((button.dataset.preview === 'populated') === state.examples)));
+    root.querySelector('[data-list-view]').hidden=formOpen;
+    root.querySelector('[data-form-view]').hidden=!formOpen;
+    root.querySelector('[data-header-new]').hidden=formOpen||items.length===0;
+    root.querySelector('[data-empty]').hidden=items.length>0;
+    root.querySelector('[data-populated]').hidden=items.length===0;
+    root.querySelector('[data-count]').textContent=String(items.length);
+    root.querySelector('[data-rows]').replaceChildren(...items.map(row));
+    if(globalThis.lucide) lucide.createIcons({attrs:{width:17,height:17}});
+  }
+  root.querySelectorAll('.ca-new').forEach(button=>button.addEventListener('click',()=>{formOpen=true;render();root.querySelector('input[name="title"]').focus();}));
+  root.querySelectorAll('[data-back]').forEach(button=>button.addEventListener('click',()=>{formOpen=false;render();}));
+  function addSchedule(event){
+    event.preventDefault();const form=root.querySelector('form');if(!form.reportValidity())return;const data=new FormData(form);
+    added.unshift({title:String(data.get('title')),agent:String(data.get('agent')),rule:String(data.get('repeat'))+' at '+String(data.get('time')),next:'Tomorrow, '+String(data.get('time')),paused:false});
+    formOpen=false;render();
+  }
+  root.querySelector('form').addEventListener('submit',addSchedule);
+  root.querySelector('[data-create]').addEventListener('click',addSchedule);
+  document.querySelectorAll('[data-preview]').forEach(button => button.addEventListener('click', () => {
+    state.examples = button.dataset.preview === 'populated'; added = []; formOpen = false; render();
+  }));
+  document.querySelector('#ca-reference-controls select').addEventListener('change', event => {
+    document.documentElement.style.colorScheme = event.currentTarget.value;
+  });
+  const saved=window.openai?.widgetState?.modelContent;
+  if(saved&&typeof saved.exampleSchedules==='boolean')state.examples=saved.exampleSchedules;
+  if(saved&&Number.isFinite(saved.pageWidth))state.frameWidth=Math.max(1000,Math.min(1280,saved.pageWidth));
+  render();
+  if(globalThis.Tweak){const tweak=new Tweak({container:root,onChange:()=>{render();remember();}});tweak.addToggle(state,'examples',{label:'Show example schedules'});tweak.addSlider(state,'frameWidth',{label:'Page width',min:1000,max:1280,step:20,unit:'px'});}
+  window.addEventListener('openai:set_globals',event=>{const s=event.detail?.globals?.widgetState?.modelContent;if(s&&typeof s.exampleSchedules==='boolean'){state.examples=s.exampleSchedules;if(Number.isFinite(s.pageWidth))state.frameWidth=Math.max(1000,Math.min(1280,s.pageWidth));render();}});
+})();
+</script>

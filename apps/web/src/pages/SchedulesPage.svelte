@@ -47,58 +47,69 @@
   }
 </script>
 
-<PageHeader title="Schedules" subtitle="Recurring work for your agents.">
-  {#snippet actions()}{#if view === 'list'}<button onclick={() => navigate('new')}><Icon name="plus" size={16} /> New schedule</button>{/if}{/snippet}
-</PageHeader>
+<div class="schedules-page">
+  <PageHeader title="Schedules" subtitle="Recurring work for your agents.">
+    {#snippet actions()}{#if view === 'list' && schedules.data && active.length > 0}<button onclick={() => navigate('new')}><Icon name="plus" size={16} /> New schedule</button>{/if}{/snippet}
+  </PageHeader>
 
-<div class="schedules-view">
-  <ErrorNote error={schedules.error} />
-  <p class="schedule-notice" role="status">{notice}</p>
-  {#if view === 'new'}
-    <button class="schedule-back" onclick={() => navigate('list')}>← Back to schedules</button>
-    <NewSchedule onDiscard={() => navigate('list')} onCreated={() => {
-      schedules.reload(); notice = 'Schedule created.'; void navigate('list');
-    }} />
-  {:else if view === 'details' && current}
-    <button class="schedule-back" onclick={() => navigate('list')}>← Back to schedules</button>
-    {#key current.id}<ScheduleCard schedule={current} agentName={name({ type: 'agent', id: current.agentId })} onChanged={schedules.reload} />{/key}
-  {:else}
-    {#each active.filter((s) => s.catchUp) as schedule (schedule.id)}
-      <div class="schedule-catchup">
-        <strong><Icon name="schedules" size={16} /> {schedule.title} missed {schedule.catchUp!.missed} run{schedule.catchUp!.missed === 1 ? '' : 's'}</strong>
-        <p>This computer was off. Run it once now, or wait for the next run at {instant(schedule.nextRunAt)}. If unanswered, this question lapses then.</p>
-        <div class="row wrap">
-          <button disabled={action.busy} onclick={() => catchUp(schedule, 'run')}>Run once now</button>
-          <button class="secondary" disabled={action.busy} onclick={() => catchUp(schedule, 'wait')}>Wait for the next run</button>
+  <div class="schedules-view">
+    <ErrorNote error={schedules.error} />
+    <p class="schedule-notice" role="status">{notice}</p>
+    {#if view === 'new'}
+      <button class="schedule-back" onclick={() => navigate('list')}>← Back to schedules</button>
+      <NewSchedule onDiscard={() => navigate('list')} onCreated={() => {
+        schedules.reload(); notice = 'Schedule created.'; void navigate('list');
+      }} />
+    {:else if view === 'details' && current}
+      <button class="schedule-back" onclick={() => navigate('list')}>← Back to schedules</button>
+      {#key current.id}<ScheduleCard schedule={current} agentName={name({ type: 'agent', id: current.agentId })} onChanged={schedules.reload} />{/key}
+    {:else}
+      {#each active.filter((s) => s.catchUp) as schedule (schedule.id)}
+        <div class="schedule-catchup">
+          <strong><Icon name="schedules" size={16} /> {schedule.title} missed {schedule.catchUp!.missed} run{schedule.catchUp!.missed === 1 ? '' : 's'}</strong>
+          <p>This computer was off. Run it once now, or wait for the next run at {instant(schedule.nextRunAt)}. If unanswered, this question lapses then.</p>
+          <div class="row wrap">
+            <button disabled={action.busy} onclick={() => catchUp(schedule, 'run')}>Run once now</button>
+            <button class="secondary" disabled={action.busy} onclick={() => catchUp(schedule, 'wait')}>Wait for the next run</button>
+          </div>
         </div>
-      </div>
-    {/each}
-    <ErrorNote error={action.error} />
-    <h2 class="schedule-eyebrow" tabindex="-1">Schedules · {active.length}</h2>
-    {#if !schedules.data && !schedules.error}<p class="muted">Loading schedules…</p>{/if}
-    {#if schedules.data && !active.length}<p class="muted">No active schedules. Create a schedule to set up recurring work.</p>{/if}
-    {#snippet rows(items: Responsibility[])}
-      {#each items as schedule (schedule.id)}
-        <button class="schedule-row" onclick={() => navigate('details', schedule)}>
-          <span class="schedule-clock"><Icon name="schedules" /></span>
-          <span class="schedule-description">
-            <strong>{schedule.title}</strong>
-            <span class="schedule-meta"><Avatar name={name({ type: 'agent', id: schedule.agentId })} id={schedule.agentId} agent size="sm" />
-              {name({ type: 'agent', id: schedule.agentId })} <span class="agent-label">agent</span>
-              <span>· {recurrenceSummary(schedule, timeDisplay.format === '12h')}</span>
-            </span>
-          </span>
-          <span class="schedule-next">{schedule.status === 'enabled' ? instant(schedule.nextRunAt) : 'No new runs'}</span>
-          <ScheduleBadge status={schedule.status} />
-          <span aria-hidden="true">›</span>
-        </button>
       {/each}
-    {/snippet}
-    <div class="schedule-list">{@render rows(active)}</div>
-    {#if cancelled.length}
-      <details class="schedule-cancelled"><summary>Cancelled schedules · {cancelled.length}</summary>
-        <div class="schedule-list">{@render rows(cancelled)}</div>
-      </details>
+      <ErrorNote error={action.error} />
+      {#if active.length > 0}
+        <h2 class="schedule-eyebrow" tabindex="-1">Schedules · {active.length}</h2>
+      {/if}
+      {#if !schedules.data && !schedules.error}<p class="muted">Loading schedules…</p>{/if}
+      {#if schedules.data && !active.length && !schedules.error}
+        <section class="schedule-empty" aria-labelledby="schedules-empty-title">
+          <div class="schedule-empty-clock"><Icon name="schedules" /></div>
+          <h2 id="schedules-empty-title" tabindex="-1">No active schedules</h2>
+          <p>Set up recurring work for an agent.<br />Choose when it runs and where it posts results.</p>
+          <button onclick={() => navigate('new')}><Icon name="plus" size={16} /> Create schedule</button>
+        </section>
+      {/if}
+      {#snippet rows(items: Responsibility[])}
+        {#each items as schedule (schedule.id)}
+          <button class="schedule-row" onclick={() => navigate('details', schedule)}>
+            <span class="schedule-clock"><Icon name="schedules" /></span>
+            <span class="schedule-description">
+              <strong>{schedule.title}</strong>
+              <span class="schedule-meta"><Avatar name={name({ type: 'agent', id: schedule.agentId })} id={schedule.agentId} agent size="sm" />
+                {name({ type: 'agent', id: schedule.agentId })} <span class="agent-label">agent</span>
+                <span>· {recurrenceSummary(schedule, timeDisplay.format === '12h')}</span>
+              </span>
+            </span>
+            <span class="schedule-next">{schedule.status === 'enabled' ? instant(schedule.nextRunAt) : 'No new runs'}</span>
+            <ScheduleBadge status={schedule.status} />
+            <span aria-hidden="true">›</span>
+          </button>
+        {/each}
+      {/snippet}
+      <div class="schedule-list">{@render rows(active)}</div>
+      {#if cancelled.length}
+        <details class="schedule-cancelled"><summary>Cancelled schedules · {cancelled.length}</summary>
+          <div class="schedule-list">{@render rows(cancelled)}</div>
+        </details>
+      {/if}
     {/if}
-  {/if}
+  </div>
 </div>

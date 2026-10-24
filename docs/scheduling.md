@@ -89,8 +89,12 @@ responsibility, resolve those runs before migrating; the migration never deletes
 ## Web interface
 
 Schedules uses the approved list, detail, and full-width creation screens in `docs/design/schedules/`.
-Cancelled schedules are folded away. The form detects the creator's device timezone without a
-picker, previews the source rule, and keeps missed-run handling visible. The interval form sets
+The approved `docs/design/schedules-centered/` follow-up puts the heading, actions, list, and
+notices in one centered frame capped at 1,220px. Rows keep next-run and status columns aligned,
+then reflow to fit narrow page widths. With no enabled or paused schedules, the empty state
+shows Create schedule near its explanation; the duplicate header action stays hidden.
+Cancelled schedules are folded below this state. The form detects the creator's device timezone
+without a picker, previews the source rule, and keeps missed-run handling visible. The interval form sets
 its first slot one interval in the future; legacy API interval creation still defaults to now.
 The local computer must be awake and the service running.
 
