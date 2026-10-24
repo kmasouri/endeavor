@@ -107,7 +107,11 @@ function MessageList(props: {
 }) {
   const end = useRef<HTMLDivElement>(null);
   const count = props.messages.length;
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [count]);
+  // Braces matter: React treats anything an effect returns as its cleanup, and newer browsers
+  // return a Promise from scrollIntoView(). Calling that on leaving the page blanked the app.
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' });
+  }, [count]);
   const byId = useMemo(() => new Map(props.messages.map((m) => [m.id, m])), [props.messages]);
 
   if (count === 0) {
