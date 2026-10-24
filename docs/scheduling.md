@@ -102,3 +102,7 @@ The source rule always names its timezone and retains its source weekdays. Actua
 history instants use the viewer's device timezone and saved 12/24-hour preference. For example,
 Monday October 26, 2026 at 00:30 in New York is Sunday October 25 at 21:30 in Los Angeles; both
 refer to `2026-10-26T04:30:00Z`. The source rule still says Monday in New York for both viewers.
+
+Schedule layout regressions are covered by the committed Playwright suite in `apps/web/e2e/`,
+run by `npm run check`. Tests exercise the production CSS bundle, including expanded cancelled
+rows, one-line badges in both themes at desktop and phone widths, alignment, and empty states.

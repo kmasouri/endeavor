@@ -86,7 +86,7 @@
 }
 .schedule-row {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1fr) 210px 90px 14px;
+  grid-template-columns: 38px minmax(0, 1fr) 210px 104px 14px;
   align-items: center;
   gap: 12px;
   width: 100%;
@@ -139,7 +139,9 @@
   color: var(--text-200);
   text-align: right;
 }
-.schedule-badge {
+.badge.schedule-badge {
+  white-space: nowrap;
+  flex-wrap: nowrap;
   justify-self: end;
   flex-shrink: 0;
   display: inline-flex;

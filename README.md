@@ -87,7 +87,8 @@ npm run test:coverage
 npm run build          # builds the API (apps/api/dist) and the web interface (apps/web/dist)
 npm run lint
 npm run format
-npm run check          # lint + typecheck + build + test (CI runs this)
+npm run check          # lint + typecheck + build + unit and browser tests (CI runs this)
+npm run test:e2e       # build the web app and run its Playwright regression suite
 npm run db:up          # start local Postgres
 npm run db:migrate     # apply apps/api/db/schema/ files
 npm run up             # run the app and Postgres in Docker
@@ -170,3 +171,23 @@ Set these in the GitHub `sandbox` environment:
 | `ECS_SERVICE`        | variable | ECS service name, such as `bold-cedar-007-sandbox-service`.    |
 
 To redeploy an image that's already built, run the `deploy` workflow by hand. It doesn't make a new release.
+
+## Browser regression tests
+
+`npm run check` includes the committed Playwright suite in `apps/web/e2e/`. It launches Vite's
+preview server against the production build, so browser checks use the same bundled CSS order as
+the served app. The suite mocks the HTTP API; it needs no database, Docker app, provider keys, or
+model calls, and it never changes real schedules or runs.
+
+Run `npm run test:e2e` for browser tests alone. Chromium downloads on the first run. In CI the
+runner also installs Chromium's system libraries; the existing CI workflow runs these tests through
+`npm run check`. No deployment workflow changes are needed. On a new Linux workstation, install
+missing system libraries with `npx playwright install-deps chromium` from `apps/web/` if needed.
+
+The initial suite covers enabled/paused/cancelled badges on one line without clipping or overlaps,
+production CSS, both themes, desktop/phone widths, the shared centered frame, empty-state action
+alignment, keyboard navigation, and API failure handling. Future UI regressions should add cases
+here. These checks cover selected browser behavior; the other feature pages still need broader
+coverage. Failed runs retain a screenshot and trace under `apps/web/test-results/`, with an HTML
+report in `apps/web/playwright-report/`. Both directories are ignored by git. To inspect a local
+report, run `npx playwright show-report` from `apps/web/`.

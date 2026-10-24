@@ -10,3 +10,6 @@ infrastructure
 npm-debug.log
 apps/api/workspaces
 pilot
+
+**/playwright-report
+**/test-results

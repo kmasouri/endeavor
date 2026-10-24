@@ -7,11 +7,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "eslint \"src/**/*.{ts,svelte}\"",
-    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "node --conditions=browser --test src/*.test.ts"
+    "lint": "eslint \"src/**/*.{ts,svelte}\" \"e2e/**/*.{ts,mjs}\" playwright.config.ts",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json && tsc -p tsconfig.e2e.json",
+    "test": "node --conditions=browser --test src/*.test.ts",
+    "test:e2e": "node e2e/run.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "1.64.1",
     "@sveltejs/vite-plugin-svelte": "7.3.1",
     "eslint": "10.11.0",
     "eslint-plugin-svelte": "3.23.1",
