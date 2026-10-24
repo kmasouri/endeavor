@@ -1,36 +1,36 @@
 # Design
 
-The design for the web app (`apps/web`): the conversation screen, skills and connections, access requests, and the shared style guide. The conversation designs came from two claude.ai boards in October 2026. Kayvan agreed the catalog and access-request designs in a Codex review on October 24. This folder is the copy any person or agent can open. When an older board and this folder disagree, ask Kayvan which one is current.
+The design for the web app (`apps/web`): every screen designed so far, and the shared style guide. All screens live on the "Chat view redesign" board on claude.ai, and this folder is their export. Codex first drafted the skills, access request, schedules, agent history, and profile screens; they were rebuilt on the board on October 24 so every screen shares one shell and the style guide. When the board and this folder disagree, ask Kayvan which one is current.
 
 Everything here is a picture of the app, not app code. Build it in Svelte, using the tokens in `style-guide/tokens.css`.
 
 ## What's here
 
-| Path                                                          | What                                                                                                                |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `chat-view/chat-view.html` + `.png`                           | The conversation screen, with the Details panel closed                                                              |
-| `chat-view/chat-view-details.html` + `.png`                   | The same screen with Details open while an agent is working                                                         |
-| `chat-view/message-box.html` + `.png`                         | The message box: the @ picker, replying, and how a reply shows                                                      |
-| `chat-view/agent-states.html` + `.png`                        | How agents look at each step: working, playful status words, its work folded, waiting, needs your OK, paused, stuck |
-| `skills-and-connections/skills-and-connections.html` + `.png` | The agreed tabbed catalog, starting on Skills, with visible Enabled and Disabled badges                             |
-| `skills-and-connections/connections.html` + `.png`            | The Connections tab, with credential state and read-only scope summaries                                            |
-| `skills-and-connections/skill-editor.html` + `.png`           | The full-width instructions editor, without connection dependencies                                                 |
-| `approvals/access-request.html` + `.png`                      | An agent's connection access request in the conversation, with task-only and ongoing choices                        |
-| `schedules/schedules.html` + `.png`                           | The agreed Quiet list, visible schedule states, full-width details, and local preview actions                       |
-| `schedules/new-schedule.png`                                  | The creation form: weekday picker, local time, detected timezone, and always-visible missed-run policy              |
-| `agent-history/agent-history.html` + `.fragment.html`         | The approved conversation-first history preview, with separate histories for each agent                             |
-| `agent-history/*.png`                                         | Conversation Details, each agent's scoped history, and the selected run's details                                   |
-| `profile-settings/profile-settings.html` + `.fragment.html`  | User Profile and Preferences tabs, with local name editing, appearance, and time display choices                     |
-| `profile-settings/profile.png` + `preferences.png`           | The two desktop settings screens as reviewed in chat                                                               |
-| `style-guide/README.md`                                       | The style guide: principles, color roles, type, spacing, words, icons, layout                                       |
-| `style-guide/tokens.json`                                     | Every token, with a note on when to use it                                                                          |
-| `style-guide/tokens.css`                                      | The same tokens as CSS custom properties, ready to import. Generated from `tokens.json`                             |
-| `style-guide/components/<Name>/`                              | Each building block: `README.md` (how to use it) and `preview.html` (a live example)                                |
+| Path                                                | What                                                                                                                |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `chat-view/chat-view.html` + `.png`                 | The conversation screen, with the Details panel closed                                                              |
+| `chat-view/chat-view-details.html` + `.png`         | The same screen with Details open while an agent is working                                                         |
+| `chat-view/message-box.html` + `.png`               | The message box: the @ picker, replying, and how a reply shows                                                      |
+| `chat-view/agent-states.html` + `.png`              | How agents look at each step: working, playful status words, its work folded, waiting, needs your OK, paused, stuck |
+| `skills-and-connections/skills.html` + `.png`       | The tabbed catalog, on Skills, with Enabled and Disabled on every row                                               |
+| `skills-and-connections/connections.html` + `.png`  | The Connections tab, with what each one allows and whether it has a credential                                      |
+| `skills-and-connections/skill-editor.html` + `.png` | The full-width instructions editor                                                                                  |
+| `approvals/access-request.html` + `.png`            | An agent asks for connection access in the conversation: for this task, or ongoing                                  |
+| `schedules/schedules.html` + `.png`                 | The schedules list, with a missed-runs card and each schedule's state                                               |
+| `schedules/schedule-details.html` + `.png`          | One schedule, with Pause, Run once now, and recent runs                                                             |
+| `schedules/new-schedule.html` + `.png`              | The new schedule form: days, local time, and what to do about missed runs                                           |
+| `agent-history/*.html` + `.png`                     | History from Details, each agent's own runs, and one run, with chat still visible                                   |
+| `profile-settings/profile.html` + `.png`            | Your display name, and how you appear in conversations                                                              |
+| `profile-settings/preferences.html` + `.png`        | Theme and time display                                                                                              |
+| `style-guide/README.md`                             | The style guide: principles, color roles, type, spacing, words, icons, layout                                       |
+| `style-guide/tokens.json`                           | Every token, with a note on when to use it                                                                          |
+| `style-guide/tokens.css`                            | The same tokens as CSS custom properties, ready to import. Generated from `tokens.json`                             |
+| `style-guide/components/<Name>/`                    | Each building block: `README.md` (how to use it) and `preview.html` (a live example)                                |
 
 ## How to look at it
 
 - **Pictures:** open the `.png` files.
-- **In a browser:** open any `.html` file directly. The chat view pages are fixed mockups. The catalog, access-request, and component previews read `style-guide/tokens.css`. Set `data-theme="light"` on their `<html>` element to see the light theme. Catalog tabs, editing, and access-request decisions work locally with sample data; they never call the app or grant real access.
+- **In a browser:** open any `.html` file directly. The screens are fixed mockups with sample data; they never call the app. The component previews read `style-guide/tokens.css`. Set `data-theme="light"` on their `<html>` element to see the light theme.
 - **From an agent:** read the `.md` files, view the `.png` files, or render the `.html` files with a headless browser. On Kayvan's computer, Chrome 153 is at `~/.cache/ms-playwright/chromium-1243/chrome-linux-arm64/chrome`; the system Chromium is too old.
 
 ## Decisions
@@ -43,6 +43,15 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 - **Sky means "this is an agent":** the agent badge, the word "agent", and an agent's live status. No yolk or amber on agents.
 - **Lime means "done":** approved and finished chips (`success`), and the first agent's avatar.
 - **Red means "look here":** every count badge (unread conversations, Approvals) is the same red with white text. Nothing else is red, except "stuck".
+
+### Every screen
+
+- **One sidebar everywhere:** Conversations, Approvals, Schedules, Agents, Skills and connections, Setup, then the conversation list. Work is gone (see Agent history below). Your name at the bottom opens Profile and settings.
+- **One header:** pages that aren't a conversation get the same header bar as a conversation: the page name, a short line under it, and the page's main action on the right ("New schedule"). No "Workspace /" breadcrumb.
+- **Selected is neutral, never yolk:** the open tab (light text, light underline), chosen days (light fill, dark letter), a chosen option card (graphite fill, light border). Yolk stays for actions and for things waiting on you.
+- **Waiting on you is yolk:** "Researcher is waiting for your OK" in the status line, and the "Needs your OK" card.
+- **Status chips:** Enabled and Done are lime (`success`), with an icon. Disabled and Paused are neutral, with an icon.
+- **Agents in lists** show their small avatar, their name, and the word "agent" in sky, like in messages.
 
 ### Who's who
 
@@ -84,7 +93,7 @@ These cards appear in the conversation itself, not only on other pages:
 - **Ask in the conversation:** the request names the agent and connection, explains why it is needed, and shows the allowed requests on demand. It also appears in Approvals.
 - **For this task is selected by default.** Access survives pauses and service restarts, then ends when the task completes or is cancelled.
 - **Ongoing is an explicit human choice:** access applies to this agent's current task and future work until revoked. Access never transfers to other agents.
-- **Decline grants nothing.** The agent receives the decision and can explain the limitation or use another available capability.
+- **"Don't allow" grants nothing.** The agent receives the decision and can explain the limitation or use another available capability.
 - **Access and actions are different approvals.** Giving a connection does not approve individual calls that require a person's OK.
 - This is the agreed target design for [CA-38](https://app.notion.com/p/4031a83d088f81999042d1aadfd02466), which also covers filtered discovery, skill requests, and revocation. The saved screen shows a connection request; it is not an implemented app feature.
 
@@ -95,8 +104,7 @@ These cards appear in the conversation itself, not only on other pages:
 The [Profile and settings reference](profile-settings/README.md) shows a person's display name and
 personal appearance and time display choices. It is separate from agent configuration.
 [CA-43](https://app.notion.com/p/4031a83d088f81a4b909f0e5b34b5fd3) tracks persistence, save/error
-states, and integration with the current person picker. The archived images preserve the reviewed
-avatar; implementation follows the current tinted-avatar tokens. Sign-in and roles stay deferred.
+states, and integration with the current person picker. Sign-in and roles stay deferred.
 
 ### Schedules
 
