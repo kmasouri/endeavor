@@ -926,18 +926,59 @@ mark.mention-you {
   margin: 8px 0;
   font-size: 13px;
 }
-.run-steps > summary {
-  display: list-item;
-  width: fit-content;
-  border: 1px solid var(--border-100);
-  border-radius: var(--radius-sm);
-  padding: 4px 10px;
-  background: var(--bg-200);
+.run-steps-toggle {
+  background: transparent;
+  color: var(--text-300);
+  border: 0;
+  min-height: 28px;
+  padding: 2px 0;
+  gap: 4px;
+  font-size: 13px;
 }
-.run-steps .events {
-  max-height: 300px;
-  overflow-y: auto;
+.run-steps-toggle:hover {
+  color: var(--text-200);
+}
+.run-steps-toggle svg.expanded {
+  transform: rotate(90deg);
+}
+.run-step-body {
+  border-left: 1px solid var(--border-200);
+  padding: 4px 0 4px 16px;
+  margin: 4px 0 8px 6px;
+  overflow-wrap: anywhere;
+}
+.work-steps {
+  padding: 0 0 0 18px;
+  margin: 0;
+  color: var(--text-200);
+}
+.work-steps li {
+  padding: 2px 0;
+  line-height: 20px;
+}
+.step-detail {
+  display: inline;
+}
+.step-detail::before {
+  content: ' · ';
+}
+.work-steps .step-error {
+  color: var(--danger);
+}
+.step-footer {
+  display: flex;
+  gap: 16px;
+  align-items: center;
   margin-top: 8px;
+  font-size: 12px;
+}
+.step-footer a,
+.step-footer .text-button {
+  color: var(--text-300);
+  font-size: 12px;
+}
+.conversation-scroll {
+  overflow-anchor: none;
 }
 .artifact-card {
   max-width: 640px;
