@@ -30,9 +30,7 @@
   </div>
 
   {#if r.body}
-    <pre>
-{r.body}
-</pre>
+    <pre>{r.body}</pre>
   {/if}
 
   <input bind:value={reason} placeholder="Reason (optional)" />

@@ -45,9 +45,7 @@
           {doc.title}
         </summary>
 
-        <pre>
-{doc.content}
-</pre>
+        <pre>{doc.content}</pre>
       </details>
 
       <button

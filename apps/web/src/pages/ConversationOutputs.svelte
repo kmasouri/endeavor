@@ -48,9 +48,7 @@
         {/if}
 
         {#if output.content}
-          <pre>
-{output.content}
-</pre>
+          <pre>{output.content}</pre>
         {/if}
 
         <a href={`#/tasks/${output.taskId}`}> Open the task </a>
