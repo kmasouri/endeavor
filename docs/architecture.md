@@ -44,6 +44,25 @@ The API and the web interface are separate npm workspaces, so each has its own d
 
 The web interface uses one Svelte component per page or form. Shared request and action state lives in `apps/web/src/state.svelte.ts`; hash navigation stays in `App.svelte`. Requests ignore answers from closed pages or older reloads, and polling stops when its component is removed. The typed HTTP client stays in `api.ts`. `svelte-check` checks components and TypeScript together. Web tests use Node's test runner with Svelte's compiler and browser runtime; they need no browser or database.
 
+The web app imports `apps/web/src/design-tokens.css`, an exact copy of
+`docs/design/style-guide/tokens.css`. A test checks that the copy stays in sync, so the Docker image
+can build without the design documentation. Dark is the default. `appearance.ts` applies the browser's
+remembered theme before mounting the app. Shared avatars, icons, and page headers keep the shell
+and feature pages consistent. The sidebar collapses and keeps the current person picker under
+Profile and settings until the profile feature ships.
+
+The conversation page owns its messages, tasks, outputs, approval requests, and spending resources.
+Details starts closed. Messages render a small Markdown subset as Svelte text nodes, including
+safe HTTP links, emphasis, code, lists, and highlighted mentions. Raw HTML stays text. Typing `@`
+opens the member picker; adding a directory agent uses the membership API before sending a mention.
+Reply actions preserve the source message ID. Run steps load on expansion. Artifact cards use task
+review when review is pending; requests for changes return to the conversation composer.
+
+The interface shows only data returned by the API. Unread counts, live steps and typing, pause
+attribution, spending by agent, and draft/final labels remain follow-up work. Work links and existing
+task routes stay available until conversation-scoped history replaces them in CA-40. The temporary
+History links filter Work by conversation and owner; message inspection links open the recorded task.
+
 Code is grouped by layer first, then by feature. For example, all handlers are in `handlers/`, and the item handlers are in `handlers/items/`. We chose this over one folder per feature because:
 
 - Each file does one job, so files stay small.

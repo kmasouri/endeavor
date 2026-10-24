@@ -1,4 +1,7 @@
 <script lang="ts">
+  import Avatar from '../Avatar.svelte';
+  import { conversationName } from '../appearance';
+  import PageHeader from '../PageHeader.svelte';
   import { api, type Conversation, type DirectoryEntry } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
@@ -28,10 +31,17 @@
   };
 </script>
 
+<PageHeader title="Conversations" subtitle="Shared conversations with people and agents.">
+  {#snippet actions()}<button
+      onclick={() =>
+        document
+          .getElementById('new-conversation')
+          ?.scrollIntoView({ block: 'start', behavior: 'smooth' })}>New conversation</button
+    >{/snippet}
+</PageHeader>
+
 <div class="columns">
   <section>
-    <h1>Conversations</h1>
-
     <ErrorNote error={conversations.error} />
 
     {#if conversations.data?.data.length === 0}
@@ -42,7 +52,7 @@
       {#each conversations.data?.data ?? [] as conversation (conversation.id)}
         <li>
           <a href={`#/conversations/${conversation.id}`}>
-            {conversation.title}
+            # {conversationName(conversation.title)}
           </a>
 
           <span class="muted">
@@ -53,7 +63,7 @@
     </ul>
   </section>
 
-  <aside class="panel">
+  <aside class="panel" id="new-conversation">
     <h2>Start a conversation</h2>
 
     <form onsubmit={start} class="stack">
@@ -87,9 +97,11 @@
             />
 
             <span>
-              <strong>
-                {agent.name}
-              </strong>
+              <span class="row"
+                ><Avatar name={agent.name} id={agent.id} agent /><strong>{agent.name}</strong><span
+                  class="agent-label">agent</span
+                ></span
+              >
 
               <span class="muted">
                 {agent.purpose}

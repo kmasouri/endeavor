@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PageHeader from '../PageHeader.svelte';
   import { api, type Approval } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
@@ -23,9 +24,9 @@
   const name = createNames();
 </script>
 
-<div class="narrow wide">
-  <h1>Approvals</h1>
+<PageHeader title="Approvals" subtitle="Requests waiting for a person’s decision." />
 
+<div class="narrow wide">
   <Hint>
     Agents work on their own within their access. Some actions, set per connection, wait for a
     person first. The agent's task waits until you decide, and it's told your reason.

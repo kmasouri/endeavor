@@ -19,6 +19,7 @@
     () => [base],
     15000
   );
+  let editing = $state(false);
   let budget = $state('');
   const action = createAction();
   let field = $derived(props.kind === 'agent' ? 'monthlyBudgetUsd' : 'budgetUsd');
@@ -32,17 +33,16 @@
     event.preventDefault();
     save(Number(budget));
   };
-
-
 </script>
 
 <h2>Spending</h2>
 
-<Hint>
-  {#if props.kind === 'agent'}What this agent spent on AI models, this month (UTC) and in total.
-    When it reaches its monthly budget, its work stops and asks a person.{:else}What all agent work
-    here spent on AI models. When it reaches the budget, agents here stop and ask a person.{/if}
-</Hint>
+{#if props.kind === 'agent'}
+  <Hint>
+    What this agent spent on AI models, this month (UTC) and in total. When it reaches its monthly
+    budget, its work stops and asks a person.
+  </Hint>
+{/if}
 
 <ErrorNote error={report.error} />
 
@@ -67,7 +67,7 @@
     </Hint>
   {/if}
 
-  {#if r.tasks.length > 0}
+  {#if props.kind === 'agent' && r.tasks.length > 0}
     <details>
       <summary>Costliest tasks</summary>
 
@@ -83,20 +83,32 @@
   {/if}
 {/if}
 
-<form onsubmit={submit} class="row wrap">
-  <input
-    inputmode="decimal"
-    bind:value={budget}
-    placeholder={props.kind === 'agent' ? 'Monthly budget, $' : 'Budget, $'}
-    style="width: 10rem"
-  />
-  <button disabled={action.busy || !(Number(budget) > 0)}>Set budget</button>
+{#if props.kind === 'conversation'}
+  {#if r && spent && r.budgetUsd !== null}<progress
+      aria-label="Conversation spending"
+      value={spent.costUsd}
+      max={r.budgetUsd}
+    ></progress>{/if}
+  <button class="text-button" onclick={() => (editing = !editing)}
+    >Change this conversation's budget</button
+  >
+{/if}
+{#if props.kind === 'agent' || editing}
+  <form onsubmit={submit} class="row wrap">
+    <input
+      inputmode="decimal"
+      bind:value={budget}
+      placeholder={props.kind === 'agent' ? 'Monthly budget, $' : 'Budget, $'}
+      style="width: 10rem"
+    />
+    <button disabled={action.busy || !(Number(budget) > 0)}>Set budget</button>
 
-  {#if r?.budgetUsd !== null && r?.budgetUsd !== undefined}
-    <button type="button" class="secondary" disabled={action.busy} onclick={() => save(null)}>
-      Remove budget
-    </button>
-  {/if}
-</form>
+    {#if r?.budgetUsd !== null && r?.budgetUsd !== undefined}
+      <button type="button" class="secondary" disabled={action.busy} onclick={() => save(null)}>
+        Remove budget
+      </button>
+    {/if}
+  </form>
+{/if}
 
 <ErrorNote error={action.error} />

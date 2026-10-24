@@ -1,5 +1,3 @@
-@import '../../../../docs/design/style-guide/tokens.css' layer(catalog-tokens);
-
 .catalogs {
   --bg: var(--bg-100);
   --surface: var(--bg-200);
