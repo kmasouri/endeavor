@@ -11,7 +11,8 @@ export const conversationParamsSchema = z.object({
 
 export const createConversationBodySchema = z.strictObject({
   title: z.string().trim().min(1).max(200),
-  agentIds: z.array(z.uuid()).max(20).optional()
+  agentIds: z.array(z.uuid()).max(20).optional(),
+  humanIds: z.array(z.uuid()).max(20).optional()
 });
 
 export const updateConversationBodySchema = z

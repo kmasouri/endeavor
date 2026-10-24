@@ -18,7 +18,9 @@
   import AgentsPage from './pages/AgentsPage.svelte';
   import CatalogsPage from './pages/CatalogsPage.svelte';
   import ConversationPage from './pages/ConversationPage.svelte';
-  import ConversationsPage from './pages/ConversationsPage.svelte';
+  import NewEndeavor from './pages/NewEndeavor.svelte';
+  import SearchEndeavors from './pages/SearchEndeavors.svelte';
+  import { loadEndeavors, lastEndeavor, rememberEndeavor } from './endeavors';
   import SetupPage from './pages/SetupPage.svelte';
   import FirstPerson from './FirstPerson.svelte';
   import PickPerson from './PickPerson.svelte';
@@ -36,6 +38,10 @@
   let collapsed = $state(window.innerWidth < 700);
   let picking = $state(false);
   let switching = $state(false);
+  let creating = $state(false);
+  let searching = $state(false);
+  let focusConversation = $state<string | null>(null);
+  let additions = $state<Conversation[]>([]);
   let switchError = $state<string | null>(null);
   let actorId = $state(getActorId());
   const people = createLoad(
@@ -54,7 +60,7 @@
   );
   const conversations = createLoad(
     () =>
-      actorId ? api.list<Conversation>('/conversations?limit=100') : Promise.resolve(undefined),
+      actorId ? loadEndeavors() : Promise.resolve(undefined),
     () => [actorId],
     10000
   );
@@ -78,6 +84,10 @@
       if (!person) throw new Error('This person is no longer available. Reload and choose again.');
       dirty = false;
       guard = () => true;
+      creating = false;
+      searching = false;
+      additions = [];
+      focusConversation = null;
       savedPerson = person;
       setActorId(id);
       actorId = id;
@@ -108,9 +118,39 @@
     timeDisplay.format = me?.preferences.timeFormat ?? '12h';
   });
   let [section, id] = $derived(route);
+  let recent = $derived([...new Map([...additions, ...(conversations.data ?? [])].map((c) => [c.id, c])).values()]);
+  $effect(() => {
+    if (!actorId || !conversations.data || (section && section !== 'conversations') || id) return;
+    const saved = lastEndeavor(actorId);
+    const selected = recent.find((c) => c.id === saved) ?? recent[0];
+    if (selected) window.location.hash = `/conversations/${selected.id}`;
+  });
+  const openConversation = (id: string) => {
+    searching = false;
+    window.location.hash = `/conversations/${id}`;
+    if (window.innerWidth < 700) collapsed = true;
+  };
+  const newEndeavor = () => { if (guard()) creating = true; };
+  const searchEndeavors = () => {
+    if (!creating && !picking && !searching && guard()) searching = true;
+  };
+  const created = (conversation: Conversation) => {
+    additions = [conversation, ...additions];
+    focusConversation = conversation.id;
+    creating = false;
+    rememberEndeavor(actorId!, conversation.id);
+    openConversation(conversation.id);
+    conversations.reload();
+  };
 </script>
 
 <svelte:window
+  onkeydown={(event) => {
+    if (me && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      searchEndeavors();
+    }
+  }}
   onbeforeunload={(event) => {
     if (dirty) {
       event.preventDefault();
@@ -150,24 +190,17 @@
   <ErrorNote error={switchError} />
 {:else}
   <div class="shell" class:sidebar-collapsed={collapsed}>
-    <button
-      class="sidebar-open secondary icon-button"
-      aria-label={collapsed ? 'Open sidebar' : 'Collapse sidebar'}
-      aria-expanded={!collapsed}
-      onclick={() => (collapsed = !collapsed)}><Icon name="panel" /></button
-    >
+    <header class="app-bar">
+      <div class="row app-brand">
+        <button class="quiet icon-button" aria-label={collapsed ? 'Open sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} onclick={() => (collapsed = !collapsed)}><Icon name="panel" /></button>
+        <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true">E</span>Endeavor</a>
+      </div>
+      <button class="secondary search-launch" aria-label="Search endeavors" onclick={searchEndeavors}><Icon name="search" /><span>Search endeavors…</span><kbd>⌘ / Ctrl K</kbd></button>
+    </header>
     {#if !collapsed}
       <aside class="sidebar">
-        <div class="brand-row">
-          <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true">E</span>Endeavor</a
-          ><button
-            class="quiet icon-button"
-            aria-label="Collapse sidebar"
-            onclick={() => (collapsed = true)}><Icon name="panel" /></button
-          >
-        </div>
         <nav aria-label="Main">
-          {#each [['', 'Conversations', 'conversations'], ['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['catalogs', 'Skills and connections', 'catalogs'], ['setup', 'Setup', 'setup'], ['tasks', 'Work', 'work']] as [path, label, icon] (path)}
+          {#each [['', 'Endeavors', 'conversations'], ['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['catalogs', 'Skills and connections', 'catalogs'], ['setup', 'Setup', 'setup'], ['tasks', 'Work', 'work']] as [path, label, icon] (path)}
             <a
               class:active={path === ''
                 ? !section || section === 'conversations'
@@ -187,22 +220,19 @@
         </nav>
         <div class="sidebar-conversations">
           <div class="row">
-            <span class="label grow">Conversations</span><a
-              class="icon-button secondary"
-              href="#/"
-              aria-label="New conversation"><Icon name="plus" size={14} /></a
-            >
+            <span class="label grow">Recent</span><button class="quiet new-endeavor" aria-label="New endeavor" onclick={newEndeavor}><Icon name="plus" size={14} /> New</button>
           </div>
           <ErrorNote error={conversations.error} />
-          {#each conversations.data?.data ?? [] as conversation (conversation.id)}
+          {#each recent as conversation (conversation.id)}
             <a
               class:active={section === 'conversations' && id === conversation.id}
               href={`#/conversations/${conversation.id}`}
               title={conversation.title}
+              aria-current={section === 'conversations' && id === conversation.id ? 'page' : undefined}
               onclick={() => {
                 if (window.innerWidth < 700) collapsed = true;
               }}
-              ><span>#</span><span class="ellipsis">{conversationName(conversation.title)}</span></a
+              ><span class="ellipsis">{conversationName(conversation.title)}</span></a
             >
           {/each}
         </div>
@@ -267,12 +297,32 @@
         {:else if section === 'catalogs'}
           <CatalogsPage />
         {:else if section === 'conversations' && id}
-          <ConversationPage conversationId={id} {me} />
+          <ConversationPage conversationId={id} {me} onReady={(conversation) => {
+            rememberEndeavor(actorId!, conversation.id);
+            const focus = focusConversation === conversation.id;
+            if (focus) focusConversation = null;
+            return focus;
+          }} />
         {:else}
-          <ConversationsPage />
+          <section class="endeavor-empty">
+            <Icon name="conversations" size={36} />
+            {#if conversations.error}
+              <h1>Endeavors</h1><ErrorNote error={conversations.error} /><button class="secondary" onclick={conversations.reload}>Retry</button>
+            {:else if !conversations.data || recent.length}
+              <p class="muted">Opening your endeavor…</p>
+            {:else}
+              <h1>What do you want to accomplish?</h1>
+              <p class="muted">Start your first endeavor. Bring in people and agents whenever you need them.</p>
+              <button aria-label="New endeavor" onclick={newEndeavor}><Icon name="plus" /> New endeavor</button>
+            {/if}
+          </section>
         {/if}
       {/key}
     </main>
+    {#key actorId}
+      {#if creating}<NewEndeavor people={people.data} {me} onCreated={created} onClose={() => (creating = false)} />{/if}
+      {#if searching}<SearchEndeavors conversations={recent} error={conversations.error} loading={!conversations.data} onPick={openConversation} onClose={() => (searching = false)} onRetry={conversations.reload} />{/if}
+    {/key}
     {#if picking}
       <SwitchPerson
         people={people.data}

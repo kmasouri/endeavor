@@ -99,6 +99,33 @@ describe('ConversationService', () => {
     expect(conversations.create).not.toHaveBeenCalled();
   });
 
+  it('adds chosen people and agents once without posting a message or starting work', async () => {
+    const { service, conversations, humans, messages } = setup();
+    humans.getById.mockImplementation(async (id) =>
+      id === KIM ? kim : id === LEE ? { ...kim, id: LEE, name: 'Lee' } : null
+    );
+    await service.createConversation(KIM, {
+      title: 'Billing',
+      humanIds: [KIM, LEE, LEE],
+      agentIds: [AGENT, AGENT]
+    });
+    expect(conversations.addMember.mock.calls.map(([input]) => input.participant)).toEqual([
+      { type: 'human', id: KIM },
+      { type: 'human', id: LEE },
+      { type: 'agent', id: AGENT }
+    ]);
+    expect(messages.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unknown person before creating anything', async () => {
+    const { service, conversations } = setup();
+    await expect(
+      service.createConversation(KIM, { title: 'Billing', humanIds: [LEE] })
+    ).rejects.toMatchObject({ name: 'participantNotFound' });
+    expect(conversations.create).not.toHaveBeenCalled();
+    expect(conversations.addMember).not.toHaveBeenCalled();
+  });
+
   it('delivers a message only to the agents it addresses', async () => {
     const { service, messages } = setup();
 

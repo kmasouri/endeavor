@@ -50,6 +50,14 @@ HTTP API. `npm run check` runs it locally and in CI, including browser setup. It
 badge geometry, themes, responsive layout, empty states, and keyboard navigation without starting
 agents or requiring a database. Browser traces and screenshots are retained on failure.
 
+Endeavors is the product-facing conversation destination. Its header search and native creation
+modal live in the shared shell; the selected chat keeps its existing features and compatible hash
+URL. Selection is remembered per person in browser storage and restored only from the current
+accessible list. Paginated lists are fully loaded for restoration and search; old requests cannot
+publish into another person's shell. A successful creation refreshes Recent and focuses the
+composer. Optional initial human and agent members use the existing membership validation; no
+message or agent invocation occurs during creation. See [conversations](conversations.md).
+
 The web app imports `apps/web/src/design-tokens.css`, an exact copy of
 `docs/design/style-guide/tokens.css`. A test checks that the copy stays in sync, so the Docker image
 can build without the design documentation. `appearance.ts` applies the browser's

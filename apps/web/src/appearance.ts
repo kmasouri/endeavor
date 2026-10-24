@@ -25,4 +25,4 @@ export function applyTheme(theme: Theme): void {
 }
 
 export const conversationName = (title: string): string =>
-  title.trim().replace(/^#\s*/, '').replace(/\s+/g, '-');
+  title.trim().replace(/^#\s*/, '').replace(/\s+/g, ' ');
