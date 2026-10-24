@@ -1,9 +1,11 @@
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
+import { svelte } from '@sveltejs/vite-plugin-svelte';
 
 // The web interface. `npm run build` puts it in apps/web/dist, and the API serves it at /app/.
 // `npm run dev:web` serves it with live reload and sends API calls to the server on port 3000.
 export default defineConfig({
+  plugins: [svelte()],
   root: fileURLToPath(new URL('.', import.meta.url)),
   base: '/app/',
   build: {

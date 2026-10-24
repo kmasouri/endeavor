@@ -2,6 +2,8 @@
 
 A starting point for a Fastify and TypeScript API. It comes with Postgres, input checks with Zod, Swagger docs, Docker, AWS hosting, and GitHub Actions.
 
+The web interface uses Svelte 5 and Vite in `apps/web/`. It calls the API over HTTP and is served at `/app/`.
+
 ## What you get
 
 - **Two apps, one repo:** the API in `apps/api` and the web interface in `apps/web`, as npm workspaces. Run every command from the repo root.

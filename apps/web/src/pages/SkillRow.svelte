@@ -1,0 +1,59 @@
+<script lang="ts">
+  import { api, type Connection, type Skill, type SkillDetails } from '../api';
+  import { createLoad } from '../state.svelte';
+  import EnableButton from './EnableButton.svelte';
+  import SkillVersionForm from './SkillVersionForm.svelte';
+
+  let props: {
+    skill: Skill;
+    connections: Connection[];
+    onChanged: () => void;
+  } = $props();
+  let open = $state(false);
+  const details = createLoad(
+    () => (open ? api.get<SkillDetails>(`/skills/${props.skill.id}`) : Promise.resolve(undefined)),
+    () => [open, props.skill.currentVersionId]
+  );
+</script>
+
+<li>
+  <div class="row">
+    <span class="grow">
+      <strong>
+        {props.skill.name}
+      </strong>
+
+      {#if props.skill.disabledAt}
+        <span class="badge"> disabled </span>
+      {/if}
+
+      <div class="muted small">
+        {props.skill.description}
+      </div>
+    </span>
+
+    <button class="secondary" onclick={() => (open = !open)}>
+      {#if open}
+        Close
+      {:else}
+        Edit
+      {/if}
+    </button>
+
+    <EnableButton
+      path={`/skills/${props.skill.id}`}
+      disabled={Boolean(props.skill.disabledAt)}
+      onChanged={props.onChanged}
+    />
+  </div>
+
+  {#if open && details.data}
+    {#key details.data.currentVersionId}
+      <SkillVersionForm
+        skill={details.data}
+        connections={props.connections}
+        onSaved={() => (details.reload(), props.onChanged())}
+      />
+    {/key}
+  {/if}
+</li>

@@ -32,7 +32,7 @@ apps/api/                  the API, runner, and scheduler (its own package.json)
     shared/                  types, response helpers, the error catalog
   db/schema/               SQL files that create the tables
 
-apps/web/                  the web interface (React and Vite, its own package.json). Vite
+apps/web/                  the web interface (Svelte 5 and Vite, its own package.json). Vite
                            builds it into apps/web/dist, and the API serves that at /app/.
                            It shares no code with the API and only calls its HTTP API.
 pilot/                     scripts for the milestone pilots (docs/pilot.md)
@@ -41,6 +41,8 @@ infrastructure/            Terraform for AWS
 ```
 
 The API and the web interface are separate npm workspaces, so each has its own dependencies and config. Run commands from the repo root: `npm run check` runs lint, typecheck, build, and tests for both, and `npm run dev` and `npm run dev:web` start each one.
+
+The web interface uses one Svelte component per page or form. Shared request and action state lives in `apps/web/src/state.svelte.ts`; hash navigation stays in `App.svelte`. Requests ignore answers from closed pages or older reloads, and polling stops when its component is removed. The typed HTTP client stays in `api.ts`. `svelte-check` checks components and TypeScript together. Web tests use Node's test runner with Svelte's compiler and browser runtime; they need no browser or database.
 
 Code is grouped by layer first, then by feature. For example, all handlers are in `handlers/`, and the item handlers are in `handlers/items/`. We chose this over one folder per feature because:
 
