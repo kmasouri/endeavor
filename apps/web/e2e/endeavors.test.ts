@@ -137,7 +137,31 @@ async function mockApi(page: Page, options: Options = {}) {
 async function openNew(page: Page) {
   if (await page.getByRole('button', { name: 'Open sidebar', exact: true }).count())
     await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
-  await page.getByRole('button', { name: 'New endeavor', exact: true }).first().click();
+  const button = page
+    .locator('.sidebar')
+    .getByRole('button', { name: 'New endeavor', exact: true });
+  await button.hover();
+  const geometry = await button.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const icon = element.querySelector('svg')!.getBoundingClientRect();
+    const label = [...element.childNodes].find(
+      (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()
+    )!;
+    const range = document.createRange();
+    range.selectNodeContents(label);
+    const text = range.getBoundingClientRect();
+    return {
+      leftInset: icon.left - bounds.left,
+      rightInset: bounds.right - text.right,
+      sameLine: Math.abs((icon.top + icon.bottom) / 2 - (text.top + text.bottom) / 2) < 3,
+      height: bounds.height
+    };
+  });
+  expect(geometry.leftInset).toBeGreaterThanOrEqual(8);
+  expect(geometry.rightInset).toBeGreaterThanOrEqual(7);
+  expect(geometry.sameLine).toBe(true);
+  if (page.viewportSize()!.width <= 700) expect(geometry.height).toBeGreaterThanOrEqual(44);
+  await button.click();
   return page.getByRole('dialog', { name: 'What do you want to accomplish?' });
 }
 
@@ -247,7 +271,9 @@ test('keeps failed values and membership, prevents duplicate saves, then selects
   const details = page.getByRole('complementary', { name: 'Conversation details' });
   await expect(details.getByText('Lee', { exact: true })).toBeVisible();
   await details.getByRole('button', { name: /1 more agents/ }).click();
-  await expect(details.getByRole('button', { name: 'Agent Researcher agent Free', exact: true })).toBeVisible();
+  await expect(
+    details.getByRole('button', { name: 'Agent Researcher agent Free', exact: true })
+  ).toBeVisible();
   expect(state.posts[1]).toEqual({
     title: 'Explain heat pumps',
     agentIds: ['agent-1'],

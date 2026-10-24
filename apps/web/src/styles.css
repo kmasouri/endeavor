@@ -1356,8 +1356,14 @@ progress::-webkit-progress-value {
   white-space: nowrap;
 }
 .new-endeavor {
-  padding: 4px 0;
+  padding: 4px 8px;
+  min-height: 28px;
+  gap: 6px;
+  flex-shrink: 0;
+  align-self: center;
+  white-space: nowrap;
   font-size: 12px;
+  line-height: 20px;
 }
 .endeavor-empty {
   min-height: calc(100dvh - 114px);
@@ -1475,6 +1481,9 @@ progress::-webkit-progress-value {
   .search-launch span,
   .search-launch kbd {
     display: none;
+  }
+  .new-endeavor {
+    min-height: var(--touch);
   }
   .endeavor-dialog {
     padding: 18px;
