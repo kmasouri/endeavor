@@ -1,26 +1,30 @@
 # Design
 
-The design for the web app (`apps/web`): the chat view redesign and the style guide it follows. Kayvan and Claude worked these out on two claude.ai boards in October 2026. This folder is the copy any person or agent can open. When the boards and this folder disagree, ask Kayvan which one is current.
+The design for the web app (`apps/web`): the conversation screen, skills and connections, access requests, and the shared style guide. The conversation designs came from two claude.ai boards in October 2026. Kayvan agreed the catalog and access-request designs in a Codex review on October 24. This folder is the copy any person or agent can open. When an older board and this folder disagree, ask Kayvan which one is current.
 
 Everything here is a picture of the app, not app code. Build it in Svelte, using the tokens in `style-guide/tokens.css`.
 
 ## What's here
 
-| Path                                        | What                                                                                                                |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `chat-view/chat-view.html` + `.png`         | The conversation screen, with the Details panel closed                                                              |
-| `chat-view/chat-view-details.html` + `.png` | The same screen with Details open while an agent is working                                                         |
-| `chat-view/message-box.html` + `.png`       | The message box: the @ picker, replying, and how a reply shows                                                      |
-| `chat-view/agent-states.html` + `.png`      | How agents look at each step: working, playful status words, its work folded, waiting, needs your OK, paused, stuck |
-| `style-guide/README.md`                     | The style guide: principles, color roles, type, spacing, words, icons, layout                                       |
-| `style-guide/tokens.json`                   | Every token, with a note on when to use it                                                                          |
-| `style-guide/tokens.css`                    | The same tokens as CSS custom properties, ready to import. Generated from `tokens.json`                             |
-| `style-guide/components/<Name>/`            | Each building block: `README.md` (how to use it) and `preview.html` (a live example)                                |
+| Path                                                          | What                                                                                                                |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `chat-view/chat-view.html` + `.png`                           | The conversation screen, with the Details panel closed                                                              |
+| `chat-view/chat-view-details.html` + `.png`                   | The same screen with Details open while an agent is working                                                         |
+| `chat-view/message-box.html` + `.png`                         | The message box: the @ picker, replying, and how a reply shows                                                      |
+| `chat-view/agent-states.html` + `.png`                        | How agents look at each step: working, playful status words, its work folded, waiting, needs your OK, paused, stuck |
+| `skills-and-connections/skills-and-connections.html` + `.png` | The agreed tabbed catalog, starting on Skills, with visible Enabled and Disabled badges                             |
+| `skills-and-connections/connections.html` + `.png`            | The Connections tab, with credential state and read-only scope summaries                                            |
+| `skills-and-connections/skill-editor.html` + `.png`           | The full-width instructions editor, without connection dependencies                                                 |
+| `approvals/access-request.html` + `.png`                      | An agent's connection access request in the conversation, with task-only and ongoing choices                        |
+| `style-guide/README.md`                                       | The style guide: principles, color roles, type, spacing, words, icons, layout                                       |
+| `style-guide/tokens.json`                                     | Every token, with a note on when to use it                                                                          |
+| `style-guide/tokens.css`                                      | The same tokens as CSS custom properties, ready to import. Generated from `tokens.json`                             |
+| `style-guide/components/<Name>/`                              | Each building block: `README.md` (how to use it) and `preview.html` (a live example)                                |
 
 ## How to look at it
 
 - **Pictures:** open the `.png` files.
-- **In a browser:** open any `.html` file directly. The chat view pages are fixed mockups; the component previews read `tokens.css`. To see a preview in the light theme, set `data-theme="light"` on its `<html>` element.
+- **In a browser:** open any `.html` file directly. The chat view pages are fixed mockups. The catalog, access-request, and component previews read `style-guide/tokens.css`. Set `data-theme="light"` on their `<html>` element to see the light theme. Catalog tabs, editing, and access-request decisions work locally with sample data; they never call the app or grant real access.
 - **From an agent:** read the `.md` files, view the `.png` files, or render the `.html` files with a headless browser. On Kayvan's computer, Chrome 153 is at `~/.cache/ms-playwright/chromium-1243/chrome-linux-arm64/chrome`; the system Chromium is too old.
 
 ## Decisions
@@ -58,6 +62,23 @@ These cards appear in the conversation itself, not only on other pages:
 - **Needs your OK:** the exact request, "Allow once", and "Don't allow".
 - **Paused:** who paused it and when, and one Resume button. Paused means on hold: it does nothing and spends nothing until someone resumes it.
 - **Stuck:** the reason in plain words, and the fix as the main button ("Raise budget to $2 and continue").
+
+### Skills and connections
+
+- **Tabbed catalog:** one page with Skills and Connections tabs and one creation action for the selected catalog.
+- **Skills are instructions only.** No required-connection picker or dependency summary. Humans select skills and connections independently on each agent.
+- **Status stays visible:** every catalog row and open item shows Enabled or Disabled, with an icon and text.
+- **Full-width editing:** opening a skill replaces the list with a wide instructions editor. Back to skills returns to the list. Saving creates a new version; agents keep their pinned version until their configuration changes.
+- This is the agreed target design for [CA-37](https://app.notion.com/p/4031a83d088f8108a631eb9174f94db0). The current app still associates skills with connections until that ticket ships.
+
+### Requests for capability access
+
+- **Ask in the conversation:** the request names the agent and connection, explains why it is needed, and shows the allowed requests on demand. It also appears in Approvals.
+- **For this task is selected by default.** Access survives pauses and service restarts, then ends when the task completes or is cancelled.
+- **Ongoing is an explicit human choice:** access applies to this agent's current task and future work until revoked. Access never transfers to other agents.
+- **Decline grants nothing.** The agent receives the decision and can explain the limitation or use another available capability.
+- **Access and actions are different approvals.** Giving a connection does not approve individual calls that require a person's OK.
+- This is the agreed target design for [CA-38](https://app.notion.com/p/4031a83d088f81999042d1aadfd02466), which also covers filtered discovery, skill requests, and revocation. The saved screen shows a connection request; it is not an implemented app feature.
 
 ## Gaps to check against the API
 
