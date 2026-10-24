@@ -15,10 +15,10 @@ This guide is the source of truth for the web interface (`apps/web`). The chat v
 
 Two themes, picked per person, with the same token names, so a component never names a theme:
 
-| Theme          | Grounds              | Action color                         | Agents        |
-| -------------- | -------------------- | ------------------------------------ | ------------- |
-| Dark (default) | Neutral graphite     | Deep yolk `#f59e0b`, dark text on it | Sky `#7dd3fc` |
-| Light          | White and soft grays | Deep yolk `#e08e00`, dark text on it | Sky `#0ea5e9` |
+| Theme | Grounds | Action color | Agents |
+| --- | --- | --- | --- |
+| Dark (default) | Neutral graphite | Deep yolk `#f59e0b`, dark text on it | Sky `#7dd3fc` |
+| Light | White and soft grays | Deep yolk `#e08e00`, dark text on it | Sky `#0ea5e9` |
 
 The palette was picked on the "Chat view redesign" board (5C + Sky agents, deep yolk). Text meets 4.5:1 contrast on its ground in both themes; control borders and icons meet 3:1. Text on yolk is always dark (`accent-ink`): white is not readable on it.
 
@@ -31,8 +31,8 @@ The palette was picked on the "Chat view redesign" board (5C + Sky agents, deep 
 - **Mentions:** others get `mention-bg` and `mention-ink`. You get `you-bg` and `you-ink`, and the whole message row gets `you-row`.
 - **Agents (sky):** `agent` (the badge), `agent-ink` (its spark), `agent-label` (the word "agent" and an agent's live status). No yolk or amber on agents, so "agent" and "do something" never blur.
 - **Counts:** `notify` with `notify-ink`, on every count badge (unread conversations, Approvals). Nothing else is red.
-- **States:** `success` for done and approved; `waiting` (yolk) for needs you; `danger` for stuck. Each has a `-bg` and, for cards, a `-border`.
-- **Avatars:** people take `person-1` to `person-4` in turn; agents take `agent-1` to `agent-3` (a ground and an ink each) in turn.
+- **States:** `success` (lime) for done and approved; `waiting` (yolk) for needs you; `danger` for stuck. Each has a `-bg` and, for cards, a `-border`.
+- **Avatars:** every avatar is a tinted ground with a bright mark: dark grounds in the dark theme, light grounds with deep marks in the light theme. People take `person-1` to `person-4` (indigo, violet, rose, slate) in turn; agents take `agent-1` to `agent-3` (lime, sky, teal) in turn. Each has a `-bg` and an `-ink`.
 
 ## Type
 

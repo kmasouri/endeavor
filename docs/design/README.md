@@ -39,11 +39,13 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 - **Grounds are neutral graphite.** The selected conversation is neutral too.
 - **Yolk means "do something":** primary buttons, Send, the brand mark, mentions, and anything waiting on you. Text on yolk is always dark (`accent-ink`).
 - **Sky means "this is an agent":** the agent badge, the word "agent", and an agent's live status. No yolk or amber on agents.
+- **Lime means "done":** approved and finished chips (`success`), and the first agent's avatar.
 - **Red means "look here":** every count badge (unread conversations, Approvals) is the same red with white text. Nothing else is red, except "stuck".
 
 ### Who's who
 
-- Every avatar is a rounded square, people included. People get initials on one of four colors, given out in turn.
+- Every avatar is a rounded square, people included, in one tinted style: a dark ground with a bright mark (a light ground with a deep mark in the light theme).
+- People get initials in indigo, violet, rose, or slate, given out in turn (`person-1` to `person-4`). Agents get their icon in lime, sky, or teal (`agent-1` to `agent-3`).
 - Every agent gets a sky spark badge in the avatar's corner, and the small word "agent" after its name. Use this everywhere a small avatar appears: messages, the @ list, Details, and task lists.
 
 ### The conversation screen
