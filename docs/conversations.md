@@ -24,8 +24,9 @@ Delivering the same message twice finds the same task (its run key is `message:<
 
 The web interface calls conversations **Endeavors**. Existing conversation URLs and APIs remain
 compatible. Endeavors opens the last accessible selection saved for the current person in this
-browser, falling back to another accessible endeavor or a first-endeavor prompt. Recent lists
-endeavors without channel hashes or forced dashes. The app header and Cmd/Ctrl K open search across
+browser, falling back to another accessible endeavor or a first-endeavor prompt. Recent displays
+Discord/Slack-style names such as `#heat-pump-brief`, with lowercase words separated by hyphens.
+Stored outcome titles, chat headings, and search result titles remain readable. The app header and Cmd/Ctrl K open search across
 all accessible endeavors, including older API pages. The list is refreshed when the person changes.
 
 **+ New** opens a native modal with a required name and optional searchable people and agents.

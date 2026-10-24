@@ -52,7 +52,8 @@ agents or requiring a database. Browser traces and screenshots are retained on f
 
 Endeavors is the product-facing conversation destination. Its header search and native creation
 modal live in the shared shell; the selected chat keeps its existing features and compatible hash
-URL. Selection is remembered per person in browser storage and restored only from the current
+URL. Recent formats navigation labels as lowercase, hyphenated channel names with a leading `#`;
+stored titles and chat headings remain readable. Selection is remembered per person in browser storage and restored only from the current
 accessible list. Paginated lists are fully loaded for restoration and search; old requests cannot
 publish into another person's shell. A successful creation refreshes Recent and focuses the
 composer. Optional initial human and agent members use the existing membership validation; no

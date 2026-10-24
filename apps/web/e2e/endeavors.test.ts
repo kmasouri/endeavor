@@ -173,7 +173,10 @@ test('restores the last accessible selection, preserves links, and searches olde
   await expect(
     page.getByRole('heading', { name: 'Website reliability', exact: true })
   ).toBeVisible();
-  await page.getByRole('link', { name: 'Heat pump brief', exact: true }).click();
+  await expect(
+    page.getByRole('link', { name: '#website-reliability', exact: true })
+  ).toHaveAttribute('title', 'Website reliability');
+  await page.getByRole('link', { name: '#heat-pump-brief', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Heat pump brief', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Agents', exact: true }).click();
   await page.getByRole('link', { name: 'Endeavors', exact: true }).click();
@@ -263,10 +266,9 @@ test('keeps failed values and membership, prevents duplicate saves, then selects
     page.getByRole('heading', { name: 'Explain heat pumps', exact: true })
   ).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeFocused();
-  await expect(page.getByRole('link', { name: 'Explain heat pumps', exact: true })).toHaveAttribute(
-    'aria-current',
-    'page'
-  );
+  await expect(
+    page.getByRole('link', { name: '#explain-heat-pumps', exact: true })
+  ).toHaveAttribute('aria-current', 'page');
   await page.getByRole('button', { name: 'Show details', exact: true }).click();
   const details = page.getByRole('complementary', { name: 'Conversation details' });
   await expect(details.getByText('Lee', { exact: true })).toBeVisible();
