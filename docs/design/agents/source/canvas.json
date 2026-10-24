@@ -1,0 +1,103 @@
+{
+  "v": 3,
+  "attachments": {},
+  "boards": {
+    "AgentConfig.dc.html": {
+      "expand": "fill",
+      "h": 1500,
+      "title": "Agent · Configuration",
+      "w": 1440,
+      "x": 1520,
+      "y": 1400,
+      "is_interactive": true
+    },
+    "AgentDetail.dc.html": {
+      "expand": "fill",
+      "h": 1300,
+      "is_interactive": true,
+      "title": "Agent · Overview",
+      "w": 1440,
+      "x": 0,
+      "y": 1400
+    },
+    "AgentVersions.dc.html": {
+      "expand": "fill",
+      "h": 1300,
+      "title": "Agent · Versions",
+      "w": 1440,
+      "x": 3040,
+      "y": 1400
+    },
+    "AgentsEmpty.dc.html": {
+      "expand": "fill",
+      "h": 1000,
+      "title": "Agents · empty",
+      "w": 1440,
+      "x": 1520,
+      "y": 0
+    },
+    "AgentsLight.dc.html": {
+      "expand": "fill",
+      "h": 1000,
+      "title": "Agents · light",
+      "w": 1440,
+      "x": 3040,
+      "y": 0
+    },
+    "AgentsMobile.dc.html": { "h": 1500, "title": "Agents · phone", "w": 390, "x": 4560, "y": 0 },
+    "Main.dc.html": {
+      "expand": "fill",
+      "h": 1000,
+      "is_interactive": true,
+      "title": "Agents · with agents",
+      "w": 1440,
+      "x": 0,
+      "y": 0
+    },
+    "NewAgent.dc.html": {
+      "expand": "fill",
+      "h": 1600,
+      "title": "New agent",
+      "w": 1440,
+      "x": 0,
+      "y": 3300,
+      "is_interactive": true
+    },
+    "Picker.dc.html": {
+      "h": 560,
+      "w": 820,
+      "x": 1520,
+      "y": 3300,
+      "title": "Skill and connection picker",
+      "is_interactive": true
+    }
+  },
+  "createdOnFiles": { "at": "2026-10-24T22:05:00Z", "v": 1 },
+  "designSystems": [],
+  "launch": { "view": "canvas" },
+  "notes": {
+    "t1": { "kind": "title1", "maxW": 4950, "text": "Agents list", "w": 240, "x": 0, "y": -300 },
+    "t2": { "kind": "title1", "maxW": 4480, "text": "One agent", "w": 240, "x": 0, "y": 1100 },
+    "t3": {
+      "kind": "title1",
+      "maxW": 2340,
+      "text": "Creating an agent",
+      "w": 240,
+      "x": 0,
+      "y": 3000
+    }
+  },
+  "order": [
+    "Main.dc.html",
+    "AgentsEmpty.dc.html",
+    "AgentsLight.dc.html",
+    "AgentsMobile.dc.html",
+    "AgentDetail.dc.html",
+    "AgentConfig.dc.html",
+    "AgentVersions.dc.html",
+    "NewAgent.dc.html",
+    "Picker.dc.html"
+  ],
+  "pages": [],
+  "title": "Agents page design"
+}

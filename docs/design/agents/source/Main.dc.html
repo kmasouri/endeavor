@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Agents</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="agents.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" data-theme="{{theme}}">
+  <header class="appbar">
+    <div class="brand"><span class="logo">CA</span><span>Collaborative Agents</span></div>
+    <button type="button" class="search-launch" aria-label="Search endeavors"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg><span>Search endeavors…</span><span class="shortcut">⌘ / Ctrl K</span></button>
+  </header>
+  <aside class="side" aria-label="Application sidebar">
+    <nav class="nav" aria-label="Main">
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18"></path><path d="M9 21V9"></path></svg><span>Endeavors</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg><span>Approvals</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg><span>Schedules</span></a>
+      <a href="Main.dc.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg><span>Agents</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg><span>Skills and connections</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"></path></svg><span>Setup</span></a>
+    </nav>
+    <div class="chats">
+      <div class="recent-head"><span class="section-label">Recent</span><button type="button" aria-label="New endeavor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>New</button></div>
+      <a href="#">Heat pump brief</a>
+      <a href="#">Website reliability</a>
+      <a href="#">Roman Empire research</a>
+      <a href="#">Shipping and world trade</a>
+    </div>
+    <div class="profile"><span class="avatar sm person">K</span><div><strong>Kayvan Masouri</strong><small>Profile and settings</small></div></div>
+  </aside>
+
+  <main class="main">
+    <div class="frame">
+      <header class="header">
+        <div>
+          <h1>Agents</h1>
+          <p class="subtitle">Participants you configure to do work in endeavors. No agent is in charge of another.</p>
+        </div>
+        <a class="btn primary" href="NewAgent.dc.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>New agent</a>
+      </header>
+
+      <div class="toolbar">
+        <div class="filters" role="group" aria-label="Show">
+          <sc-for list="{{filters}}" as="f" hint-placeholder-count="3">
+            <button type="button" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}">{{f.label}}</button>
+          </sc-for>
+        </div>
+        <input class="search" type="search" aria-label="Search agents" placeholder="Search agents">
+      </div>
+
+      <div class="section-label list-label">{{countLabel}}</div>
+      <div role="list" aria-label="Agents">
+        <sc-for list="{{rows}}" as="item" hint-placeholder-count="4">
+          <a class="row {{item.rowClass}}" href="AgentDetail.dc.html" role="listitem">
+            <span class="avatar {{item.tone}}">
+              <sc-if value="{{item.isSearch}}" hint-placeholder-val="{{true}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></sc-if>
+              <sc-if value="{{item.isCheck}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+              <sc-if value="{{item.isBot}}" hint-placeholder-val="{{false}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M15 13v2"></path><path d="M9 13v2"></path></svg></sc-if>
+            </span>
+            <div style="min-width: 0">
+              <div class="row-title"><h3>{{item.name}}</h3><span class="agent-label">agent</span></div>
+              <p class="row-purpose">{{item.purpose}}</p>
+            </div>
+            <div class="row-model">{{item.model}}<small>{{item.version}}</small></div>
+            <div class="row-spend">
+              <span>{{item.spend}} <small>{{item.budget}}</small></span>
+              <sc-if value="{{item.hasBudget}}" hint-placeholder-val="{{true}}"><div class="bar" aria-hidden="true"><span style="width: {{item.pct}}"></span></div></sc-if>
+            </div>
+            <sc-if value="{{item.on}}" hint-placeholder-val="{{true}}"><span class="chip on"><span class="dot"></span>Enabled</span></sc-if>
+            <sc-if value="{{item.off}}" hint-placeholder-val="{{false}}"><span class="chip off">Disabled</span></sc-if>
+            <sc-if value="{{item.warn}}" hint-placeholder-val="{{false}}"><span class="chip warn">Needs setup</span></sc-if>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+          </a>
+        </sc-for>
+      </div>
+      <p class="caption muted" style="margin-top: 14px">Spending is this month (UTC). Needs setup means the provider has no API key, so its tasks can’t run yet.</p>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) { super(props); this.state = { filter: 'all' }; }
+  renderVals() {
+    const agents = [
+      { name: 'Researcher', purpose: 'Researches topics and drafts briefs', tone: 'a2', icon: 'search', model: 'Anthropic · claude-sonnet-5-5', version: 'Version 4 · saved Oct 22', spend: '$3.12', budget: 'of $20.00', pct: '16%', status: 'on' },
+      { name: 'Reviewer', purpose: 'Checks claims and sources', tone: 'a1', icon: 'check', model: 'Anthropic · claude-haiku-5-5', version: 'Version 2 · saved Oct 19', spend: '$0.84', budget: 'no budget', pct: '0%', status: 'on' },
+      { name: 'Checker', purpose: 'Checks the test API and reports failures with steps to reproduce', tone: 'a3', icon: 'bot', model: 'OpenAI · [model name]', version: 'Version 1 · saved Oct 23', spend: '$0.00', budget: 'of $5.00', pct: '0%', status: 'warn' },
+      { name: 'QA', purpose: 'Tests the staging site and reports failures', tone: 'a0', icon: 'bot', model: 'Anthropic · claude-haiku-5-5', version: 'Version 3 · saved Oct 12', spend: '$0.00', budget: 'no budget', pct: '0%', status: 'off' }
+    ];
+    const f = this.state.filter;
+    const shown = agents.filter((a) => f === 'all' || (f === 'disabled' ? a.status === 'off' : a.status !== 'off'));
+    const filters = [['all', 'All'], ['enabled', 'Enabled'], ['disabled', 'Disabled']].map(([id, label]) => ({
+      label, pressed: String(f === id), pick: () => this.setState({ filter: id })
+    }));
+    return {
+      theme: this.props.theme ?? 'dark',
+      filters,
+      countLabel: 'Agents · ' + shown.length,
+      rows: shown.map((a) => ({
+        ...a,
+        isSearch: a.icon === 'search', isCheck: a.icon === 'check', isBot: a.icon === 'bot',
+        hasBudget: a.budget !== 'no budget',
+        on: a.status === 'on', off: a.status === 'off', warn: a.status === 'warn',
+        rowClass: a.status === 'off' ? 'disabled' : ''
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>
