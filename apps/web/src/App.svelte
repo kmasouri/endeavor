@@ -221,7 +221,7 @@
             ></button
           >
           <button
-            class="quiet small"
+            class="quiet switch-person"
             disabled={switching}
             aria-haspopup="dialog"
             aria-expanded={picking}
