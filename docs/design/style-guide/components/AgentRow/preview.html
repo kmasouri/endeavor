@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>AgentRow</title>
+<link rel="stylesheet" href="../../tokens.css">
+</head>
+<body>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400&display=swap">
+<style>
+body{margin:0;background:var(--bg-100);color:var(--text-100);font-family:var(--font-sans)}
+.wrap{display:flex;flex-direction:column;gap:var(--space-4);padding:var(--space-4)}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:var(--space-3)}
+.av{position:relative;flex-shrink:0;display:block}
+.av>.face{display:flex;align-items:center;justify-content:center;width:100%;height:100%;box-sizing:border-box;font-weight:600;color:var(--accent-ink)}
+.av.sm{width:var(--avatar-sm);height:var(--avatar-sm)}.av.sm>.face{border-radius:var(--radius-sm);font-size:10px}
+.av.md{width:var(--avatar-md);height:var(--avatar-md)}.av.md>.face{border-radius:var(--radius-md);font-size:12px}
+.av.lg{width:var(--avatar-lg);height:var(--avatar-lg)}.av.lg>.face{border-radius:var(--radius-lg);font-size:15px}
+.p1{background:var(--person-1)}.p2{background:var(--person-2)}.p3{background:var(--person-3)}.p4{background:var(--person-4)}
+.a1{background:var(--agent-1-bg);color:var(--agent-1-ink)!important}.a2{background:var(--agent-2-bg);color:var(--agent-2-ink)!important}.a3{background:var(--agent-3-bg);color:var(--agent-3-ink)!important}
+.spark{position:absolute;right:-3px;bottom:-3px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;border-radius:var(--radius-full);background:var(--agent);border:2px solid var(--bg-100)}
+.av.sm .spark{width:11px;height:11px}.av.md .spark{width:14px;height:14px}.av.lg .spark{width:18px;height:18px;right:-4px;bottom:-4px}
+.spark svg{fill:var(--agent-ink)}
+.tag{color:var(--agent-label);font-weight:500}
+.muted{color:var(--text-300)}
+.btn{display:inline-flex;align-items:center;gap:6px;height:var(--control);padding:0 14px;border-radius:var(--radius-md);font:inherit;font-size:14px;cursor:pointer}
+.btn.primary{border:0;background:var(--accent);color:var(--accent-ink);font-weight:600}
+.btn.secondary{border:1px solid var(--border-200);background:transparent;color:var(--text-100)}
+.btn.icon{width:var(--control);padding:0;justify-content:center;border:0;background:transparent;color:var(--text-200)}
+.btn:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+.mention{border-radius:4px;padding:0 3px;font-weight:500;background:var(--mention-bg);color:var(--mention-ink)}
+.mention.you{background:var(--you-bg);color:var(--you-ink);font-weight:600}
+</style>
+<div class="wrap">
+<div style="max-width:300px;display:flex;flex-direction:column;gap:4px;background:var(--bg-150);padding:var(--space-3);border-radius:var(--radius-lg)">
+  <div class="row" style="justify-content:space-between"><span class="label muted" style="text-transform:uppercase">Agents</span><span class="caption muted">1 working · 1 waiting · 3 free</span></div>
+  <div style="border-radius:var(--radius-lg);background:var(--bg-200);border:1px solid var(--agent-2-bg)">
+    <div class="row" style="gap:10px;min-height:40px;padding:6px 8px"><span class="av md"><span class="face a2"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12l4 4 10-10"></path></svg></span><span class="spark"><svg width="8" height="8" viewBox="0 0 24 24" role="img" aria-label="Agent"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"></path></svg></span></span><span class="body-sm" style="font-weight:600;flex-grow:1">Reviewer</span><span class="caption tag">Fact-checking… 18 s</span></div>
+    <div style="padding:0 12px 12px 46px;display:flex;flex-direction:column;gap:8px">
+      <span class="meta" style="color:var(--text-200)">Reading Air source heat pump to check claim 3 of 7.</span>
+      <div class="row" style="gap:var(--space-2)"><button class="btn secondary" style="height:30px;font-size:13px">Pause</button><button class="btn secondary" style="height:30px;font-size:13px">Stop</button></div>
+    </div>
+  </div>
+  <div class="row" style="gap:10px;min-height:40px;padding:0 8px"><span class="av md"><span class="face a1"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="6"></circle><path d="M20 20l-4.5-4.5"></path></svg></span><span class="spark"><svg width="8" height="8" viewBox="0 0 24 24" role="img" aria-label="Agent"><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z"></path></svg></span></span><span class="body-sm" style="flex-grow:1">Researcher</span><span class="caption" style="color:var(--text-200)">Waiting for Reviewer</span></div>
+  <div class="row" style="gap:10px;min-height:40px;padding:0 8px;color:var(--text-200)"><span style="display:flex;width:34px"><span class="av sm"><span class="face a3"></span><span class="spark"></span></span><span style="margin-left:-6px;display:flex"><span class="av sm"><span class="face a1"></span><span class="spark"></span></span></span></span><span class="body-sm" style="flex-grow:1">3 more agents</span><span class="caption muted">Free</span></div>
+</div>
+</div>
+<script>/* static preview */</script>
+</body>
+</html>

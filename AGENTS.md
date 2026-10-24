@@ -14,6 +14,7 @@ This file says what to do and what not to do. For how things work and why, read:
 - `docs/scheduling.md`: recurring responsibilities, missed runs, and event starts.
 - `docs/local.md`: running everything on one computer with Docker, workspaces, and tool isolation.
 - `docs/pilot.md`: the milestone pilots: setup, runbook, and report (scripts in `pilot/`).
+- `docs/design/`: the web app's design: the chat view redesign and the style guide (colors, type, components). Build the web interface to match it.
 
 ## Source of truth
 
