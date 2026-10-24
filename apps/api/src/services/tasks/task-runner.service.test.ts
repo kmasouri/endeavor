@@ -193,6 +193,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
     id: HUMAN,
     name: 'Kim',
     role: 'admin',
+    preferences: { theme: 'system', timeFormat: '12h' },
     createdAt: new Date()
   });
   conversations.listMembers.mockResolvedValue([

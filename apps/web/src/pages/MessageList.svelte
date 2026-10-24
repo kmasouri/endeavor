@@ -10,7 +10,7 @@
   } from '../api';
   import { conversationArtifacts } from '../conversation-artifacts';
   import { messagePreview } from '../message-format';
-  import { when } from '../components';
+  import { when, shortTime } from '../components';
   import FormattedText from '../FormattedText.svelte';
   import Avatar from '../Avatar.svelte';
   import Icon from '../Icon.svelte';
@@ -145,16 +145,10 @@
             <strong>{name}</strong>{#if message.authorType === 'agent'}<span class="agent-label"
                 >agent</span
               >{/if}<time class="caption muted" title={when(message.createdAt)}
-              >{new Date(message.createdAt).toLocaleTimeString([], {
-                hour: 'numeric',
-                minute: '2-digit'
-              })}</time
+              >{shortTime(message.createdAt)}</time
             >
           </div>{:else}<time class="group-time caption muted" title={when(message.createdAt)}
-            >{new Date(message.createdAt).toLocaleTimeString([], {
-              hour: 'numeric',
-              minute: '2-digit'
-            })}</time
+            >{shortTime(message.createdAt)}</time
           >{/if}
         <div class="message-body"><FormattedText text={message.body} {names} /></div>
         {#if message.taskId && lastForTask.get(message.taskId) === message.id}

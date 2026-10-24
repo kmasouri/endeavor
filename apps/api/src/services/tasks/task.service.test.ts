@@ -17,7 +17,13 @@ const TASK_ID = '00000000-0000-4000-8000-0000000000c1';
 const NEW_TASK_ID = '00000000-0000-4000-8000-0000000000c2';
 const WAIT_ID = '00000000-0000-4000-8000-0000000000d1';
 
-const human: Human = { id: HUMAN_ID, name: 'Kim', role: 'member', createdAt: new Date() };
+const human: Human = {
+  id: HUMAN_ID,
+  name: 'Kim',
+  role: 'member',
+  preferences: { theme: 'system', timeFormat: '12h' },
+  createdAt: new Date()
+};
 const agentActor = { type: 'agent' as const, id: AGENT_ID };
 
 const agent: Agent = {

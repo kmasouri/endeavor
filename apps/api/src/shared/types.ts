@@ -18,10 +18,16 @@ export interface Actor {
 
 export type HumanRole = 'admin' | 'member';
 
+export interface HumanPreferences {
+  theme: 'system' | 'dark' | 'light';
+  timeFormat: '12h' | '24h';
+}
+
 export interface Human {
   id: string;
   name: string;
   role: HumanRole;
+  preferences: HumanPreferences;
   createdAt: Date;
 }
 

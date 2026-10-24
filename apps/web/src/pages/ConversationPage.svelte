@@ -15,7 +15,7 @@
   import Avatar from '../Avatar.svelte';
   import Icon from '../Icon.svelte';
   import { conversationName } from '../appearance';
-  import { when } from '../components';
+  import { when, shortTime } from '../components';
   import { createLoad } from '../state.svelte';
   import KnowledgeSources from './KnowledgeSources.svelte';
   import Spending from './Spending.svelte';
@@ -293,11 +293,7 @@
               href={`#/tasks/${output.taskId}`}
               ><Icon name="file" /><span class="grow ellipsis">{output.title}</span><time
                 class="caption muted"
-                title={when(output.createdAt)}
-                >{new Date(output.createdAt).toLocaleTimeString([], {
-                  hour: 'numeric',
-                  minute: '2-digit'
-                })}</time
+                title={when(output.createdAt)}>{shortTime(output.createdAt)}</time
               ></a
             >{/each}{#if !artifacts.length}<p class="caption muted">None yet.</p>{/if}
         </section>

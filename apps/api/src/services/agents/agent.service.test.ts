@@ -11,7 +11,13 @@ import { AgentService } from './agent.service';
 const ADMIN_ID = '00000000-0000-4000-8000-000000000001';
 const AGENT_ID = '00000000-0000-4000-8000-0000000000a1';
 
-const admin: Human = { id: ADMIN_ID, name: 'Kim', role: 'admin', createdAt: new Date() };
+const admin: Human = {
+  id: ADMIN_ID,
+  name: 'Kim',
+  role: 'admin',
+  preferences: { theme: 'system', timeFormat: '12h' },
+  createdAt: new Date()
+};
 
 const agent: Agent = {
   id: AGENT_ID,

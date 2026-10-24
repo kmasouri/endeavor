@@ -5,6 +5,7 @@ const person = (role: Human['role']): Human => ({
   id: '00000000-0000-4000-8000-000000000001',
   name: 'Sam',
   role,
+  preferences: { theme: 'system', timeFormat: '12h' },
   createdAt: new Date()
 });
 

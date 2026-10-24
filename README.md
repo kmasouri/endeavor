@@ -112,7 +112,7 @@ Requests that act as a person send that person's ID in the `x-actor-id` header. 
 
 - `GET /health`
 - `GET /docs`
-- `POST /humans`, `GET /humans`
+- `POST /humans`, `GET /humans`, `PATCH /humans/me` — update your display name (1–100 characters) and personal theme/time format; see [person profiles](docs/responses.md#person-profiles).
 - `GET /providers`, `GET /directory`
 - `POST /skills`, `GET /skills`, `GET /skills/:skillId`, `POST /skills/:skillId/versions`, `/disable`, `/enable`
 - `POST /connections`, `GET /connections`, `PATCH /connections/:connectionId`, `/disable`, `/enable`

@@ -67,6 +67,7 @@ export function mockAgentRepository(): jest.Mocked<AgentRepository> {
 
 export function mockHumanRepository(): jest.Mocked<HumanRepository> {
   return {
+    update: jest.fn(),
     create: jest.fn(),
     createFirst: jest.fn(),
     getById: jest.fn(),
