@@ -1,6 +1,6 @@
 # Design
 
-The design for the web app (`apps/web`): every screen designed so far, and the shared style guide. All screens live on the "Chat view redesign" board on claude.ai, and this folder is their export. Codex first drafted the skills, access request, schedules, agent history, and profile screens; they were rebuilt on the board on October 24 so every screen shares one shell and the style guide. When the board and this folder disagree, ask Kayvan which one is current.
+The design for the web app (`apps/web`): every screen designed so far, and the shared style guide. All screens live on the "Collaborative Agents app design" board on claude.ai, and this folder is their export. Codex first drafted the skills, access request, schedules, agent history, and profile screens; they were rebuilt on the board on October 24 so every screen shares one shell and the style guide. When the board and this folder disagree, ask Kayvan which one is current.
 
 Everything here is a picture of the app, not app code. Build it in Svelte, using the tokens in `style-guide/tokens.css`.
 

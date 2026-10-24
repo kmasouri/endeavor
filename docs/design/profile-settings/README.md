@@ -1,7 +1,7 @@
 # Profile and settings
 
 The Profile and Preferences designs reviewed with Kayvan on October 24, 2026. These are fixed
-mockups with sample data, exported from the "Chat view redesign" board on claude.ai. They do not call the API or change a person's
+mockups with sample data, exported from the "Collaborative Agents app design" board on claude.ai. They do not call the API or change a person's
 real profile.
 
 - `profile.html` + `.png`: the display name, and how you appear in a conversation.

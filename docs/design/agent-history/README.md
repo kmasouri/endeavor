@@ -1,7 +1,7 @@
 # Agent history
 
 The conversation-first history design Kayvan agreed on October 24, 2026. These are fixed mockups
-with sample data, exported from the "Chat view redesign" board on claude.ai. They do not call the API or start agents.
+with sample data, exported from the "Collaborative Agents app design" board on claude.ai. They do not call the API or start agents.
 
 - `conversation-details.html` + `.png`: the conversation with Details open. Researcher is expanded,
   with its last run and **History**. Hovering the final message shows **See what this agent did**.

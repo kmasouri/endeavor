@@ -1,7 +1,7 @@
 # Schedules
 
 The Schedules design Kayvan agreed on October 24, 2026. These are fixed mockups with sample data,
-exported from the "Chat view redesign" board on claude.ai. They do not create schedules or call the API.
+exported from the "Collaborative Agents app design" board on claude.ai. They do not create schedules or call the API.
 
 - `schedules.html` + `.png`: the list, with a missed-runs card and each schedule's state.
 - `schedule-details.html` + `.png`: one schedule, with Pause, Run once now, and its recent runs.
