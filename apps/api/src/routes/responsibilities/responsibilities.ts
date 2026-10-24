@@ -27,7 +27,8 @@ export async function responsibilitiesRouter(fastifyInstance: FastifyInstance): 
     '/responsibilities',
     {
       schema: {
-        description: 'Set up recurring work for an agent. Each run is a task. Admins only.',
+        description:
+          'Set up interval or source-timezone calendar work for an agent. Each run is a task.',
         tags: ['responsibilities'],
         headers: actorHeadersSchema,
         body: createResponsibilityBodySchema
@@ -93,7 +94,8 @@ export async function responsibilitiesRouter(fastifyInstance: FastifyInstance): 
     '/responsibilities/:responsibilityId/resume',
     {
       schema: {
-        description: 'Resume a paused schedule, starting from now. Admins only.',
+        description:
+          'Resume intervals from now, or calendar schedules at the next matching local-time slot.',
         tags: ['responsibilities'],
         headers: actorHeadersSchema,
         params: responsibilityParamsSchema

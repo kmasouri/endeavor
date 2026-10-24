@@ -281,7 +281,13 @@ export interface Responsibility {
   title: string;
   brief: string;
   completionCriteria: string;
-  intervalMinutes: number;
+  intervalMinutes: number | null;
+  recurrence: {
+    frequency: 'daily' | 'weekdays' | 'weekly';
+    days?: number[];
+    time: string;
+    timeZone: string;
+  } | null;
   missedRunPolicy: 'ask' | 'run_once' | 'skip';
   status: 'enabled' | 'paused' | 'cancelled';
   nextRunAt: string;

@@ -1,21 +1,58 @@
 import { z } from 'zod';
 
+export const calendarRecurrenceSchema = z
+  .strictObject({
+    frequency: z.enum(['daily', 'weekdays', 'weekly']),
+    days: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(),
+    time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm'),
+    timeZone: z
+      .string()
+      .min(1)
+      .max(100)
+      .refine((value) => {
+        try {
+          // Reject numeric offset zones: recurrence needs a named timezone with DST rules.
+          return !/^[+-]/.test(value) && !!new Intl.DateTimeFormat('en', { timeZone: value });
+        } catch {
+          return false;
+        }
+      }, 'Use a valid IANA timezone')
+  })
+  .refine(
+    (rule) =>
+      rule.frequency === 'weekly'
+        ? !!rule.days?.length && new Set(rule.days).size === rule.days.length
+        : rule.days === undefined,
+    'Choose unique weekdays only for a weekly rule'
+  );
+export type CalendarRecurrenceBody = z.infer<typeof calendarRecurrenceSchema>;
+
 export const responsibilityParamsSchema = z.object({ responsibilityId: z.uuid() });
 
-export const createResponsibilityBodySchema = z.strictObject({
-  agentId: z.uuid(),
-  // The agent posts its results here. It must already be a member.
-  conversationId: z.uuid().optional(),
-  title: z.string().trim().min(1).max(200),
-  brief: z.string().trim().min(1),
-  completionCriteria: z.string().trim().min(1),
-  intervalMinutes: z.number().int().min(5).max(525_600),
-  missedRunPolicy: z.enum(['ask', 'run_once', 'skip']).optional(),
-  startAt: z.iso
-    .datetime()
-    .transform((value) => new Date(value))
-    .optional()
-});
+export const createResponsibilityBodySchema = z
+  .strictObject({
+    agentId: z.uuid(),
+    // The agent posts its results here. It must already be a member.
+    conversationId: z.uuid().optional(),
+    title: z.string().trim().min(1).max(200),
+    brief: z.string().trim().min(1),
+    completionCriteria: z.string().trim().min(1),
+    intervalMinutes: z.number().int().min(5).max(525_600).optional(),
+    recurrence: calendarRecurrenceSchema.optional(),
+    missedRunPolicy: z.enum(['ask', 'run_once', 'skip']).optional(),
+    startAt: z.iso
+      .datetime()
+      .transform((value) => new Date(value))
+      .optional()
+  })
+  .refine(
+    (body) => (body.intervalMinutes !== undefined) !== (body.recurrence !== undefined),
+    'Send either intervalMinutes or recurrence'
+  )
+  .refine(
+    (body) => !body.recurrence || body.startAt === undefined,
+    'Calendar rules compute their first slot; omit startAt'
+  );
 
 export const updateResponsibilityBodySchema = z
   .strictObject({
@@ -23,13 +60,22 @@ export const updateResponsibilityBodySchema = z
     brief: z.string().trim().min(1).optional(),
     completionCriteria: z.string().trim().min(1).optional(),
     intervalMinutes: z.number().int().min(5).max(525_600).optional(),
+    recurrence: calendarRecurrenceSchema.optional(),
     missedRunPolicy: z.enum(['ask', 'run_once', 'skip']).optional(),
     nextRunAt: z.iso
       .datetime()
       .transform((value) => new Date(value))
       .optional()
   })
-  .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
+  .refine((body) => Object.keys(body).length > 0, 'Send at least one field')
+  .refine(
+    (body) => !(body.intervalMinutes !== undefined && body.recurrence !== undefined),
+    'Send either intervalMinutes or recurrence'
+  )
+  .refine(
+    (body) => !body.recurrence || body.nextRunAt === undefined,
+    'Calendar rules compute their next slot; omit nextRunAt'
+  );
 
 export const listResponsibilitiesQuerySchema = z.strictObject({
   agentId: z.uuid().optional(),

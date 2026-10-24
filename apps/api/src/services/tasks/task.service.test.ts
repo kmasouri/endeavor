@@ -598,6 +598,19 @@ describe('TaskService', () => {
       expect(tasks.create).not.toHaveBeenCalled();
     });
 
+    it('does not mistake a competing scheduled run for the requested restart', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed', responsibilityId: 'r1' }));
+      tasks.create.mockResolvedValue({
+        task: makeTask({ id: NEW_TASK_ID, runKey: 'schedule:r1:other', responsibilityId: 'r1' }),
+        created: false
+      });
+      await expect(service.restartTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'responsibilityRunOpen'
+      });
+      expect(tasks.addEvent).not.toHaveBeenCalled();
+    });
+
     it('only restarts finished work', async () => {
       const { service, tasks } = setup();
       tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));

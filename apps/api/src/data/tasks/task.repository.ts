@@ -85,7 +85,8 @@ export interface TaskCost {
 }
 
 export interface TaskRepository {
-  // Creates the task, or returns the existing one with the same runKey. created says which.
+  // Creates the task, or returns the existing one with the same runKey. For responsibility
+  // starts, a competing open run can also be returned; services check its key before use.
   create(input: CreateTaskInput): Promise<{ task: Task; created: boolean }>;
   getById(taskId: string): Promise<Task | null>;
   getByRunKey(runKey: string): Promise<Task | null>;

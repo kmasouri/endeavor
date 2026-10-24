@@ -125,3 +125,12 @@ discarding, and navigation waits for an active save to finish. The browser remem
 selected person and a theme copy for startup. The server remains the source for preferences on
 reload or person switch. System theme follows the computer's appearance. Times use the device's
 IANA timezone and the person's saved hour format, without changing stored instants or schedules.
+
+## Recurring schedules
+
+Responsibility responses include `intervalMinutes` and `recurrence`. Existing interval schedules
+return their original interval and `recurrence: null`. Calendar schedules return
+`intervalMinutes: null` and `recurrence: { frequency, time, timeZone, days? }`. Only weekly rules
+include `days` (ISO weekdays, Monday = 1). UTC timestamps stay ISO strings; clients format actual
+instants in their viewer's timezone and keep the source rule separate. See
+[scheduling.md](scheduling.md#calendar-recurrence) for request validation, DST rules, and migration details.

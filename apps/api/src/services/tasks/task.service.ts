@@ -310,6 +310,9 @@ export class TaskService {
       responsibilityId: previous.responsibilityId
     });
 
+    if (!created && task.runKey !== runKey) {
+      throw new AppError('responsibilityRunOpen', 'Another run of this schedule is already open');
+    }
     if (created) {
       await this.lifecycle.recordCreated(task, actor);
       await this.taskRepository.addEvent(previous.id, 'task.restarted', actor, {
