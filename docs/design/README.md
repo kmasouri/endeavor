@@ -1,33 +1,34 @@
 # Design
 
-The design for the web app (`apps/web`): every screen designed so far, and the shared style guide. The original screens live on the "Collaborative Agents app design" board on claude.ai, and this folder contains their exports. Codex first drafted the skills, access request, schedules, agent history, and profile screens; they were rebuilt on the board on October 24 so every screen shares one shell and the style guide. The separately approved `conversation-workspace/` and `schedules-centered/` follow-ups were made in Codex. They refine conversation navigation/creation and the Schedules page frame/empty state, respectively. When the board and this folder disagree outside those recorded refinements, ask Kayvan which one is current.
+The design for the web app (`apps/web`): every screen designed so far, and the shared style guide. The original screens live on the "Collaborative Agents app design" board on claude.ai, and this folder contains their exports. Codex first drafted the skills, access request, schedules, agent history, and profile screens; they were rebuilt on the board on October 24 so every screen shares one shell and the style guide. The separately approved `conversation-workspace/` and `schedules-centered/` follow-ups were made in Codex. They refine conversation navigation/creation and the Schedules page frame/empty state, respectively. The approved `agents/` design was made on its own claude.ai canvas, using that same shell. When the board and this folder disagree outside those recorded refinements, ask Kayvan which one is current.
 
 Everything here is a picture of the app, not app code. Build it in Svelte, using the tokens in `style-guide/tokens.css`.
 
 ## What's here
 
-| Path                                                | What                                                                                                                |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `chat-view/chat-view.html` + `.png`                 | The conversation screen, with the Details panel closed                                                              |
-| `conversation-workspace/`                         | Approved Endeavors view, compact Recent list, header search, and goal-focused creation dialog; editable source and theme/phone screenshots |
-| `chat-view/chat-view-details.html` + `.png`         | The same screen with Details open while an agent is working                                                         |
-| `chat-view/message-box.html` + `.png`               | The message box: the @ picker, replying, and how a reply shows                                                      |
-| `chat-view/agent-states.html` + `.png`              | How agents look at each step: working, playful status words, its work folded, waiting, needs your OK, paused, stuck |
-| `skills-and-connections/skills.html` + `.png`       | The tabbed catalog, on Skills, with Enabled and Disabled on every row                                               |
-| `skills-and-connections/connections.html` + `.png`  | The Connections tab, with what each one allows and whether it has a credential                                      |
-| `skills-and-connections/skill-editor.html` + `.png` | The full-width instructions editor                                                                                  |
-| `approvals/access-request.html` + `.png`            | An agent asks for connection access in the conversation: for this task, or ongoing                                  |
-| `schedules-centered/`                            | Approved 1220px centered Schedules frame, empty/populated views, editable preview, and theme/phone screenshots |
-| `schedules/schedules.html` + `.png`                 | The schedules list, with a missed-runs card and each schedule's state                                               |
-| `schedules/schedule-details.html` + `.png`          | One schedule, with Pause, Run once now, and recent runs                                                             |
-| `schedules/new-schedule.html` + `.png`              | The new schedule form: days, local time, and what to do about missed runs                                           |
-| `agent-history/*.html` + `.png`                     | History from Details, each agent's own runs, and one run, with chat still visible                                   |
-| `profile-settings/profile.html` + `.png`            | Your display name, and how you appear in conversations                                                              |
-| `profile-settings/preferences.html` + `.png`        | Theme and time display                                                                                              |
-| `style-guide/README.md`                             | The style guide: principles, color roles, type, spacing, words, icons, layout                                       |
-| `style-guide/tokens.json`                           | Every token, with a note on when to use it                                                                          |
-| `style-guide/tokens.css`                            | The same tokens as CSS custom properties, ready to import. Generated from `tokens.json`                             |
-| `style-guide/components/<Name>/`                    | Each building block: `README.md` (how to use it) and `preview.html` (a live example)                                |
+| Path                                                | What                                                                                                                                                     |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chat-view/chat-view.html` + `.png`                 | The conversation screen, with the Details panel closed                                                                                                   |
+| `conversation-workspace/`                           | Approved Endeavors view, compact Recent list, header search, and goal-focused creation dialog; editable source and theme/phone screenshots               |
+| `chat-view/chat-view-details.html` + `.png`         | The same screen with Details open while an agent is working                                                                                              |
+| `chat-view/message-box.html` + `.png`               | The message box: the @ picker, replying, and how a reply shows                                                                                           |
+| `chat-view/agent-states.html` + `.png`              | How agents look at each step: working, playful status words, its work folded, waiting, needs your OK, paused, stuck                                      |
+| `skills-and-connections/skills.html` + `.png`       | The tabbed catalog, on Skills, with Enabled and Disabled on every row                                                                                    |
+| `skills-and-connections/connections.html` + `.png`  | The Connections tab, with what each one allows and whether it has a credential                                                                           |
+| `skills-and-connections/skill-editor.html` + `.png` | The full-width instructions editor                                                                                                                       |
+| `approvals/access-request.html` + `.png`            | An agent asks for connection access in the conversation: for this task, or ongoing                                                                       |
+| `schedules-centered/`                               | Approved 1220px centered Schedules frame, empty/populated views, editable preview, and theme/phone screenshots                                           |
+| `schedules/schedules.html` + `.png`                 | The schedules list, with a missed-runs card and each schedule's state                                                                                    |
+| `schedules/schedule-details.html` + `.png`          | One schedule, with Pause, Run once now, and recent runs                                                                                                  |
+| `schedules/new-schedule.html` + `.png`              | The new schedule form: days, local time, and what to do about missed runs                                                                                |
+| `agents/`                                           | Approved Agents list, one agent (Overview, Configuration, Versions), New agent, and the skill and connection picker; preview and theme/phone screenshots |
+| `agent-history/*.html` + `.png`                     | History from Details, each agent's own runs, and one run, with chat still visible                                                                        |
+| `profile-settings/profile.html` + `.png`            | Your display name, and how you appear in conversations                                                                                                   |
+| `profile-settings/preferences.html` + `.png`        | Theme and time display                                                                                                                                   |
+| `style-guide/README.md`                             | The style guide: principles, color roles, type, spacing, words, icons, layout                                                                            |
+| `style-guide/tokens.json`                           | Every token, with a note on when to use it                                                                                                               |
+| `style-guide/tokens.css`                            | The same tokens as CSS custom properties, ready to import. Generated from `tokens.json`                                                                  |
+| `style-guide/components/<Name>/`                    | Each building block: `README.md` (how to use it) and `preview.html` (a live example)                                                                     |
 
 ## How to look at it
 
@@ -102,6 +103,13 @@ These cards appear in the conversation itself, not only on other pages:
 - **"Don't allow" grants nothing.** The agent receives the decision and can explain the limitation or use another available capability.
 - **Access and actions are different approvals.** Giving a connection does not approve individual calls that require a person's OK.
 - This is the agreed target design for [CA-38](https://app.notion.com/p/4031a83d088f81999042d1aadfd02466), which also covers filtered discovery, skill requests, and revocation. The saved screen shows a connection request; it is not an implemented app feature.
+- **Ongoing becomes configuration** (decided October 24, 2026, with the Agents design): approving ongoing access adds the connection to the agent's configuration as a new version. Removing it there revokes it.
+
+### Agents
+
+- **Chosen means allowed.** An agent's chosen skills and connections are its access. There is no separate Access tab. Removing one and saving revokes it, including for open tasks on older versions. See the [Agents design](agents/README.md).
+- **Pick from a search, not a grid.** The configuration lists only what's chosen; search the catalog to add more, so it works with hundreds of items.
+- **Three tabs per agent:** Overview, Configuration, Versions. New agent is its own page.
 
 ## Gaps to check against the API
 
@@ -121,6 +129,13 @@ keeps **If runs are missed** visible. [CA-39](https://app.notion.com/p/4031a83d0
 tracks the UI and backend work. Calendar rules need their source IANA timezone as well as UTC run
 instants; the current interval-only API cannot implement the new picker yet. See the linked Notion
 design for the agreed behavior.
+
+### Agents
+
+The approved [Agents design](agents/README.md) needs two API changes. Saving a configuration that
+drops a skill or connection must revoke its grant; today a save only adds grants. And each version
+row says what changed, which the API doesn't store, so it must be worked out by comparing versions.
+[CA-57](https://app.notion.com/p/4031a83d088f81899996d9c7e651a90e) covers both.
 
 ### Conversation data
 

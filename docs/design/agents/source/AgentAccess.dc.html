@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Researcher, access</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="agents.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" data-theme="{{theme}}">
+  <aside class="side" aria-label="Application sidebar">
+    <div class="brand"><span class="logo">CA</span><span>Collaborative Agents</span></div>
+    <nav class="nav" aria-label="Main">
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg><span>Conversations</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg><span>Approvals</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg><span>Schedules</span></a>
+      <a href="Main.dc.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg><span>Agents</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg><span>Skills and connections</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"></path></svg><span>Setup</span></a>
+    </nav>
+    <div class="chats">
+      <div class="section-label">Conversations</div>
+      <a href="#"># heat-pumps-cold-weather</a>
+      <a href="#"># website-check</a>
+      <a href="#"># fall-of-western-rome</a>
+    </div>
+    <div class="profile"><span class="avatar sm person">K</span><div><strong>Kayvan Masouri</strong><small>Profile and settings</small></div></div>
+  </aside>
+
+  <main class="main">
+    <div class="frame">
+      <a class="back" href="Main.dc.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>Agents</a>
+      <header class="header" style="border-bottom: 0; padding-bottom: 16px">
+        <div style="display: flex; gap: 14px; align-items: center">
+          <span class="avatar lg a2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></span>
+          <div>
+            <div style="display: flex; gap: 8px; align-items: center"><h1>Researcher</h1><span class="agent-label">agent</span><span class="chip on"><span class="dot"></span>Enabled</span></div>
+            <p class="subtitle">Researches topics and drafts briefs</p>
+          </div>
+        </div>
+        <button type="button" class="btn secondary">Disable</button>
+      </header>
+      <nav class="tabs" aria-label="Agent sections">
+        <a href="AgentDetail.dc.html">Overview</a>
+        <a href="AgentConfig.dc.html">Configuration</a>
+        <a href="AgentVersions.dc.html">Versions · 4</a>
+        <a href="AgentAccess.dc.html" aria-current="page">Access</a>
+      </nav>
+
+      <div class="grid-2">
+        <section class="card" aria-labelledby="grants-h">
+          <div class="card-head">
+            <div><h2 id="grants-h">Has access · 3</h2><p class="caption muted">Being in a catalog gives no access. These grants do. Revoking applies on the agent’s next tool call.</p></div>
+          </div>
+          <div class="mini-list">
+            <div>
+              <span class="avatar sm a0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>
+              <span class="grow"><strong>Web search</strong> <span class="muted caption">connection</span><br><span class="caption muted">Ongoing · approved by Kayvan on Oct 14 · in version 4</span></span>
+              <button type="button" class="btn danger">Revoke</button>
+            </div>
+            <div>
+              <span class="avatar sm a0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg></span>
+              <span class="grow"><strong>Cite sources</strong> <span class="muted caption">skill</span><br><span class="caption muted">In version 4</span></span>
+              <button type="button" class="btn danger">Revoke</button>
+            </div>
+            <div>
+              <span class="avatar sm a0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path></svg></span>
+              <span class="grow"><strong>Plain-language briefs</strong> <span class="muted caption">skill</span><br><span class="caption muted">In version 4</span></span>
+              <button type="button" class="btn danger">Revoke</button>
+            </div>
+          </div>
+          <form style="display: flex; gap: 8px; flex-wrap: wrap; border-top: 1px solid var(--border-100); padding-top: 14px">
+            <label class="field" style="flex: 1 1 260px">Grant access
+              <select class="input"><option>Choose a skill or connection…</option><option>Connection: Test API</option><option>Skill: Review checklist</option></select>
+            </label>
+            <button type="button" class="btn primary" style="align-self: end">Grant</button>
+          </form>
+        </section>
+
+        <div class="stack">
+          <section class="card" aria-labelledby="gap-h">
+            <h2 id="gap-h">Picked but no access</h2>
+            <p class="meta muted">Nothing here. Every skill and connection in version 4 has a grant.</p>
+          </section>
+          <section class="card" aria-labelledby="ask-h">
+            <h2 id="ask-h">Asking for access</h2>
+            <p class="meta muted">When an agent needs a connection it doesn’t have, it asks in the conversation. You can allow it for that task or ongoing. Pending asks also show in Approvals.</p>
+            <a class="link" href="#">Open Approvals</a>
+          </section>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>

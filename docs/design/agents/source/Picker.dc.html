@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Skill and connection picker</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="agents.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app picker" data-theme="{{theme}}" style="display: block; min-height: 0; background: var(--bg-100)">
+  <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px">
+    <span class="section-label">{{chosenLabel}}</span>
+    <a class="link" href="#">{{browseLabel}}</a>
+  </div>
+
+  <sc-if value="{{hasChosen}}" hint-placeholder-val="{{true}}">
+    <ul class="picked" aria-label="{{chosenLabel}}">
+      <sc-for list="{{chosenItems}}" as="item" hint-placeholder-count="2">
+        <li>
+          <span class="grow">
+            <strong>{{item.name}}</strong>
+            <span class="muted caption"> · {{item.desc}}</span>
+          </span>
+          <button type="button" class="icon-btn" aria-label="{{item.removeLabel}}" onClick="{{item.remove}}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>
+        </li>
+      </sc-for>
+      <sc-for list="{{removedItems}}" as="item" hint-placeholder-count="0">
+        <li class="removed">
+          <span class="grow">
+            <s>{{item.name}}</s>
+            <span class="caption"> · {{removedNote}}</span>
+          </span>
+          <button type="button" class="btn quiet" style="min-height: 32px" onClick="{{item.undo}}">Undo</button>
+        </li>
+      </sc-for>
+    </ul>
+  </sc-if>
+  <sc-if value="{{noneChosen}}" hint-placeholder-val="{{false}}">
+    <p class="meta muted picked-empty">{{noneLabel}}</p>
+  </sc-if>
+
+  <div class="combo">
+    <label class="combo-input">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>
+      <input type="search" role="combobox" aria-expanded="{{openStr}}" aria-label="{{placeholder}}" placeholder="{{placeholder}}" value="{{query}}" onInput="{{onQuery}}" onFocus="{{onOpen}}">
+    </label>
+    <sc-if value="{{open}}" hint-placeholder-val="{{false}}">
+      <div class="results" role="listbox">
+        <sc-for list="{{matches}}" as="m" hint-placeholder-count="4">
+          <button type="button" role="option" class="result" onClick="{{m.add}}">
+            <span class="grow"><strong>{{m.name}}</strong><br><span class="muted caption">{{m.desc}}</span></span>
+            <span class="caption muted">{{m.meta}}</span>
+            <span class="add">Add</span>
+          </button>
+        </sc-for>
+        <sc-if value="{{noMatches}}" hint-placeholder-val="{{false}}"><p class="meta muted" style="padding: 12px">{{noMatchLabel}}</p></sc-if>
+        <div class="results-foot">
+          <span class="caption muted">{{footLabel}}</span>
+          <button type="button" class="btn quiet" style="min-height: 0; padding: 4px 8px" onClick="{{onClose}}">Done</button>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+  <p class="hint" style="margin-top: 8px">{{hint}}</p>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"kind":{"editor":"enum","options":["skill","connection"],"default":"skill"},"chosen":{"editor":"text","default":"cite,plain"},"isNew":{"editor":"boolean","default":false},"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":820,"height":560}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const start = (props.chosen ?? 'cite,plain').split(',').map((s) => s.trim()).filter(Boolean);
+    this.state = { chosen: start, removed: [], query: '', open: false };
+  }
+  catalog(kind) {
+    if (kind === 'connection') return {
+      total: 38,
+      items: [
+        { id: 'web', name: 'Web search', desc: 'Search the public web', access: true, meta: 'Used by 4 agents' },
+        { id: 'test', name: 'Test API', desc: 'Staging checkout endpoints', access: false, meta: 'Used by 2 agents' },
+        { id: 'github', name: 'GitHub', desc: 'Read issues and pull requests', access: false, meta: 'Used by 3 agents' },
+        { id: 'linear', name: 'Linear', desc: 'Create and update tickets', access: false, meta: 'Used by 1 agent' },
+        { id: 'slack', name: 'Slack', desc: 'Post to chosen channels', access: false, meta: 'Used by 2 agents' },
+        { id: 'drive', name: 'Google Drive', desc: 'Read shared folders', access: false, meta: 'Not used yet' },
+        { id: 'stripe', name: 'Stripe (test mode)', desc: 'Look up test payments', access: false, meta: 'Used by 1 agent' },
+        { id: 'pg', name: 'Reporting database', desc: 'Read-only SQL', access: false, meta: 'Used by 2 agents' }
+      ]
+    };
+    return {
+      total: 214,
+      items: [
+        { id: 'cite', name: 'Cite sources', desc: 'Link a source after every claim', meta: 'Version 3' },
+        { id: 'plain', name: 'Plain-language briefs', desc: 'Short sentences, everyday words', meta: 'Version 2' },
+        { id: 'review', name: 'Review checklist', desc: 'Check claims against their sources', meta: 'Version 5' },
+        { id: 'release', name: 'Release notes', desc: 'Summarize changes for readers', meta: 'Version 1' },
+        { id: 'meetings', name: 'Meeting summaries', desc: 'Decisions, owners, and dates', meta: 'Version 2' },
+        { id: 'a11y', name: 'Accessibility review', desc: 'Check pages against WCAG basics', meta: 'Version 4' },
+        { id: 'sql', name: 'Careful SQL', desc: 'Read-only queries with limits', meta: 'Version 1' },
+        { id: 'spanish', name: 'Translate to Spanish', desc: 'Keep names and numbers as written', meta: 'Version 1' },
+        { id: 'testplan', name: 'Test plans', desc: 'Steps, expected results, and risks', meta: 'Version 3' },
+        { id: 'security', name: 'Security review', desc: 'Flag secrets and unsafe input', meta: 'Version 2' }
+      ]
+    };
+  }
+  renderVals() {
+    const kind = this.props.kind ?? 'skill';
+    const isConn = kind === 'connection';
+    const { total, items } = this.catalog(kind);
+    const { chosen, removed, query, open } = this.state;
+    const q = query.trim().toLowerCase();
+    const pool = items.filter((i) => !chosen.includes(i.id) && !removed.includes(i.id));
+    const found = pool.filter((i) => !q || (i.name + ' ' + i.desc).toLowerCase().includes(q));
+    const noun = isConn ? 'connection' : 'skill';
+    const nouns = noun + 's';
+    return {
+      theme: this.props.theme ?? 'dark',
+      chosenLabel: 'Chosen ' + nouns + ' · ' + chosen.length,
+      browseLabel: 'Browse ' + nouns,
+      hasChosen: chosen.length + removed.length > 0,
+      noneChosen: chosen.length + removed.length === 0,
+      noneLabel: 'No ' + nouns + ' yet.',
+      chosenItems: chosen.map((id) => items.find((i) => i.id === id)).filter(Boolean).map((i) => ({
+        ...i,
+        removeLabel: 'Remove ' + i.name,
+        remove: () => this.setState({ chosen: chosen.filter((c) => c !== i.id), removed: this.props.isNew ? removed : [...removed, i.id] })
+      })),
+      removedItems: removed.map((id) => items.find((i) => i.id === id)).filter(Boolean).map((i) => ({
+        ...i,
+        undo: () => this.setState({ removed: removed.filter((r) => r !== i.id), chosen: [...chosen, i.id] })
+      })),
+      removedNote: 'When you save, open tasks stop using it too',
+      placeholder: 'Add a ' + noun + '…',
+      query,
+      open,
+      openStr: String(open),
+      onQuery: (e) => this.setState({ query: e.target.value, open: true }),
+      onOpen: () => this.setState({ open: true }),
+      onClose: () => this.setState({ open: false, query: '' }),
+      matches: found.slice(0, 5).map((i) => ({ ...i, add: () => this.setState({ chosen: [...chosen, i.id], query: '' }) })),
+      noMatches: found.length === 0,
+      noMatchLabel: 'No ' + nouns + ' match “' + query + '”.',
+      footLabel: q
+        ? found.length + ' match' + (found.length === 1 ? '' : 'es') + (found.length > 5 ? ' · showing 5, keep typing to narrow' : '')
+        : (total - chosen.length) + ' more ' + nouns + ' · type to search',
+      hint: isConn
+        ? 'Outside APIs the agent may call. Chosen means allowed; some calls still ask for your OK.'
+        : 'Reusable instructions the agent follows. Skills never add connections.'
+    };
+  }
+}
+</script>
+</body>
+</html>

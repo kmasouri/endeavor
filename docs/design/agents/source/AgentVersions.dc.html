@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Researcher, versions</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="agents.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div class="app" data-theme="{{theme}}">
+  <header class="appbar">
+    <div class="brand"><span class="logo">CA</span><span>Collaborative Agents</span></div>
+    <button type="button" class="search-launch" aria-label="Search endeavors"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg><span>Search endeavors…</span><span class="shortcut">⌘ / Ctrl K</span></button>
+  </header>
+  <aside class="side" aria-label="Application sidebar">
+    <nav class="nav" aria-label="Main">
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18"></path><path d="M9 21V9"></path></svg><span>Endeavors</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path><path d="m9 12 2 2 4-4"></path></svg><span>Approvals</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg><span>Schedules</span></a>
+      <a href="Main.dc.html" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 8V4H8"></path><rect width="16" height="12" x="4" y="8" rx="2"></rect><path d="M2 14h2"></path><path d="M20 14h2"></path><path d="M15 13v2"></path><path d="M9 13v2"></path></svg><span>Agents</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="7" x="3" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="3" rx="1"></rect><rect width="7" height="7" x="14" y="14" rx="1"></rect><rect width="7" height="7" x="3" y="14" rx="1"></rect></svg><span>Skills and connections</span></a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"></path></svg><span>Setup</span></a>
+    </nav>
+    <div class="chats">
+      <div class="recent-head"><span class="section-label">Recent</span><button type="button" aria-label="New endeavor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14"></path><path d="M12 5v14"></path></svg>New</button></div>
+      <a href="#">Heat pump brief</a>
+      <a href="#">Website reliability</a>
+      <a href="#">Roman Empire research</a>
+    </div>
+    <div class="profile"><span class="avatar sm person">K</span><div><strong>Kayvan Masouri</strong><small>Profile and settings</small></div></div>
+  </aside>
+
+  <main class="main">
+    <div class="frame">
+      <a class="back" href="Main.dc.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 19-7-7 7-7"></path><path d="M19 12H5"></path></svg>Agents</a>
+      <header class="header" style="border-bottom: 0; padding-bottom: 16px">
+        <div style="display: flex; gap: 14px; align-items: center">
+          <span class="avatar lg a2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg></span>
+          <div>
+            <div style="display: flex; gap: 8px; align-items: center"><h1>Researcher</h1><span class="agent-label">agent</span><span class="chip on"><span class="dot"></span>Enabled</span></div>
+            <p class="subtitle">Researches topics and drafts briefs</p>
+          </div>
+        </div>
+        <button type="button" class="btn secondary">Disable</button>
+      </header>
+      <nav class="tabs" aria-label="Agent sections">
+        <a href="AgentDetail.dc.html">Overview</a>
+        <a href="AgentConfig.dc.html">Configuration</a>
+        <a href="AgentVersions.dc.html" aria-current="page">Versions · 4</a>
+      </nav>
+
+      <p class="meta muted" style="margin: 24px 0 16px; max-width: 720px">A saved version never changes. Each task keeps the version it started with. Moving open work to a newer version is a separate step, and it’s recorded with who did it and why.</p>
+
+      <div role="list" aria-label="Versions">
+        <div class="version" role="listitem">
+          <div class="vnum">v4</div>
+          <div>
+            <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap"><h3>Raised the cost limit, added Plain-language briefs</h3><span class="chip on">Current</span></div>
+            <p class="caption muted" style="margin-top: 4px">Oct 22 · Kayvan · Anthropic · claude-sonnet-5-5 · 2 open tasks</p>
+            <details open>
+              <summary>Instructions</summary>
+              <div class="instructions">Answer with a short summary. Cite a source for every claim.
+Ask a clarifying question when the request is unclear.
+Write for a reader who is new to the topic. Prefer sources from the last five years, and say when a claim is disputed.</div>
+            </details>
+          </div>
+          <span></span>
+        </div>
+
+        <div class="version" role="listitem">
+          <div class="vnum muted">v3</div>
+          <div>
+            <h3>Switched to claude-sonnet-5-5</h3>
+            <p class="caption muted" style="margin-top: 4px">Oct 18 · Kayvan · Anthropic · claude-sonnet-5-5 · 1 open task</p>
+            <details><summary>Instructions</summary><div class="instructions">Answer with a short summary. Cite a source for every claim. Ask a clarifying question when the request is unclear.</div></details>
+          </div>
+          <button type="button" class="btn secondary">Move 1 task to v4</button>
+        </div>
+
+        <div class="version" role="listitem">
+          <div class="vnum muted">v2</div>
+          <div>
+            <h3>Added Web search</h3>
+            <p class="caption muted" style="margin-top: 4px">Oct 14 · Sam · Anthropic · claude-haiku-5-5 · no open tasks</p>
+            <div class="notice danger" style="margin-top: 10px">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>
+              <p>This version relied on inherited connections. Calls now need connections picked on purpose. Review them on the Configuration tab and save.</p>
+            </div>
+            <details><summary>Instructions</summary><div class="instructions">Answer with a short summary. Cite a source for every claim.</div></details>
+          </div>
+          <span></span>
+        </div>
+
+        <div class="version" role="listitem">
+          <div class="vnum muted">v1</div>
+          <div>
+            <h3>Created</h3>
+            <p class="caption muted" style="margin-top: 4px">Oct 10 · Kayvan · Anthropic · claude-haiku-5-5 · no open tasks</p>
+            <details><summary>Instructions</summary><div class="instructions">Find and summarize sources on a question.</div></details>
+          </div>
+          <span></span>
+        </div>
+      </div>
+      <p class="caption muted" style="margin-top: 14px">Finished tasks don’t move. Restart one to run it on the current version.</p>
+    </div>
+  </main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["dark","light"],"default":"dark"},"$preview":{"width":1440,"height":1300}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.theme ?? 'dark' };
+  }
+}
+</script>
+</body>
+</html>
