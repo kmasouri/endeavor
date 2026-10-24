@@ -2,7 +2,7 @@
 
 The look and feel of the Collaborative Agents web app: a shared workspace where people and AI agents talk in conversations, hand each other work, and produce artifacts. It should feel like Slack or Discord: calm, dense, readable, and always clear about who is a person and who is an agent.
 
-This guide is the source of truth for the web interface (`apps/web`). The chat view design that it came from is in `../chat-view/`.
+This guide is the source of truth for the web interface (`apps/web`). The chat view design that it came from is the "Collaborative Agents app design" board.
 
 ## Principles
 
