@@ -9,7 +9,7 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 | Path                                                | What                                                                                                                |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `chat-view/chat-view.html` + `.png`                 | The conversation screen, with the Details panel closed                                                              |
-| `conversation-workspace/`                         | Approved unified chat workspace and New conversation dialog; editable source, browser preview, and theme/phone screenshots |
+| `conversation-workspace/`                         | Approved Endeavors view, compact Recent list, header search, and goal-focused creation dialog; editable source and theme/phone screenshots |
 | `chat-view/chat-view-details.html` + `.png`         | The same screen with Details open while an agent is working                                                         |
 | `chat-view/message-box.html` + `.png`               | The message box: the @ picker, replying, and how a reply shows                                                      |
 | `chat-view/agent-states.html` + `.png`              | How agents look at each step: working, playful status words, its work folded, waiting, needs your OK, paused, stuck |
@@ -48,7 +48,7 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 
 ### Every screen
 
-- **One sidebar everywhere:** Conversations, Approvals, Schedules, Agents, Skills and connections, Setup, then the conversation list. Work is gone (see Agent history below). Your name at the bottom opens Profile and settings.
+- **One sidebar everywhere:** Conversations (Endeavors under the approved CA-52 follow-up), Approvals, Schedules, Agents, Skills and connections, Setup, then the recent list. Work is gone (see Agent history below). Your name at the bottom opens Profile and settings.
 - **One header:** pages that aren't a conversation get the same header bar as a conversation: the page name, a short line under it, and the page's main action on the right ("New schedule"). No "Workspace /" breadcrumb.
 - **Selected is neutral, never yolk:** the open tab (light text, light underline), chosen days (light fill, dark letter), a chosen option card (graphite fill, light border). Yolk stays for actions and for things waiting on you.
 - **Waiting on you is yolk:** "Researcher is waiting for your OK" in the status line, and the "Needs your OK" card.
@@ -65,9 +65,9 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 
 ### The conversation screen
 
-- **Navigation and creation follow-up (CA-52):** the approved [conversation workspace reference](conversation-workspace/README.md) puts one searchable conversation list and a labeled New conversation action in the sidebar. The main area shows the selected chat, restoring the last accessible chat on return. Creation opens a centered dialog with a name and optional people/agents; success opens the new chat, while cancellation returns to the previous one. This refines the earlier sidebar `+` action and replaces the duplicate directory and permanent creation form. It is design-only until [CA-52](https://app.notion.com/p/4031a83d088f81ec915ad0fe54ac2bc8) ships; the full chat and history references below remain in force.
+- **Endeavors follow-up (CA-52):** the approved [Endeavors reference](conversation-workspace/README.md) names the destination **Endeavors**, with **Recent** and a compact **+ New** action in the sidebar. Search opens from the app header. Readable outcome titles replace channel-style names. The centered creation dialog asks **What do you want to accomplish?**; success opens the new endeavor, while cancellation returns to the previous one. This supersedes the earlier Conversations directory, sidebar search, and large New conversation button. Reserve Workspace for future teams or organizations. This remains design-only until [CA-52](https://app.notion.com/p/4031a83d088f81ec915ad0fe54ac2bc8) ships; existing full chat/history references define the other features and internal conversation/task records remain unchanged.
 
-- **Sidebar:** collapsible. Main navigation with count badges, then the conversation list. Conversation names use dashes and no spaces (`#heat-pumps-cold-weather`), always on one line, with "…" when long. Unread conversations get a red badge and a bold name.
+- **Sidebar:** collapsible. Main navigation with count badges, then the conversation list. The original exports use dashed conversation names; CA-52 supersedes that display rule with readable endeavor titles, always on one line with "…" when long. Unread conversations get a red badge and a bold name.
 - **Header:** the title, one members button (at most 4 same-size pictures, then "+N"; it never grows, and it opens Details), "Add people or agents", and a Details toggle.
 - **Messages:** grouped by sender, with short times ("9:31 PM") and the full date on hover. Formatting is rendered. An agent's steps fold into one line ("Read 6 Wikipedia pages · 24 s") that opens on click. Drafts and results arrive as artifact cards with actions ("Read it", "Accept", "Ask for changes"), plus time taken and cost. Hovering a message shows Reply, Copy, and "See what this agent did".
 - **Status line**, just above the message box: one slim line for every busy agent and anyone typing ("Reviewer is fact-checking… · Researcher is waiting for it"). Playful words are picked from what the agent is really doing, always next to the plain detail. Waiting, paused, needs your OK, and stuck always use plain words.
