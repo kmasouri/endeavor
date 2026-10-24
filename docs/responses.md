@@ -117,7 +117,9 @@ return `validationError`. An unknown acting person returns `actorNotFound`. IDs,
 ownership, and history do not change. There is still no sign-in; the header identifies the person
 selected in the local app.
 
-Profile and settings opens from the sidebar name. Each tab has its own Save and Discard actions;
+Profile and settings opens from the sidebar name. Switch person opens a modal with a dimmed
+background and large avatar tiles; choose a person or dismiss with Close, Escape, or the backdrop.
+Each tab has its own Save and Discard actions;
 changing tabs keeps drafts. Failed saves keep edits for retry. Leaving with edits prompts before
 discarding, and navigation waits for an active save to finish. The browser remembers only the
 selected person and a theme copy for startup. The server remains the source for preferences on

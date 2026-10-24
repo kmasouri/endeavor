@@ -48,8 +48,9 @@ The web app imports `apps/web/src/design-tokens.css`, an exact copy of
 `docs/design/style-guide/tokens.css`. A test checks that the copy stays in sync, so the Docker image
 can build without the design documentation. `appearance.ts` applies the browser's
 remembered theme before mounting the app. Shared avatars, icons, and page headers keep the shell
-and feature pages consistent. The sidebar name opens Profile and settings; Switch person keeps
-the existing picker available. Person records store theme and hour format, defaulting to system
+and feature pages consistent. The sidebar name opens Profile and settings. Switch person opens
+a native modal with a dimmed backdrop and large avatar tiles. Person records store theme and hour
+format, defaulting to system
 appearance and 12-hour time. The browser keeps a theme copy for startup and restores authoritative
 preferences from the API on reload or person switch. System appearance follows changes to the
 computer's theme. `time-display.svelte.ts` formats message and run timestamps in the device timezone.
