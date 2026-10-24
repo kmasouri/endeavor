@@ -27,10 +27,12 @@ import {
   ModelTurnResult
 } from './model.client';
 
+type ProviderOptions = Parameters<typeof generateText>[0]['providerOptions'];
+
 // How one provider is reached: the SDK model for a model name, and any provider options.
 export interface AiSdkProvider {
   model(name: string): LanguageModel;
-  options?(name: string): Record<string, Record<string, unknown>> | undefined;
+  options?(name: string): ProviderOptions;
 }
 
 // OpenAI through its Responses API: its current models only accept tools there. Reasoning comes
@@ -88,7 +90,7 @@ export class ModelAiSdkClient implements ModelClient {
         messages: toMessages(request.transcript),
         ...(request.tools.length > 0 && { tools }),
         maxOutputTokens: request.maxTokens,
-        providerOptions: this.sdk.options?.(request.model) as never,
+        providerOptions: this.sdk.options?.(request.model),
         // The runner retries with its own backoff and counts failures.
         maxRetries: 0
       });
