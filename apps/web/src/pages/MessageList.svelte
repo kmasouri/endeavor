@@ -8,6 +8,7 @@
     type Task,
     type TaskOutput
   } from '../api';
+  import { conversationArtifacts } from '../conversation-artifacts';
   import { messagePreview } from '../message-format';
   import { when } from '../components';
   import FormattedText from '../FormattedText.svelte';
@@ -41,6 +42,7 @@
       end?.scrollIntoView({ block: 'end' });
     });
   });
+  let artifacts = $derived(conversationArtifacts(props.outputs, props.messages, props.tasks));
   let byId = $derived.by(() => new Map(props.messages.map((m) => [m.id, m])));
   let lastForTask = $derived.by(
     () => new Map(props.messages.filter((m) => m.taskId).map((m) => [m.taskId, m.id]))
@@ -156,8 +158,10 @@
           >{/if}
         <div class="message-body"><FormattedText text={message.body} {names} /></div>
         {#if message.taskId && lastForTask.get(message.taskId) === message.id}
-          <RunSteps taskId={message.taskId} />
-          {#each props.outputs.filter((o) => o.taskId === message.taskId) as output (output.id)}<ArtifactCard
+          {#if !props.outputs.some((o) => o.taskId === message.taskId) || artifacts.some((o) => o.taskId === message.taskId)}<RunSteps
+              taskId={message.taskId}
+            />{/if}
+          {#each artifacts.filter((o) => o.taskId === message.taskId) as output (output.id)}<ArtifactCard
               {output}
               task={props.tasks.find((t) => t.id === message.taskId)}
               cost={props.costs?.tasks.find((t) => t.taskId === message.taskId)?.costUsd}

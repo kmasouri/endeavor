@@ -55,7 +55,9 @@ The conversation page owns its messages, tasks, outputs, approval requests, and 
 Details starts closed. Messages render a small Markdown subset as Svelte text nodes, including
 safe HTTP links, emphasis, code, lists, and highlighted mentions. Raw HTML stays text. Typing `@`
 opens the member picker; adding a directory agent uses the membership API before sending a mention.
-Reply actions preserve the source message ID. Run steps load on expansion. Artifact cards use task
+Reply actions preserve the source message ID. Run steps load on expansion. Generic Result records that repeat an agent message stay in task
+inspection; the conversation shows the answer once, without a duplicate card or steps control.
+Named outputs, files, links, distinct content, and pending reviews keep their artifact cards. Artifact cards use task
 review when review is pending; requests for changes return to the conversation composer.
 
 The interface shows only data returned by the API. Unread counts, live steps and typing, pause
