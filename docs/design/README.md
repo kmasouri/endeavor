@@ -1,6 +1,6 @@
 # Design
 
-The design for the web app (`apps/web`): every screen designed so far, and the shared style guide. All screens live on the "Collaborative Agents app design" board on claude.ai, and this folder is their export. Codex first drafted the skills, access request, schedules, agent history, and profile screens; they were rebuilt on the board on October 24 so every screen shares one shell and the style guide. When the board and this folder disagree, ask Kayvan which one is current.
+The design for the web app (`apps/web`): every screen designed so far, and the shared style guide. The original screens live on the "Collaborative Agents app design" board on claude.ai, and this folder contains their exports. Codex first drafted the skills, access request, schedules, agent history, and profile screens; they were rebuilt on the board on October 24 so every screen shares one shell and the style guide. The separately approved `conversation-workspace/` follow-up was made in Codex and refines navigation and creation only. When the board and this folder disagree outside that recorded refinement, ask Kayvan which one is current.
 
 Everything here is a picture of the app, not app code. Build it in Svelte, using the tokens in `style-guide/tokens.css`.
 
@@ -9,6 +9,7 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 | Path                                                | What                                                                                                                |
 | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 | `chat-view/chat-view.html` + `.png`                 | The conversation screen, with the Details panel closed                                                              |
+| `conversation-workspace/`                         | Approved unified chat workspace and New conversation dialog; editable source, browser preview, and theme/phone screenshots |
 | `chat-view/chat-view-details.html` + `.png`         | The same screen with Details open while an agent is working                                                         |
 | `chat-view/message-box.html` + `.png`               | The message box: the @ picker, replying, and how a reply shows                                                      |
 | `chat-view/agent-states.html` + `.png`              | How agents look at each step: working, playful status words, its work folded, waiting, needs your OK, paused, stuck |
@@ -62,6 +63,8 @@ Everything here is a picture of the app, not app code. Build it in Svelte, using
 - Every agent gets a sky spark badge in the avatar's corner, and the small word "agent" after its name. Use this everywhere a small avatar appears: messages, the @ list, Details, and task lists.
 
 ### The conversation screen
+
+- **Navigation and creation follow-up (CA-52):** the approved [conversation workspace reference](conversation-workspace/README.md) puts one searchable conversation list and a labeled New conversation action in the sidebar. The main area shows the selected chat, restoring the last accessible chat on return. Creation opens a centered dialog with a name and optional people/agents; success opens the new chat, while cancellation returns to the previous one. This refines the earlier sidebar `+` action and replaces the duplicate directory and permanent creation form. It is design-only until [CA-52](https://app.notion.com/p/4031a83d088f81ec915ad0fe54ac2bc8) ships; the full chat and history references below remain in force.
 
 - **Sidebar:** collapsible. Main navigation with count badges, then the conversation list. Conversation names use dashes and no spaces (`#heat-pumps-cold-weather`), always on one line, with "…" when long. Unread conversations get a red badge and a bold name.
 - **Header:** the title, one members button (at most 4 same-size pictures, then "+N"; it never grows, and it opens Details), "Add people or agents", and a Details toggle.
