@@ -71,7 +71,7 @@ test('a proposed request does not appear as completed before a recorded call', (
 test('help, failed calls, and blocked work remain clear and plain', () => {
   const steps = agentSteps([
     event(1, 'model.turn', {
-      toolCalls: [{ id: 'ask', name: 'ask_agent', input: { to: 'Reviewer' } }]
+      toolCalls: [{ id: 'ask', name: 'ask', input: { to: 'Reviewer' } }]
     }),
     event(2, 'tool.results', {
       results: [{ callId: 'ask', isError: false, content: 'Internal message id and raw response' }]

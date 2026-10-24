@@ -71,7 +71,7 @@ export function agentSteps(events: TaskEvent[]): AgentStep[] {
             title: 'A step could not be completed',
             detail: 'Open the full run for details.'
           });
-        else if (call?.name === 'ask_agent' && text(call.input.to))
+        else if (call?.name === 'ask' && text(call.input.to))
           steps.push({
             id: `${event.id}:${index}`,
             kind: 'status',
