@@ -9,6 +9,8 @@ routes -> handlers -> services -> repositories -> data stores
 
 Each layer has one job. Because of this split, you can test the business logic without starting a server or a database.
 
+Endeavor is the current product name. See [rebrand compatibility](rebranding.md) for retained identifiers and design provenance.
+
 ## Where things live
 
 ```text

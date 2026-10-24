@@ -1,6 +1,6 @@
-# Collaborative Agents
+# Endeavor
 
-The look and feel of the Collaborative Agents web app: a shared workspace where people and AI agents talk in conversations, hand each other work, and produce artifacts. It should feel like Slack or Discord: calm, dense, readable, and always clear about who is a person and who is an agent.
+The look and feel of the Endeavor web app: a shared workspace where people and AI agents talk in conversations, hand each other work, and produce artifacts. It should feel like Slack or Discord: calm, dense, readable, and always clear about who is a person and who is an agent.
 
 This guide is the source of truth for the web interface (`apps/web`). The chat view design that it came from is the "Collaborative Agents app design" board.
 
@@ -56,7 +56,7 @@ Inter for everything in the interface, JetBrains Mono for requests, paths and ID
 
 ## Words
 
-- Plain words, short sentences. Name things the way people do: "conversation", "agent", "artifact", "budget".
+- Plain words, short sentences. Name things the way people do: "endeavor", "agent", "artifact", "budget".
 - Times are short ("9:31 PM"); the full date shows on hover.
 - **Live agent status can be playful**, picked from what the agent is really doing, always next to the plain detail: "Rummaging…" (searching), "Skimming…" (reading a page), "Scribbling…" (writing a draft), "Fact-checking…" (comparing claims to sources), "Poking the API…" (calling a connection), "Mulling it over…" (thinking).
 - **States that need a person are never playful:** "Waiting for Reviewer", "Paused by Sam", "Needs your OK", "Stopped: this conversation reached its $1.00 budget".

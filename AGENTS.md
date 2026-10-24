@@ -18,7 +18,7 @@ This file says what to do and what not to do. For how things work and why, read:
 
 ## Source of truth
 
-This repo builds the Collaborative Agents platform. The Notion project hub is the source of truth for what to build and why:
+This repo builds the Endeavor platform. The Notion project hub is the source of truth for what to build and why:
 
 - [Project Hub](https://app.notion.com/p/4011a83d088f8182b29ed57ace67d81b): start here. It links everything below.
 - [PRD](https://app.notion.com/p/4011a83d088f81918f3ff1d468dc962e): the product, agreed behavior, MVP scope, and open decisions.

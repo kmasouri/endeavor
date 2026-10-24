@@ -1,8 +1,8 @@
 {
-  "name": "@bold-cedar-007/api",
+  "name": "@endeavor/api",
   "version": "0.1.0",
   "private": true,
-  "description": "The platform's API, runner, and scheduler (Fastify and TypeScript).",
+  "description": "Endeavor: The platform's API, runner, and scheduler (Fastify and TypeScript).",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ENVIRONMENT=local tsx watch src/index.ts",

@@ -4,6 +4,8 @@ The design for the web app (`apps/web`): every screen designed so far, and the s
 
 Everything here is a picture of the app, not app code. Build it in Svelte, using the tokens in `style-guide/tokens.css`.
 
+Endeavor is the current product name. See [rebrand compatibility](../rebranding.md) for retained identifiers and design provenance. Old names and CA marks in approved exports await the board-owner refresh tracked in CA-58.
+
 ## What's here
 
 | Path                                                | What                                                                                                                                                     |

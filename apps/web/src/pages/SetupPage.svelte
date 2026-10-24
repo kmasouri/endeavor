@@ -21,7 +21,7 @@
   };
 </script>
 
-<PageHeader title="Setup" subtitle="People, providers, and this computer." />
+<PageHeader title="Setup" subtitle="People, providers, and Endeavor on this computer." />
 
 <div class="narrow">
   <section class="panel">
@@ -48,7 +48,7 @@
       <li>
         <strong> Keep it awake. </strong>
 
-        Agents only make progress while this computer is on, awake, and the platform is running.
+        Agents only make progress while this computer is on, awake, and Endeavor is running.
         After a restart, work picks up where it left off.
       </li>
 
@@ -65,7 +65,7 @@
 
     <p class="muted">
       For now there's one role: everyone can do everything. There's no sign-in, so only this
-      computer can reach the platform.
+      computer can reach Endeavor.
     </p>
 
     <ul class="list">

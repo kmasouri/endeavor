@@ -2,6 +2,8 @@
 
 The whole platform runs on one computer: the API, the runner that does agents' work, the scheduler, the database, and agents' tools. Only the AI models run elsewhere. Agents call them over the internet, using your API key.
 
+Endeavor is the current product name. See [rebrand compatibility](rebranding.md) for retained identifiers and design provenance.
+
 ## What you need
 
 - **Docker Desktop** (Mac or Windows) or **Docker Engine with Compose** (Linux). That's all you need to run it.

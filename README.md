@@ -1,6 +1,6 @@
-# Bold Cedar 007
+# Endeavor
 
-A starting point for a Fastify and TypeScript API. It comes with Postgres, input checks with Zod, Swagger docs, Docker, AWS hosting, and GitHub Actions.
+A local platform where people and configurable AI agents collaborate in shared endeavors, carry work forward, and produce results. Built with Fastify, TypeScript, Postgres, and Svelte.
 
 The web interface uses Svelte 5 and Vite in `apps/web/`. It calls the API over HTTP and is served at `/app/`.
 
@@ -17,6 +17,15 @@ The web interface uses Svelte 5 and Vite in `apps/web/`. It calls the API over H
 - **Dockerfile** that builds a small image and doesn't run as root.
 - **Terraform** for a throwaway AWS test setup: network, load balancer, image registry, and containers on ECS Fargate.
 - **GitHub Actions** that run the checks on every push, and deploy when you publish a GitHub release.
+
+Clone [kmasouri/endeavor](https://github.com/kmasouri/endeavor):
+
+```bash
+git clone https://github.com/kmasouri/endeavor.git
+cd endeavor
+```
+
+Existing checkouts and deployments: see [the rebrand compatibility guide](docs/rebranding.md).
 
 ## Running it
 
@@ -103,8 +112,8 @@ npm run pilot:report
 ## Docker
 
 ```bash
-docker build -t bold-cedar-007 .
-docker run --rm -p 3000:3000 -e DATABASE_URL=postgres://... bold-cedar-007
+docker build -t endeavor .
+docker run --rm -p 3000:3000 -e DATABASE_URL=postgres://... endeavor
 ```
 
 ## API
@@ -166,9 +175,9 @@ Set these in the GitHub `sandbox` environment:
 | -------------------- | -------- | -------------------------------------------------------------- |
 | `AWS_ROLE_TO_ASSUME` | secret   | The AWS role GitHub Actions logs in as.                        |
 | `AWS_REGION`         | variable | The AWS region the app runs in.                                |
-| `ECR_REPOSITORY`     | variable | ECR repository name, such as `bold-cedar-007-sandbox-service`. |
-| `ECS_CLUSTER`        | variable | ECS cluster name, such as `bold-cedar-007-sandbox-cluster`.    |
-| `ECS_SERVICE`        | variable | ECS service name, such as `bold-cedar-007-sandbox-service`.    |
+| `ECR_REPOSITORY`     | variable | ECR repository name, such as `endeavor-sandbox-service`. |
+| `ECS_CLUSTER`        | variable | ECS cluster name, such as `endeavor-sandbox-cluster`.    |
+| `ECS_SERVICE`        | variable | ECS service name, such as `endeavor-sandbox-service`.    |
 
 To redeploy an image that's already built, run the `deploy` workflow by hand. It doesn't make a new release.
 

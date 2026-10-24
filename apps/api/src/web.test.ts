@@ -16,7 +16,7 @@ describe('registerWebApp', () => {
   });
 
   it('serves the built interface at /app/ and sends / there', async () => {
-    await writeFile(join(dir, 'index.html'), '<h1>Collaborative Agents</h1>');
+    await writeFile(join(dir, 'index.html'), '<h1>Endeavor</h1>');
     const app = fastify();
     expect(registerWebApp(app, dir)).toBe(true);
 
@@ -26,7 +26,7 @@ describe('registerWebApp', () => {
     expect(home.statusCode).toBe(302);
     expect(home.headers.location).toBe('/app/');
     expect(page.statusCode).toBe(200);
-    expect(page.body).toContain('Collaborative Agents');
+    expect(page.body).toContain('Endeavor');
     await app.close();
   });
 

@@ -174,3 +174,26 @@ test('failed schedule loading does not show an empty-state creation prompt', asy
   await expect(page.getByText('Schedules unavailable')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'No active schedules' })).toHaveCount(0);
 });
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`Endeavor keeps the selected person, theme, and navigation after reload: ${theme}`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width: 1100, height: 800 });
+    await mockApi(page, theme);
+    await page.goto('/app/#/schedules');
+    await expect(page).toHaveTitle('Endeavor');
+    await expect(page.getByRole('link', { name: 'Endeavor', exact: true })).toBeVisible();
+    await page.getByRole('link', { name: 'Setup', exact: true }).click();
+    await expect(page.getByText('People, providers, and Endeavor on this computer.')).toBeVisible();
+    await page.reload();
+    await expect(page.getByRole('button', { name: 'Profile and settings' })).toContainText('Kayvan');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    expect(await page.evaluate(() => localStorage.getItem('collaborative-agents.actorId'))).toBe(
+      'person-1'
+    );
+    await page.getByRole('link', { name: 'Schedules', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Schedules', exact: true })).toBeVisible();
+    await expect(page.locator('.brand')).not.toContainText('Collaborative Agents');
+  });
+}

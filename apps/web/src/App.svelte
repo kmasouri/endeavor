@@ -135,7 +135,7 @@
 
 {#if people.error}
   <main class="narrow">
-    <h1>Collaborative Agents</h1>
+    <h1>Endeavor</h1>
 
     <ErrorNote error={`Can't reach the platform: ${people.error}`} />
 
@@ -159,7 +159,7 @@
     {#if !collapsed}
       <aside class="sidebar">
         <div class="brand-row">
-          <a class="brand" href="#/"><span class="brand-mark">CA</span>Collaborative Agents</a
+          <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true">E</span>Endeavor</a
           ><button
             class="quiet icon-button"
             aria-label="Collapse sidebar"

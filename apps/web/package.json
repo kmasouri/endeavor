@@ -1,8 +1,8 @@
 {
-  "name": "@bold-cedar-007/web",
+  "name": "@endeavor/web",
   "version": "0.1.0",
   "private": true,
-  "description": "The web interface (Svelte 5 and Vite). The API serves its build at /app/.",
+  "description": "Endeavor: The web interface (Svelte 5 and Vite). The API serves its build at /app/.",
   "type": "module",
   "scripts": {
     "dev": "vite",

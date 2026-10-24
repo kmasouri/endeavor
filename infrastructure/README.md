@@ -2,6 +2,8 @@
 
 Terraform for a disposable AWS test environment around the service.
 
+Endeavor is the current product name. See [rebrand compatibility](../docs/rebranding.md) for retained identifiers and design provenance.
+
 ## What it creates
 
 - One VPC across two availability zones.
