@@ -16,13 +16,15 @@
     "db:migrate": "ENVIRONMENT=local tsx src/migrate.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^1.1.0",
+    "@ai-sdk/anthropic": "4.0.87",
+    "@ai-sdk/openai": "4.0.101",
     "@fastify/postgres": "^6.1.0",
     "@fastify/request-context": "^7.0.0",
     "@fastify/static": "^10.1.7",
     "@fastify/swagger": "^9.9.0",
     "@fastify/swagger-ui": "^6.1.1",
     "@fastify/type-provider-zod": "^1.0.0",
+    "ai": "7.0.151",
     "fastify": "^5.12.5",
     "fastify-plugin": "^6.0.0",
     "openapi-types": "^12.1.3",

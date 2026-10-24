@@ -56,7 +56,8 @@ interface Responsibility {
 
 const args = parseArgs(process.argv.slice(2));
 const dryRun = args['dry-run'] === true;
-const apiUrl = str(args.api) ?? process.env.PILOT_API_URL ?? 'http://localhost:3000';
+const apiUrl =
+  str(args.api) ?? process.env.PILOT_API_URL ?? `http://localhost:${process.env.APP_PORT ?? 3000}`;
 // Where the platform reaches the test API. In Docker that is the pilot-api service.
 const targetUrl =
   str(args['target-url']) ?? process.env.PILOT_TARGET_URL ?? 'http://pilot-api:4100';

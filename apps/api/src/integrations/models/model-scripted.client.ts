@@ -20,6 +20,7 @@ export type ModelScript = (request: ModelTurnRequest) => ScriptedStep;
 
 export class ModelScriptedClient implements ModelClient {
   readonly provider = 'scripted' as const;
+  readonly transcriptFormat = 'native';
   private callCount = 0;
 
   constructor(private readonly script: ModelScript = () => ({ text: '' })) {}

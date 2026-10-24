@@ -17,11 +17,12 @@ import {
 } from '../data';
 import {
   ConnectionHttpClient,
-  ModelAnthropicClient,
+  anthropicProvider,
+  ModelAiSdkClient,
   ModelClient,
-  ModelOpenAIClient,
   ModelScript,
   ModelScriptedClient,
+  openAiProvider,
   WorkspaceFsClient
 } from '../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../observability';
@@ -62,10 +63,13 @@ export function buildModelClients(
 ): Partial<Record<ModelProvider, ModelClient>> {
   return {
     ...(settings.ANTHROPIC_API_KEY && {
-      anthropic: new ModelAnthropicClient(settings.ANTHROPIC_API_KEY)
+      anthropic: new ModelAiSdkClient('anthropic', anthropicProvider(settings.ANTHROPIC_API_KEY))
     }),
     ...(settings.OPENAI_API_KEY && {
-      openai: new ModelOpenAIClient(settings.OPENAI_API_KEY, settings.OPENAI_BASE_URL)
+      openai: new ModelAiSdkClient(
+        'openai',
+        openAiProvider(settings.OPENAI_API_KEY, settings.OPENAI_BASE_URL)
+      )
     }),
     scripted: new ModelScriptedClient(echoScript)
   };

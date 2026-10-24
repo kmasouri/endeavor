@@ -160,6 +160,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
   const workspaceClient = { list: jest.fn(), read: jest.fn(), write: jest.fn() };
   const client: jest.Mocked<ModelClient> = {
     provider: 'scripted',
+    transcriptFormat: 'native',
     complete: jest.fn().mockResolvedValue(turn({}))
   };
 
@@ -340,7 +341,11 @@ describe('TaskRunnerService', () => {
     // A real provider, so the check runs. The scripted test provider skips it.
     function setupChecked(replies: string[], earlier: TaskEvent[] = []) {
       const ctx = setup();
-      const checker: jest.Mocked<ModelClient> = { provider: 'openai', complete: jest.fn() };
+      const checker: jest.Mocked<ModelClient> = {
+        provider: 'openai',
+        transcriptFormat: 'native',
+        complete: jest.fn()
+      };
       for (const text of replies) {
         checker.complete.mockResolvedValueOnce(turn({ text }));
       }
@@ -1726,6 +1731,56 @@ describe('TaskRunnerService', () => {
       expect(transcript.map((entry) => entry.role)).toEqual(['user', 'user', 'user', 'assistant']);
       expect(transcript[1]).toMatchObject({ text: expect.stringContaining('Checking') });
       expect(transcript[2]).toMatchObject({ text: expect.stringContaining('Posted') });
+    });
+
+    it('shows turns saved in an older format as text, so tasks open across a client change still resume', async () => {
+      const { runner } = setup();
+      const call = { id: 'c1', name: 'send_message', input: { body: 'hi' } };
+
+      const { transcript } = await runner.rebuildTranscript(
+        'Task prompt',
+        [
+          // Saved by the old OpenAI client: same provider, no format recorded.
+          event(1, 'model.turn', {
+            raw: { role: 'assistant', content: 'Checking' },
+            provider: 'openai',
+            text: 'Checking',
+            toolCalls: [call]
+          }),
+          event(2, 'tool.results', {
+            results: [{ callId: 'c1', content: 'Posted', isError: false }]
+          }),
+          event(3, 'model.turn', {
+            raw: [{ role: 'assistant', content: 'Done' }],
+            provider: 'openai',
+            format: 'ai-sdk',
+            toolCalls: []
+          })
+        ],
+        'openai',
+        'ai-sdk'
+      );
+
+      expect(transcript.map((entry) => entry.role)).toEqual(['user', 'user', 'user', 'assistant']);
+      expect(transcript[1]).toMatchObject({ text: expect.stringContaining('Checking') });
+      expect(transcript[3]).toEqual({
+        role: 'assistant',
+        raw: [{ role: 'assistant', content: 'Done' }]
+      });
+    });
+
+    it('records the client format on each model turn', async () => {
+      const { runner, client, tasks } = setup();
+      client.complete.mockResolvedValueOnce(turn({ text: 'Thinking' }));
+
+      await runner.runTask(makeTask());
+
+      expect(tasks.addEvent).toHaveBeenCalledWith(
+        expect.any(String),
+        'model.turn',
+        expect.anything(),
+        expect.objectContaining({ format: 'native' })
+      );
     });
 
     it('stops when the task moved to another version mid-claim', async () => {

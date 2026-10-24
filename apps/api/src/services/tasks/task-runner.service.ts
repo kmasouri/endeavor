@@ -473,7 +473,8 @@ export class TaskRunnerService {
       const { transcript, pendingCalls } = await this.rebuildTranscript(
         prompt,
         events,
-        version.provider
+        version.provider,
+        client.transcriptFormat
       );
 
       // A tool call that was asked for but never run, such as after a crash, runs first.
@@ -575,6 +576,7 @@ export class TaskRunnerService {
       await this.taskRepository.addEvent(task.id, EVENTS.modelTurn, agentActor, {
         raw: result.raw,
         provider: version.provider,
+        format: client.transcriptFormat,
         text: result.text,
         toolCalls: result.toolCalls,
         stopReason: result.stopReason,
@@ -1471,12 +1473,14 @@ export class TaskRunnerService {
   // still waiting for its results are held back until after the results, because providers
   // need results right after the call. Returns the calls that still need results.
   //
-  // Turns from another provider, such as before a version change, can't be sent back in their
-  // own format. They are shown as text instead.
+  // Turns from another provider, such as before a version change, or saved in another format,
+  // such as before a client change, can't be sent back as they are. They are shown as text
+  // instead. Turns saved before formats were recorded are 'native'.
   async rebuildTranscript(
     prompt: string,
     events: TaskEvent[],
-    provider: ModelProvider
+    provider: ModelProvider,
+    format: string = 'native'
   ): Promise<{ transcript: ModelTranscriptEntry[]; pendingCalls: ModelToolCall[] }> {
     const transcript: ModelTranscriptEntry[] = [{ role: 'user', text: prompt }];
     let pendingCalls: ModelToolCall[] = [];
@@ -1497,7 +1501,9 @@ export class TaskRunnerService {
         case EVENTS.modelTurn: {
           const calls = (event.data.toolCalls as ModelToolCall[] | undefined) ?? [];
           const turnProvider = event.data.provider as ModelProvider | undefined;
-          pendingIsForeign = turnProvider !== undefined && turnProvider !== provider;
+          const turnFormat = (event.data.format as string | undefined) ?? 'native';
+          pendingIsForeign =
+            (turnProvider !== undefined && turnProvider !== provider) || turnFormat !== format;
           if (pendingIsForeign) {
             const callText = calls.map((call) => `${call.name}(${JSON.stringify(call.input)})`);
             transcript.push({
