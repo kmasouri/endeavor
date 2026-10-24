@@ -30,7 +30,7 @@
   import Icon from './Icon.svelte';
   import SettingsPage from './pages/SettingsPage.svelte';
   import { timeDisplay } from './time-display.svelte';
-  import { applyTheme, conversationName } from './appearance';
+  import { applyTheme, conversationChannelName } from './appearance';
 
   let guard = $state<() => boolean>(() => true);
   let dirty = $state(false);
@@ -232,7 +232,7 @@
               onclick={() => {
                 if (window.innerWidth < 700) collapsed = true;
               }}
-              ><span class="ellipsis">{conversationName(conversation.title)}</span></a
+              ><span class="ellipsis">{conversationChannelName(conversation.title)}</span></a
             >
           {/each}
         </div>
