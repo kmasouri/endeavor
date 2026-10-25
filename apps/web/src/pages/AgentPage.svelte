@@ -1,5 +1,4 @@
 <script lang="ts">
-  import AgentActions from './AgentActions.svelte';
   import DeleteAgent from './DeleteAgent.svelte';
   import Avatar from '../Avatar.svelte';
   import {
@@ -96,12 +95,9 @@
           <p>{a.purpose}</p>
         </div>
       </div>
-      <AgentActions
-        disabled={Boolean(a.disabledAt)}
-        busy={action.busy}
-        onToggle={toggle}
-        onDelete={() => (deleting = true)}
-      />
+      <button class="secondary agent-enable" disabled={action.busy} onclick={toggle}
+        >{a.disabledAt ? 'Enable agent' : 'Disable agent'}</button
+      >
     </header>
     {#if deleting}<DeleteAgent agent={a} onClose={() => (deleting = false)} />{/if}
     {#if a.disabledAt}<p class="hint">
@@ -218,6 +214,13 @@
           <section class="panel"><SavedNotes agentId={a.id} /></section>
         </div>
       </div>
+      <section class="agent-delete-section" aria-labelledby="delete-agent-heading">
+        <div>
+          <h2 id="delete-agent-heading">Delete agent</h2>
+          <p class="muted">Permanently delete this agent and cancel its open tasks and schedules. Shared history and costs stay available.</p>
+        </div>
+        <button class="secondary agent-delete" disabled={action.busy} onclick={() => (deleting = true)}>Delete agent</button>
+      </section>
     {:else if tab === 'Configuration'}
       {#key `${a.currentVersionId}:${configRevision}`}<NewVersion
           agent={a}

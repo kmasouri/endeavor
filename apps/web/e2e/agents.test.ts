@@ -282,7 +282,6 @@ for (const kind of ['skill', 'connection']) {
 test('permanent deletion previews affected work and requires confirmation', async ({ page }) => {
   const { writes } = await mockApi(page);
   await page.goto('/app/#/agents/a1');
-  await page.locator('.agent-actions summary').click();
   await page.getByRole('button', { name: 'Delete agent', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('Daily brief');
@@ -290,7 +289,6 @@ test('permanent deletion previews affected work and requires confirmation', asyn
   await expect(dialog).toContainText('cannot be undone');
   await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(writes.filter((w) => w.path === '/agents/a1')).toHaveLength(0);
-  await page.locator('.agent-actions summary').click();
   await page.getByRole('button', { name: 'Delete agent', exact: true }).click();
   const confirm = dialog.getByRole('button', { name: 'Delete permanently', exact: true });
   await expect(confirm).toBeDisabled();
@@ -321,9 +319,8 @@ test('failed deletion preview prevents confirmation and Escape restores focus', 
     })
   );
   await page.goto('/app/#/agents/a1');
-  const opener = page.locator('.agent-actions summary');
+  const opener = page.getByRole('button', { name: 'Delete agent', exact: true });
   await opener.click();
-  await page.getByRole('button', { name: 'Delete agent', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toContainText('Preview unavailable');
   await expect(dialog.getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
@@ -335,30 +332,40 @@ test('failed deletion preview prevents confirmation and Escape restores focus', 
 
 for (const theme of ['dark', 'light']) {
   for (const width of [390, 1440]) {
-    test(`agent actions stay grouped and dismiss with keyboard in ${theme} at ${width}px`, async ({
-      page
-    }) => {
+    test(`agent controls have clear placement in ${theme} at ${width}px`, async ({ page }) => {
       await mockApi(page, theme);
       await page.setViewportSize({ width, height: 1000 });
       await page.goto('/app/#/agents/a1');
-      const trigger = page.locator('.agent-actions summary');
-      await expect(page.getByRole('button', { name: 'Delete agent', exact: true })).toBeHidden();
-      await trigger.focus();
-      await page.keyboard.press('Enter');
-      await expect(page.getByRole('button', { name: 'Disable agent', exact: true })).toBeVisible();
-      await page.screenshot({ path: `/tmp/ca63-actions-${theme}-${width}.png`, fullPage: true });
+      const header = page.locator('.agent-detail-header');
+      const toggle = header.getByRole('button', { name: 'Disable agent', exact: true });
+      await expect(toggle).toBeVisible();
+      await expect(header.getByRole('button', { name: 'Delete agent', exact: true })).toHaveCount(
+        0
+      );
+      const section = page.getByRole('region', { name: 'Delete agent', exact: true });
+      await expect(section).toContainText('Shared history and costs stay available.');
+      const overview = await page.locator('.agent-overview').boundingBox();
+      const deletion = await section.boundingBox();
+      expect(deletion!.y).toBeGreaterThanOrEqual(overview!.y + overview!.height);
+      await page.screenshot({ path: `/tmp/ca63-placement-${theme}-${width}.png`, fullPage: true });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true
       );
+      await toggle.click();
+      await expect(header.getByRole('button', { name: 'Enable agent', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Configuration', exact: true }).click();
+      await expect(section).toHaveCount(0);
+      await expect(header.getByRole('button', { name: 'Enable agent', exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Overview', exact: true }).click();
+      await section.getByRole('button', { name: 'Delete agent', exact: true }).click();
+      await expect(page.getByRole('dialog')).toBeVisible();
+      await expect(
+        page.getByRole('dialog').getByRole('button', { name: 'Delete permanently' })
+      ).toBeDisabled();
       await page.keyboard.press('Escape');
-      await expect(trigger).toBeFocused();
-      await expect(page.getByRole('button', { name: 'Delete agent', exact: true })).toBeHidden();
-      await trigger.click();
-      await page.getByRole('button', { name: 'Disable agent', exact: true }).click();
-      await trigger.click();
-      await expect(page.getByRole('button', { name: 'Enable agent', exact: true })).toBeVisible();
-      await page.getByRole('heading', { name: 'Current configuration' }).click();
-      await expect(page.getByRole('button', { name: 'Enable agent', exact: true })).toBeHidden();
+      await expect(
+        section.getByRole('button', { name: 'Delete agent', exact: true })
+      ).toBeFocused();
     });
   }
 }
