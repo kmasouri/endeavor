@@ -7,6 +7,7 @@ export function connectionCallDenied(
   method: HttpMethod,
   path: string
 ): string | null {
+  if (connection.kind === 'mcp') return 'MCP connections must use their named tools.';
   if (connection.disabledAt) {
     return `The ${connection.name} connection is disabled.`;
   }

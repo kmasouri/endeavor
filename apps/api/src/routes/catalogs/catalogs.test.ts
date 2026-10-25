@@ -67,3 +67,88 @@ describe('instructions-only skill routes', () => {
     }
   });
 });
+
+describe('connection types', () => {
+  it('accepts existing HTTP payloads and MCP payloads with explicit tool permissions', async () => {
+    const app = setupApp();
+    await app.ready();
+    const create = jest
+      .spyOn(app.catalogService, 'createConnection')
+      .mockResolvedValue({ id: CONNECTION } as never);
+    try {
+      const shared = {
+        name: 'Records',
+        description: 'Records service',
+        baseUrl: 'https://records.test/mcp'
+      };
+      for (const input of [
+        { ...shared, allowedMethods: ['GET'], allowedPathPrefixes: ['/'] },
+        { ...shared, kind: 'mcp', allowedTools: [], approvalTools: [] },
+        { ...shared, kind: 'mcp', allowedTools: ['lookup', 'create'] }
+      ]) {
+        const response = await app.inject({
+          method: 'POST',
+          url: '/connections',
+          headers: { 'x-actor-id': ACTOR },
+          payload: input
+        });
+        expect(response.statusCode).toBe(201);
+      }
+      expect(create).toHaveBeenCalledTimes(3);
+    } finally {
+      await app.close();
+    }
+  });
+
+  it.each([
+    { kind: 'mcp', allowedTools: ['lookup'], allowedMethods: ['POST'] },
+    { kind: 'mcp', allowedTools: ['*'] },
+    { kind: 'mcp', allowedTools: ['a'.repeat(129)] },
+    { kind: 'http', allowedMethods: ['GET'], allowedPathPrefixes: ['/'], allowedTools: ['lookup'] },
+    { kind: 'stdio', allowedTools: ['lookup'] }
+  ])('rejects invalid or mixed transport configuration %#', async (config) => {
+    const app = setupApp();
+    await app.ready();
+    const create = jest.spyOn(app.catalogService, 'createConnection');
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/connections',
+        headers: { 'x-actor-id': ACTOR },
+        payload: {
+          name: 'Records',
+          description: 'Records',
+          baseUrl: 'https://records.test/mcp',
+          ...config
+        }
+      });
+      expect(response.statusCode).toBe(400);
+      expect(create).not.toHaveBeenCalled();
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('routes discovery through the catalog service', async () => {
+    const app = setupApp();
+    await app.ready();
+    const discover = jest
+      .spyOn(app.catalogService, 'discoverConnectionTools')
+      .mockResolvedValue([
+        { name: 'lookup', description: 'Look up records', inputSchema: { type: 'object' } }
+      ]);
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/connections/${CONNECTION}/tools`,
+        headers: { 'x-actor-id': ACTOR },
+        payload: {}
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().data[0].name).toBe('lookup');
+      expect(discover).toHaveBeenCalledWith(ACTOR, CONNECTION);
+    } finally {
+      await app.close();
+    }
+  });
+});

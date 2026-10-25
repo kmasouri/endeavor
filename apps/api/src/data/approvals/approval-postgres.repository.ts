@@ -49,6 +49,14 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
     return { approval: toApproval(existing.rows[0]), created: false };
   }
 
+  async getByClientKey(clientKey: string): Promise<Approval | null> {
+    const result = await this.db.query<ApprovalRow>(
+      `SELECT * FROM endeavor.approvals WHERE client_key = $1`,
+      [clientKey]
+    );
+    return result.rows[0] ? toApproval(result.rows[0]) : null;
+  }
+
   async getById(approvalId: string): Promise<Approval | null> {
     const result = await this.db.query<ApprovalRow>(
       `SELECT * FROM endeavor.approvals WHERE id = $1`,

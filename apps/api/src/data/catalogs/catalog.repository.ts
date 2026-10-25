@@ -21,6 +21,9 @@ export interface CreateSkillVersionInput {
 }
 
 export interface ConnectionInput {
+  kind?: 'http' | 'mcp';
+  allowedTools?: string[];
+  approvalTools?: string[];
   name: string;
   description: string;
   baseUrl: string;
@@ -58,7 +61,7 @@ export interface CatalogRepository {
   // credential: a string replaces it, null removes it, undefined leaves it as is.
   updateConnection(
     connectionId: string,
-    changes: Partial<Omit<ConnectionInput, 'createdByHumanId'>>
+    changes: Partial<Omit<ConnectionInput, 'createdByHumanId' | 'kind'>>
   ): Promise<Connection | null>;
   setConnectionDisabled(connectionId: string, disabled: boolean): Promise<Connection | null>;
   getConnectionCredential(connectionId: string): Promise<string | null>;

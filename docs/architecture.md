@@ -366,3 +366,17 @@ run and schedule cancellation, wait closure, approval rejection, and grant revoc
 transaction. Runner model and tool execution holds shared advisory locks; deletion waits on the
 exclusive lock. Task and schedule triggers serialize changes against the agent row and reject
 new or resumed work for deleted identities. See [permanent deletion](agents.md#permanent-deletion).
+
+## Remote MCP connections
+
+Connections have an immutable type: HTTP API or remote MCP server. Existing rows default to
+HTTP. The catalog service owns tool discovery for people; the runner discovers and executes
+only tools allowed by the connection and the agent's live access. `McpClient` is an integration
+interface. Plugins build `McpHttpClient` and pass it to both services. Model adapters remain
+provider-neutral and never execute tools themselves.
+
+MCP approvals use the existing durable connection-call approval workflow, with a typed request
+containing the tool, arguments, and endpoint. They are separate from HTTP method approvals.
+The runner checks access again after approval and refuses a changed endpoint. Unattended
+calls record their start and result so restart recovery never silently repeats an action.
+See [MCP connections](catalogs.md#remote-mcp-tools-ca-64) for setup, limits, and compatibility.

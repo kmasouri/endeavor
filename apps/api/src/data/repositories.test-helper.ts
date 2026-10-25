@@ -131,6 +131,7 @@ export function mockCatalogRepository(): jest.Mocked<CatalogRepository> {
 
 export function mockApprovalRepository(): jest.Mocked<ApprovalRepository> {
   return {
+    getByClientKey: jest.fn().mockResolvedValue(null),
     create: jest.fn(),
     getById: jest.fn().mockResolvedValue(null),
     list: jest.fn().mockResolvedValue([]),

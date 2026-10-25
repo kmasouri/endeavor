@@ -171,6 +171,9 @@ export interface SkillDetails extends Skill {
 }
 
 export interface Connection {
+  kind?: 'http' | 'mcp';
+  allowedTools?: string[];
+  approvalTools?: string[];
   id: string;
   name: string;
   description: string;
@@ -256,7 +259,15 @@ export interface Approval {
   id: string;
   taskId: string;
   agentId: string;
-  request: { connectionName: string; method: string; path: string; body: string | null };
+  request:
+    | { kind?: 'http'; connectionName: string; method: string; path: string; body: string | null }
+    | {
+        kind: 'mcp';
+        connectionName: string;
+        tool: string;
+        arguments: Record<string, unknown>;
+        baseUrl: string;
+      };
   status: 'pending' | 'approved' | 'rejected';
   reason: string | null;
   decidedAt: string | null;

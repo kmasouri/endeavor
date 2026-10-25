@@ -36,6 +36,9 @@ interface SkillVersionRow {
 }
 
 interface ConnectionRow {
+  kind: 'http' | 'mcp';
+  allowed_tools: string[];
+  approval_tools: string[];
   id: string;
   name: string;
   description: string;
@@ -62,6 +65,8 @@ interface GrantRow {
 const UNIQUE_VIOLATION = '23505';
 const NAME_INDEXES = new Set(['idx_skills_name_unique', 'idx_connections_name_unique']);
 const UPDATABLE_CONNECTION_COLUMNS = {
+  allowedTools: 'allowed_tools',
+  approvalTools: 'approval_tools',
   name: 'name',
   description: 'description',
   baseUrl: 'base_url',
@@ -115,10 +120,9 @@ export class CatalogPostgresRepository implements CatalogRepository {
   }
 
   async getSkill(skillId: string): Promise<Skill | null> {
-    const result = await this.db.query<SkillRow>(
-      `SELECT * FROM endeavor.skills WHERE id = $1`,
-      [skillId]
-    );
+    const result = await this.db.query<SkillRow>(`SELECT * FROM endeavor.skills WHERE id = $1`, [
+      skillId
+    ]);
     return result.rows[0] ? toSkill(result.rows[0]) : null;
   }
 
@@ -223,9 +227,9 @@ export class CatalogPostgresRepository implements CatalogRepository {
       .query<ConnectionRow>(
         `INSERT INTO endeavor.connections (
            id, name, description, base_url, auth_header, credential_ciphertext, allowed_methods,
-           allowed_path_prefixes, created_by_human_id, approval_methods
+           allowed_path_prefixes, created_by_human_id, approval_methods, kind, allowed_tools, approval_tools
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
          RETURNING *`,
         [
           randomUUID(),
@@ -237,7 +241,10 @@ export class CatalogPostgresRepository implements CatalogRepository {
           input.allowedMethods,
           input.allowedPathPrefixes,
           input.createdByHumanId,
-          input.approvalMethods
+          input.approvalMethods,
+          input.kind ?? 'http',
+          input.allowedTools ?? [],
+          input.approvalTools ?? []
         ]
       )
       .catch((error) => rethrowNameConflict(error, input.name));
@@ -283,7 +290,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
 
   async updateConnection(
     connectionId: string,
-    changes: Partial<Omit<ConnectionInput, 'createdByHumanId'>>
+    changes: Partial<Omit<ConnectionInput, 'createdByHumanId' | 'kind'>>
   ): Promise<Connection | null> {
     const values: unknown[] = [connectionId];
     const sets = ['updated_at = now()'];
@@ -439,6 +446,9 @@ function toSkillVersion(row: SkillVersionRow): SkillVersion {
 
 function toConnection(row: ConnectionRow): Connection {
   return {
+    kind: row.kind ?? 'http',
+    allowedTools: row.allowed_tools ?? [],
+    approvalTools: row.approval_tools ?? [],
     id: row.id,
     name: row.name,
     description: row.description,

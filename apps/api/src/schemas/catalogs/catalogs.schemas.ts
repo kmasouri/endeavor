@@ -18,7 +18,12 @@ export const addSkillVersionBodySchema = z
 
 const pathPrefix = z.string().regex(/^\/[^?#]*$/, 'Must start with "/" and have no query string');
 
+const toolNames = z.array(z.string().regex(/^[a-zA-Z0-9_.-]{1,128}$/)).max(100);
+
 const connectionFields = {
+  kind: z.enum(['http', 'mcp']),
+  allowedTools: toolNames,
+  approvalTools: toolNames,
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().min(1),
   baseUrl: z.url({ protocol: /^https?$/ }),
@@ -31,15 +36,32 @@ const connectionFields = {
   approvalMethods: z.array(z.enum(HTTP_METHODS))
 };
 
-export const createConnectionBodySchema = z.strictObject({
-  ...connectionFields,
-  authHeader: connectionFields.authHeader.optional(),
-  credential: connectionFields.credential.optional(),
-  approvalMethods: connectionFields.approvalMethods.optional()
-});
+export const createConnectionBodySchema = z.union([
+  z.strictObject({
+    ...connectionFields,
+    kind: z.literal('http').default('http'),
+    allowedTools: z.never().optional(),
+    approvalTools: z.never().optional(),
+    authHeader: connectionFields.authHeader.optional(),
+    credential: connectionFields.credential.optional(),
+    approvalMethods: connectionFields.approvalMethods.optional()
+  }),
+  z.strictObject({
+    name: connectionFields.name,
+    description: connectionFields.description,
+    baseUrl: connectionFields.baseUrl,
+    kind: z.literal('mcp'),
+    authHeader: connectionFields.authHeader.optional(),
+    credential: connectionFields.credential.optional(),
+    allowedTools: toolNames,
+    approvalTools: toolNames.optional()
+  })
+]);
 
 export const updateConnectionBodySchema = z
   .strictObject({
+    allowedTools: toolNames.optional(),
+    approvalTools: toolNames.optional(),
     name: connectionFields.name.optional(),
     description: connectionFields.description.optional(),
     baseUrl: connectionFields.baseUrl.optional(),

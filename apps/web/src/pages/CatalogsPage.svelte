@@ -29,7 +29,7 @@
 
 <PageHeader
   title="Skills and connections"
-  subtitle="Reusable instructions and API connections for your agents."
+  subtitle="Reusable instructions and connections for your agents."
 >
   {#snippet actions()}<button
       onclick={() => {
@@ -79,8 +79,8 @@
       <h2>Connections</h2>
 
       <Hint>
-        A connection is an outside API agents can call. The platform adds the credential and checks
-        every call's method and path. Credentials are stored encrypted and never shown again.
+        A connection gives agents access to an HTTP API or MCP server. The platform adds the
+        credential and checks each call against its allowed methods, paths, or tools. Credentials are stored encrypted and never shown again.
       </Hint>
 
       <ErrorNote error={connections.error} />

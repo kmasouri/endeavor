@@ -22,14 +22,16 @@
 <div class="stack">
   <div>
     <strong>
-      {r.method}
-      {r.path}
+      {#if r.kind === 'mcp'}{r.tool}{:else}{r.method} {r.path}{/if}
     </strong>
 
     on {r.connectionName}
   </div>
 
-  {#if r.body}
+  {#if r.kind === 'mcp'}
+    <div class="muted small">{r.baseUrl}</div>
+    <pre>{JSON.stringify(r.arguments, null, 2)}</pre>
+  {:else if r.body}
     <pre>{r.body}</pre>
   {/if}
 

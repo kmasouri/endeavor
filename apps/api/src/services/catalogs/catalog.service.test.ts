@@ -275,3 +275,53 @@ describe('CatalogService', () => {
     expect(logger.onRevoked).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('MCP catalog policy', () => {
+  it('defaults every allowed MCP tool to requiring approval', async () => {
+    const { service, catalogs } = setup();
+    await service.createConnection(ADMIN, {
+      kind: 'mcp',
+      name: 'Records',
+      description: 'Record tools',
+      baseUrl: 'https://records.test/mcp',
+      allowedTools: ['lookup', 'create']
+    });
+    expect(catalogs.createConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'mcp',
+        allowedTools: ['lookup', 'create'],
+        approvalTools: ['lookup', 'create'],
+        allowedMethods: [],
+        allowedPathPrefixes: []
+      })
+    );
+  });
+
+  it('requires approval for newly allowed tools when changing only the allowlist', async () => {
+    const { service, catalogs } = setup();
+    catalogs.getConnection.mockResolvedValue({
+      ...connection,
+      kind: 'mcp',
+      allowedTools: ['lookup'],
+      approvalTools: []
+    });
+    catalogs.updateConnection.mockResolvedValue(connection);
+    await service.updateConnection(ADMIN, 'c1', { allowedTools: ['lookup', 'create'] });
+    expect(catalogs.updateConnection).toHaveBeenCalledWith('c1', {
+      allowedTools: ['lookup', 'create'],
+      approvalTools: ['create']
+    });
+  });
+
+  it('rejects tool settings on HTTP connections and HTTP policy on MCP connections', async () => {
+    const { service, catalogs } = setup();
+    await expect(
+      service.updateConnection(ADMIN, 'c1', { allowedTools: ['lookup'] })
+    ).rejects.toThrow('HTTP permissions');
+    catalogs.getConnection.mockResolvedValue({ ...connection, kind: 'mcp' });
+    await expect(service.updateConnection(ADMIN, 'c1', { approvalMethods: [] })).rejects.toThrow(
+      'MCP permissions'
+    );
+    expect(catalogs.updateConnection).not.toHaveBeenCalled();
+  });
+});
