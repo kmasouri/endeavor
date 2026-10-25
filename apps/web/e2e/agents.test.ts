@@ -235,3 +235,42 @@ test('creates an agent from the narrow example form only after submit', async ({
   await expect(page.getByRole('heading', { name: 'Current configuration' })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+for (const kind of ['skill', 'connection']) {
+  test(`${kind} picker opens before typing, filters, selects, and dismisses`, async ({ page }) => {
+    const { writes, errors } = await mockApi(page);
+    await page.setViewportSize({ width: kind === 'skill' ? 1440 : 390, height: 1000 });
+    await page.goto('/app/#/agents/new');
+    const input = page.getByRole('searchbox', { name: `Add ${kind}s` });
+    const results = page.getByRole('region', { name: `${kind} matches` });
+    await expect(results).toHaveCount(0);
+    await input.click();
+    await expect(input).toHaveValue('');
+    await expect(results).toBeVisible();
+    await expect(results.getByRole('button')).toHaveCount(kind === 'skill' ? 5 : 2);
+    await page.screenshot({ path: `/tmp/ca57-${kind}-dropdown.png`, fullPage: true });
+    await input.press('Escape');
+    await expect(results).toHaveCount(0);
+    await expect(input).toBeFocused();
+    await input.click();
+    await expect(results).toBeVisible();
+    const name = kind === 'skill' ? 'Cite sources' : 'Web search';
+    await input.fill(kind === 'skill' ? 'Cite' : 'Web');
+    await expect(results.getByRole('button')).toHaveCount(1);
+    await input.press('ArrowDown');
+    await expect(results.getByRole('button').first()).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('button', { name: `Remove ${name}`, exact: true })).toBeVisible();
+    await expect(input).toHaveValue('');
+    await expect(input).toBeFocused();
+    await expect(results.getByRole('button', { name: new RegExp(name) })).toHaveCount(0);
+    await page.getByRole('textbox', { name: 'Name', exact: true }).click();
+    await expect(results).toHaveCount(0);
+    await input.focus();
+    await expect(results).toBeVisible();
+    await input.fill('does-not-exist');
+    await expect(results.getByText(`No matching ${kind}s.`)).toBeVisible();
+    expect(writes).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+}
