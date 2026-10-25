@@ -85,6 +85,8 @@ One agent has Overview, Configuration, and Versions tabs. Overview shows its con
 open work, profile, spending, and saved notes. Configuration lists chosen skills and connections;
 clicking or focusing the picker shows available entries before typing. Typing filters the full
 catalog, with at most five matches shown. Browse opens the catalog. Removing a saved choice shows the effect on open tasks and an Undo action before save.
+Discard changes returns to Overview without saving. Reopening Configuration starts from the saved
+version, including its skill and connection selections and limits.
 Version summaries compare saved versions in the browser. People can move open tasks from an old
 version to the current one; completed and cancelled tasks are excluded.
 
