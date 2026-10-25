@@ -18,6 +18,8 @@
   import AgentsPage from './pages/AgentsPage.svelte';
   import NewAgentPage from './pages/NewAgentPage.svelte';
   import CatalogsPage from './pages/CatalogsPage.svelte';
+  import NewSkill from './pages/NewSkill.svelte';
+  import NewConnection from './pages/NewConnection.svelte';
   import ConversationPage from './pages/ConversationPage.svelte';
   import NewEndeavor from './pages/NewEndeavor.svelte';
   import SearchEndeavors from './pages/SearchEndeavors.svelte';
@@ -300,6 +302,10 @@
           <AgentPage agentId={id} />
         {:else if section === 'agents'}
           <AgentsPage />
+        {:else if section === 'catalogs' && route[2] === 'new' && id === 'skills'}
+          <NewSkill />
+        {:else if section === 'catalogs' && route[2] === 'new' && id === 'connections'}
+          <NewConnection />
         {:else if section === 'catalogs'}
           <CatalogsPage />
         {:else if section === 'conversations' && id}

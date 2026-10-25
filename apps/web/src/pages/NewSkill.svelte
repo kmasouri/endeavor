@@ -1,11 +1,10 @@
 <script lang="ts">
   import { api } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
-  import { createAction } from '../state.svelte';
+  import PageHeader from '../PageHeader.svelte';
+  import './creation.css';
+  import { createAction, go } from '../state.svelte';
 
-  let props: {
-    onCreated: () => void;
-  } = $props();
   let name = $state('');
   let description = $state('');
   let instructions = $state('');
@@ -16,43 +15,50 @@
       .run(() => api.post('/skills', { name, description, instructions }))
       .then((ok) => {
         if (ok) {
-          name = '';
-          description = '';
-          instructions = '';
-          props.onCreated();
+          go('/catalogs?tab=skills');
         }
       });
   };
 </script>
 
-<details>
-  <summary> New skill </summary>
+<div class="creation-page">
+  <a class="creation-back" href="#/catalogs?tab=skills">← Skills</a>
+  <PageHeader
+    title="New skill"
+    subtitle="Give it a name and reusable instructions for your agents."
+  />
 
-  <form onsubmit={create} class="stack">
-    <label>
-      Name
+  <form onsubmit={create} class="creation-form">
+    <fieldset class="stack">
+      <legend>Profile</legend>
+      <label>
+        Name
 
-      <input bind:value={name} required />
-    </label>
+        <input bind:value={name} required />
+      </label>
 
-    <label>
-      Description
+      <label>
+        Description
 
-      <input bind:value={description} required />
-    </label>
+        <input bind:value={description} required />
+      </label>
+    </fieldset>
+    <fieldset class="stack">
+      <legend>Instructions</legend>
+      <label>
+        Instructions
 
-    <label>
-      Instructions
-
-      <textarea
-        class="tall skill-instructions"
-        bind:value={instructions}
-        placeholder="How to do this kind of work, step by step."
-        required></textarea>
-    </label>
-
-    <button disabled={action.busy}> Create skill </button>
-
+        <textarea
+          class="tall skill-instructions"
+          bind:value={instructions}
+          placeholder="How to do this kind of work, step by step."
+          required></textarea>
+      </label>
+    </fieldset>
     <ErrorNote error={action.error} />
+    <div class="savebar">
+      <a href="#/catalogs?tab=skills">Cancel</a>
+      <button disabled={action.busy || !name.trim() || !description.trim() || !instructions.trim()}>Create skill</button>
+    </div>
   </form>
-</details>
+</div>

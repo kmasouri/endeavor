@@ -26,7 +26,7 @@
   };
 </script>
 
-<form onsubmit={save} class="agent-form">
+<form onsubmit={save} class="creation-form">
   <h2>Configuration</h2>
 
   <Hint>

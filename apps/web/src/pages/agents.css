@@ -1,14 +1,9 @@
+@import './creation.css';
+
 .agents-page {
-  overflow-wrap: anywhere;
-  max-width: 1220px;
-  margin-inline: auto;
-  padding-top: 18px;
-  padding-bottom: 40px;
   container: agents / inline-size;
 }
-.agents-page .page-header {
-  margin-bottom: 24px;
-}
+
 .agents-page h2 {
   font-size: 15px;
   margin: 0;
@@ -130,12 +125,6 @@
   color: var(--text-300);
   margin: 6px 0 0;
 }
-.agent-back {
-  display: inline-block;
-  margin-bottom: 18px;
-  color: var(--text-300);
-  font-size: 13px;
-}
 .agent-heading {
   min-width: 0;
   display: flex;
@@ -224,40 +213,6 @@
   border-radius: 8px;
   font: inherit;
   font-size: 13px;
-}
-.agent-form {
-  max-width: 820px;
-  display: grid;
-  gap: 24px;
-}
-.agent-form fieldset {
-  border: 0;
-  border-bottom: 1px solid var(--border-100);
-  border-radius: 0;
-  padding: 0 0 24px;
-  margin: 0;
-  min-width: 0;
-}
-.agent-form legend {
-  padding: 0;
-  margin-bottom: 12px;
-  font-size: 15px;
-  font-weight: 600;
-}
-.agent-form .tall {
-  min-height: 180px;
-}
-.agent-form .savebar {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 16px 0;
-  background: var(--bg-100);
-  border-top: 1px solid var(--border-100);
 }
 .agent-picker {
   display: grid;
