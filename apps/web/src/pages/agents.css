@@ -394,47 +394,28 @@
   border-color: var(--danger-border);
 }
 
-.agent-actions {
-  position: relative;
+.agent-enable {
   flex: 0 0 auto;
   margin-left: auto;
 }
-.agent-actions summary {
-  cursor: pointer;
-  list-style: none;
-  padding: 8px 12px;
-  border: 1px solid var(--border-100);
-  border-radius: 8px;
-}
-.agent-actions summary::-webkit-details-marker {
-  display: none;
-}
-.agent-actions-list {
-  position: absolute;
-  z-index: 5;
-  right: 0;
-  top: calc(100% + 6px);
-  min-width: 180px;
-  padding: 6px;
-  border: 1px solid var(--border-100);
-  border-radius: 8px;
-  background: var(--bg-100);
-}
-.agent-actions-list button {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: transparent;
-  color: var(--text-100);
-  border: 0;
-}
-.agent-actions-list button + button {
+.agent-delete-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 32px;
+  padding-top: 24px;
   border-top: 1px solid var(--border-100);
 }
-
-.agent-actions-list button.agent-delete {
-  color: var(--danger);
+.agent-delete-section > div {
+  flex: 1 1 280px;
 }
-.agent-actions-list button:hover:not(:disabled) {
-  background: var(--bg-200);
+.agent-delete-section p {
+  margin: 8px 0 0;
+}
+.agent-delete-section button.agent-delete {
+  color: var(--danger);
+  border-color: var(--danger-border);
+  flex: 0 0 auto;
 }
