@@ -93,3 +93,31 @@ configuration as a new version. Existing tasks keep their pin until explicitly m
 grants for an already chosen item restore access without adding duplicate versions. This API
 supports ongoing access decisions; structured capability requests and task-only access in
 endeavors remain CA-38. Per-call action approvals still allow only the exact call shown.
+
+## Permanent deletion
+
+Enable/disable controls whether an agent takes new work. Permanent deletion removes the agent
+from configuration, lists, the directory, and participant pickers, and cannot be undone.
+
+A person opens **Delete agent** on the agent page. The confirmation loads
+`GET /agents/:agentId/deletion-impact`, which returns `tasks` and `schedules` with their IDs,
+titles, and states or statuses. Cancel and Escape make no changes. The delete button stays
+unavailable until the preview loads. `DELETE /agents/:agentId` requires a human actor and returns
+`{ data: { deleted: true } }`.
+
+Deletion cancels all open tasks (including paused, waiting, and blocked work), closes their waits,
+cancels schedules and missed-run questions, revokes grants, and rejects pending approvals.
+It also prevents approved calls that have not started from executing. These changes commit together.
+The operation uses the current work in storage, including work started after the preview loaded.
+
+Messages, outputs, run events, pinned configuration versions, and cost records remain available.
+Historical membership and agent IDs remain valid; names display as **Deleted agent**. The retained
+identity has no current configuration and cannot be enabled, edited, or restored. The old name can
+be used by a newly created agent, which has its own identity.
+
+The runner holds a shared Postgres advisory lock during each model call, tool call, and approved
+connection call. Deletion takes the exclusive lock before cancelling work. Calls already in progress
+finish before deletion completes; no later call can begin for the deleted agent. Each held execution
+lock uses one pool connection; the default runner runs at most four tasks concurrently. Database
+triggers lock the agent row when tasks or schedules change, preventing concurrent starts or resumes
+from escaping deletion. Apply migration 035 before running this version of the app.

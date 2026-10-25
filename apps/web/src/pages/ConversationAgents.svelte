@@ -16,7 +16,7 @@
   const action = createAction();
   const activeTasks = (id: string) =>
     tasks.filter((t) => t.ownerAgentId === id && !['completed', 'cancelled'].includes(t.state));
-  let agents = $derived(members.filter((m) => m.participant.type === 'agent'));
+  let agents = $derived(members.filter((m) => m.participant.type === 'agent' && !m.deleted));
   let busy = $derived(
     agents
       .filter((m) => activeTasks(m.participant.id).length)

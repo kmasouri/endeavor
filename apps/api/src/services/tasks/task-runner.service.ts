@@ -424,6 +424,7 @@ export class TaskRunnerService {
   // Returns how long to wait before the task may be claimed again.
   async runTask(claimed: Task): Promise<number> {
     const agent = await this.agentRepository.getById(claimed.ownerAgentId);
+    if (agent?.deletedAt) return 0;
     const version = await this.agentRepository.getVersion(claimed.agentVersionId);
     if (!agent || !version) {
       await this.block(claimed, 'The agent or its configuration no longer exists.');
@@ -544,6 +545,8 @@ export class TaskRunnerService {
     transcript: ModelTranscriptEntry[],
     events: TaskEvent[]
   ): Promise<'continue' | 'stop' | number> {
+    const release = await this.agentRepository.acquireExecution(agent.id);
+    if (!release) return 'stop';
     const agentActor: Actor = { type: 'agent', id: agent.id };
     // Model calls can be slow. Keep the lease alive while waiting, and drop the result if the
     // lease was lost anyway, because another worker may be running the task by now.
@@ -610,6 +613,8 @@ export class TaskRunnerService {
       }
       await this.block(task, `The model call failed: ${error.message}`);
       return 'stop';
+    } finally {
+      await release();
     }
   }
 
@@ -628,7 +633,14 @@ export class TaskRunnerService {
         continue;
       }
       try {
-        const outcome = await this.runTool(task, agent, call);
+        const release = await this.agentRepository.acquireExecution(agent.id);
+        if (!release) return true;
+        let outcome;
+        try {
+          outcome = await this.runTool(task, agent, call);
+        } finally {
+          await release();
+        }
         const content = typeof outcome === 'string' ? outcome : outcome.content;
         results.push({ callId: call.id, content, isError: false });
         stopped = STOPPING_TOOLS.has(call.name) || (typeof outcome !== 'string' && outcome.stop);
@@ -1021,7 +1033,9 @@ export class TaskRunnerService {
   // approval waited), records the result for the agent, and wakes the task. Calls run in
   // parallel, so one slow outside system doesn't hold up the others.
   private async executeApprovedCalls(): Promise<void> {
-    const approved = await this.approvalRepository.listApprovedNotExecuted(10);
+    const approved = await this.approvalRepository.listApprovedNotExecuted(
+      this.options.concurrency
+    );
     await Promise.all(approved.map((approval) => this.executeApproved(approval)));
     // A crash after claiming a call but before waking its task would leave the task waiting.
     for (const approval of await this.approvalRepository.listExecutedAwaitingWake(20)) {
@@ -1030,6 +1044,16 @@ export class TaskRunnerService {
   }
 
   private async executeApproved(approval: Approval): Promise<void> {
+    const release = await this.agentRepository.acquireExecution(approval.agentId);
+    if (!release) return;
+    try {
+      await this.executeApprovedWhileHeld(approval);
+    } finally {
+      await release();
+    }
+  }
+
+  private async executeApprovedWhileHeld(approval: Approval): Promise<void> {
     const task = await this.taskRepository.getById(approval.taskId);
     const agent = await this.agentRepository.getById(approval.agentId);
     if (!task || !agent) {

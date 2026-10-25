@@ -12,6 +12,24 @@ import { paged, success } from '../../shared/response';
 
 type AgentActionRequest = FastifyRequest<{ Params: AgentParams; Headers: ActorHeaders }>;
 
+export async function agentDeletionImpactHandler(request: AgentActionRequest): Promise<unknown> {
+  return success(
+    await request.server.agentService.deletionImpact(
+      request.headers['x-actor-id'],
+      request.params.agentId
+    )
+  );
+}
+
+export async function deleteAgentHandler(request: AgentActionRequest): Promise<unknown> {
+  return success(
+    await request.server.agentService.deleteAgent(
+      request.headers['x-actor-id'],
+      request.params.agentId
+    )
+  );
+}
+
 export async function createAgentHandler(
   request: FastifyRequest<{ Body: CreateAgentBody; Headers: ActorHeaders }>,
   reply: FastifyReply

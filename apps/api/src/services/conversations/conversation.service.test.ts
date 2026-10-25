@@ -79,6 +79,22 @@ function setup() {
 }
 
 describe('ConversationService', () => {
+  it('retains deleted-agent membership for attribution while flagging it unavailable for mentions', async () => {
+    const { service, agents } = setup();
+    agents.getById.mockResolvedValue({
+      ...agent,
+      name: 'Deleted agent',
+      deletedAt: new Date(),
+      disabledAt: new Date(),
+      currentVersionId: null
+    });
+    const details = await service.getConversation(KIM, CONV);
+    expect(details.members.find((m) => m.participant.id === AGENT)).toMatchObject({
+      name: 'Deleted agent',
+      deleted: true
+    });
+  });
+
   it('persists canonical names on create and rename', async () => {
     const { service, conversations } = setup();
     await service.createConversation(KIM, { title: '  Heat Pumps!! Brief  ' });

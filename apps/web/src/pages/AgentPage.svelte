@@ -1,4 +1,5 @@
 <script lang="ts">
+  import DeleteAgent from './DeleteAgent.svelte';
   import Avatar from '../Avatar.svelte';
   import {
     type Agent,
@@ -41,6 +42,7 @@
     () => loadAll<Connection>('/connections'),
     () => []
   );
+  let deleting = $state(false);
   let tab = $state('Overview');
   let editingProfile = $state(false);
   let configRevision = $state(0);
@@ -96,7 +98,9 @@
       <button class="secondary" disabled={action.busy} onclick={toggle}
         >{a.disabledAt ? 'Enable' : 'Disable'}</button
       >
+      <button class="text-button agent-delete" disabled={action.busy} onclick={() => (deleting = true)}>Delete agent</button>
     </header>
+    {#if deleting}<DeleteAgent agent={a} onClose={() => (deleting = false)} />{/if}
     {#if a.disabledAt}<p class="hint">
         This agent takes no new work. Its open tasks keep going until someone pauses or cancels them
         in their endeavor.

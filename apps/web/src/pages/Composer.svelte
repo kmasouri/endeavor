@@ -46,7 +46,7 @@
   let query = $derived(/(?:^|\s)@([^@\n]*)$/.exec(body.slice(0, caret))?.[1]);
   let candidates = $derived(
     [
-      ...members.map((m) => ({
+      ...members.filter((m) => !m.deleted).map((m) => ({
         id: m.participant.id,
         name: m.name,
         type: m.participant.type,
@@ -91,7 +91,7 @@
           mentions.some((m) => m.id === a.id) && !members.some((m) => m.participant.id === a.id)
       )
       .map((a) => ({ name: a.name, participant: { type: 'agent' as const, id: a.id } }));
-    const refs = [...members, ...selectedMembers]
+    const refs = [...members.filter((m) => !m.deleted), ...selectedMembers]
       .filter((m) =>
         new RegExp(
           `(?:^|\\s)@${m.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_])`,

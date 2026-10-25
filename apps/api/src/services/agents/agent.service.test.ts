@@ -66,6 +66,7 @@ function setup(ready: ('anthropic' | 'openai' | 'scripted')[] = ['anthropic', 's
   humans.getById.mockResolvedValue(admin);
   const logger = {
     onAgentCreated: jest.fn(),
+    onAgentDeleted: jest.fn(),
     onAgentConfigured: jest.fn(),
     onAgentDisabled: jest.fn(),
     onAgentEnabled: jest.fn()
@@ -81,6 +82,49 @@ function setup(ready: ('anthropic' | 'openai' | 'scripted')[] = ['anthropic', 's
 }
 
 describe('AgentService', () => {
+  it('deletes enabled and disabled agents through the atomic repository operation', async () => {
+    const { service, agents, logger } = setup();
+    await expect(service.deleteAgent(ADMIN_ID, AGENT_ID)).resolves.toEqual({ deleted: true });
+    expect(agents.delete).toHaveBeenCalledWith(AGENT_ID, ADMIN_ID);
+    expect(logger.onAgentDeleted).toHaveBeenCalledWith(AGENT_ID);
+  });
+
+  it('rejects deletion by someone who is not a person', async () => {
+    const { service, agents, humans } = setup();
+    humans.getById.mockResolvedValue(null);
+    await expect(service.deleteAgent(AGENT_ID, AGENT_ID)).rejects.toMatchObject({
+      name: 'actorNotFound'
+    });
+    expect(agents.delete).not.toHaveBeenCalled();
+  });
+
+  it('returns not found for repeated deletion', async () => {
+    const { service, agents } = setup();
+    agents.delete.mockResolvedValue(false);
+    await expect(service.deleteAgent(ADMIN_ID, AGENT_ID)).rejects.toMatchObject({
+      name: 'agentNotFound'
+    });
+  });
+
+  it('keeps deleted identities out of configuration and version endpoints', async () => {
+    const { service, agents } = setup();
+    agents.getById.mockResolvedValue({ ...agent, deletedAt: new Date() });
+    await expect(service.getAgent(AGENT_ID)).rejects.toMatchObject({ name: 'agentNotFound' });
+    await expect(service.listVersions(AGENT_ID)).rejects.toMatchObject({ name: 'agentNotFound' });
+    await expect(service.setDisabled(ADMIN_ID, AGENT_ID, false)).rejects.toMatchObject({
+      name: 'agentNotFound'
+    });
+    expect(agents.setDisabled).not.toHaveBeenCalled();
+  });
+
+  it('previews affected work without deleting it', async () => {
+    const { service, agents } = setup();
+    const impact = { tasks: [{ id: 't', title: 'Brief', state: 'waiting' }], schedules: [] };
+    agents.deletionImpact.mockResolvedValue(impact);
+    await expect(service.deletionImpact(ADMIN_ID, AGENT_ID)).resolves.toEqual(impact);
+    expect(agents.delete).not.toHaveBeenCalled();
+  });
+
   it('creates an agent with version 1 of its configuration', async () => {
     const { service, agents } = setup();
 

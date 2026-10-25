@@ -230,7 +230,8 @@ export class CatalogService {
   ): Promise<AgentGrant> {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     const agent = await this.agentRepository.getById(agentId);
-    if (!agent) throw new AppError('agentNotFound', `Agent ${agentId} was not found`);
+    if (!agent || agent.deletedAt)
+      throw new AppError('agentNotFound', `Agent ${agentId} was not found`);
     const current = agent.currentVersionId
       ? await this.agentRepository.getVersion(agent.currentVersionId)
       : null;
@@ -340,7 +341,8 @@ export class CatalogService {
   }
 
   private async requireAgent(agentId: string): Promise<void> {
-    if (!(await this.agentRepository.getById(agentId))) {
+    const agent = await this.agentRepository.getById(agentId);
+    if (!agent || agent.deletedAt) {
       throw new AppError('agentNotFound', `Agent ${agentId} was not found`);
     }
   }

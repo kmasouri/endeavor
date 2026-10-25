@@ -384,3 +384,12 @@
     gap: 18px;
   }
 }
+
+.agent-delete {
+  color: var(--danger);
+}
+.agent-delete-confirm {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}

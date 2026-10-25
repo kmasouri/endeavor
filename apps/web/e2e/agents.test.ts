@@ -78,7 +78,7 @@ async function mockApi(page: Page, theme = 'dark', empty = false) {
       page: { limit: 100, offset: 0, total: data.length }
     });
     if (req.method() !== 'GET') {
-      const body = req.postDataJSON() as Record<string, unknown>;
+      const body = (req.postData() ? req.postDataJSON() : {}) as Record<string, unknown>;
       writes.push({ path: url.pathname, body });
       if (url.pathname.endsWith('/config')) {
         const next = { ...latest, id: 'v3', version: 3, ...body };
@@ -105,6 +105,10 @@ async function mockApi(page: Page, theme = 'dark', empty = false) {
           budgetUsd: 20,
           tasks: []
         }
+      });
+    if (url.pathname.endsWith('/deletion-impact'))
+      return reply({
+        data: { tasks, schedules: [{ id: 'r1', title: 'Daily brief', status: 'enabled' }] }
       });
     if (url.pathname.endsWith('/versions')) return reply({ data: versions });
     if (/^\/agents\/a/.test(url.pathname) && !url.pathname.endsWith('/notes'))
@@ -274,3 +278,42 @@ for (const kind of ['skill', 'connection']) {
     expect(errors).toEqual([]);
   });
 }
+
+test('permanent deletion previews affected work and requires confirmation', async ({ page }) => {
+  const { writes } = await mockApi(page);
+  await page.goto('/app/#/agents/a1');
+  await page.getByRole('button', { name: 'Delete agent', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Daily brief');
+  await expect(dialog).toContainText('Research heat pumps');
+  await expect(dialog).toContainText('cannot be undone');
+  await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
+  expect(writes.filter((w) => w.path === '/agents/a1')).toHaveLength(0);
+  await page.getByRole('button', { name: 'Delete agent', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Delete permanently', exact: true }).click();
+  await expect(page).toHaveURL(/#\/agents$/);
+  expect(writes.filter((w) => w.path === '/agents/a1')).toHaveLength(1);
+});
+
+test('failed deletion preview prevents confirmation and Escape restores focus', async ({
+  page
+}) => {
+  const { writes } = await mockApi(page);
+  await page.route('**/agents/a1/deletion-impact', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message: 'Preview unavailable' } })
+    })
+  );
+  await page.goto('/app/#/agents/a1');
+  const opener = page.getByRole('button', { name: 'Delete agent', exact: true });
+  await opener.click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toContainText('Preview unavailable');
+  await expect(dialog.getByRole('button', { name: 'Delete permanently' })).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  expect(writes).toHaveLength(0);
+});
