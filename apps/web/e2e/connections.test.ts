@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 test('create an MCP connection, discover tools, save access, and review exact arguments', async ({
   page
-}) => {
+}, testInfo) => {
   const writes: { path: string; body: Record<string, unknown> }[] = [];
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -95,7 +95,7 @@ test('create an MCP connection, discover tools, save access, and review exact ar
   await expect
     .poll(() => writes.find((write) => write.path === '/connections/c1')?.body)
     .toEqual({ allowedTools: ['lookup'], approvalTools: [] });
-  await page.screenshot({ path: '/tmp/ca64-connections.png', fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath('mcp-connections.png'), fullPage: true });
 
   await page.goto('/app/#/approvals');
   await expect(page.getByText('Exact approved title', { exact: false })).toBeVisible();
