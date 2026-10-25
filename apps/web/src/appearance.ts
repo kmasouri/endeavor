@@ -27,11 +27,13 @@ export function applyTheme(theme: Theme): void {
 export const conversationName = (title: string): string =>
   title.trim().replace(/^#\s*/, '').replace(/\s+/g, ' ');
 
-// Channel formatting is only a navigation label; keep the stored outcome title intact.
-export const conversationChannelName = (title: string): string => {
-  const name = conversationName(title)
+// Keep a trailing separator while typing so the next word can follow a space.
+export const conversationNameInput = (value: string): string =>
+  value
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, '-')
-    .replace(/^-+|-+$/g, '');
-  return `#${name || 'endeavor'}`;
-};
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+/, '');
+export const canonicalConversationName = (value: string): string =>
+  conversationNameInput(value).replace(/-+$/, '');
+export const conversationChannelName = (title: string): string =>
+  `#${canonicalConversationName(title) || 'endeavor'}`;

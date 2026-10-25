@@ -8,6 +8,7 @@ import {
 import { ConversationLogger } from '../../observability';
 import { requireHuman, hasFullAccess } from '../../shared/access';
 import { addressedAgentIds } from '../../shared/addressing';
+import { canonicalConversationName } from '../../shared/conversation-name';
 import { AppError } from '../../shared/errors';
 import {
   Conversation,
@@ -56,7 +57,7 @@ export class ConversationService {
     }
 
     const conversation = await this.conversationRepository.create({
-      title: input.title,
+      title: canonicalConversationName(input.title),
       createdByHumanId: human.id
     });
     await this.conversationRepository.addMember({
@@ -107,7 +108,10 @@ export class ConversationService {
     changes: { title?: string; budgetUsd?: number | null }
   ): Promise<ConversationDetails> {
     const { conversation } = await this.requireAccess(actorId, conversationId);
-    const updated = await this.conversationRepository.update(conversation.id, changes);
+    const updated = await this.conversationRepository.update(conversation.id, {
+      ...changes,
+      ...(changes.title !== undefined && { title: canonicalConversationName(changes.title) })
+    });
     return this.loadDetails(updated ?? conversation);
   }
 

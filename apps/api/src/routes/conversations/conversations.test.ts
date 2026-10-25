@@ -21,7 +21,7 @@ describe('conversation creation', () => {
     await app.close();
   });
 
-  it('passes people and agents to the service with a trimmed name', async () => {
+  it('passes a canonical name and chosen members to the service', async () => {
     const app = setupApp();
     await app.ready();
     const create = jest.spyOn(app.conversationService, 'createConversation').mockResolvedValue({
@@ -39,7 +39,71 @@ describe('conversation creation', () => {
       payload: { title: '  Goal  ', humanIds: [PERSON], agentIds: [] }
     });
     expect(response.statusCode).toBe(201);
-    expect(create).toHaveBeenCalledWith(ACTOR, { title: 'Goal', humanIds: [PERSON], agentIds: [] });
+    expect(create).toHaveBeenCalledWith(ACTOR, { title: 'goal', humanIds: [PERSON], agentIds: [] });
+    await app.close();
+  });
+  it.each(['', '   ', '#!?', '---', '🧪', 'a'.repeat(201)])(
+    'rejects an empty or oversized canonical name: %s',
+    async (title) => {
+      const app = setupApp();
+      await app.ready();
+      const create = jest.spyOn(app.conversationService, 'createConversation');
+      const response = await app.inject({
+        method: 'POST',
+        url: '/conversations',
+        headers: { 'x-actor-id': ACTOR },
+        payload: { title }
+      });
+      expect(response.statusCode).toBe(400);
+      expect(create).not.toHaveBeenCalled();
+      await app.close();
+    }
+  );
+
+  it.each(['  Heat Pumps!! Brief  ', '#HEAT___PUMPS / BRIEF', 'heat--pumps-brief---'])(
+    'normalizes direct API creates and renames: %s',
+    async (title) => {
+      const app = setupApp();
+      await app.ready();
+      const saved = {
+        id: ACTOR,
+        title: 'heat-pumps-brief',
+        createdByHumanId: ACTOR,
+        budgetUsd: null,
+        createdAt: new Date(),
+        members: []
+      };
+      const create = jest
+        .spyOn(app.conversationService, 'createConversation')
+        .mockResolvedValue(saved);
+      const update = jest
+        .spyOn(app.conversationService, 'updateConversation')
+        .mockResolvedValue(saved);
+      for (const method of ['POST', 'PATCH'] as const) {
+        const response = await app.inject({
+          method,
+          url: method === 'POST' ? '/conversations' : `/conversations/${ACTOR}`,
+          headers: { 'x-actor-id': ACTOR },
+          payload: { title }
+        });
+        expect(response.statusCode).toBe(method === 'POST' ? 201 : 200);
+        expect(response.json().data.title).toBe('heat-pumps-brief');
+      }
+      expect(create).toHaveBeenCalledWith(ACTOR, { title: 'heat-pumps-brief' });
+      expect(update).toHaveBeenCalledWith(ACTOR, ACTOR, { title: 'heat-pumps-brief' });
+      await app.close();
+    }
+  );
+
+  it('rejects a rename with no remaining letters or numbers', async () => {
+    const app = setupApp();
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/conversations/${ACTOR}`,
+      headers: { 'x-actor-id': ACTOR },
+      payload: { title: '! # ---' }
+    });
+    expect(response.statusCode).toBe(400);
     await app.close();
   });
 });

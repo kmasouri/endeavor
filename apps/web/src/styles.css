@@ -1492,3 +1492,21 @@ progress::-webkit-progress-value {
     font-size: 16px;
   }
 }
+
+.channel-name-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.channel-name-field > span {
+  color: var(--text-300);
+  flex-shrink: 0;
+}
+.channel-name-field input {
+  flex: 1;
+}
+
+.channel-name {
+  display: grid;
+  gap: 4px;
+}

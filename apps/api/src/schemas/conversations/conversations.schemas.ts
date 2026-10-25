@@ -1,4 +1,17 @@
 import { z } from 'zod';
+import { canonicalConversationName } from '../../shared/conversation-name';
+
+const conversationTitleSchema = z
+  .string()
+  .max(200)
+  .transform(canonicalConversationName)
+  .pipe(
+    z
+      .string()
+      .min(1, 'Use at least one letter or number.')
+      .max(200)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+  );
 
 const participantRefSchema = z.strictObject({
   type: z.enum(['human', 'agent']),
@@ -10,14 +23,14 @@ export const conversationParamsSchema = z.object({
 });
 
 export const createConversationBodySchema = z.strictObject({
-  title: z.string().trim().min(1).max(200),
+  title: conversationTitleSchema,
   agentIds: z.array(z.uuid()).max(20).optional(),
   humanIds: z.array(z.uuid()).max(20).optional()
 });
 
 export const updateConversationBodySchema = z
   .strictObject({
-    title: z.string().trim().min(1).max(200).optional(),
+    title: conversationTitleSchema.optional(),
     // US dollars for all agent work in this conversation. null removes the cap.
     budgetUsd: z.number().positive().max(100_000).nullable().optional()
   })
