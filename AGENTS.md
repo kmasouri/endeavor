@@ -60,6 +60,8 @@ Once the new ticket is created, recommend starting a new session focused on that
 
 ### Working in parallel
 
+If you use Git worktrees, put every worktree inside this repository's `.worktrees/` folder, such as `.worktrees/ca-7-persistence`. Never create worktrees in a Codex folder or elsewhere outside the repository. Keep `main` checked out at the repository root; worktrees must use a ticket branch or a detached HEAD, never `main`.
+
 Several agents can work at once. The `Agent` field on the backlog keeps them out of each other's way.
 
 - **Who you are.** A Claude Code session uses its session ID (`session_...`, from the `get_session` tool). A person uses their name.
