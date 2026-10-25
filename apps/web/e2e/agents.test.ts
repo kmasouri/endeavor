@@ -398,7 +398,7 @@ for (const legacy of [false, true]) {
     const configuration = page.getByRole('button', { name: 'Configuration', exact: true });
     const overview = page.getByRole('button', { name: 'Overview', exact: true });
     await configuration.click();
-    const form = page.locator('form.agent-form');
+    const form = page.locator('form.creation-form');
     const instructions = form.getByRole('textbox', { name: /^Instructions/ });
     const model = form.getByRole('textbox', { name: 'Model', exact: true });
     const provider = form.getByRole('combobox', { name: 'Provider', exact: true });
