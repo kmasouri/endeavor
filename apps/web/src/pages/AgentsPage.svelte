@@ -1,108 +1,127 @@
 <script lang="ts">
   import Avatar from '../Avatar.svelte';
   import PageHeader from '../PageHeader.svelte';
-  import { type Agent, api } from '../api';
+  import { type Agent, api, type CostReport } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
-  import Hint from '../Hint.svelte';
-  import { go, createAction, createLoad } from '../state.svelte';
-  import AgentConfigFields from './AgentConfigFields.svelte';
-  import { type ConfigValues, initialConfig } from './AgentConfig';
-
+  import { go, createLoad } from '../state.svelte';
+  import { loadAll } from './agent-data';
+  import AgentStatus from './AgentStatus.svelte';
+  import './agents.css';
   const agents = createLoad(
-    () => api.list<Agent>('/agents?includeDisabled=true&limit=100'),
+    () => loadAll<Agent>('/agents?includeDisabled=true'),
     () => []
   );
-  let name = $state('');
-  let purpose = $state('');
-  let config = $state<ConfigValues>(initialConfig());
-  const action = createAction();
-  const create = (event: SubmitEvent) => {
-    event.preventDefault();
-    void action.run(async () => {
-      const agent = await api.post<Agent>('/agents', { name, purpose, ...config });
-      go(`/agents/${agent.id}`);
-    });
-  };
+  const spending = createLoad(
+    async () =>
+      new Map(
+        await Promise.all(
+          (agents.data ?? []).map(
+            async (a) => [a.id, await api.get<CostReport>(`/agents/${a.id}/costs`)] as const
+          )
+        )
+      ),
+    () => [agents.data],
+    15000
+  );
+  let filter = $state('All');
+  let search = $state('');
+  let shown = $derived(
+    (agents.data ?? []).filter(
+      (a) =>
+        (filter === 'All' || (filter === 'Disabled' ? !!a.disabledAt : !a.disabledAt)) &&
+        a.name.toLowerCase().includes(search.toLowerCase().trim())
+    )
+  );
 </script>
 
-<PageHeader title="Agents" subtitle="Configure the people-like participants that do your work.">
-  {#snippet actions()}<button
-      onclick={() =>
-        document
-          .getElementById('new-agent')
-          ?.scrollIntoView({ block: 'start', behavior: 'smooth' })}>New agent</button
-    >{/snippet}
-</PageHeader>
-
-<div class="columns">
-  <section>
-    <Hint>
-      An agent is a configured participant. A QA agent and a research agent are the same kind of
-      thing with different settings, and no agent is in charge of another.
-    </Hint>
-
-    <ErrorNote error={agents.error} />
-
-    {#if agents.data?.data.length === 0}
-      <p class="muted">No agents yet.</p>
-    {/if}
-
-    <ul class="list">
-      {#each agents.data?.data ?? [] as agent (agent.id)}
+<div class="agents-page">
+  <PageHeader
+    title="Agents"
+    subtitle="Participants you configure to do work in endeavors. No agent is in charge of another."
+  >
+    {#snippet actions()}{#if agents.data?.length}<button onclick={() => go('/agents/new')}
+          >+ Create agent</button
+        >{/if}{/snippet}
+  </PageHeader>
+  <ErrorNote error={agents.error} />
+  {#if !agents.data && !agents.error}<p class="muted">Loading agents…</p>
+  {:else if agents.data?.length === 0}
+    <section class="agent-empty" aria-label="No agents yet">
+      <h2>No agents yet</h2>
+      <p>
+        An agent has a purpose, instructions, and a model. Add it to an endeavor and @mention it to
+        give it work.
+      </p>
+      <button onclick={() => go('/agents/new')}>+ Create agent</button>
+      <div class="agent-examples">
+        <a href="#/agents/new?example=researcher"
+          ><h3>Researcher</h3>
+          <p>Finds and summarizes sources on a question, citing each claim.</p></a
+        >
+        <a href="#/agents/new?example=qa"
+          ><h3>QA</h3>
+          <p>Tests the staging site and reports failures with steps to reproduce.</p></a
+        >
+      </div>
+      <p class="caption">
+        Examples fill in the form. They aren’t built-in roles; you can change everything.
+      </p>
+    </section>
+  {:else if agents.data}
+    <div class="agent-toolbar">
+      <div class="agent-filters" aria-label="Filter agents">
+        {#each ['All', 'Enabled', 'Disabled'] as value (value)}<button
+            aria-pressed={filter === value}
+            onclick={() => (filter = value)}>{value}</button
+          >{/each}
+      </div>
+      <input
+        type="search"
+        aria-label="Search agents"
+        placeholder="Search agents"
+        bind:value={search}
+      />
+    </div>
+    <div class="label muted">Agents · {shown.length}</div>
+    <ErrorNote error={spending.error} />
+    <ul class="agent-list" aria-label="Agents">
+      {#each shown as agent (agent.id)}
+        {@const costs = spending.data?.get(agent.id)}
         <li>
-          <a href={`#/agents/${agent.id}`}>
-            <span class="row"
-              ><Avatar name={agent.name} id={agent.id} agent /><strong>{agent.name}</strong><span
-                class="agent-label">agent</span
-              ></span
-            >
-          </a>
-
-          {#if agent.disabledAt}
-            <span class="badge"> disabled </span>
-          {/if}
-
-          {#if !agent.providerReady}
-            <span class="badge warn"> provider not set up </span>
-          {/if}
-
-          <div class="muted small">
-            {agent.purpose}
-
-            {#if agent.currentVersion}
-              {` · ${agent.currentVersion.provider} ${agent.currentVersion.model} · version ${agent.currentVersion.version}`}
-            {/if}
-          </div>
+          <a class="agent-row" href={`#/agents/${agent.id}`}
+            ><Avatar name={agent.name} id={agent.id} agent />
+            <div>
+              <h3>{agent.name} <span class="agent-label">agent</span></h3>
+              <p class="agent-purpose">{agent.purpose}</p>
+            </div>
+            <div class="agent-model caption">
+              {agent.currentVersion?.provider} · {agent.currentVersion?.model}<small
+                >Version {agent.currentVersion?.version ?? '—'}</small
+              >
+            </div>
+            <div class="agent-spend caption">
+              {#if costs}${costs.thisMonth.costUsd.toFixed(2)}
+                <small
+                  >{costs.budgetUsd === null
+                    ? 'no budget'
+                    : `of $${costs.budgetUsd.toFixed(2)}`}</small
+                >{#if costs.budgetUsd}<progress
+                    aria-label={`${agent.name} monthly spending`}
+                    value={costs.thisMonth.costUsd}
+                    max={costs.budgetUsd}
+                  ></progress>{/if}{:else}<span class="muted"
+                  >Spending {spending.error ? 'unavailable' : 'loading…'}</span
+                >{/if}
+            </div>
+            <AgentStatus {agent} /><span class="chevron" aria-hidden="true">›</span></a
+          >
         </li>
       {/each}
     </ul>
-  </section>
-
-  <aside class="panel" id="new-agent">
-    <h2>New agent</h2>
-
-    <form onsubmit={create} class="stack">
-      <label>
-        Name
-
-        <input bind:value={name} required />
-      </label>
-
-      <label>
-        Purpose
-
-        <Hint>One line other participants see in the directory.</Hint>
-
-        <input bind:value={purpose} required />
-      </label>
-
-      <AgentConfigFields onChange={(value) => (config = value)} />
-
-      <button disabled={action.busy || !name.trim() || !config.instructions.trim()}>
-        Create agent
-      </button>
-
-      <ErrorNote error={action.error} />
-    </form>
-  </aside>
+    {#if !shown.length}<p class="muted">No agents match your search.</p>{/if}
+    <p class="caption muted">
+      Spending is this month (UTC). Needs setup means the provider has no API key, so its tasks
+      can’t run yet.
+    </p>
+  {/if}
 </div>

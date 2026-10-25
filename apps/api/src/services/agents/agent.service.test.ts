@@ -102,7 +102,8 @@ describe('AgentService', () => {
         connectionIds: [],
         limits: {},
         createdByHumanId: ADMIN_ID
-      }
+      },
+      expect.objectContaining({ actorId: ADMIN_ID })
     );
     expect(details.currentVersion?.version).toBe(1);
     // openai has no key in this setup, so the agent is saved but flagged as not ready.
@@ -139,15 +140,19 @@ describe('AgentService', () => {
 
     const details = await service.updateConfig(ADMIN_ID, AGENT_ID, { model: 'claude-sonnet-5-5' });
 
-    expect(agents.addVersion).toHaveBeenCalledWith(AGENT_ID, {
-      instructions: 'Test the checkout flow',
-      provider: 'anthropic',
-      model: 'claude-sonnet-5-5',
-      skillVersionIds: ['s1'],
-      connectionIds: ['c1'],
-      limits: {},
-      createdByHumanId: ADMIN_ID
-    });
+    expect(agents.addVersion).toHaveBeenCalledWith(
+      AGENT_ID,
+      {
+        instructions: 'Test the checkout flow',
+        provider: 'anthropic',
+        model: 'claude-sonnet-5-5',
+        skillVersionIds: ['s1'],
+        connectionIds: ['c1'],
+        limits: {},
+        createdByHumanId: ADMIN_ID
+      },
+      expect.objectContaining({ actorId: ADMIN_ID })
+    );
     expect(details.currentVersion?.version).toBe(2);
     expect(details.providerReady).toBe(true);
   });
@@ -288,17 +293,13 @@ describe('AgentService', () => {
 
     expect(agents.addVersion).toHaveBeenCalledWith(
       AGENT_ID,
-      expect.objectContaining({ skillVersionIds: ['sv7'] })
+      expect.objectContaining({ skillVersionIds: ['sv7'] }),
+      expect.objectContaining({ grant: [{ type: 'skill', id: 's1' }] })
     );
-    const granted = catalogs.grant.mock.calls.map(
-      ([input]) => `${input.targetType}:${input.targetId}`
-    );
-    // c1 was already chosen in version 1, so it is not granted again.
-    expect(granted).toEqual(['skill:s1']);
     expect(agents.addVersion.mock.calls[0][1].connectionIds).toEqual(['c1']);
   });
 
-  it('keeps connections independent when upgrading a skill and preserves revoked legacy grants', async () => {
+  it('keeps connections independent and restores an explicitly chosen legacy connection', async () => {
     const { service, catalogs, agents } = setup();
     agents.getVersion.mockResolvedValue({ ...version1, legacyConnectionIds: ['c9'] });
     catalogs.listGrants.mockResolvedValue([
@@ -321,7 +322,10 @@ describe('AgentService', () => {
       connectionIds: ['c1', 'c9']
     });
     expect(agents.addVersion.mock.calls[0][1].connectionIds).toEqual(['c1', 'c9']);
-    expect(catalogs.grant).not.toHaveBeenCalled();
+    expect(agents.addVersion.mock.calls[0][2]).toMatchObject({
+      grant: [{ type: 'connection', id: 'c9' }],
+      revoke: []
+    });
   });
 
   it('grants an explicitly selected new connection without needing a skill', async () => {
@@ -332,18 +336,50 @@ describe('AgentService', () => {
       skillVersionIds: [],
       connectionIds: ['c2']
     });
-    expect(catalogs.grant).toHaveBeenCalledWith(
-      expect.objectContaining({ targetType: 'connection', targetId: 'c2', restoreRevoked: false })
-    );
+    expect(agents.addVersion.mock.calls[0][2]).toMatchObject({
+      grant: [{ type: 'connection', id: 'c2' }],
+      revoke: [{ type: 'connection', id: 'c1' }]
+    });
   });
 
   it('never re-grants an entry that was already chosen, so revokes stick', async () => {
-    const { service, catalogs } = setup();
+    const { service, catalogs, agents } = setup();
     catalogs.getConnections.mockResolvedValue([{ id: 'c1', disabledAt: null } as never]);
 
     await service.updateConfig(ADMIN_ID, AGENT_ID, { connectionIds: ['c1'], model: 'other' });
 
-    expect(catalogs.grant).not.toHaveBeenCalled();
+    expect(agents.addVersion.mock.calls[0][2]).toMatchObject({ grant: [], revoke: [] });
+  });
+
+  it('revokes removed skills and connections in the same save as the new version', async () => {
+    const { service, catalogs, agents } = setup();
+    catalogs.getSkillVersions.mockImplementation(async (ids) =>
+      ids.includes('s1') ? [{ id: 's1', skillId: 'skill-1' } as never] : []
+    );
+    await service.updateConfig(ADMIN_ID, AGENT_ID, { skillIds: [], connectionIds: [] });
+    expect(agents.addVersion.mock.calls[0][2]).toEqual({
+      actorId: ADMIN_ID,
+      expectedVersionId: 'v1',
+      grant: [],
+      revoke: [
+        { type: 'skill', id: 'skill-1' },
+        { type: 'connection', id: 'c1' }
+      ]
+    });
+  });
+
+  it('grants a removed connection again when it is re-chosen', async () => {
+    const { service, catalogs, agents } = setup();
+    agents.getVersion.mockResolvedValue({ ...version1, connectionIds: [] });
+    catalogs.getConnections.mockResolvedValue([{ id: 'c1', disabledAt: null } as never]);
+    catalogs.listGrants.mockResolvedValue([
+      { targetType: 'connection', targetId: 'c1', revokedAt: new Date() } as never
+    ]);
+    await service.updateConfig(ADMIN_ID, AGENT_ID, { connectionIds: ['c1'] });
+    expect(agents.addVersion.mock.calls[0][2]).toMatchObject({
+      grant: [{ type: 'connection', id: 'c1' }],
+      revoke: []
+    });
   });
 
   it('refuses a disabled skill', async () => {

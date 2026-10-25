@@ -134,10 +134,11 @@ design for the agreed behavior.
 
 ### Agents
 
-The approved [Agents design](agents/README.md) needs two API changes. Saving a configuration that
-drops a skill or connection must revoke its grant; today a save only adds grants. And each version
-row says what changed, which the API doesn't store, so it must be worked out by comparing versions.
-[CA-57](https://app.notion.com/p/4031a83d088f81899996d9c7e651a90e) covers both.
+The approved [Agents design](agents/README.md) is implemented through
+[CA-57](https://app.notion.com/p/4031a83d088f81899996d9c7e651a90e): configuration removal revokes
+access for open tasks too, re-selection restores access, and version rows compare saved versions
+in the web app. The ongoing-grant API records a configuration version. Endeavor capability
+approval integration still depends on CA-38, so CA-57 retains that final acceptance item.
 
 ### Conversation data
 

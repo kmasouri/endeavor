@@ -69,7 +69,7 @@ export interface CatalogRepository {
     targetType: GrantTargetType;
     targetId: string;
     grantedByHumanId: string;
-    // Configuration saves set false so concurrent revocation cannot be undone.
+    // Set false when reading back an atomic configuration grant to preserve later revocation.
     restoreRevoked?: boolean;
   }): Promise<AgentGrant>;
   // Returns false when there was no active grant.

@@ -65,9 +65,11 @@ decided this on October 24, 2026
   next call. The row turns amber and says so before you save, with an Undo.
 - Approving access "ongoing" in an endeavor adds the item to the configuration as a new version.
 
-**This changes the API.** Today a save only adds grants; it never revokes one (see
-[catalogs.md](../../catalogs.md#grants-and-revocation)). CA-57 covers that change. Until
-it ships, `docs/catalogs.md` describes how the code behaves now.
+The CA-57 implementation saves configuration and changed grants atomically: removing a choice
+revokes access, and choosing it again restores access. Version summaries are computed in the web
+app. The ongoing-grant API records a configuration version; connecting endeavor capability
+approvals to it remains CA-38. See [catalogs.md](../../catalogs.md#grants-and-revocation) for the
+current API behavior. The saved screens remain the approved design reference.
 
 ## Sample data
 

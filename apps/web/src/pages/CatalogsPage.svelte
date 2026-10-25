@@ -10,7 +10,11 @@
   import NewConnection from './NewConnection.svelte';
   import './catalogs.css';
 
-  let tab = $state<'skills' | 'connections'>('skills');
+  let tab = $state<'skills' | 'connections'>(
+    new URLSearchParams(window.location.hash.split('?')[1]).get('tab') === 'connections'
+      ? 'connections'
+      : 'skills'
+  );
 
   const skills = createLoad(
     () => api.list<Skill>('/skills?limit=100'),

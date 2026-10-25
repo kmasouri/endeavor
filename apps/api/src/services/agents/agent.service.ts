@@ -1,5 +1,7 @@
 import {
   AgentNameConflictError,
+  AgentConfigConflictError,
+  AgentAccessChanges,
   AgentRepository,
   CatalogRepository,
   HumanRepository
@@ -79,10 +81,10 @@ export class AgentService {
           connectionIds,
           limits: input.limits ?? {},
           createdByHumanId: admin.id
-        }
+        },
+        await this.chosenAccess(admin.id, null, { skillVersionIds, connectionIds })
       )
       .catch(toNameTaken);
-    await this.grantNewlyChosen(agent.id, admin.id, null, version);
     this.agentLogger.onAgentCreated(agent.id);
     this.agentLogger.onAgentConfigured(agent.id, version.version, version.provider);
     return this.toDetails(agent, version);
@@ -176,16 +178,25 @@ export class AgentService {
       return this.toDetails(agent, current);
     }
 
-    const version = await this.agentRepository.addVersion(agent.id, {
-      instructions,
-      provider,
-      model,
-      skillVersionIds,
-      connectionIds,
-      limits,
-      createdByHumanId: admin.id
-    });
-    await this.grantNewlyChosen(agent.id, admin.id, current, version);
+    const version = await this.agentRepository
+      .addVersion(
+        agent.id,
+        {
+          instructions,
+          provider,
+          model,
+          skillVersionIds,
+          connectionIds,
+          limits,
+          createdByHumanId: admin.id
+        },
+        await this.chosenAccess(admin.id, current, { skillVersionIds, connectionIds })
+      )
+      .catch((error: unknown) => {
+        if (error instanceof AgentConfigConflictError)
+          throw new AppError('validationError', error.message);
+        throw error;
+      });
     this.agentLogger.onAgentConfigured(agent.id, version.version, version.provider);
     return this.toDetails({ ...agent, currentVersionId: version.id }, version);
   }
@@ -272,41 +283,32 @@ export class AgentService {
     return unique;
   }
 
-  // Skills grant instructions only. Connections must be selected independently.
-  // Only newly chosen entries are granted, once the version is saved. Saving
-  // again with the same choices never brings back a grant an admin revoked; use the grants API.
-  private async grantNewlyChosen(
-    agentId: string,
-    adminId: string,
-    previous: AgentVersion | null,
-    next: AgentVersion
-  ): Promise<void> {
+  // Re-choosing restores access; unchanged choices keep any explicit revocation.
+  private async chosenAccess(
+    actorId: string,
+    previous: Pick<AgentVersion, 'id' | 'skillVersionIds' | 'connectionIds'> | null,
+    next: Pick<AgentVersion, 'skillVersionIds' | 'connectionIds'>
+  ): Promise<AgentAccessChanges> {
     const [before, after] = await Promise.all([
       this.chosenTargets(previous),
       this.chosenTargets(next)
     ]);
-    // A configuration save never restores a revoked grant, including a connection that
-    // used to be inherited or was removed and later selected again. Use the grants API.
-    const existingGrants = new Set(
-      (await this.catalogRepository.listGrants(agentId, { activeOnly: false })).map(
-        (grant) => `${grant.targetType}:${grant.targetId}`
-      )
-    );
-    for (const key of after) {
-      if (!before.has(key) && !existingGrants.has(key)) {
-        const [targetType, targetId] = key.split(':') as ['skill' | 'connection', string];
-        await this.catalogRepository.grant({
-          agentId,
-          grantedByHumanId: adminId,
-          targetType,
-          targetId,
-          restoreRevoked: false
-        });
-      }
-    }
+    const targets = (keys: string[]) =>
+      keys.map((key) => {
+        const [type, id] = key.split(':') as ['skill' | 'connection', string];
+        return { type, id };
+      });
+    return {
+      actorId,
+      ...(previous && { expectedVersionId: previous.id }),
+      grant: targets([...after].filter((key) => !before.has(key))),
+      revoke: targets([...before].filter((key) => !after.has(key)))
+    };
   }
 
-  private async chosenTargets(version: AgentVersion | null): Promise<Set<string>> {
+  private async chosenTargets(
+    version: Pick<AgentVersion, 'skillVersionIds' | 'connectionIds'> | null
+  ): Promise<Set<string>> {
     if (!version) {
       return new Set();
     }

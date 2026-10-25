@@ -226,7 +226,8 @@ export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<
     '/agents/:agentId/grants',
     {
       schema: {
-        description: 'Let an agent use a skill or connection. Admins only.',
+        description:
+          'Grant ongoing access and add the skill or connection to agent configuration as a new version when needed. Existing task pins stay unchanged. Admins only.',
         tags,
         headers,
         params: grantParamsSchema,

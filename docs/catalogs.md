@@ -1,6 +1,6 @@
 # Skills, connections, and grants
 
-People keep two shared catalogs. Being in a catalog gives no agent access: access comes from per-agent **grants**.
+People keep two shared catalogs. Being in a catalog gives no agent access. Choosing an entry in an agent configuration grants access; removing it and saving revokes access. The runner enforces these choices through per-agent grants.
 
 ## Skills
 
@@ -20,7 +20,7 @@ A connection is an outside HTTP API: a base URL, an auth header, an optional cre
 
 ## Grants and revocation
 
-`POST /agents/:id/grants` grants a skill or connection; `DELETE /agents/:id/grants/:type/:targetId` revokes it. Every `http_request` call is checked at the moment it runs. The connection must be:
+`POST /agents/:id/grants` grants ongoing access to a skill or connection and adds it to configuration as a new version when needed; `DELETE /agents/:id/grants/:type/:targetId` revokes it. Every `http_request` call is checked at the moment it runs. The connection must be:
 
 1. explicitly chosen in the task's configuration version (`connectionIds`),
 2. granted to the agent right now,
@@ -33,14 +33,14 @@ So a revoke, a disabled connection, or a narrower path list applies on the very 
 
 Deploy the API and web interface together. No data migration is required: new skill versions leave the retired database column at its empty default. Older `skill_versions.connection_ids` remain stored as immutable history. They never authorize calls and are omitted from skill API responses.
 
-Stored agent versions, task pins, credentials, and grants stay unchanged. There are no bulk grants, revokes, or automatic task migrations. Explicit connections continue to work, subject to live checks. An old task that depended only on an inherited connection cannot call it after rollout. The model is told to explain the missing capability and ask a person through the existing conversation flow; it must never claim it used unavailable access.
+Stored agent versions, task pins, credentials, and grants stay unchanged. There are no bulk grants, revokes, or automatic task migrations during rollout. Later configuration saves apply the removal and re-selection rules above. Explicit connections continue to work, subject to live checks. An old task that depended only on an inherited connection cannot call it after rollout. The model is told to explain the missing capability and ask a person through the existing conversation flow; it must never claim it used unavailable access.
 
 Agent version responses include `legacyConnectionIds`: distinct connections listed by old pinned skill versions but absent from the explicit connection list. This is review information only, including disabled or revoked entries. The configuration form names these connections and version history flags affected versions. This field is never accepted as configuration input or used to authorize calls. No dependency checklist or consent flow is added to skill assignment.
 
 Before resuming affected work, a person should:
 
 1. Review the warning on the agent's configuration and explicitly select any connections still needed. Disabled connections must be enabled separately first.
-2. Save a new agent configuration. A save preserves existing grants and never restores a previously revoked grant, even when removing and reselecting an entry. Restore an intended grant separately with `POST /agents/:id/grants`.
+2. Save a new agent configuration. Newly chosen entries receive grants, including entries removed and saved earlier. Removing a choice revokes its grant for open tasks too. Unchanged choices preserve an explicit API revocation; use `POST /agents/:id/grants` to restore one directly. Configuration and changed grants save in one statement.
 3. Move each affected open task to the reviewed version with `POST /tasks/:taskId/version`. Until then, its original pin stays unchanged and inherited-only calls remain unavailable. Restart finished tasks to use the current version.
 
 New skill versions contain no associations, so upgrading skills can remove historical review information. Review the old agent version in history when transitioning. Connection choices still never change automatically. The pilot setup selects each agent's connections explicitly; existing pilot agents must be reviewed using the steps above.
