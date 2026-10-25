@@ -165,6 +165,59 @@ async function openNew(page: Page) {
   return page.getByRole('dialog', { name: 'What do you want to accomplish?' });
 }
 
+for (const theme of ['dark', 'light'] as const) {
+  test(`${theme}: collapsed sidebar keeps icons and expands on hover and keyboard focus`, async ({ page }) => {
+    await mockApi(page, { theme });
+    await page.goto('/app/');
+    const sidebar = page.getByRole('complementary', { name: 'Sidebar', exact: true });
+    const width = () => sidebar.evaluate((element) => element.getBoundingClientRect().width);
+    await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+    await expect.poll(width).toBe(68);
+    const agents = sidebar.getByRole('link', { name: 'Agents', exact: true });
+    await expect(agents.locator('svg')).toBeVisible();
+    await expect(agents).toHaveAttribute('href', '#/agents');
+    await agents.hover();
+    await expect.poll(width).toBe(264);
+    await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
+    await agents.click();
+    await expect(page).toHaveURL(/#\/agents$/);
+    await expect(agents).toHaveAttribute('aria-current', 'page');
+    await page.getByRole('button', { name: 'Search endeavors', exact: true }).hover();
+    await expect.poll(width).toBe(68);
+    // Keyboard focus reveals the labels even after the mouse has left.
+    await page.keyboard.press('Tab');
+    await expect.poll(width).toBe(264);
+    await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+    await page.getByRole('button', { name: 'Search endeavors', exact: true }).hover();
+    await expect.poll(width).toBe(264);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await expect(sidebar).toHaveCSS('transition-duration', '0s');
+    await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+    await expect.poll(width).toBe(68);
+    await page.screenshot({ path: `/tmp/ca61-${theme}-collapsed.png` });
+  });
+}
+
+test.describe('touch sidebar', () => {
+  test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
+  test('compact icons navigate and the toggle opens the full menu', async ({ page }) => {
+    await mockApi(page);
+    await page.goto('/app/');
+    const sidebar = page.getByRole('complementary', { name: 'Sidebar', exact: true });
+    const width = () => sidebar.evaluate((element) => element.getBoundingClientRect().width);
+    await expect.poll(width).toBe(68);
+    await sidebar.getByRole('link', { name: 'Agents', exact: true }).tap();
+    await expect(page).toHaveURL(/#\/agents$/);
+    await expect.poll(width).toBe(68);
+    await page.getByRole('button', { name: 'Open sidebar', exact: true }).tap();
+    await expect.poll(width).toBe(264);
+    await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
+    await sidebar.getByRole('link', { name: 'Endeavors', exact: true }).tap();
+    await expect.poll(width).toBe(68);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+});
+
 test('restores the last accessible selection, preserves links, and searches older pages', async ({
   page
 }) => {

@@ -420,15 +420,34 @@ pre {
   color: var(--text-200);
 }
 .shell {
+  --sidebar-width: 264px;
+  --sidebar-opacity: 1;
+  --sidebar-visibility: visible;
   display: grid;
-  grid-template-columns: 264px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: 66px minmax(0, 1fr);
   min-height: 100dvh;
+  transition: grid-template-columns 220ms ease;
 }
 .shell.sidebar-collapsed {
-  grid-template-columns: minmax(0, 1fr);
+  --sidebar-width: 68px;
+  --sidebar-opacity: 0;
+  --sidebar-visibility: hidden;
+}
+.shell.sidebar-collapsed:has(.sidebar :focus-visible) {
+  --sidebar-width: 264px;
+  --sidebar-opacity: 1;
+  --sidebar-visibility: visible;
+}
+@media (hover: hover) and (pointer: fine) {
+  .shell.sidebar-collapsed:has(.sidebar:hover) {
+    --sidebar-width: 264px;
+    --sidebar-opacity: 1;
+    --sidebar-visibility: visible;
+  }
 }
 .shell > main {
+  grid-column: 2;
   width: 100%;
   max-width: none;
   min-width: 0;
@@ -446,7 +465,50 @@ pre {
   flex-direction: column;
   gap: 24px;
   min-width: 0;
+  width: var(--sidebar-width);
+  overflow-x: hidden;
   overflow-y: auto;
+  transition: width 220ms ease;
+}
+.sidebar nav,
+.sidebar-conversations,
+.sidebar-footer {
+  width: 239px;
+  flex-shrink: 0;
+}
+.sidebar nav a > svg,
+.sidebar .avatar {
+  flex-shrink: 0;
+}
+.sidebar-label,
+.sidebar nav .count-badge,
+.sidebar-conversations,
+.sidebar .switch-person {
+  opacity: var(--sidebar-opacity);
+  transition: opacity 160ms ease;
+}
+.sidebar-conversations,
+.sidebar .switch-person {
+  visibility: var(--sidebar-visibility);
+}
+.sidebar-label {
+  white-space: nowrap;
+}
+.sidebar nav a {
+  width: calc(var(--sidebar-width) - 25px);
+  overflow: hidden;
+  transition: width 220ms ease, background-color 160ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .shell,
+  .sidebar,
+  .sidebar nav a,
+  .sidebar-label,
+  .sidebar nav .count-badge,
+  .sidebar-conversations,
+  .sidebar .switch-person {
+    transition: none;
+  }
 }
 .brand {
   display: flex;
@@ -700,11 +762,11 @@ details summary {
 }
 @media (max-width: 700px) {
   .shell {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 68px minmax(0, 1fr);
   }
   .sidebar {
     position: fixed;
-    width: min(290px, 85vw);
+    left: 0;
     z-index: 10;
   }
   .shell > main {
