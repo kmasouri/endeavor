@@ -6,11 +6,11 @@ An agent is a configured participant. It is not a built-in role: a QA agent and 
 
 - **Name and purpose.** What the agent is for, shown in the directory. Changing these doesn't create a new version.
 - **Configuration (versioned).** Instructions, provider, and model. Saving any change creates a new version, and versions never change once saved. Each task records the version it started with, so editing an agent never changes work that is already running or waiting. Only new tasks use the new version.
-- **Skills and connections.** Chosen independently from the shared catalogs and saved with the configuration version. Skills add instructions only. `connectionIds` explicitly selects API access; every call also needs a live grant. Skill edits and upgrades never change these selections. A configuration save never restores revoked grants.
+- **Skills and connections.** Chosen independently from the shared catalogs and saved with the configuration version. Skills add instructions only. `connectionIds` explicitly selects API access; every call also needs a live grant. Skill edits and upgrades never change connection selections. Removing a choice and saving revokes its grant, including for tasks on older versions. Choosing it again restores access. An unchanged choice keeps an explicit API revocation. The version and changed grants are saved atomically; a concurrent configuration change is rejected so the person can reload.
 
 To move open work to a newer version, a person calls `POST /tasks/:taskId/version`. It defaults to the agent's current version. The change is recorded as a `task.version.migrated` event with who did it and why. Tasks never change version on their own, including after a restart. Finished tasks aren't moved: restart them instead, and the new run uses the current version.
 
-Permissions are a separate matter. Revoked skills, connections, and actions are checked against the current grants on every tool call, whatever version a task runs (CA-5).
+Configuration is the place to manage access. Revoked skills, connections, and actions are checked against the current grants on every tool call, whatever version a task runs (CA-5).
 
 **Limits** (`limits` on the configuration, saved with the version): `maxModelTurns`, `maxTokens` (input plus output over the task, including completion checks), `maxCostUsd` (US dollars over the task; without it, `TASK_BUDGET_USD` applies, $1 by default), and `maxWorkingMinutes` (time spent working; waiting and paused time don't count). When a task reaches a limit, it is blocked with the reason, and the person who asked is told. To let it go on, a person raises the limit, which saves a new version, and moves the task to it with `POST /tasks/:taskId/version`.
 
@@ -74,3 +74,22 @@ You can save an agent on a provider that isn't ready. Its `providerReady` is `fa
 3. Add its key to `apps/api/src/config.ts`, `README.md`, and `.env.example`, and turn it on in `readyProviders()` in `apps/api/src/plugins/agent.ts`.
 
 Nothing else changes: conversations and tasks only use the `ModelClient` interface. A provider the AI SDK doesn't cover can still get its own `ModelClient`; give it its own `transcriptFormat`.
+
+## Agents pages (CA-57)
+
+Agents has name search and All, Enabled, and Disabled filters. Each row shows the current model,
+version, provider readiness, and this month's spending against budget. New agent is a separate
+page. The Researcher and QA examples fill in that form without creating an agent.
+
+One agent has Overview, Configuration, and Versions tabs. Overview shows its configuration,
+open work, profile, spending, and saved notes. Configuration lists chosen skills and connections;
+search adds entries from the full catalog, with at most five matches shown. Browse opens the
+catalog. Removing a saved choice shows the effect on open tasks and an Undo action before save.
+Version summaries compare saved versions in the browser. People can move open tasks from an old
+version to the current one; completed and cancelled tasks are excluded.
+
+An ongoing grant through `POST /agents/:id/grants` adds the chosen item to the current
+configuration as a new version. Existing tasks keep their pin until explicitly moved. Repeated
+grants for an already chosen item restore access without adding duplicate versions. This API
+supports ongoing access decisions; structured capability requests and task-only access in
+endeavors remain CA-38. Per-call action approvals still allow only the exact call shown.

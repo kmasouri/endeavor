@@ -8,7 +8,9 @@
     type ProviderStatus,
     type Skill
   } from '../api';
-  import CheckGroup from '../CheckGroup.svelte';
+  import AgentPicker from './AgentPicker.svelte';
+  import ErrorNote from '../ErrorNote.svelte';
+  import { loadAll } from './agent-data';
   import Hint from '../Hint.svelte';
   import { toLimit } from '../components';
   import { createLoad } from '../state.svelte';
@@ -17,24 +19,29 @@
   let props: {
     current?: AgentVersion | null;
     onChange: (values: ConfigValues) => void;
+    initial?: ConfigValues;
   } = $props();
   const providers = createLoad(
     () => api.get<ProviderStatus[]>('/providers'),
     () => []
   );
   const skills = createLoad(
-    () => api.list<Skill>('/skills?limit=100'),
+    () => loadAll<Skill>('/skills'),
     () => []
   );
   const connections = createLoad(
-    () => api.list<Connection>('/connections?limit=100'),
+    () => loadAll<Connection>('/connections'),
     () => []
   );
   let current = $derived(props.current);
   // Start from this version once; polling must not overwrite what someone is typing.
-  let instructions = $state(untrack(() => current?.instructions ?? ''));
-  let provider = $state<Provider>(untrack(() => current?.provider ?? 'openai'));
-  let model = $state(untrack(() => current?.model ?? ''));
+  let instructions = $state(
+    untrack(() => props.initial?.instructions ?? current?.instructions ?? '')
+  );
+  let provider = $state<Provider>(
+    untrack(() => props.initial?.provider ?? current?.provider ?? 'openai')
+  );
+  let model = $state(untrack(() => props.initial?.model ?? current?.model ?? ''));
   // Omitted lists preserve existing pins and grants until the user changes them.
   let skillIds = $state<string[] | undefined>();
   let connectionIds = $state<string[] | undefined>();
@@ -42,20 +49,15 @@
   let tokens = $state(untrack(() => String(current?.limits.maxTokens ?? '')));
   let minutes = $state(untrack(() => String(current?.limits.maxWorkingMinutes ?? '')));
   let cost = $state(untrack(() => String(current?.limits.maxCostUsd ?? '')));
-  let enabledSkills = $derived((skills.data?.data ?? []).filter((skill) => !skill.disabledAt));
-  let enabledConnections = $derived((connections.data?.data ?? []).filter((c) => !c.disabledAt));
-  let chosenSkills = $derived(
-    skillIds ??
-      enabledSkills
+
+  let originalSkills = $derived(
+    current?.skillIds ??
+      (skills.data ?? [])
         .filter((skill) => current?.skillVersionIds.includes(skill.currentVersionId ?? ''))
         .map((skill) => skill.id)
   );
+  let chosenSkills = $derived(skillIds ?? originalSkills);
   let chosenConnections = $derived(connectionIds ?? current?.connectionIds ?? []);
-  let olderSkillVersions = $derived(
-    (current?.skillVersionIds.length ?? 0) -
-      enabledSkills.filter((s) => current?.skillVersionIds.includes(s.currentVersionId ?? ''))
-        .length
-  );
   const report = () => {
     props.onChange({
       instructions,
@@ -136,57 +138,47 @@
   </Hint>
 {/if}
 
+<ErrorNote error={providers.error ?? skills.error ?? connections.error} />
 <fieldset>
-  <legend> Skills </legend>
-
-  <Hint>Skills add reusable instructions. They never select connections or grant API access.</Hint>
-
-  <CheckGroup
-    options={enabledSkills.map((skill) => ({
-      value: skill.id,
-      label: skill.name,
-      description: skill.description
-    }))}
+  <legend>Skills</legend>
+  <Hint>Reusable instructions. Connections are chosen separately.</Hint>
+  <AgentPicker
+    kind="skill"
+    options={skills.data ?? []}
     selected={chosenSkills}
-    onChange={(selected) => ((skillIds = selected), report())}
+    original={originalSkills}
+    onChange={(ids) => {
+      skillIds = ids;
+      report();
+    }}
   />
-
-  {#if olderSkillVersions > 0 && !skillIds}
-    <Hint>
-      {olderSkillVersions} chosen skill(s) are pinned to an older version. They stay as they are unless
-      you change this list.
-    </Hint>
-  {/if}
 </fieldset>
-
 <fieldset>
-  <legend> Connections </legend>
-
-  <Hint>Outside APIs the agent may call. Each call is still checked, and some need approval.</Hint>
-
+  <legend>Connections</legend>
+  <Hint>Outside APIs the agent may call. Some actions still need approval.</Hint>
   {#if current?.legacyConnectionIds?.length}
     <p class="error" role="status">
-      An older skill version listed connections that are not selected here:
-      {current.legacyConnectionIds.map((id) => connections.data?.data.find((c) => c.id === id)?.name ?? id).join(', ')}.
-      Select any you still need below. Save the configuration, then move open tasks to the new
-      version from their task page. Existing grants stay as they are; restore revoked grants
-      separately on the agent page.
+      This version relied on inherited connections: {current.legacyConnectionIds
+        .map((id) => connections.data?.find((c) => c.id === id)?.name ?? id)
+        .join(', ')}. Select any you still need, save, and move open tasks to the reviewed version.
     </p>
   {/if}
-
-  <CheckGroup
-    options={enabledConnections.map((connection) => ({
-      value: connection.id,
-      label: connection.name,
-      description: connection.description
-    }))}
+  <AgentPicker
+    kind="connection"
+    options={connections.data ?? []}
     selected={chosenConnections}
-    onChange={(selected) => ((connectionIds = selected), report())}
+    original={current?.connectionIds ?? []}
+    onChange={(ids) => {
+      connectionIds = ids;
+      report();
+    }}
   />
 </fieldset>
 
-<fieldset>
-  <legend> Limits per task </legend>
+<details>
+  <summary
+    >Limits per task <span class="caption muted">· leave blank to use the defaults</span></summary
+  >
 
   <Hint>A task stops and asks a person when it reaches one. Leave empty for the default.</Hint>
 
@@ -232,4 +224,4 @@
       />
     </label>
   </div>
-</fieldset>
+</details>

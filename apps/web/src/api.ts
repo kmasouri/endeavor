@@ -133,6 +133,7 @@ export interface AgentVersion {
   provider: Provider;
   model: string;
   skillVersionIds: string[];
+  skillIds?: string[];
   connectionIds: string[];
   legacyConnectionIds?: string[];
   limits: AgentLimits;

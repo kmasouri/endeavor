@@ -1,5 +1,6 @@
 import {
   AgentRepository,
+  AgentConfigConflictError,
   CatalogNameConflictError,
   CatalogRepository,
   HumanRepository
@@ -228,18 +229,68 @@ export class CatalogService {
     target: { type: GrantTargetType; id: string }
   ): Promise<AgentGrant> {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
-    await this.requireAgent(agentId);
+    const agent = await this.agentRepository.getById(agentId);
+    if (!agent) throw new AppError('agentNotFound', `Agent ${agentId} was not found`);
+    const current = agent.currentVersionId
+      ? await this.agentRepository.getVersion(agent.currentVersionId)
+      : null;
+    if (!current)
+      throw new AppError('validationError', 'Configure this agent before granting ongoing access');
+    let skillVersionIds = current.skillVersionIds;
+    let connectionIds = current.connectionIds;
     if (target.type === 'skill') {
-      await this.requireSkill(target.id);
+      const skill = await this.requireSkill(target.id);
+      if (skill.disabledAt || !skill.currentVersionId)
+        throw new AppError('catalogEntryUnavailable');
+      const chosen = await this.catalogRepository.getSkillVersions(skillVersionIds);
+      if (
+        !chosen.some(
+          (version) => skillVersionIds.includes(version.id) && version.skillId === skill.id
+        )
+      ) {
+        skillVersionIds = [...skillVersionIds, skill.currentVersionId];
+      }
     } else {
-      await this.requireConnection(target.id);
+      const connection = await this.requireConnection(target.id);
+      if (connection.disabledAt) throw new AppError('catalogEntryUnavailable');
+      if (!connectionIds.includes(connection.id)) connectionIds = [...connectionIds, connection.id];
+    }
+    // Ongoing access is part of configuration. Existing tasks keep their explicit version pin.
+    const changed =
+      skillVersionIds !== current.skillVersionIds || connectionIds !== current.connectionIds;
+    if (changed) {
+      await this.agentRepository
+        .addVersion(
+          agentId,
+          {
+            instructions: current.instructions,
+            provider: current.provider,
+            model: current.model,
+            limits: current.limits,
+            skillVersionIds,
+            connectionIds,
+            createdByHumanId: admin.id
+          },
+          {
+            actorId: admin.id,
+            expectedVersionId: current.id,
+            grant: [{ type: target.type, id: target.id }],
+            revoke: []
+          }
+        )
+        .catch((error: unknown) => {
+          if (error instanceof AgentConfigConflictError)
+            throw new AppError('validationError', error.message);
+          throw error;
+        });
     }
 
     const grant = await this.catalogRepository.grant({
       agentId,
       targetType: target.type,
       targetId: target.id,
-      grantedByHumanId: admin.id
+      grantedByHumanId: admin.id,
+      restoreRevoked: !changed
     });
     this.catalogLogger.onGranted(agentId, target.type, target.id);
     return grant;

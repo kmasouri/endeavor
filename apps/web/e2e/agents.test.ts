@@ -1,0 +1,237 @@
+import { expect, test, type Page } from '@playwright/test';
+
+const first = {
+  id: 'v1',
+  version: 1,
+  instructions: 'Find sources.',
+  provider: 'openai',
+  model: 'test',
+  skillVersionIds: ['sv1'],
+  skillIds: ['s1'],
+  connectionIds: ['c1'],
+  limits: {},
+  createdAt: '2026-10-24T10:00:00Z'
+};
+const latest = {
+  ...first,
+  id: 'v2',
+  version: 2,
+  instructions: 'Find sources and cite each claim.',
+  connectionIds: ['c1', 'c2']
+};
+async function mockApi(page: Page, theme = 'dark', empty = false) {
+  const agents = empty
+    ? []
+    : [
+        {
+          id: 'a1',
+          name: 'Researcher',
+          purpose: 'Researches topics and drafts briefs',
+          currentVersionId: 'v2',
+          currentVersion: latest,
+          disabledAt: null,
+          providerReady: true
+        },
+        {
+          id: 'a2',
+          name: 'QA',
+          purpose: 'Tests the staging site',
+          currentVersionId: 'v1',
+          currentVersion: first,
+          disabledAt: '2026-10-24',
+          providerReady: true
+        },
+        {
+          id: 'a3',
+          name: 'Checker',
+          purpose: 'Checks an API',
+          currentVersionId: 'v1',
+          currentVersion: first,
+          disabledAt: null,
+          providerReady: false
+        }
+      ];
+  const versions = [latest, first];
+  const tasks = [
+    {
+      id: 't1',
+      title: 'Research heat pumps',
+      ownerAgentId: 'a1',
+      agentVersionId: 'v1',
+      state: 'waiting',
+      pausedAt: null
+    }
+  ];
+  const writes: { path: string; body: Record<string, unknown> }[] = [];
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.addInitScript(() => localStorage.setItem('endeavor.actorId', 'p1'));
+  await page.route('**/*', async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    if (url.origin !== 'http://127.0.0.1:5190') return route.abort();
+    if (url.pathname.startsWith('/app/')) return route.continue();
+    const reply = (data: unknown) =>
+      route.fulfill({ contentType: 'application/json', body: JSON.stringify(data) });
+    const paged = (data: unknown[]) => ({
+      data,
+      page: { limit: 100, offset: 0, total: data.length }
+    });
+    if (req.method() !== 'GET') {
+      const body = req.postDataJSON() as Record<string, unknown>;
+      writes.push({ path: url.pathname, body });
+      if (url.pathname.endsWith('/config')) {
+        const next = { ...latest, id: 'v3', version: 3, ...body };
+        agents[0] = { ...agents[0], currentVersionId: next.id, currentVersion: next };
+        versions.unshift(next);
+        return reply({ data: agents[0] });
+      }
+      if (url.pathname === '/tasks/t1/version') tasks[0].agentVersionId = String(body.versionId);
+      if (url.pathname.endsWith('/disable')) agents[0].disabledAt = '2026-10-25';
+      if (url.pathname.endsWith('/enable')) agents[0].disabledAt = null;
+      if (url.pathname === '/agents') return reply({ data: { id: 'a1' } });
+      return reply({ data: agents[0] });
+    }
+    if (url.pathname === '/humans')
+      return reply({
+        data: [{ id: 'p1', name: 'Kayvan', preferences: { theme, timeFormat: '12h' } }]
+      });
+    if (url.pathname === '/agents') return reply(paged(agents));
+    if (url.pathname.endsWith('/costs'))
+      return reply({
+        data: {
+          thisMonth: { costUsd: 3.12, tokens: 12, unpricedCalls: 0 },
+          total: { costUsd: 5, tokens: 20, unpricedCalls: 0 },
+          budgetUsd: 20,
+          tasks: []
+        }
+      });
+    if (url.pathname.endsWith('/versions')) return reply({ data: versions });
+    if (/^\/agents\/a/.test(url.pathname) && !url.pathname.endsWith('/notes'))
+      return reply({ data: agents[0] });
+    if (url.pathname === '/tasks') return reply(paged(tasks));
+    if (url.pathname === '/providers')
+      return reply({ data: [{ provider: 'openai', ready: true, setup: 'Ready' }] });
+    if (url.pathname === '/skills')
+      return reply(
+        paged([
+          {
+            id: 's1',
+            name: 'Cite sources',
+            description: 'Citations',
+            currentVersionId: 'sv1',
+            disabledAt: null
+          },
+          ...Array.from({ length: 8 }, (_, i) => ({
+            id: `s${i + 2}`,
+            name: `Brief ${i + 1}`,
+            description: 'Plain language',
+            disabledAt: null
+          }))
+        ])
+      );
+    if (url.pathname === '/connections')
+      return reply(
+        paged([
+          { id: 'c1', name: 'Web search', description: 'Search API', disabledAt: null },
+          { id: 'c2', name: 'Docs', description: 'Read docs', disabledAt: null }
+        ])
+      );
+    return reply(paged([]));
+  });
+  return { writes, errors };
+}
+
+for (const theme of ['dark', 'light']) {
+  for (const width of [1440, 390]) {
+    test(`Agents layout and tabs in ${theme} at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      const state = await mockApi(page, theme);
+      await page.goto('/app/#/agents');
+      await expect(page.getByRole('heading', { name: 'Researcher agent' })).toBeVisible();
+      await expect(page.getByText('$3.12', { exact: false }).first()).toBeVisible();
+      await page.getByRole('button', { name: 'Disabled', exact: true }).click();
+      await expect(page.getByRole('heading', { name: 'QA agent' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Researcher agent' })).toHaveCount(0);
+      await page.getByRole('button', { name: 'All', exact: true }).click();
+      await page.getByRole('searchbox', { name: 'Search agents' }).fill('Research');
+      await expect(page.getByRole('heading', { name: 'QA agent' })).toHaveCount(0);
+      await page.screenshot({ path: `/tmp/ca57-list-${theme}-${width}.png`, fullPage: true });
+      await page.getByRole('heading', { name: 'Researcher agent' }).click();
+      await expect(page.getByRole('heading', { name: 'Current configuration' })).toBeVisible();
+      for (const tab of ['Configuration', 'Versions · 2', 'Overview']) {
+        await page.getByRole('button', { name: tab, exact: true }).click();
+        await page.screenshot({
+          path: `/tmp/ca57-${tab.split(' ')[0]}-${theme}-${width}.png`,
+          fullPage: true
+        });
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+          true
+        );
+      }
+      await page.screenshot({ path: `/tmp/ca57-${theme}-${width}.png`, fullPage: true });
+      expect(state.errors).toEqual([]);
+    });
+  }
+}
+
+test('configuration picker removal, undo, save, and version migration', async ({ page }) => {
+  const { writes, errors } = await mockApi(page);
+  await page.goto('/app/#/agents/a1');
+  await page.getByRole('button', { name: 'Configuration', exact: true }).click();
+  await page.getByRole('button', { name: 'Remove Web search', exact: true }).click();
+  await expect(
+    page.getByText('When you save, open tasks stop using it too', { exact: true })
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Undo removal of Web search' }).click();
+  await expect(
+    page.getByText('When you save, open tasks stop using it too', { exact: true })
+  ).toHaveCount(0);
+  await page.getByRole('button', { name: 'Remove Web search', exact: true }).click();
+  await page.getByRole('searchbox', { name: 'Add skills' }).fill('Brief');
+  await expect(page.getByRole('button', { name: /Brief.*Add/ })).toHaveCount(5);
+  await page.getByRole('button', { name: 'Save new version' }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0]).toEqual({
+    path: '/agents/a1/config',
+    body: expect.objectContaining({ connectionIds: ['c2'] })
+  });
+  await page.getByRole('button', { name: 'Versions · 3' }).click();
+  await page.getByRole('button', { name: 'Move 1 task to v3' }).click();
+  await expect.poll(() => writes.length).toBe(2);
+  expect(writes[1]).toEqual({
+    path: '/tasks/t1/version',
+    body: expect.objectContaining({ versionId: 'v3' })
+  });
+  expect(errors).toEqual([]);
+});
+
+test('examples only fill the separate creation form', async ({ page }) => {
+  const { writes, errors } = await mockApi(page, 'light', true);
+  await page.goto('/app/#/agents');
+  await page.getByRole('heading', { name: 'Researcher', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'New agent' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Name', exact: true })).toHaveValue('Researcher');
+  expect(writes).toEqual([]);
+  await expect(page.getByText('Limits per task', { exact: false })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('creates an agent from the narrow example form only after submit', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  const { writes, errors } = await mockApi(page);
+  await page.goto('/app/#/agents/new?example=researcher');
+  await page.getByRole('textbox', { name: 'Model', exact: true }).fill('test-model');
+  await page.getByRole('button', { name: 'Create agent', exact: true }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0]).toEqual({
+    path: '/agents',
+    body: expect.objectContaining({
+      name: 'Researcher',
+      model: 'test-model',
+      instructions: expect.stringContaining('Cite a source')
+    })
+  });
+  await expect(page.getByRole('heading', { name: 'Current configuration' })).toBeVisible();
+  expect(errors).toEqual([]);
+});

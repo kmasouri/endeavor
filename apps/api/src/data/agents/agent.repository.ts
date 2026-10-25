@@ -23,11 +23,25 @@ export class AgentNameConflictError extends Error {
   }
 }
 
+export class AgentConfigConflictError extends Error {
+  constructor() {
+    super('The configuration changed while you were editing. Reload and try again.');
+  }
+}
+
+export interface AgentAccessChanges {
+  expectedVersionId?: string;
+  grant: { type: 'skill' | 'connection'; id: string }[];
+  revoke: { type: 'skill' | 'connection'; id: string }[];
+  actorId: string;
+}
+
 export interface AgentRepository {
   // Saves the agent and its version 1 in one statement, so neither exists without the other.
   create(
     input: CreateAgentInput,
-    firstVersion: CreateAgentVersionInput
+    firstVersion: CreateAgentVersionInput,
+    access?: AgentAccessChanges
   ): Promise<{ agent: Agent; version: AgentVersion }>;
   getById(agentId: string): Promise<Agent | null>;
   getByName(name: string): Promise<Agent | null>;
@@ -44,7 +58,11 @@ export interface AgentRepository {
   setDisabled(agentId: string, disabled: boolean): Promise<Agent | null>;
 
   // Saves the next version number for the agent and makes it current.
-  addVersion(agentId: string, input: CreateAgentVersionInput): Promise<AgentVersion>;
+  addVersion(
+    agentId: string,
+    input: CreateAgentVersionInput,
+    access?: AgentAccessChanges
+  ): Promise<AgentVersion>;
   getVersion(versionId: string): Promise<AgentVersion | null>;
   getVersions(versionIds: string[]): Promise<AgentVersion[]>;
   listVersions(agentId: string): Promise<AgentVersion[]>;

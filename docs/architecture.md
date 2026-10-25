@@ -69,6 +69,14 @@ Recent endeavors and its New action appear only in the Endeavors view. Other sec
 main navigation and show their own page content. Returning to Endeavors restores the last
 accessible conversation for the selected person.
 
+Agents uses the centered page frame, a searchable list, a separate creation page, and Overview,
+Configuration, and Versions tabs. Configuration uses catalog search with chosen-item removal
+and Undo. Version summaries are computed in the browser. The API returns skill identities
+alongside pinned version IDs so an older pin remains editable. Configuration versions and their
+added or revoked grants save in one SQL statement. A checked current-version ID rejects stale
+concurrent edits. Ongoing grants add missing choices to a new configuration version. Task pins
+remain explicit; the runner checks live grants before each call. See [agents](agents.md).
+
 The web app imports `apps/web/src/design-tokens.css`, an exact copy of
 `docs/design/style-guide/tokens.css`. A test checks that the copy stays in sync, so the Docker image
 can build without the design documentation. `appearance.ts` applies the browser's
