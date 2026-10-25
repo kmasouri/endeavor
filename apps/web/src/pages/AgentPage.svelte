@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AgentActions from './AgentActions.svelte';
   import DeleteAgent from './DeleteAgent.svelte';
   import Avatar from '../Avatar.svelte';
   import {
@@ -95,10 +96,12 @@
           <p>{a.purpose}</p>
         </div>
       </div>
-      <button class="secondary" disabled={action.busy} onclick={toggle}
-        >{a.disabledAt ? 'Enable' : 'Disable'}</button
-      >
-      <button class="text-button agent-delete" disabled={action.busy} onclick={() => (deleting = true)}>Delete agent</button>
+      <AgentActions
+        disabled={Boolean(a.disabledAt)}
+        busy={action.busy}
+        onToggle={toggle}
+        onDelete={() => (deleting = true)}
+      />
     </header>
     {#if deleting}<DeleteAgent agent={a} onClose={() => (deleting = false)} />{/if}
     {#if a.disabledAt}<p class="hint">

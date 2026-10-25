@@ -99,7 +99,9 @@ endeavors remain CA-38. Per-call action approvals still allow only the exact cal
 Enable/disable controls whether an agent takes new work. Permanent deletion removes the agent
 from configuration, lists, the directory, and participant pickers, and cannot be undone.
 
-A person opens **Delete agent** on the agent page. The confirmation loads
+A person opens **Actions → Delete agent** on the agent page. Enable/disable is in the same
+header menu. The person must type the exact agent name, including capitalization, before the
+permanent-delete button becomes available. Closing the confirmation clears that input. The confirmation loads
 `GET /agents/:agentId/deletion-impact`, which returns `tasks` and `schedules` with their IDs,
 titles, and states or statuses. Cancel and Escape make no changes. The delete button stays
 unavailable until the preview loads. `DELETE /agents/:agentId` requires a human actor and returns
