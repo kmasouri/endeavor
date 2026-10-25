@@ -83,8 +83,8 @@ page. The Researcher and QA examples fill in that form without creating an agent
 
 One agent has Overview, Configuration, and Versions tabs. Overview shows its configuration,
 open work, profile, spending, and saved notes. Configuration lists chosen skills and connections;
-search adds entries from the full catalog, with at most five matches shown. Browse opens the
-catalog. Removing a saved choice shows the effect on open tasks and an Undo action before save.
+clicking or focusing the picker shows available entries before typing. Typing filters the full
+catalog, with at most five matches shown. Browse opens the catalog. Removing a saved choice shows the effect on open tasks and an Undo action before save.
 Version summaries compare saved versions in the browser. People can move open tasks from an old
 version to the current one; completed and cancelled tasks are excluded.
 
