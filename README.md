@@ -1,5 +1,21 @@
 # Endeavor
 
+```text
+    ,---,.
+  ,'  .' |                  ,---,
+,---.'   |      ,---,     ,---.'|                                  ,---.    __  ,-.
+|   |   .'  ,-+-. /  |    |   | :                          .---.  '   ,'\ ,' ,'/ /|
+:   :  |-, ,--.'|'   |    |   | |   ,---.     ,--.--.    /.  ./| /   /   |'  | |' |
+:   |  ;/||   |  ,"' |  ,--.__| |  /     \   /       \ .-' . ' |.   ; ,. :|  |   ,'
+|   :   .'|   | /  | | /   ,'   | /    /  | .--.  .-. /___/ \: |'   | |: :'  :  /
+|   |  |-,|   | |  | |.   '  /  |.    ' / |  \__\/: . .   \  ' .'   | .; :|  | '
+'   :  ;/||   | |  |/ '   ; |:  |'   ;   /|  ," .--.; |\   \   '|   :    |;  : |
+|   |    \|   | |--'  |   | '/  ''   |  / | /  /  ,.  | \   \    \   \  / |  , ;
+|   :   .'|   |/      |   :    :||   :    |;  :   .'   \ \   \ |  `----'   ---'
+|   | ,'  '---'        \   \  /   \   \  / |  ,     .-./  '---"
+`----'                  `----'     `----'   `--`---'
+```
+
 A local platform where people and configurable AI agents collaborate in shared endeavors, carry work forward, and produce results. Built with Fastify, TypeScript, Postgres, and Svelte.
 
 The web interface uses Svelte 5 and Vite in `apps/web/`. It calls the API over HTTP and is served at `/app/`.
