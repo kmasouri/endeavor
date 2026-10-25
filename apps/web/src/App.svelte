@@ -220,24 +220,26 @@
           </a>
         {/each}
       </nav>
-      <div class="sidebar-conversations">
-        <div class="row">
-          <span class="label grow">Recent</span><button class="quiet new-endeavor" aria-label="New endeavor" onclick={newEndeavor}><Icon name="plus" size={14} /> New</button>
+      {#if !section || section === 'conversations'}
+        <div class="sidebar-conversations">
+          <div class="row">
+            <span class="label grow">Recent</span><button class="quiet new-endeavor" aria-label="New endeavor" onclick={newEndeavor}><Icon name="plus" size={14} /> New</button>
+          </div>
+          <ErrorNote error={conversations.error} />
+          {#each recent as conversation (conversation.id)}
+            <a
+              class:active={section === 'conversations' && id === conversation.id}
+              href={`#/conversations/${conversation.id}`}
+              title={conversation.title}
+              aria-current={section === 'conversations' && id === conversation.id ? 'page' : undefined}
+              onclick={() => {
+                if (window.innerWidth < 700) collapsed = true;
+              }}
+              ><span class="ellipsis">{conversationChannelName(conversation.title)}</span></a
+            >
+          {/each}
         </div>
-        <ErrorNote error={conversations.error} />
-        {#each recent as conversation (conversation.id)}
-          <a
-            class:active={section === 'conversations' && id === conversation.id}
-            href={`#/conversations/${conversation.id}`}
-            title={conversation.title}
-            aria-current={section === 'conversations' && id === conversation.id ? 'page' : undefined}
-            onclick={() => {
-              if (window.innerWidth < 700) collapsed = true;
-            }}
-            ><span class="ellipsis">{conversationChannelName(conversation.title)}</span></a
-          >
-        {/each}
-      </div>
+      {/if}
       <div class="sidebar-footer">
         <div class="sidebar-profile">
           <button
