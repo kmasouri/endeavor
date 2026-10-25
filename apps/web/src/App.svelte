@@ -16,6 +16,7 @@
   import TaskPage from './pages/TaskPage.svelte';
   import TasksPage from './pages/TasksPage.svelte';
   import AgentsPage from './pages/AgentsPage.svelte';
+  import NewAgentPage from './pages/NewAgentPage.svelte';
   import CatalogsPage from './pages/CatalogsPage.svelte';
   import ConversationPage from './pages/ConversationPage.svelte';
   import NewEndeavor from './pages/NewEndeavor.svelte';
@@ -293,6 +294,8 @@
           <ApprovalsPage />
         {:else if section === 'schedules'}
           <SchedulesPage />
+        {:else if section === 'agents' && id === 'new'}
+          <NewAgentPage />
         {:else if section === 'agents' && id}
           <AgentPage agentId={id} />
         {:else if section === 'agents'}

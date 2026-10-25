@@ -3,6 +3,8 @@ import { FastifyInstance } from 'fastify';
 import { Agent, AgentLimits, AgentVersion, ModelProvider } from '../../shared/types';
 import {
   AgentNameConflictError,
+  AgentConfigConflictError,
+  AgentAccessChanges,
   AgentRepository,
   CreateAgentInput,
   CreateAgentVersionInput
@@ -28,6 +30,7 @@ interface AgentVersionRow {
   provider: ModelProvider;
   model: string;
   skill_version_ids: string[];
+  skill_ids?: string[];
   connection_ids: string[];
   legacy_connection_ids?: string[];
   limits: AgentLimits;
@@ -38,6 +41,10 @@ interface AgentVersionRow {
 // Retired skill metadata is read only to warn people about legacy configurations.
 // It is never copied into connection_ids or used to authorize a tool call.
 const VERSION_COLUMNS = `av.*, ARRAY(
+  SELECT sv.skill_id FROM endeavor.skill_versions sv
+  WHERE sv.id = ANY(av.skill_version_ids)
+  ORDER BY array_position(av.skill_version_ids, sv.id)
+) AS skill_ids, ARRAY(
   SELECT DISTINCT connection_id
   FROM endeavor.skill_versions sv,
        unnest(sv.connection_ids) AS connection_id
@@ -53,7 +60,8 @@ export class AgentPostgresRepository implements AgentRepository {
 
   async create(
     input: CreateAgentInput,
-    firstVersion: CreateAgentVersionInput
+    firstVersion: CreateAgentVersionInput,
+    access?: AgentAccessChanges
   ): Promise<{ agent: Agent; version: AgentVersion }> {
     const agentId = randomUUID();
     const versionId = randomUUID();
@@ -72,6 +80,7 @@ export class AgentPostgresRepository implements AgentRepository {
            FROM agent
            RETURNING *
          )
+         ${accessCtes('$1', '$12', 'version')}
          SELECT row_to_json(agent.*) AS agent, row_to_json(v.*) AS version
          FROM agent, LATERAL (SELECT ${VERSION_COLUMNS} FROM version av) v`,
         [
@@ -85,7 +94,8 @@ export class AgentPostgresRepository implements AgentRepository {
           firstVersion.skillVersionIds,
           firstVersion.connectionIds,
           firstVersion.createdByHumanId,
-          firstVersion.limits
+          firstVersion.limits,
+          JSON.stringify(access ?? { grant: [], revoke: [] })
         ]
       )
       .catch((error) => rethrowNameConflict(error, input.name));
@@ -203,11 +213,20 @@ export class AgentPostgresRepository implements AgentRepository {
 
   // Two saves at once can pick the same version number. The unique (agent_id, version) index
   // rejects the second, which then tries the next number.
-  async addVersion(agentId: string, input: CreateAgentVersionInput): Promise<AgentVersion> {
+  async addVersion(
+    agentId: string,
+    input: CreateAgentVersionInput,
+    access?: AgentAccessChanges
+  ): Promise<AgentVersion> {
     for (let attempt = 1; ; attempt++) {
       try {
         const result = await this.db.query<AgentVersionRow>(
-          `WITH next AS (
+          `WITH locked AS (
+             SELECT id FROM endeavor.agents
+             WHERE id = $2 AND (NOT ($10::jsonb ? 'expectedVersionId')
+               OR current_version_id = ($10::jsonb->>'expectedVersionId')::uuid)
+             FOR UPDATE
+           ), next AS (
              SELECT coalesce(max(version), 0) + 1 AS version
              FROM endeavor.agent_versions
              WHERE agent_id = $2
@@ -217,13 +236,14 @@ export class AgentPostgresRepository implements AgentRepository {
                created_by_human_id, limits
              )
              SELECT $1, $2, next.version, $3, $4, $5, $6, $7, $8, $9
-             FROM next
+             FROM next WHERE EXISTS (SELECT 1 FROM locked)
              RETURNING *
            ), current AS (
              UPDATE endeavor.agents
              SET current_version_id = (SELECT id FROM saved), updated_at = now()
-             WHERE id = $2
+             WHERE id = $2 AND EXISTS (SELECT 1 FROM saved)
            )
+           ${accessCtes('$2', '$10', 'saved')}
            SELECT ${VERSION_COLUMNS} FROM saved av`,
           [
             randomUUID(),
@@ -234,9 +254,11 @@ export class AgentPostgresRepository implements AgentRepository {
             input.skillVersionIds,
             input.connectionIds,
             input.createdByHumanId,
-            input.limits
+            input.limits,
+            JSON.stringify(access ?? { grant: [], revoke: [] })
           ]
         );
+        if (!result.rows[0]) throw new AgentConfigConflictError();
         return toAgentVersion(result.rows[0]);
       } catch (error) {
         if (attempt >= 3 || (error as { code?: string }).code !== UNIQUE_VIOLATION) {
@@ -336,10 +358,33 @@ function toAgentVersion(row: AgentVersionRow): AgentVersion {
     provider: row.provider,
     model: row.model,
     skillVersionIds: row.skill_version_ids,
+    skillIds: row.skill_ids ?? [],
     connectionIds: row.connection_ids,
     legacyConnectionIds: row.legacy_connection_ids ?? [],
     limits: row.limits ?? {},
     createdByHumanId: row.created_by_human_id,
     createdAt: row.created_at
   };
+}
+
+// The service supplies the access changes. Save them in the same statement as the version,
+// so a failed save cannot leave an item removed from configuration but still usable.
+function accessCtes(agent: string, parameter: string, saved: string): string {
+  return `, granted AS (
+    INSERT INTO endeavor.agent_grants (agent_id, target_type, target_id, granted_by_human_id)
+    SELECT ${agent}::uuid, entry->>'type', (entry->>'id')::uuid,
+           (${parameter}::jsonb->>'actorId')::uuid
+    FROM jsonb_array_elements(${parameter}::jsonb->'grant') entry
+    WHERE EXISTS (SELECT 1 FROM ${saved})
+    ON CONFLICT (agent_id, target_type, target_id) DO UPDATE
+    SET revoked_at = NULL, revoked_by_human_id = NULL,
+        granted_at = now(), granted_by_human_id = EXCLUDED.granted_by_human_id
+  ), revoked AS (
+    UPDATE endeavor.agent_grants g
+    SET revoked_at = now(), revoked_by_human_id = (${parameter}::jsonb->>'actorId')::uuid
+    FROM jsonb_array_elements(${parameter}::jsonb->'revoke') entry
+    WHERE g.agent_id = ${agent}::uuid AND g.target_type = entry->>'type'
+      AND g.target_id = (entry->>'id')::uuid AND g.revoked_at IS NULL
+      AND EXISTS (SELECT 1 FROM ${saved})
+  )`;
 }

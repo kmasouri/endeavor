@@ -53,9 +53,19 @@ const connection: Connection = {
 function setup(credentialsReady = true) {
   const catalogs = mockCatalogRepository();
   const agents = mockAgentRepository();
+  agents.addVersion.mockResolvedValue({ id: 'v2' } as never);
   const humans = mockHumanRepository();
   humans.getById.mockResolvedValue(admin);
-  agents.getById.mockResolvedValue({ id: AGENT } as never);
+  agents.getById.mockResolvedValue({ id: AGENT, currentVersionId: 'v1' } as never);
+  agents.getVersion.mockResolvedValue({
+    id: 'v1',
+    instructions: 'Work carefully',
+    provider: 'scripted',
+    model: 'test',
+    limits: {},
+    skillVersionIds: [],
+    connectionIds: []
+  } as never);
   catalogs.getSkill.mockResolvedValue(skill);
   catalogs.getSkillVersions.mockResolvedValue([skillVersion]);
   catalogs.getConnection.mockResolvedValue(connection);
@@ -200,6 +210,58 @@ describe('CatalogService', () => {
     ).rejects.toMatchObject({
       name: 'connectionNotFound'
     });
+    expect(catalogs.grant).not.toHaveBeenCalled();
+  });
+
+  it('saves ongoing connection access as a new configuration version', async () => {
+    const { service, agents, catalogs } = setup();
+    await service.grant(ADMIN, AGENT, { type: 'connection', id: 'c1' });
+    expect(agents.addVersion).toHaveBeenCalledWith(
+      AGENT,
+      expect.objectContaining({
+        connectionIds: ['c1'],
+        skillVersionIds: [],
+        createdByHumanId: ADMIN
+      }),
+      {
+        actorId: ADMIN,
+        expectedVersionId: 'v1',
+        grant: [{ type: 'connection', id: 'c1' }],
+        revoke: []
+      }
+    );
+    expect(catalogs.grant).toHaveBeenCalledWith(expect.objectContaining({ targetId: 'c1' }));
+  });
+
+  it('saves ongoing skill access without changing independent connections', async () => {
+    const { service, agents } = setup();
+    await service.grant(ADMIN, AGENT, { type: 'skill', id: 's1' });
+    expect(agents.addVersion.mock.calls[0][1]).toMatchObject({
+      skillVersionIds: ['sv1'],
+      connectionIds: []
+    });
+  });
+
+  it('does not add duplicate versions for access already chosen', async () => {
+    const { service, agents } = setup();
+    agents.getVersion.mockResolvedValue({
+      instructions: 'i',
+      provider: 'scripted',
+      model: 'm',
+      limits: {},
+      skillVersionIds: [],
+      connectionIds: ['c1']
+    } as never);
+    await service.grant(ADMIN, AGENT, { type: 'connection', id: 'c1' });
+    expect(agents.addVersion).not.toHaveBeenCalled();
+  });
+
+  it('does not grant ongoing access if its configuration save fails', async () => {
+    const { service, agents, catalogs } = setup();
+    agents.addVersion.mockRejectedValue(new Error('Save failed'));
+    await expect(service.grant(ADMIN, AGENT, { type: 'connection', id: 'c1' })).rejects.toThrow(
+      'Save failed'
+    );
     expect(catalogs.grant).not.toHaveBeenCalled();
   });
 

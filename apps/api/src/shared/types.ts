@@ -196,6 +196,8 @@ export interface AgentVersion {
   provider: ModelProvider;
   model: string;
   skillVersionIds: string[];
+  // Skill identities for display and editing, including pins to older versions.
+  skillIds?: string[];
   connectionIds: string[];
   // Historical inherited selections for human review only. Never authorize calls.
   legacyConnectionIds?: string[];
