@@ -134,3 +134,11 @@ return their original interval and `recurrence: null`. Calendar schedules return
 include `days` (ISO weekdays, Monday = 1). UTC timestamps stay ISO strings; clients format actual
 instants in their viewer's timezone and keep the source rule separate. See
 [scheduling.md](scheduling.md#calendar-recurrence) for request validation, DST rules, and migration details.
+
+## Conversation names
+
+Conversation `title` fields contain the stored channel name, such as `heat-pumps-brief`, without
+`#`. Create and rename requests normalize uppercase, spaces, and punctuation before saving;
+responses return the canonical value. Names use only `a–z`, `0–9`, and single hyphens, with no
+leading/trailing hyphen. Inputs with no letters or numbers return `validationError`. Migration 034
+normalizes existing names while preserving their IDs and links. See [conversations](conversations.md#channel-names).

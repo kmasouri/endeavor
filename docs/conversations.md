@@ -26,7 +26,8 @@ The web interface calls conversations **Endeavors**. Existing conversation URLs 
 compatible. Endeavors opens the last accessible selection saved for the current person in this
 browser, falling back to another accessible endeavor or a first-endeavor prompt. Recent displays
 Discord/Slack-style names such as `#heat-pump-brief`, with lowercase words separated by hyphens.
-Stored outcome titles, chat headings, and search result titles remain readable. The app header and Cmd/Ctrl K open search across
+The name is canonical in storage and every view; the leading `#` is a navigation decoration.
+The app header and Cmd/Ctrl K open search across
 all accessible endeavors, including older API pages. The list is refreshed when the person changes.
 
 **+ New** opens a native modal with a required name and optional searchable people and agents.
@@ -35,10 +36,29 @@ those actions until the request finishes. Errors retain the form values. Success
 selects the new endeavor, and focuses its message box. Creating an endeavor never posts a message
 or starts agent work. The full chat, Details, member controls, and history remain available.
 
-`POST /conversations` accepts `title` (1–200 characters after trimming), optional `agentIds`, and
+`POST /conversations` accepts `title` (at most 200 input characters; nonempty after normalization), optional `agentIds`, and
 optional `humanIds` (up to 20 each). It validates every chosen participant before creating the
 conversation, adds the creator automatically, and ignores duplicate selections. Only humans can
 create conversations or add members. Initial members can access the full history.
+
+### Channel names
+
+Channel names contain lowercase ASCII letters (`a–z`), numbers, and single hyphens. They have no
+leading/trailing hyphen and are stored without `#`. Creating or renaming a conversation normalizes
+spaces and punctuation to hyphens and lowercases letters. For example, `Heat Pumps: Brief!` is
+stored and returned as `heat-pumps-brief`. Input with no letters or numbers is rejected with the
+existing `validationError`. Budgets can still be updated without sending a name.
+
+The creation field applies this format while typing or pasting. A trailing separator remains
+while typing the next word, then is removed on blur or submission. The server applies the same
+rule to direct API clients. A database check protects all stored names, including writes that
+bypass the API.
+
+Migration `034_conversation_names.sql` normalizes existing titles without changing conversation
+IDs, members, messages, task links, or saved navigation. A legacy title with no usable characters
+becomes `endeavor-<conversation UUID>`. Legacy titles over 200 characters are shortened. Existing
+API clients can continue sending human-readable titles; responses now return the canonical name.
+The pilot setup reuses its canonical schedule conversation name to avoid creating duplicates.
 
 Only people add members. Adding a member with `history: "from_now"` hides older messages from them. An agent can't add anyone.
 

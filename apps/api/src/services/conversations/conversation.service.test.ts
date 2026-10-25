@@ -79,6 +79,19 @@ function setup() {
 }
 
 describe('ConversationService', () => {
+  it('persists canonical names on create and rename', async () => {
+    const { service, conversations } = setup();
+    await service.createConversation(KIM, { title: '  Heat Pumps!! Brief  ' });
+    expect(conversations.create).toHaveBeenCalledWith({
+      title: 'heat-pumps-brief',
+      createdByHumanId: KIM
+    });
+    await service.updateConversation(KIM, CONV, { title: '#New Goal!', budgetUsd: 10 });
+    expect(conversations.update).toHaveBeenCalledWith(CONV, { title: 'new-goal', budgetUsd: 10 });
+    await service.updateConversation(KIM, CONV, { budgetUsd: 20 });
+    expect(conversations.update).toHaveBeenLastCalledWith(CONV, { budgetUsd: 20 });
+  });
+
   it('adds the creator and the chosen agents as members', async () => {
     const { service, conversations } = setup();
 

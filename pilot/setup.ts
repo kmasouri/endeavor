@@ -39,7 +39,7 @@ const NAMES = {
   investigator: 'Investigator',
   wikipedia: 'Wikipedia (read-only)',
   testApi: 'Pilot test API',
-  checkConversation: 'Pilot 2: scheduled API check',
+  checkConversation: 'pilot-2-scheduled-api-check',
   checkResponsibility: 'Check the test API'
 };
 

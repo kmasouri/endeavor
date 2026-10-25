@@ -23,8 +23,8 @@ const agents = [
   }
 ];
 const initial = [
-  { id: 'heat', title: 'Heat pump brief', createdAt: '2026-10-24T10:00:00Z' },
-  { id: 'site', title: 'Website reliability', createdAt: '2026-10-23T10:00:00Z' }
+  { id: 'heat', title: 'heat-pump-brief', createdAt: '2026-10-24T10:00:00Z' },
+  { id: 'site', title: 'website-reliability', createdAt: '2026-10-23T10:00:00Z' }
 ];
 
 type Options = {
@@ -171,18 +171,18 @@ test('restores the last accessible selection, preserves links, and searches olde
   const { errors } = await mockApi(page, { saved: 'site', pages: true });
   await page.goto('/app/');
   await expect(
-    page.getByRole('heading', { name: 'Website reliability', exact: true })
+    page.getByRole('heading', { name: 'website-reliability', exact: true })
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: '#website-reliability', exact: true })
-  ).toHaveAttribute('title', 'Website reliability');
+  ).toHaveAttribute('title', 'website-reliability');
   await page.getByRole('link', { name: '#heat-pump-brief', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Heat pump brief', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   await page.getByRole('link', { name: 'Agents', exact: true }).click();
   await page.getByRole('link', { name: 'Endeavors', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Heat pump brief', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Heat pump brief', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   await page.keyboard.press('Control+k');
   const search = page.getByRole('dialog', { name: 'Find an endeavor' });
   await search.getByLabel('Search endeavors', { exact: true }).fill('website');
@@ -197,16 +197,16 @@ test('unavailable saved selection falls back, and switching people resets access
 }) => {
   await mockApi(page, { saved: 'gone' });
   await page.goto('/app/');
-  await expect(page.getByRole('heading', { name: 'Heat pump brief', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Switch person', exact: true }).click();
   await page.getByRole('button', { name: 'Lee', exact: true }).click();
   await page.getByRole('link', { name: 'Endeavors', exact: true }).click();
   await expect(
-    page.getByRole('heading', { name: 'Website reliability', exact: true })
+    page.getByRole('heading', { name: 'website-reliability', exact: true })
   ).toBeVisible();
   await page.getByRole('button', { name: 'Search endeavors', exact: true }).click();
   await expect(
-    page.getByRole('dialog').getByRole('button', { name: 'Heat pump brief', exact: true })
+    page.getByRole('dialog').getByRole('button', { name: 'heat-pump-brief', exact: true })
   ).toHaveCount(0);
 });
 
@@ -245,7 +245,17 @@ test('keeps failed values and membership, prevents duplicate saves, then selects
   const { state, errors } = await mockApi(page, { fail: true, slow: true });
   await page.goto('/app/');
   const dialog = await openNew(page);
-  await dialog.getByLabel('Name', { exact: true }).fill('  Explain heat pumps  ');
+  const name = dialog.getByLabel('Name', { exact: true });
+  await name.fill('! @ 🧪');
+  await expect(dialog.getByRole('button', { name: 'Start', exact: true })).toBeDisabled();
+  await name.fill('Heat');
+  await name.press('Space');
+  await expect(name).toHaveValue('heat-');
+  await name.pressSequentially('Pumps @ Brief!!');
+  await expect(name).toHaveValue('heat-pumps-brief-');
+  await name.press('Tab');
+  await expect(name).toHaveValue('heat-pumps-brief');
+  await name.fill('  Explain heat pumps  ');
   await dialog.getByLabel('Find people or agents').fill('research');
   await dialog.getByRole('checkbox', { name: 'Add Researcher' }).check();
   await expect(dialog.locator('.spark')).toHaveCount(1);
@@ -256,14 +266,14 @@ test('keeps failed values and membership, prevents duplicate saves, then selects
   await page.keyboard.press('Escape');
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText('Please try again.', { exact: true })).toBeVisible();
-  await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('  Explain heat pumps  ');
+  await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('explain-heat-pumps');
   await expect(dialog.getByRole('checkbox', { name: 'Add Lee' })).toBeChecked();
   expect(state.posts).toHaveLength(1);
   state.fail = false;
   await dialog.getByRole('button', { name: 'Start', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await expect(
-    page.getByRole('heading', { name: 'Explain heat pumps', exact: true })
+    page.getByRole('heading', { name: 'explain-heat-pumps', exact: true })
   ).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeFocused();
   await expect(
@@ -277,7 +287,7 @@ test('keeps failed values and membership, prevents duplicate saves, then selects
     details.getByRole('button', { name: 'Agent Researcher agent Free', exact: true })
   ).toBeVisible();
   expect(state.posts[1]).toEqual({
-    title: 'Explain heat pumps',
+    title: 'explain-heat-pumps',
     agentIds: ['agent-1'],
     humanIds: ['person-2']
   });
@@ -297,14 +307,14 @@ for (const theme of ['dark', 'light'] as const) {
         page.getByRole('heading', { name: 'What do you want to accomplish?' })
       ).toBeVisible();
       const dialog = await openNew(page);
-      await dialog.getByLabel('Name', { exact: true }).fill('A readable outcome');
+      await dialog.getByLabel('Name', { exact: true }).fill('A readable outcome ');
       await expect(dialog.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
       await page.screenshot({ path: `/tmp/ca52-${theme}-${width}-dialog.png` });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true
       );
       expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-      await dialog.getByRole('button', { name: 'Start', exact: true }).click();
+      await dialog.getByLabel('Name', { exact: true }).press('Enter');
       await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeFocused();
       await page.getByRole('button', { name: 'Search endeavors', exact: true }).click();
       await page
@@ -320,7 +330,7 @@ for (const theme of ['dark', 'light'] as const) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true
       );
-      expect(state.posts[0]).toEqual({ title: 'A readable outcome', agentIds: [], humanIds: [] });
+      expect(state.posts[0]).toEqual({ title: 'a-readable-outcome', agentIds: [], humanIds: [] });
       expect(errors).toEqual([]);
     });
   }
