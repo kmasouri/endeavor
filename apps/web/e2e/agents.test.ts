@@ -19,7 +19,7 @@ const latest = {
   instructions: 'Find sources and cite each claim.',
   connectionIds: ['c1', 'c2']
 };
-async function mockApi(page: Page, theme = 'dark', empty = false) {
+async function mockApi(page: Page, theme = 'dark', empty = false, legacy = false) {
   const agents = empty
     ? []
     : [
@@ -28,7 +28,19 @@ async function mockApi(page: Page, theme = 'dark', empty = false) {
           name: 'Researcher',
           purpose: 'Researches topics and drafts briefs',
           currentVersionId: 'v2',
-          currentVersion: latest,
+          currentVersion: legacy
+            ? {
+                ...latest,
+                connectionIds: [],
+                legacyConnectionIds: ['c1'],
+                limits: {
+                  maxModelTurns: 12,
+                  maxTokens: 1000,
+                  maxCostUsd: 0.5,
+                  maxWorkingMinutes: 10
+                }
+              }
+            : latest,
           disabledAt: null,
           providerReady: true
         },
@@ -115,7 +127,12 @@ async function mockApi(page: Page, theme = 'dark', empty = false) {
       return reply({ data: agents[0] });
     if (url.pathname === '/tasks') return reply(paged(tasks));
     if (url.pathname === '/providers')
-      return reply({ data: [{ provider: 'openai', ready: true, setup: 'Ready' }] });
+      return reply({
+        data: [
+          { provider: 'openai', ready: true, setup: 'Ready' },
+          { provider: 'scripted', ready: true, setup: 'Test provider' }
+        ]
+      });
     if (url.pathname === '/skills')
       return reply(
         paged([
@@ -368,4 +385,92 @@ for (const theme of ['dark', 'light']) {
       ).toBeFocused();
     });
   }
+}
+
+for (const legacy of [false, true]) {
+  test(`discard leaves configuration and restores saved values with legacy connections ${legacy}`, async ({
+    page
+  }) => {
+    const { writes, errors } = await mockApi(page, 'dark', false, legacy);
+    await page.clock.install();
+    await page.setViewportSize({ width: legacy ? 390 : 1440, height: 1000 });
+    await page.goto('/app/#/agents/a1');
+    const configuration = page.getByRole('button', { name: 'Configuration', exact: true });
+    const overview = page.getByRole('button', { name: 'Overview', exact: true });
+    await configuration.click();
+    const form = page.locator('form.agent-form');
+    const instructions = form.getByRole('textbox', { name: /^Instructions/ });
+    const model = form.getByRole('textbox', { name: 'Model', exact: true });
+    const provider = form.getByRole('combobox', { name: 'Provider', exact: true });
+    const limits = ['Model turns', 'Tokens', 'Cost, $', 'Working minutes'];
+    await instructions.fill('Unsaved instructions');
+    await model.fill('unsaved-model');
+    await provider.selectOption('scripted');
+    await form.getByRole('button', { name: 'Remove Cite sources', exact: true }).click();
+    await form.getByRole('searchbox', { name: 'Add skills' }).fill('Brief 1');
+    await form.getByRole('region', { name: 'skill matches' }).getByRole('button').click();
+    if (legacy) {
+      await expect(form.getByRole('status')).toContainText('inherited connections: Web search');
+      await form.getByRole('searchbox', { name: 'Add connections' }).fill('Web');
+      await form.getByRole('region', { name: 'connection matches' }).getByRole('button').click();
+    } else {
+      await form.getByRole('button', { name: 'Remove Web search', exact: true }).click();
+    }
+    await form.getByText('Limits per task', { exact: false }).click();
+    for (const label of limits) {
+      await form.getByRole('textbox', { name: label, exact: true }).fill('99');
+    }
+    await form.getByRole('button', { name: 'Discard changes', exact: true }).click();
+    await expect(overview).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('heading', { name: 'Current configuration' })).toBeVisible();
+    await expect(form).toHaveCount(0);
+    await page.screenshot({
+      path: `/tmp/ca67-discard-${legacy ? 'legacy' : 'explicit'}.png`,
+      fullPage: true
+    });
+    expect(writes).toEqual([]);
+
+    await configuration.click();
+    const assertSaved = async () => {
+      await expect(instructions).toHaveValue(latest.instructions);
+      await expect(model).toHaveValue(latest.model);
+      await expect(provider).toHaveValue(latest.provider);
+      await expect(
+        form.getByRole('button', { name: 'Remove Cite sources', exact: true })
+      ).toBeVisible();
+      await expect(form.getByRole('button', { name: 'Remove Brief 1', exact: true })).toHaveCount(
+        0
+      );
+      await expect(form.getByRole('button', { name: /Undo removal/ })).toHaveCount(0);
+      await expect(form.getByRole('searchbox', { name: 'Add skills' })).toHaveValue('');
+      await expect(form.getByRole('searchbox', { name: 'Add connections' })).toHaveValue('');
+      if (legacy) {
+        await expect(form.getByText('No connections chosen.', { exact: true })).toBeVisible();
+        await expect(form.getByRole('status')).toContainText('inherited connections: Web search');
+      } else {
+        for (const name of ['Web search', 'Docs']) {
+          await expect(
+            form.getByRole('button', { name: `Remove ${name}`, exact: true })
+          ).toBeVisible();
+        }
+      }
+      for (const [i, label] of limits.entries()) {
+        await expect(form.getByRole('textbox', { name: label, exact: true })).toHaveValue(
+          legacy ? ['12', '1000', '0.5', '10'][i] : ''
+        );
+      }
+    };
+    await form.getByText('Limits per task', { exact: false }).click();
+    await assertSaved();
+    // A parent update from task polling must not revive the discarded draft.
+    const poll = page.waitForResponse((response) => new URL(response.url()).pathname === '/tasks');
+    await page.clock.fastForward(10_001);
+    await poll;
+    await assertSaved();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true
+    );
+    expect(writes).toEqual([]);
+    expect(errors).toEqual([]);
+  });
 }

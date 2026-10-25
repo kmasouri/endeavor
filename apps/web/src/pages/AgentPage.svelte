@@ -45,7 +45,6 @@
   let deleting = $state(false);
   let tab = $state('Overview');
   let editingProfile = $state(false);
-  let configRevision = $state(0);
   const action = createAction();
   const reloadAll = () => {
     agent.reload();
@@ -222,9 +221,9 @@
         <button class="secondary agent-delete" disabled={action.busy} onclick={() => (deleting = true)}>Delete agent</button>
       </section>
     {:else if tab === 'Configuration'}
-      {#key `${a.currentVersionId}:${configRevision}`}<NewVersion
+      {#key a.currentVersionId}<NewVersion
           agent={a}
-          onDiscard={() => configRevision++}
+          onDiscard={() => (tab = 'Overview')}
           onSaved={reloadAll}
         />{/key}
     {:else}
