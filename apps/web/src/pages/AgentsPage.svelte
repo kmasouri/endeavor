@@ -34,7 +34,7 @@
   );
 </script>
 
-<div class="agents-page">
+<div class="agents-page creation-page">
   <PageHeader
     title="Agents"
     subtitle="Participants you configure to do work in endeavors. No agent is in charge of another."

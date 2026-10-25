@@ -72,7 +72,7 @@ test('create an MCP connection, discover tools, save access, and review exact ar
   });
 
   await page.goto('/app/#/catalogs?tab=connections');
-  await page.locator('#new-connections summary').click();
+  await page.getByRole('button', { name: 'New connection', exact: true }).click();
   const form = page
     .locator('form')
     .filter({ has: page.getByRole('button', { name: 'Create connection', exact: true }) });

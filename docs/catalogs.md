@@ -2,6 +2,15 @@
 
 People keep two shared catalogs. Being in a catalog gives no agent access. Choosing an entry in an agent configuration grants access; removing it and saving revokes access. The runner enforces these choices through per-agent grants.
 
+## Creating catalog entries
+
+The catalog's **New skill** and **New connection** buttons open dedicated pages at
+`#/catalogs/skills/new` and `#/catalogs/connections/new`. They share the new-agent page's
+layout: a back link, heading, grouped fields, and a sticky Cancel/Create footer.
+Cancel and successful saves return to the matching catalog tab. Failed saves keep the
+entered values and show the error on the form. Connection creation includes Profile,
+Authentication, and Access sections for both HTTP APIs and MCP servers.
+
 ## Skills
 
 A skill is a named piece of guidance for a kind of work, such as "Billing lookup: use the Billing connection for invoice counts". Each skill has versions that never change once saved. A version contains instructions only. Mentioning an outside service in those instructions grants no access.

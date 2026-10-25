@@ -3,15 +3,12 @@
   import CheckGroup from '../CheckGroup.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
-  import { createAction } from '../state.svelte';
+  import PageHeader from '../PageHeader.svelte';
+  import './creation.css';
+  import { createAction, go } from '../state.svelte';
 
   const methodOptions = HTTP_METHODS.map((method) => ({ value: method, label: method }));
 
-  let {
-    onCreated
-  }: {
-    onCreated: () => void;
-  } = $props();
   let kind = $state<'http' | 'mcp'>('http');
   let tools = $state('');
   let freeTools = $state('');
@@ -51,110 +48,113 @@
       )
       .then((ok) => {
         if (ok) {
-          name = '';
-          description = '';
-          baseUrl = '';
-          credential = '';
-          tools = '';
-          freeTools = '';
-          onCreated();
+          go('/catalogs?tab=connections');
         }
       });
   };
 </script>
 
-<details>
-  <summary> New connection </summary>
+<div class="creation-page">
+  <a class="creation-back" href="#/catalogs?tab=connections">← Connections</a>
+  <PageHeader
+    title="New connection"
+    subtitle="Connect an HTTP API or MCP server and choose what agents can call."
+  />
 
-  <form onsubmit={create} class="stack">
-    <label>
-      Connection type
-      <select bind:value={kind}>
-        <option value="http">HTTP API</option>
-        <option value="mcp">MCP server</option>
-      </select>
-    </label>
-    <div class="grid2">
+  <form onsubmit={create} class="creation-form">
+    <fieldset class="stack">
+      <legend>Profile</legend>
       <label>
-        Name
-
-        <input bind:value={name} required />
+        Connection type
+        <select bind:value={kind}>
+          <option value="http">HTTP API</option>
+          <option value="mcp">MCP server</option>
+        </select>
       </label>
-
-      <label>
-        {kind === 'mcp' ? 'MCP endpoint URL' : 'Base URL'}
-
-        <input type="url" bind:value={baseUrl} placeholder="https://api.example.com" required />
-      </label>
-    </div>
-
-    <label>
-      Description
-
-      <input bind:value={description} required />
-    </label>
-
-    <div class="grid2">
-      <label>
-        Credential header
-
-        <input bind:value={authHeader} />
-      </label>
-
-      <label>
-        Credential
-
-        <input type="password" autocomplete="off" bind:value={credential} placeholder="Bearer …" />
-      </label>
-    </div>
-
-    <Hint>The credential is encrypted when saved, and never shown again, not even to you.</Hint>
-
-    {#if kind === 'http'}
       <div class="grid2">
-        <fieldset>
-          <legend> Allowed methods </legend>
+        <label>
+          Name
 
-          <CheckGroup
-            options={methodOptions}
-            selected={allowedMethods}
-            onChange={(value) => (allowedMethods = value)}
-          />
-        </fieldset>
+          <input bind:value={name} required />
+        </label>
 
-        <fieldset>
-          <legend> Need a person's approval </legend>
+        <label>
+          {kind === 'mcp' ? 'MCP endpoint URL' : 'Base URL'}
 
-          <CheckGroup
-            options={methodOptions.filter((o) => allowedMethods.includes(o.value))}
-            selected={approvalMethods}
-            onChange={(value) => (approvalMethods = value)}
-          />
-        </fieldset>
+          <input type="url" bind:value={baseUrl} placeholder="https://api.example.com" required />
+        </label>
       </div>
 
       <label>
-        Allowed paths
+        Description
 
-        <Hint>Path prefixes agents may call, one per line, like /v1/issues.</Hint>
-
-        <textarea bind:value={prefixes} rows={2}></textarea>
+        <input bind:value={description} required />
       </label>
+    </fieldset>
+    <fieldset class="stack">
+      <legend>Authentication</legend>
+      <div class="grid2">
+        <label>
+          Credential header
 
-    {:else}
-      <label>
-        Allowed tools
-        <Hint>Exact MCP tool names, one per line. You can discover tools after saving.</Hint>
-        <textarea bind:value={tools} rows={3}></textarea>
-      </label>
-      <label>
-        Tools that can run without approval
-        <Hint>Leave empty to require approval for every tool. Only include allowed tools you trust to run unattended.</Hint>
-        <textarea bind:value={freeTools} rows={2}></textarea>
-      </label>
-    {/if}
-    <button disabled={action.busy}> Create connection </button>
+          <input bind:value={authHeader} />
+        </label>
 
+        <label>
+          Credential
+
+          <input type="password" autocomplete="off" bind:value={credential} placeholder="Bearer …" />
+        </label>
+      </div>
+
+      <Hint>The credential is encrypted when saved, and never shown again, not even to you.</Hint>
+    </fieldset>
+    <fieldset class="stack">
+      <legend>Access</legend>
+      {#if kind === 'http'}
+        <div class="grid2">
+          <fieldset class="method-group">
+            <legend>Allowed methods</legend>
+            <CheckGroup
+              options={methodOptions}
+              selected={allowedMethods}
+              onChange={(value) => (allowedMethods = value)}
+            />
+          </fieldset>
+          <fieldset class="method-group">
+            <legend>Need a person's approval</legend>
+            <CheckGroup
+              options={methodOptions.filter((o) => allowedMethods.includes(o.value))}
+              selected={approvalMethods}
+              onChange={(value) => (approvalMethods = value)}
+            />
+          </fieldset>
+        </div>
+        <label>
+          Allowed paths
+          <Hint>Path prefixes agents may call, one per line, like /v1/issues.</Hint>
+          <textarea bind:value={prefixes} rows={2}></textarea>
+        </label>
+      {:else}
+        <label>
+          Allowed tools
+          <Hint>Exact MCP tool names, one per line. You can discover tools after saving.</Hint>
+          <textarea bind:value={tools} rows={3}></textarea>
+        </label>
+        <label>
+          Tools that can run without approval
+          <Hint>
+            Leave empty to require approval for every tool. Only include allowed tools you trust to
+            run unattended.
+          </Hint>
+          <textarea bind:value={freeTools} rows={2}></textarea>
+        </label>
+      {/if}
+    </fieldset>
     <ErrorNote error={action.error} />
+    <div class="savebar">
+      <a href="#/catalogs?tab=connections">Cancel</a>
+      <button disabled={action.busy || !name.trim() || !description.trim() || !baseUrl.trim()}>Create connection</button>
+    </div>
   </form>
-</details>
+</div>

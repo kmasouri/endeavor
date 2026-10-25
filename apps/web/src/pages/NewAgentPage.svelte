@@ -40,13 +40,13 @@
   };
 </script>
 
-<div class="agents-page">
-  <a class="agent-back" href="#/agents">← Agents</a>
+<div class="agents-page creation-page">
+  <a class="creation-back" href="#/agents">← Agents</a>
   <PageHeader
     title="New agent"
     subtitle="Give it a purpose, instructions, and a model. You can change these later."
   />
-  <form class="agent-form" onsubmit={create}>
+  <form class="creation-form" onsubmit={create}>
     <fieldset class="stack">
       <legend>Profile</legend><label>Name<input bind:value={name} required /></label><label
         >Purpose<input bind:value={purpose} required /></label

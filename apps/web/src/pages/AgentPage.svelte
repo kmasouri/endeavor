@@ -79,8 +79,8 @@
     ids.map((id) => entries?.find((entry) => entry.id === id)?.name ?? id).join(', ') || 'None';
 </script>
 
-<div class="agents-page">
-  <a class="agent-back" href="#/agents">← Agents</a>
+<div class="agents-page creation-page">
+  <a class="creation-back" href="#/agents">← Agents</a>
   <ErrorNote error={agent.error} />
   {#if !a && !agent.error}<p>Loading agent…</p>{:else if a}
     <header class="agent-detail-header">

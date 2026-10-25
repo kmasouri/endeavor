@@ -3,14 +3,12 @@
   import { api, type Connection, type Skill } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
-  import { createLoad } from '../state.svelte';
+  import { createLoad, go } from '../state.svelte';
   import SkillRow from './SkillRow.svelte';
-  import NewSkill from './NewSkill.svelte';
   import ConnectionRow from './ConnectionRow.svelte';
-  import NewConnection from './NewConnection.svelte';
   import './catalogs.css';
 
-  let tab = $state<'skills' | 'connections'>(
+  const tab = $state<'skills' | 'connections'>(
     new URLSearchParams(window.location.hash.split('?')[1]).get('tab') === 'connections'
       ? 'connections'
       : 'skills'
@@ -31,14 +29,11 @@
   title="Skills and connections"
   subtitle="Reusable instructions and connections for your agents."
 >
-  {#snippet actions()}<button
-      onclick={() => {
-        const area = document.getElementById(`new-${tab}`);
-        const disclosure = area?.querySelector('details');
-        if (disclosure) disclosure.open = true;
-        area?.scrollIntoView({ block: 'start', behavior: 'smooth' });
-      }}>New {tab === 'skills' ? 'skill' : 'connection'}</button
-    >{/snippet}
+  {#snippet actions()}
+    <button onclick={() => go(`/catalogs/${tab}/new`)}>
+      New {tab === 'skills' ? 'skill' : 'connection'}
+    </button>
+  {/snippet}
 </PageHeader>
 
 <div class="catalogs narrow wide">
@@ -46,12 +41,12 @@
     <button
       class:active={tab === 'skills'}
       aria-current={tab === 'skills' ? 'page' : undefined}
-      onclick={() => (tab = 'skills')}>Skills</button
+      onclick={() => go('/catalogs?tab=skills')}>Skills</button
     >
     <button
       class:active={tab === 'connections'}
       aria-current={tab === 'connections' ? 'page' : undefined}
-      onclick={() => (tab = 'connections')}>Connections</button
+      onclick={() => go('/catalogs?tab=connections')}>Connections</button
     >
   </nav>
 
@@ -71,8 +66,6 @@
           <SkillRow {skill} onChanged={skills.reload} />
         {/each}
       </ul>
-
-      <div id="new-skills"><NewSkill onCreated={skills.reload} /></div>
     </section>
   {:else}
     <section class="panel">
@@ -90,8 +83,6 @@
           <ConnectionRow {connection} onChanged={connections.reload} />
         {/each}
       </ul>
-
-      <div id="new-connections"><NewConnection onCreated={connections.reload} /></div>
     </section>
   {/if}
 </div>
