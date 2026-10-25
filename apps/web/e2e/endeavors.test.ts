@@ -173,6 +173,12 @@ for (const theme of ['dark', 'light'] as const) {
     const width = () => sidebar.evaluate((element) => element.getBoundingClientRect().width);
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
     await expect.poll(width).toBe(68);
+    const iconOffsets = await sidebar.locator('nav a').evaluateAll((links) => links.map((link) => {
+      const bounds = link.getBoundingClientRect();
+      const icon = link.querySelector('svg')!.getBoundingClientRect();
+      return Math.abs((icon.left + icon.right - bounds.left - bounds.right) / 2);
+    }));
+    expect(iconOffsets.every((offset) => offset < 1)).toBe(true);
     const agents = sidebar.getByRole('link', { name: 'Agents', exact: true });
     await expect(agents.locator('svg')).toBeVisible();
     await expect(agents).toHaveAttribute('href', '#/agents');
