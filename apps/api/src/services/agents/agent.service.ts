@@ -61,6 +61,21 @@ export class AgentService {
     private readonly agentLogger: AgentLogger
   ) {}
 
+  async deletionImpact(actorId: string, agentId: string) {
+    requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
+    await this.requireAgent(agentId);
+    return this.agentRepository.deletionImpact(agentId);
+  }
+
+  async deleteAgent(actorId: string, agentId: string): Promise<{ deleted: true }> {
+    requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
+    if (!(await this.agentRepository.delete(agentId, actorId))) {
+      throw new AppError('agentNotFound', `Agent ${agentId} was not found`);
+    }
+    this.agentLogger.onAgentDeleted(agentId);
+    return { deleted: true };
+  }
+
   async createAgent(
     actorId: string,
     input: { name: string; purpose: string } & AgentConfigInput
@@ -336,7 +351,7 @@ export class AgentService {
 
   private async requireAgent(agentId: string): Promise<Agent> {
     const agent = await this.agentRepository.getById(agentId);
-    if (!agent) {
+    if (!agent || agent.deletedAt) {
       throw new AppError('agentNotFound', `Agent ${agentId} was not found`);
     }
     return agent;

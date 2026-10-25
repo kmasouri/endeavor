@@ -36,7 +36,16 @@ export interface AgentAccessChanges {
   actorId: string;
 }
 
+export interface AgentDeletionImpact {
+  tasks: { id: string; title: string; state: string }[];
+  schedules: { id: string; title: string; status: string }[];
+}
+
 export interface AgentRepository {
+  deletionImpact(agentId: string): Promise<AgentDeletionImpact>;
+  delete(agentId: string, actorId: string): Promise<boolean>;
+  // Holds a shared database lock until the call finishes. Deletion waits for these calls.
+  acquireExecution(agentId: string): Promise<(() => Promise<void>) | null>;
   // Saves the agent and its version 1 in one statement, so neither exists without the other.
   create(
     input: CreateAgentInput,

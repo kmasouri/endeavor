@@ -142,3 +142,12 @@ Conversation `title` fields contain the stored channel name, such as `heat-pumps
 responses return the canonical value. Names use only `a–z`, `0–9`, and single hyphens, with no
 leading/trailing hyphen. Inputs with no letters or numbers return `validationError`. Migration 034
 normalizes existing names while preserving their IDs and links. See [conversations](conversations.md#channel-names).
+
+### Agent deletion
+
+`GET /agents/:agentId/deletion-impact` returns `success({ tasks, schedules })`. Tasks contain
+`id`, `title`, and `state`; schedules contain `id`, `title`, and `status`. Only open tasks and
+uncancelled schedules appear. Both this preview and deletion require a human actor.
+
+`DELETE /agents/:agentId` returns `success({ deleted: true })` with status 200. Missing or already
+deleted agents return `agentNotFound`. Shared history and costs remain readable.

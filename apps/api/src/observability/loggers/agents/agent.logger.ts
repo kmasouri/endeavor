@@ -4,6 +4,13 @@ import { currentLogger } from '../request-logger';
 export class AgentLogger {
   constructor(private readonly logger: FastifyBaseLogger) {}
 
+  onAgentDeleted(agentId: string): void {
+    currentLogger(this.logger).info(
+      { event: 'agent.deleted', agentId },
+      'agent permanently deleted'
+    );
+  }
+
   onAgentCreated(agentId: string): void {
     currentLogger(this.logger).info({ event: 'agent.created', agentId }, 'agent created');
   }

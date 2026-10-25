@@ -1,6 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import {
   createAgentHandler,
+  agentDeletionImpactHandler,
+  deleteAgentHandler,
   disableAgentHandler,
   enableAgentHandler,
   getAgentHandler,
@@ -22,6 +24,33 @@ import {
 } from '../../schemas';
 
 export async function agentsRouter(fastifyInstance: FastifyInstance): Promise<void> {
+  fastifyInstance.get(
+    '/agents/:agentId/deletion-impact',
+    {
+      schema: {
+        description:
+          'Show the open tasks and schedules permanent deletion will cancel. Humans only.',
+        tags: ['agents'],
+        headers: actorHeadersSchema,
+        params: agentParamsSchema
+      }
+    },
+    agentDeletionImpactHandler
+  );
+  fastifyInstance.delete(
+    '/agents/:agentId',
+    {
+      schema: {
+        description:
+          'Permanently delete an agent, cancel its work, and preserve shared history. Humans only.',
+        tags: ['agents'],
+        headers: actorHeadersSchema,
+        params: agentParamsSchema
+      }
+    },
+    deleteAgentHandler
+  );
+
   fastifyInstance.get(
     '/providers',
     {

@@ -6,6 +6,7 @@ import {
   AgentConfigConflictError,
   AgentAccessChanges,
   AgentRepository,
+  AgentDeletionImpact,
   CreateAgentInput,
   CreateAgentVersionInput
 } from './agent.repository';
@@ -16,6 +17,7 @@ interface AgentRow {
   purpose: string;
   current_version_id: string | null;
   disabled_at: Date | null;
+  deleted_at: Date | null;
   // numeric comes back from Postgres as a string.
   monthly_budget_usd: string | null;
   created_at: Date;
@@ -57,6 +59,136 @@ const UNIQUE_VIOLATION = '23505';
 
 export class AgentPostgresRepository implements AgentRepository {
   constructor(private readonly db: FastifyInstance['pg']) {}
+
+  async deletionImpact(agentId: string): Promise<AgentDeletionImpact> {
+    const [tasks, schedules] = await Promise.all([
+      this.db.query<{ id: string; title: string; state: string }>(
+        `SELECT id, title, state FROM endeavor.tasks
+         WHERE owner_agent_id = $1 AND state IN ('working', 'waiting', 'blocked')
+         ORDER BY created_at, id`,
+        [agentId]
+      ),
+      this.db.query<{ id: string; title: string; status: string }>(
+        `SELECT id, title, status FROM endeavor.responsibilities
+         WHERE agent_id = $1 AND status <> 'cancelled' ORDER BY created_at, id`,
+        [agentId]
+      )
+    ]);
+    return { tasks: tasks.rows, schedules: schedules.rows };
+  }
+
+  async acquireExecution(agentId: string): Promise<(() => Promise<void>) | null> {
+    const client = await this.db.connect();
+    try {
+      const lock = await client.query<{ held: boolean }>(
+        `SELECT pg_try_advisory_lock_shared(hashtextextended($1, 63)) AS held`,
+        [agentId]
+      );
+      const held = lock.rows[0].held;
+      const agent = held
+        ? await client.query(
+            `SELECT id FROM endeavor.agents WHERE id = $1 AND deleted_at IS NULL`,
+            [agentId]
+          )
+        : null;
+      if (!agent?.rows.length) {
+        if (held)
+          await client.query(`SELECT pg_advisory_unlock_shared(hashtextextended($1, 63))`, [
+            agentId
+          ]);
+        client.release();
+        return null;
+      }
+      return async () => {
+        try {
+          await client.query(`SELECT pg_advisory_unlock_shared(hashtextextended($1, 63))`, [
+            agentId
+          ]);
+          client.release();
+        } catch (error) {
+          client.release(true);
+          throw error;
+        }
+      };
+    } catch (error) {
+      // Destroy the connection so a failed query cannot leave a session lock behind.
+      client.release(true);
+      throw error;
+    }
+  }
+
+  async delete(agentId: string, actorId: string): Promise<boolean> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      // Wait for already-started model and tool calls before deletion takes effect.
+      await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 63))`, [agentId]);
+      const deleted = await client.query(
+        `UPDATE endeavor.agents SET deleted_at = now(), disabled_at = coalesce(disabled_at, now()),
+           name = 'Deleted agent ' || id::text, purpose = '', current_version_id = NULL,
+           monthly_budget_usd = NULL, updated_at = now()
+         WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
+        [agentId]
+      );
+      if (!deleted.rows.length) {
+        await client.query('COMMIT');
+        return false;
+      }
+      const tasks = await client.query<{ id: string; previous_state: string }>(
+        `UPDATE endeavor.tasks t SET state = 'cancelled', state_reason = 'Agent permanently deleted',
+           paused_at = NULL, lease_owner = NULL, lease_expires_at = NULL,
+           finished_at = now(), updated_at = now()
+         FROM (SELECT id, state FROM endeavor.tasks
+           WHERE owner_agent_id = $1 AND state IN ('working', 'waiting', 'blocked') FOR UPDATE) original
+         WHERE t.id = original.id RETURNING t.id, original.state AS previous_state`,
+        [agentId]
+      );
+      const ids = tasks.rows.map((task) => task.id);
+      await client.query(
+        `INSERT INTO endeavor.task_events (task_id, type, actor_type, actor_id, data)
+         SELECT cancelled.id, 'task.state.changed', 'human', $2::uuid,
+           jsonb_build_object('from', cancelled.state, 'to', 'cancelled',
+             'reason', 'Agent permanently deleted')
+         FROM unnest($1::uuid[], $3::text[]) AS cancelled(id, state)`,
+        [ids, actorId, tasks.rows.map((task) => task.previous_state)]
+      );
+      await client.query(
+        `UPDATE endeavor.task_waits SET resolved_at = now(), resolution = '{"cancelled":true}'::jsonb
+         WHERE task_id = ANY($1::uuid[]) AND resolved_at IS NULL`,
+        [ids]
+      );
+      await client.query(
+        `UPDATE endeavor.responsibilities SET status = 'cancelled', catch_up_slot = NULL,
+           catch_up_missed = NULL, updated_at = now() WHERE agent_id = $1`,
+        [agentId]
+      );
+      await client.query(
+        `UPDATE endeavor.agent_grants SET revoked_at = coalesce(revoked_at, now()),
+           revoked_by_human_id = coalesce(revoked_by_human_id, $2)
+         WHERE agent_id = $1`,
+        [agentId, actorId]
+      );
+      await client.query(
+        `UPDATE endeavor.approvals SET status = 'rejected', decided_by_human_id = $2,
+           decided_at = now(), reason = 'Agent permanently deleted'
+         WHERE agent_id = $1 AND status = 'pending'`,
+        [agentId, actorId]
+      );
+      await client.query(
+        `UPDATE endeavor.approvals SET executed_at = now(),
+           result = '{"status":null,"body":"","truncated":false,"error":"Agent permanently deleted"}'::jsonb
+         WHERE agent_id = $1 AND status = 'approved' AND executed_at IS NULL`,
+        [agentId]
+      );
+      await client.query('COMMIT');
+      return true;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
 
   async create(
     input: CreateAgentInput,
@@ -108,7 +240,7 @@ export class AgentPostgresRepository implements AgentRepository {
     const result = await this.db.query<AgentRow>(
       `SELECT *
        FROM endeavor.agents
-       WHERE lower(name) = lower($1)`,
+       WHERE lower(name) = lower($1) AND deleted_at IS NULL`,
       [name]
     );
 
@@ -119,7 +251,7 @@ export class AgentPostgresRepository implements AgentRepository {
     const result = await this.db.query<AgentRow>(
       `SELECT *
        FROM endeavor.agents
-       WHERE $1::boolean OR disabled_at IS NULL
+       WHERE deleted_at IS NULL AND ($1::boolean OR disabled_at IS NULL)
        ORDER BY lower(name)
        LIMIT $2 OFFSET $3`,
       [input.includeDisabled, input.limit, input.offset]
@@ -136,7 +268,7 @@ export class AgentPostgresRepository implements AgentRepository {
     const result = await this.db.query<AgentRow>(
       `SELECT *
        FROM endeavor.agents
-       WHERE disabled_at IS NULL
+       WHERE deleted_at IS NULL AND disabled_at IS NULL
          AND current_version_id IS NOT NULL
          AND NOT (id = ANY($1::uuid[]))
        ORDER BY lower(name)
@@ -151,7 +283,7 @@ export class AgentPostgresRepository implements AgentRepository {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
        FROM endeavor.agents
-       WHERE disabled_at IS NULL
+       WHERE deleted_at IS NULL AND disabled_at IS NULL
          AND current_version_id IS NOT NULL
          AND NOT (id = ANY($1::uuid[]))`,
       [input.excludeIds]
@@ -164,7 +296,7 @@ export class AgentPostgresRepository implements AgentRepository {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
        FROM endeavor.agents
-       WHERE $1::boolean OR disabled_at IS NULL`,
+       WHERE deleted_at IS NULL AND ($1::boolean OR disabled_at IS NULL)`,
       [input.includeDisabled]
     );
 
@@ -183,7 +315,7 @@ export class AgentPostgresRepository implements AgentRepository {
            purpose = coalesce($3, purpose),
            monthly_budget_usd = CASE WHEN $4 THEN $5 ELSE monthly_budget_usd END,
            updated_at = now()
-       WHERE id = $1
+       WHERE id = $1 AND deleted_at IS NULL
        RETURNING *`,
         [
           agentId,
@@ -203,7 +335,7 @@ export class AgentPostgresRepository implements AgentRepository {
       `UPDATE endeavor.agents
        SET disabled_at = CASE WHEN $2 THEN coalesce(disabled_at, now()) ELSE NULL END,
            updated_at = now()
-       WHERE id = $1
+       WHERE id = $1 AND deleted_at IS NULL
        RETURNING *`,
       [agentId, disabled]
     );
@@ -223,7 +355,7 @@ export class AgentPostgresRepository implements AgentRepository {
         const result = await this.db.query<AgentVersionRow>(
           `WITH locked AS (
              SELECT id FROM endeavor.agents
-             WHERE id = $2 AND (NOT ($10::jsonb ? 'expectedVersionId')
+             WHERE id = $2 AND deleted_at IS NULL AND (NOT ($10::jsonb ? 'expectedVersionId')
                OR current_version_id = ($10::jsonb->>'expectedVersionId')::uuid)
              FOR UPDATE
            ), next AS (
@@ -328,7 +460,7 @@ function rethrowNameConflict(error: unknown, name: string): never {
 // row_to_json gives timestamps as strings. Turn them back into dates.
 function fromJson<Row extends { created_at: Date }>(row: Row): Row {
   const dated = { ...row } as Record<string, unknown>;
-  for (const key of ['created_at', 'updated_at', 'disabled_at']) {
+  for (const key of ['created_at', 'updated_at', 'disabled_at', 'deleted_at']) {
     if (typeof dated[key] === 'string') {
       dated[key] = new Date(dated[key] as string);
     }
@@ -339,7 +471,8 @@ function fromJson<Row extends { created_at: Date }>(row: Row): Row {
 function toAgent(row: AgentRow): Agent {
   return {
     id: row.id,
-    name: row.name,
+    name: row.deleted_at ? 'Deleted agent' : row.name,
+    deletedAt: row.deleted_at,
     purpose: row.purpose,
     currentVersionId: row.current_version_id,
     disabledAt: row.disabled_at,

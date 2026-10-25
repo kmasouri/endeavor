@@ -94,7 +94,7 @@
       ?.name ??
     (ref.type === 'system'
       ? 'Platform'
-      : (directory.data?.find((a) => a.id === ref.id)?.name ?? 'Someone'));
+      : (directory.data?.find((a) => a.id === ref.id)?.name ?? (ref.type === 'agent' ? 'Deleted agent' : 'Someone')));
   const onAdd = (id: string) =>
     api
       .post(`/conversations/${conversationId}/members`, { type: 'agent', id })

@@ -273,6 +273,28 @@ function eventTypes(tasks: ReturnType<typeof setup>['tasks']): string[] {
   return tasks.addEvent.mock.calls.map(([, type]) => type);
 }
 
+describe('agent deletion execution gate', () => {
+  it('does not make a model call after deletion has taken the execution lock', async () => {
+    const { runner, agentRepo, client } = setup();
+    agentRepo.acquireExecution.mockResolvedValue(null);
+    await runner.runTask(makeTask());
+    expect(client.complete).not.toHaveBeenCalled();
+  });
+
+  it('does not replay a queued tool for a deleted agent', async () => {
+    const { runner, agentRepo, tasks, messages } = setup();
+    tasks.listEvents.mockResolvedValue([
+      event(1, 'model.turn', {
+        raw: {},
+        toolCalls: [{ id: 'queued', name: 'send_message', input: { body: 'Old reply' } }]
+      })
+    ]);
+    agentRepo.acquireExecution.mockResolvedValue(null);
+    await runner.runTask(makeTask());
+    expect(messages.create).not.toHaveBeenCalled();
+  });
+});
+
 describe('TaskRunnerService', () => {
   describe('costs and budgets', () => {
     it('records what each model turn cost, from the price table', async () => {

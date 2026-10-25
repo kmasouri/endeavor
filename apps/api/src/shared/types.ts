@@ -165,6 +165,8 @@ export const MODEL_PROVIDERS = ['anthropic', 'openai', 'scripted'] as const;
 export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
 
 export interface Agent {
+  // Retained only for historical references. Deleted agents cannot be restored.
+  deletedAt?: Date | null;
   id: string;
   name: string;
   purpose: string;

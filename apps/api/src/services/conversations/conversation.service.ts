@@ -20,6 +20,7 @@ import {
 } from '../../shared/types';
 
 export interface MemberDetails extends ConversationMember {
+  deleted?: boolean;
   name: string;
   // An agent's purpose, so participants know whom to ask. null for humans.
   purpose: string | null;
@@ -302,6 +303,7 @@ export class ConversationService {
           return {
             ...member,
             name: agent?.name ?? 'Unknown agent',
+            deleted: Boolean(agent?.deletedAt),
             purpose: agent?.purpose ?? null
           };
         }

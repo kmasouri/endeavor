@@ -81,6 +81,7 @@ export interface Conversation {
 }
 
 export interface Member {
+  deleted?: boolean;
   participant: ParticipantRef;
   name: string;
   purpose: string | null;
