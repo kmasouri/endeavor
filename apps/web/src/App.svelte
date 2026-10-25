@@ -192,81 +192,82 @@
   <div class="shell" class:sidebar-collapsed={collapsed}>
     <header class="app-bar">
       <div class="row app-brand">
-        <button class="quiet icon-button" aria-label={collapsed ? 'Open sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} onclick={() => (collapsed = !collapsed)}><Icon name="panel" /></button>
+        <button class="quiet icon-button" aria-label={collapsed ? 'Open sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} aria-controls="main-sidebar" onclick={() => (collapsed = !collapsed)}><Icon name="panel" /></button>
         <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true">E</span>Endeavor</a>
       </div>
       <button class="secondary search-launch" aria-label="Search endeavors" onclick={searchEndeavors}><Icon name="search" /><span>Search endeavors…</span><kbd>⌘ / Ctrl K</kbd></button>
     </header>
-    {#if !collapsed}
-      <aside class="sidebar">
-        <nav aria-label="Main">
-          {#each [['', 'Endeavors', 'conversations'], ['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['catalogs', 'Skills and connections', 'catalogs'], ['setup', 'Setup', 'setup'], ['tasks', 'Work', 'work']] as [path, label, icon] (path)}
-            <a
-              class:active={path === ''
-                ? !section || section === 'conversations'
-                : section === path}
-              href={`#/${path}`}
-              onclick={() => {
-                if (window.innerWidth < 700) collapsed = true;
-              }}
-            >
-              <Icon name={icon} /><span class="grow">{label}</span>
-              {#if path === 'approvals' && pending.data?.page.total}<span class="count-badge"
-                  >{pending.data.page.total}</span
-                >{/if}
-              {#if path === 'schedules' && catchUps}<span class="count-badge">{catchUps}</span>{/if}
-            </a>
-          {/each}
-        </nav>
-        <div class="sidebar-conversations">
-          <div class="row">
-            <span class="label grow">Recent</span><button class="quiet new-endeavor" aria-label="New endeavor" onclick={newEndeavor}><Icon name="plus" size={14} /> New</button>
-          </div>
-          <ErrorNote error={conversations.error} />
-          {#each recent as conversation (conversation.id)}
-            <a
-              class:active={section === 'conversations' && id === conversation.id}
-              href={`#/conversations/${conversation.id}`}
-              title={conversation.title}
-              aria-current={section === 'conversations' && id === conversation.id ? 'page' : undefined}
-              onclick={() => {
-                if (window.innerWidth < 700) collapsed = true;
-              }}
-              ><span class="ellipsis">{conversationChannelName(conversation.title)}</span></a
-            >
-          {/each}
+    <aside class="sidebar" id="main-sidebar" aria-label="Sidebar">
+      <nav aria-label="Main">
+        {#each [['', 'Endeavors', 'conversations'], ['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['catalogs', 'Skills and connections', 'catalogs'], ['setup', 'Setup', 'setup'], ['tasks', 'Work', 'work']] as [path, label, icon] (path)}
+          <a
+            class:active={path === ''
+              ? !section || section === 'conversations'
+              : section === path}
+            href={`#/${path}`}
+            aria-label={label}
+            title={label}
+            aria-current={(path === '' ? !section || section === 'conversations' : section === path) ? 'page' : undefined}
+            onclick={() => {
+              if (window.innerWidth < 700) collapsed = true;
+            }}
+          >
+            <Icon name={icon} /><span class="grow sidebar-label">{label}</span>
+            {#if path === 'approvals' && pending.data?.page.total}<span class="count-badge"
+                >{pending.data.page.total}</span
+              >{/if}
+            {#if path === 'schedules' && catchUps}<span class="count-badge">{catchUps}</span>{/if}
+          </a>
+        {/each}
+      </nav>
+      <div class="sidebar-conversations">
+        <div class="row">
+          <span class="label grow">Recent</span><button class="quiet new-endeavor" aria-label="New endeavor" onclick={newEndeavor}><Icon name="plus" size={14} /> New</button>
         </div>
-        <div class="sidebar-footer">
-          <div class="sidebar-profile">
-            <button
-              class="quiet row profile-button"
-              class:active={section === 'settings'}
-              aria-label="Profile and settings"
-              onclick={() => {
-                window.location.hash = '/settings';
-                if (window.innerWidth < 700) collapsed = true;
-              }}
-              ><Avatar name={me.name} id={me.id} /><span
-                ><strong>{me.name}</strong><span class="caption muted">Profile and settings</span
-                ></span
-              ></button
-            >
-            <button
-              class="quiet switch-person"
-              aria-label="Switch person"
-              title="Switch person"
-              disabled={switching}
-              aria-haspopup="dialog"
-              aria-expanded={picking}
-              onclick={() => {
-                switchError = null;
-                picking = true;
-              }}><Icon name="switch" size={16} /></button
-            >
-          </div>
+        <ErrorNote error={conversations.error} />
+        {#each recent as conversation (conversation.id)}
+          <a
+            class:active={section === 'conversations' && id === conversation.id}
+            href={`#/conversations/${conversation.id}`}
+            title={conversation.title}
+            aria-current={section === 'conversations' && id === conversation.id ? 'page' : undefined}
+            onclick={() => {
+              if (window.innerWidth < 700) collapsed = true;
+            }}
+            ><span class="ellipsis">{conversationChannelName(conversation.title)}</span></a
+          >
+        {/each}
+      </div>
+      <div class="sidebar-footer">
+        <div class="sidebar-profile">
+          <button
+            class="quiet row profile-button"
+            class:active={section === 'settings'}
+            aria-label="Profile and settings"
+            onclick={() => {
+              window.location.hash = '/settings';
+              if (window.innerWidth < 700) collapsed = true;
+            }}
+            ><Avatar name={me.name} id={me.id} /><span class="sidebar-label"
+              ><strong>{me.name}</strong><span class="caption muted">Profile and settings</span
+              ></span
+            ></button
+          >
+          <button
+            class="quiet switch-person"
+            aria-label="Switch person"
+            title="Switch person"
+            disabled={switching}
+            aria-haspopup="dialog"
+            aria-expanded={picking}
+            onclick={() => {
+              switchError = null;
+              picking = true;
+            }}><Icon name="switch" size={16} /></button
+          >
         </div>
-      </aside>
-    {/if}
+      </div>
+    </aside>
 
     <main class:conversation-main={section === 'conversations' && Boolean(id)}>
       {#key `${actorId}:${hash}`}

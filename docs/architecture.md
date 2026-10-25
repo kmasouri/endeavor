@@ -61,6 +61,11 @@ publish into another person's shell. A successful creation refreshes Recent and 
 composer. Optional initial human and agent members use the existing membership validation; no
 message or agent invocation occurs during creation. See [conversations](conversations.md).
 
+The sidebar stays mounted when collapsed, with a compact rail of navigation icons. Hovering
+with a mouse or focusing a control with the keyboard expands it temporarily. The header toggle
+pins it open. On narrow screens, the expanded sidebar overlays the page and navigation returns
+it to the rail. Width and label transitions respect the browser's reduced-motion setting.
+
 The web app imports `apps/web/src/design-tokens.css`, an exact copy of
 `docs/design/style-guide/tokens.css`. A test checks that the copy stays in sync, so the Docker image
 can build without the design documentation. `appearance.ts` applies the browser's
