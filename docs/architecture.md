@@ -65,6 +65,9 @@ The sidebar stays mounted when collapsed, with a compact rail of navigation icon
 with a mouse or focusing a control with the keyboard expands it temporarily. The header toggle
 pins it open. On narrow screens, the expanded sidebar overlays the page and navigation returns
 it to the rail. Width and label transitions respect the browser's reduced-motion setting.
+Recent endeavors and its New action appear only in the Endeavors view. Other sections retain
+main navigation and show their own page content. Returning to Endeavors restores the last
+accessible conversation for the selected person.
 
 The web app imports `apps/web/src/design-tokens.css`, an exact copy of
 `docs/design/style-guide/tokens.css`. A test checks that the copy stays in sync, so the Docker image

@@ -211,7 +211,8 @@ test.describe('touch sidebar', () => {
     await expect.poll(width).toBe(68);
     await page.getByRole('button', { name: 'Open sidebar', exact: true }).tap();
     await expect.poll(width).toBe(264);
-    await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
+    await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toHaveCount(0);
+    await expect(sidebar.locator('.sidebar-conversations')).toHaveCount(0);
     await sidebar.getByRole('link', { name: 'Endeavors', exact: true }).tap();
     await expect.poll(width).toBe(68);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -231,8 +232,17 @@ test('restores the last accessible selection, preserves links, and searches olde
   ).toHaveAttribute('title', 'website-reliability');
   await page.getByRole('link', { name: '#heat-pump-brief', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
-  await page.getByRole('link', { name: 'Agents', exact: true }).click();
+  for (const destination of ['Agents', 'Schedules', 'Approvals', 'Skills and connections', 'Setup', 'Work']) {
+    await page.getByRole('navigation', { name: 'Main', exact: true })
+      .getByRole('link', { name: destination, exact: true }).click();
+    await expect(page.locator('.sidebar-conversations')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'New endeavor', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Main', exact: true })).toBeVisible();
+  }
+  await page.getByRole('button', { name: 'Profile and settings', exact: true }).click();
+  await expect(page.locator('.sidebar-conversations')).toHaveCount(0);
   await page.getByRole('link', { name: 'Endeavors', exact: true }).click();
+  await expect(page.locator('.sidebar-conversations')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
