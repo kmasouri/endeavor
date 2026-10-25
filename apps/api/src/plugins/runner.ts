@@ -17,6 +17,7 @@ import {
 } from '../data';
 import {
   ConnectionHttpClient,
+  McpHttpClient,
   anthropicProvider,
   ModelAiSdkClient,
   ModelClient,
@@ -100,7 +101,8 @@ const runnerPlugin: FastifyPluginAsync = async (fastify) => {
       completionCheck: config.COMPLETION_CHECK,
       prices: config.MODEL_PRICES,
       taskBudgetUsd: config.TASK_BUDGET_USD
-    }
+    },
+    new McpHttpClient()
   );
   fastify.decorate('taskRunnerService', runner);
 

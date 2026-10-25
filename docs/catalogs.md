@@ -13,10 +13,10 @@ A skill is a named piece of guidance for a kind of work, such as "Billing lookup
 
 ## Connections
 
-A connection is an outside HTTP API: a base URL, an auth header, an optional credential, the HTTP methods allowed, and the path prefixes allowed.
+A connection is an outside service: an HTTP API or a remote MCP server. Both have an endpoint, an auth header, and an optional credential. HTTP connections limit methods and path prefixes. MCP connections limit named tools; see [Remote MCP tools](#remote-mcp-tools-ca-64).
 
 - The credential is encrypted with AES-256-GCM using `CREDENTIALS_KEY`, and is never returned by the API. `hasCredential` shows whether one is stored. Without `CREDENTIALS_KEY`, saving a credential fails with `credentialsKeyMissing`.
-- Agents call connections through the `http_request` tool. The platform adds the credential, doesn't follow redirects, keeps the path on the connection's host, and cuts responses off at 20,000 characters.
+- Agents call HTTP connections through the `http_request` tool. The platform adds the credential, doesn't follow redirects, keeps the path on the connection's host, and cuts responses off at 20,000 characters.
 
 ## Grants and revocation
 
@@ -59,3 +59,87 @@ A second decision on the same approval gets `approvalAlreadyDecided`.
 ## Not yet
 
 - Explicitly supplied documents, and knowledge-source connections beyond plain HTTP calls, come with saved notes and context (CA-21).
+
+## Remote MCP tools (CA-64)
+
+Connections support two types: `http` (the default for existing API clients) and `mcp`.
+A connection's type is fixed at creation. Both types use the same encrypted credentials,
+agent configuration selections, live grants, enable/disable controls, and task history.
+
+An MCP connection's `baseUrl` is its full remote MCP endpoint, such as
+`https://tools.example.com/mcp`. It uses Streamable HTTP through the official MCP client
+SDK, with protocol negotiation and compatibility with 2025 servers. JSON and SSE responses
+are supported. `authHeader` and `credential` work as they do for HTTP connections; for bearer
+authentication, save the full `Bearer …` value. Redirects are refused. Servers needing an
+interactive OAuth login are not supported by this first increment.
+
+Create an MCP connection with:
+
+```json
+{
+  "kind": "mcp",
+  "name": "Records",
+  "description": "Look up and create records",
+  "baseUrl": "https://tools.example.com/mcp",
+  "allowedTools": ["lookup", "create"],
+  "approvalTools": ["create"]
+}
+```
+
+- `allowedTools` contains exact, case-sensitive server tool names. There are no wildcards.
+  An empty list grants no tools and lets a person save the endpoint before discovery.
+- Omitting `approvalTools` requires approval for every allowed tool. An explicit empty list
+  permits unattended calls. Server annotations never decide the platform's approval policy.
+- `POST /connections/:connectionId/tools` discovers tools for the acting person without
+  executing them or granting access. It returns `success([{ name, description, inputSchema }])`.
+  The connection must be enabled. In the web catalog, open **Discover and manage tools**,
+  discover, select allowed tools and approval requirements, then save. Discovery alone
+  does not change agent access.
+- `PATCH /connections/:connectionId` accepts `allowedTools` and `approvalTools` for MCP
+  connections. Adding allowed tools without supplying an approval policy makes the new
+  tools require approval. HTTP method/path fields are rejected on MCP connections, and
+  MCP tool fields are rejected on HTTP connections. `kind` cannot be patched.
+- Agents receive only allowed tools, with the server's descriptions and input schemas.
+  Their model-facing names include a stable connection ID and tool-name hash, fitting the
+  model provider's name limit and avoiding collisions across servers. HTTP's `http_request`
+  cannot call MCP connections.
+- Calls recheck explicit task-version selection, live grant, enabled state, and allowed tool
+  name. The client validates arguments with Zod against the discovered schema before calling
+  the server. Unsupported schema conversions fail discovery. Discovery failure leaves the
+  other platform tools available and records `connection.discovery.failed`.
+- A pending approval stores the tool name, exact arguments, endpoint, and credential header.
+  After approval, the runner checks access again and refuses a changed endpoint or header.
+  It claims the approval before execution, records the result, and wakes the task through
+  the existing recovery path. An approval authorizes one call and never grants a connection.
+- Unattended calls record `connection.mcp.started` before contacting the server, followed
+  by `connection.mcp.result`. Recovery reuses a recorded result. If the service stopped
+  between those events, the outcome is unknown: the call is not repeated automatically.
+  Check the external system before requesting another action.
+
+Each client operation has a 30-second deadline. Individual HTTP responses are capped at
+2 MB; results returned to the agent are capped at 20,000 characters. Discovery is limited
+to 20 pages and 1,000 tools; each connection can allow up to 100 tool names. Credentials
+are not included in model definitions, approval requests, or transport failure messages.
+Tool arguments and results are recorded as task evidence and should not contain secrets.
+
+Local stdio servers, interactive OAuth setup, MCP resources/prompts, deferred tasks,
+server-initiated sampling, and interactive elicitation are outside this increment.
+
+### Local verification
+
+The MCP client test starts a real local HTTP server and verifies handshake, paginated
+discovery, JSON/SSE results, exact arguments, invalid arguments, failed authentication,
+and redirect refusal. Runner tests cover unattended reads, pending and approved actions,
+revocation, disabled connections, changed endpoints, removed tools, paused/cancelled tasks,
+and restart recovery. The browser test creates an MCP connection, discovers tools, saves
+permissions, and checks the approval's exact arguments.
+
+Run these without an external account, model API key, or database:
+
+```bash
+npm test -w apps/api -- --runInBand mcp-http.client.test.ts task-runner.service.test.ts
+npm run test:e2e -w apps/web -- connections.test.ts
+```
+
+Run `npm run db:migrate` before starting the updated application on an existing database.
+Migration `036_mcp_connections.sql` preserves every existing connection as HTTP.

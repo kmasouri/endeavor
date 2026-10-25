@@ -273,6 +273,10 @@ export type HttpMethod = (typeof HTTP_METHODS)[number];
 
 // A connection as the API shows it. The credential itself is never included.
 export interface Connection {
+  // Missing kind in older in-memory records means HTTP.
+  kind?: 'http' | 'mcp';
+  allowedTools?: string[];
+  approvalTools?: string[];
   id: string;
   name: string;
   description: string;
@@ -301,7 +305,8 @@ export interface AgentGrant {
 
 export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
 
-export interface ConnectionCallRequest {
+export interface HttpConnectionCallRequest {
+  kind?: 'http';
   connectionId: string;
   connectionName: string;
   method: HttpMethod;
@@ -309,7 +314,21 @@ export interface ConnectionCallRequest {
   body: string | null;
 }
 
+export interface McpConnectionCallRequest {
+  kind: 'mcp';
+  connectionId: string;
+  connectionName: string;
+  tool: string;
+  arguments: Record<string, unknown>;
+  // Bind approval to the endpoint and credential header reviewed by the person.
+  baseUrl: string;
+  authHeader: string;
+}
+
+export type ConnectionCallRequest = HttpConnectionCallRequest | McpConnectionCallRequest;
+
 export interface ApprovalResult {
+  isError?: boolean;
   status: number | null;
   body: string;
   truncated: boolean;

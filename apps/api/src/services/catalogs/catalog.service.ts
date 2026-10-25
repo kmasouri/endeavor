@@ -5,6 +5,7 @@ import {
   CatalogRepository,
   HumanRepository
 } from '../../data';
+import { McpClient, McpTool } from '../../integrations';
 import { CatalogLogger } from '../../observability';
 import { ADMIN_ONLY, requireHuman } from '../../shared/access';
 import { AppError } from '../../shared/errors';
@@ -22,6 +23,8 @@ export interface SkillDetails extends Skill {
 }
 
 export interface ConnectionChanges {
+  allowedTools?: string[];
+  approvalTools?: string[];
   name?: string;
   description?: string;
   baseUrl?: string;
@@ -42,7 +45,8 @@ export class CatalogService {
     private readonly agentRepository: AgentRepository,
     private readonly humanRepository: HumanRepository,
     private readonly credentialsReady: boolean,
-    private readonly catalogLogger: CatalogLogger
+    private readonly catalogLogger: CatalogLogger,
+    private readonly mcpClient?: McpClient
   ) {}
 
   // Skills
@@ -143,13 +147,16 @@ export class CatalogService {
   async createConnection(
     actorId: string,
     input: {
+      kind?: 'http' | 'mcp';
+      allowedTools?: string[];
+      approvalTools?: string[];
       name: string;
       description: string;
       baseUrl: string;
       authHeader?: string;
       credential?: string;
-      allowedMethods: HttpMethod[];
-      allowedPathPrefixes: string[];
+      allowedMethods?: HttpMethod[];
+      allowedPathPrefixes?: string[];
       approvalMethods?: HttpMethod[];
     }
   ): Promise<Connection> {
@@ -157,21 +164,45 @@ export class CatalogService {
     this.requireCredentialsKey(input.credential);
     const connection = await this.catalogRepository
       .createConnection({
+        kind: input.kind ?? 'http',
+        allowedTools: input.allowedTools ?? [],
+        approvalTools: input.approvalTools ?? input.allowedTools ?? [],
         name: input.name,
         description: input.description,
         baseUrl: input.baseUrl,
         authHeader: input.authHeader ?? 'Authorization',
         credential: input.credential ?? null,
-        allowedMethods: input.allowedMethods,
-        allowedPathPrefixes: input.allowedPathPrefixes,
+        allowedMethods: input.allowedMethods ?? [],
+        allowedPathPrefixes: input.allowedPathPrefixes ?? [],
         // Reading is free; anything that changes something waits for a person, unless set.
         approvalMethods:
-          input.approvalMethods ?? input.allowedMethods.filter((method) => method !== 'GET'),
+          input.approvalMethods ??
+          (input.allowedMethods ?? []).filter((method) => method !== 'GET'),
         createdByHumanId: admin.id
       })
       .catch(toNameTaken);
     this.catalogLogger.onConnectionSaved(connection.id);
     return connection;
+  }
+
+  async discoverConnectionTools(actorId: string, connectionId: string): Promise<McpTool[]> {
+    requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
+    const connection = await this.requireConnection(connectionId);
+    if (connection.kind !== 'mcp' || connection.disabledAt || !this.mcpClient) {
+      throw new AppError('validationError', 'Choose an enabled MCP connection.');
+    }
+    const credential = await this.catalogRepository.getConnectionCredential(connection.id);
+    try {
+      return await this.mcpClient.listTools({
+        url: connection.baseUrl,
+        headers: credential ? { [connection.authHeader]: credential } : {}
+      });
+    } catch {
+      throw new AppError(
+        'validationError',
+        'MCP discovery failed. Check the endpoint, credential, and supported schemas.'
+      );
+    }
   }
 
   async listConnections(input: {
@@ -196,7 +227,28 @@ export class CatalogService {
     changes: ConnectionChanges
   ): Promise<Connection> {
     requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
-    await this.requireConnection(connectionId);
+    const current = await this.requireConnection(connectionId);
+    if (
+      current.kind === 'mcp' &&
+      (changes.allowedMethods || changes.allowedPathPrefixes || changes.approvalMethods)
+    ) {
+      throw new AppError('validationError', 'MCP permissions use tool names.');
+    }
+    if (current.kind !== 'mcp' && (changes.allowedTools || changes.approvalTools)) {
+      throw new AppError('validationError', 'HTTP permissions use methods and paths.');
+    }
+    // Newly allowed tools require approval until a person explicitly changes that policy.
+    if (changes.allowedTools && !changes.approvalTools) {
+      changes = {
+        ...changes,
+        approvalTools: [
+          ...new Set([
+            ...(current.approvalTools ?? []),
+            ...changes.allowedTools.filter((name) => !(current.allowedTools ?? []).includes(name))
+          ])
+        ]
+      };
+    }
     this.requireCredentialsKey(changes.credential);
     const updated = await this.catalogRepository
       .updateConnection(connectionId, changes)

@@ -182,3 +182,14 @@ export async function revokeHandler(
   );
   return reply.code(204).send();
 }
+
+export async function discoverConnectionToolsHandler(
+  request: FastifyRequest<{ Params: ConnectionParams } & Actor>
+): Promise<unknown> {
+  return success(
+    await request.server.catalogService.discoverConnectionTools(
+      request.headers['x-actor-id'],
+      request.params.connectionId
+    )
+  );
+}

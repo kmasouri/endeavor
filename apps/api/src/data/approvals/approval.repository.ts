@@ -13,6 +13,7 @@ export interface ApprovalRepository {
     agentId: string;
     request: ConnectionCallRequest;
   }): Promise<{ approval: Approval; created: boolean }>;
+  getByClientKey(clientKey: string): Promise<Approval | null>;
   getById(approvalId: string): Promise<Approval | null>;
   list(input: {
     status?: ApprovalStatus;

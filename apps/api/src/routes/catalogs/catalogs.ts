@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import {
   addSkillVersionHandler,
+  discoverConnectionToolsHandler,
   createConnectionHandler,
   createSkillHandler,
   disableConnectionHandler,
@@ -134,7 +135,7 @@ export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<
     {
       schema: {
         description:
-          'Add a connection to an HTTP API. The credential is stored encrypted and never returned. Admins only.',
+          'Add an HTTP API or remote MCP connection. The credential is stored encrypted and never returned. Admins only.',
         tags,
         headers,
         body: createConnectionBodySchema
@@ -165,6 +166,19 @@ export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<
       }
     },
     getConnectionHandler
+  );
+
+  fastifyInstance.post(
+    '/connections/:connectionId/tools',
+    {
+      schema: {
+        description: 'Discover MCP tools without granting access or executing them. Admins only.',
+        tags,
+        headers,
+        params: connectionParamsSchema
+      }
+    },
+    discoverConnectionToolsHandler
   );
 
   fastifyInstance.patch(

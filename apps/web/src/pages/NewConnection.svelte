@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type HttpMethod } from '../api';
+  import { api, HTTP_METHODS, type HttpMethod } from '../api';
   import CheckGroup from '../CheckGroup.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
@@ -12,6 +12,11 @@
   }: {
     onCreated: () => void;
   } = $props();
+  let kind = $state<'http' | 'mcp'>('http');
+  let tools = $state('');
+  let freeTools = $state('');
+  const names = (text: string) =>
+    text.split(/[\n,]/).map((name) => name.trim()).filter(Boolean);
   let name = $state('');
   let description = $state('');
   let baseUrl = $state('');
@@ -31,12 +36,17 @@
           baseUrl,
           authHeader,
           ...(credential && { credential }),
-          allowedMethods,
-          allowedPathPrefixes: prefixes
-            .split(/[\n,]/)
-            .map((p) => p.trim())
-            .filter(Boolean),
-          approvalMethods: approvalMethods.filter((m) => allowedMethods.includes(m))
+          ...(kind === 'mcp'
+            ? {
+                kind,
+                allowedTools: names(tools),
+                approvalTools: names(tools).filter((name) => !names(freeTools).includes(name))
+              }
+            : {
+                allowedMethods,
+                allowedPathPrefixes: names(prefixes),
+                approvalMethods: approvalMethods.filter((m) => allowedMethods.includes(m))
+              })
         })
       )
       .then((ok) => {
@@ -45,19 +55,25 @@
           description = '';
           baseUrl = '';
           credential = '';
+          tools = '';
+          freeTools = '';
           onCreated();
         }
       });
   };
-
-  import { HTTP_METHODS } from '../api';
-
 </script>
 
 <details>
   <summary> New connection </summary>
 
   <form onsubmit={create} class="stack">
+    <label>
+      Connection type
+      <select bind:value={kind}>
+        <option value="http">HTTP API</option>
+        <option value="mcp">MCP server</option>
+      </select>
+    </label>
     <div class="grid2">
       <label>
         Name
@@ -66,7 +82,7 @@
       </label>
 
       <label>
-        Base URL
+        {kind === 'mcp' ? 'MCP endpoint URL' : 'Base URL'}
 
         <input type="url" bind:value={baseUrl} placeholder="https://api.example.com" required />
       </label>
@@ -94,36 +110,49 @@
 
     <Hint>The credential is encrypted when saved, and never shown again, not even to you.</Hint>
 
-    <div class="grid2">
-      <fieldset>
-        <legend> Allowed methods </legend>
+    {#if kind === 'http'}
+      <div class="grid2">
+        <fieldset>
+          <legend> Allowed methods </legend>
 
-        <CheckGroup
-          options={methodOptions}
-          selected={allowedMethods}
-          onChange={(value) => (allowedMethods = value)}
-        />
-      </fieldset>
+          <CheckGroup
+            options={methodOptions}
+            selected={allowedMethods}
+            onChange={(value) => (allowedMethods = value)}
+          />
+        </fieldset>
 
-      <fieldset>
-        <legend> Need a person's approval </legend>
+        <fieldset>
+          <legend> Need a person's approval </legend>
 
-        <CheckGroup
-          options={methodOptions.filter((o) => allowedMethods.includes(o.value))}
-          selected={approvalMethods}
-          onChange={(value) => (approvalMethods = value)}
-        />
-      </fieldset>
-    </div>
+          <CheckGroup
+            options={methodOptions.filter((o) => allowedMethods.includes(o.value))}
+            selected={approvalMethods}
+            onChange={(value) => (approvalMethods = value)}
+          />
+        </fieldset>
+      </div>
 
-    <label>
-      Allowed paths
+      <label>
+        Allowed paths
 
-      <Hint>Path prefixes agents may call, one per line, like /v1/issues.</Hint>
+        <Hint>Path prefixes agents may call, one per line, like /v1/issues.</Hint>
 
-      <textarea bind:value={prefixes} rows={2}></textarea>
-    </label>
+        <textarea bind:value={prefixes} rows={2}></textarea>
+      </label>
 
+    {:else}
+      <label>
+        Allowed tools
+        <Hint>Exact MCP tool names, one per line. You can discover tools after saving.</Hint>
+        <textarea bind:value={tools} rows={3}></textarea>
+      </label>
+      <label>
+        Tools that can run without approval
+        <Hint>Leave empty to require approval for every tool. Only include allowed tools you trust to run unattended.</Hint>
+        <textarea bind:value={freeTools} rows={2}></textarea>
+      </label>
+    {/if}
     <button disabled={action.busy}> Create connection </button>
 
     <ErrorNote error={action.error} />

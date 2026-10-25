@@ -24,6 +24,7 @@ import {
   TaskWait
 } from '../../shared/types';
 import {
+  mcpToolName,
   budgetExceeded,
   DEFAULT_RUNNER_OPTIONS,
   TaskRunnerService,
@@ -157,6 +158,10 @@ function setup(options: { client?: ModelClient | null } = {}) {
   const documents = mockDocumentRepository();
   const responsibilities = mockResponsibilityRepository();
   const connectionClient = { request: jest.fn() };
+  const mcpClient = {
+    listTools: jest.fn().mockResolvedValue([]),
+    callTool: jest.fn().mockResolvedValue({ body: 'MCP result', truncated: false, isError: false })
+  };
   const workspaceClient = { list: jest.fn(), read: jest.fn(), write: jest.fn() };
   const client: jest.Mocked<ModelClient> = {
     provider: 'scripted',
@@ -242,7 +247,8 @@ function setup(options: { client?: ModelClient | null } = {}) {
       onScheduledRunFailed: jest.fn(),
       onTickFailed: jest.fn()
     } as unknown as TaskRunnerLogger,
-    { ...DEFAULT_RUNNER_OPTIONS, workerId: 'test' }
+    { ...DEFAULT_RUNNER_OPTIONS, workerId: 'test' },
+    mcpClient
   );
   return {
     runner,
@@ -258,6 +264,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
     conversations,
     connectionClient,
     workspaceClient,
+    mcpClient,
     current: () => current,
     setCurrent: (task: Task) => (current = task)
   };
@@ -2054,5 +2061,247 @@ describe('budgets', () => {
     expect(
       budgetExceeded(task, { ...version, limits: { maxWorkingMinutes: 30 } }, [], 40, at(31))
     ).toBe('Worked 31 of the 30 allowed minutes.');
+  });
+});
+
+describe('MCP connections', () => {
+  const id = '00000000-0000-4000-8000-0000000000d1';
+  const connection: Connection = {
+    id,
+    kind: 'mcp',
+    name: 'Records',
+    description: 'Record tools',
+    baseUrl: 'https://records.test/mcp',
+    authHeader: 'Authorization',
+    hasCredential: true,
+    allowedMethods: [],
+    allowedPathPrefixes: [],
+    approvalMethods: [],
+    allowedTools: ['lookup', 'create'],
+    approvalTools: ['create'],
+    disabledAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  const call = (tool = 'lookup') => ({
+    id: 'mcp-call',
+    name: mcpToolName(id, tool),
+    input: { title: 'Exact approved value' }
+  });
+  const grant = {
+    agentId: RESEARCHER,
+    targetType: 'connection' as const,
+    targetId: id,
+    grantedByHumanId: HUMAN,
+    grantedAt: new Date(),
+    revokedAt: null
+  };
+  function mcpSetup() {
+    const ctx = setup();
+    ctx.agentRepo.getVersion.mockResolvedValue({ ...version, connectionIds: [id] });
+    ctx.catalogs.getConnection.mockResolvedValue(connection);
+    ctx.catalogs.getConnections.mockResolvedValue([connection]);
+    ctx.catalogs.listGrants.mockResolvedValue([grant]);
+    ctx.catalogs.getConnectionCredential.mockResolvedValue('Bearer secret');
+    ctx.mcpClient.listTools.mockResolvedValue(
+      ['lookup', 'create', 'forbidden'].map((name) => ({
+        name,
+        description: `Use ${name}`,
+        inputSchema: { type: 'object', properties: { title: { type: 'string' } } }
+      }))
+    );
+    return ctx;
+  }
+  function approved() {
+    return {
+      id: 'ap-mcp',
+      taskId: TASK,
+      agentId: RESEARCHER,
+      kind: 'connection_call' as const,
+      request: {
+        kind: 'mcp' as const,
+        connectionId: id,
+        connectionName: connection.name,
+        tool: 'create',
+        arguments: { title: 'Exact approved value' },
+        baseUrl: connection.baseUrl,
+        authHeader: connection.authHeader
+      },
+      status: 'approved' as const,
+      decidedByHumanId: HUMAN,
+      decidedAt: new Date(),
+      reason: null,
+      executedAt: null,
+      result: null,
+      createdAt: new Date()
+    };
+  }
+
+  it('exposes only allowed named tools with schemas and no generic HTTP access', async () => {
+    const ctx = mcpSetup();
+    await ctx.runner.runTask(makeTask());
+    const request = ctx.client.complete.mock.calls[0][0];
+    expect(request.tools.filter((tool) => tool.name.startsWith('mcp_'))).toEqual(
+      ['lookup', 'create'].map((name) =>
+        expect.objectContaining({
+          name: mcpToolName(id, name),
+          description: `Records: Use ${name}`,
+          inputSchema: expect.objectContaining({ type: 'object' })
+        })
+      )
+    );
+    expect(request.tools.some((tool) => tool.name === 'http_request')).toBe(false);
+    expect(mcpToolName(id, 'a'.repeat(128))).toHaveLength(57);
+  });
+
+  it('executes an unattended tool and records its result and arguments', async () => {
+    const ctx = mcpSetup();
+    ctx.tasks.listEvents.mockResolvedValue([
+      event(1, 'model.turn', { raw: {}, toolCalls: [call()] })
+    ]);
+    await ctx.runner.runTask(makeTask());
+    expect(ctx.mcpClient.callTool).toHaveBeenCalledWith(
+      { url: connection.baseUrl, headers: { Authorization: 'Bearer secret' } },
+      'lookup',
+      call().input
+    );
+    expect(ctx.tasks.addEvent).toHaveBeenCalledWith(
+      TASK,
+      'connection.called',
+      expect.anything(),
+      expect.objectContaining({ tool: 'lookup', arguments: call().input })
+    );
+    expect(toolResult(ctx.tasks).results[0]).toEqual(
+      expect.objectContaining({ content: 'MCP result', isError: false })
+    );
+    expect(ctx.connectionClient.request).not.toHaveBeenCalled();
+  });
+
+  it.each(['revoked', 'disabled', 'unselected', 'disallowed'] as const)(
+    'refuses %s access on a saved pending tool call',
+    async (reason) => {
+      const ctx = mcpSetup();
+      if (reason === 'revoked') ctx.catalogs.listGrants.mockResolvedValue([]);
+      if (reason === 'disabled')
+        ctx.catalogs.getConnections.mockResolvedValue([{ ...connection, disabledAt: new Date() }]);
+      if (reason === 'unselected') ctx.agentRepo.getVersion.mockResolvedValue(version);
+      if (reason === 'disallowed')
+        ctx.catalogs.getConnections.mockResolvedValue([{ ...connection, allowedTools: [] }]);
+      ctx.tasks.listEvents.mockResolvedValue([
+        event(1, 'model.turn', { raw: {}, toolCalls: [call()] })
+      ]);
+      await ctx.runner.runTask(makeTask());
+      expect(ctx.mcpClient.callTool).not.toHaveBeenCalled();
+      expect(toolResult(ctx.tasks).results[0].isError).toBe(true);
+    }
+  );
+
+  it('saves exact arguments for approval and pauses without executing', async () => {
+    const ctx = mcpSetup();
+    ctx.approvals.create.mockResolvedValue({ approval: approved(), created: true });
+    ctx.tasks.listEvents.mockResolvedValue([
+      event(1, 'model.turn', { raw: {}, toolCalls: [call('create')] })
+    ]);
+    await ctx.runner.runTask(makeTask());
+    expect(ctx.mcpClient.callTool).not.toHaveBeenCalled();
+    expect(ctx.current().state).toBe('waiting');
+    expect(ctx.approvals.create).toHaveBeenCalledWith(
+      expect.objectContaining({ request: approved().request })
+    );
+  });
+
+  it('preserves an existing approval after a crash even when approval policy was relaxed', async () => {
+    const ctx = mcpSetup();
+    ctx.catalogs.getConnections.mockResolvedValue([{ ...connection, approvalTools: [] }]);
+    ctx.approvals.getByClientKey.mockResolvedValue({ ...approved(), status: 'pending' });
+    ctx.tasks.listEvents.mockResolvedValue([
+      event(1, 'model.turn', { raw: {}, toolCalls: [call('create')] })
+    ]);
+    await ctx.runner.runTask(makeTask());
+    expect(ctx.mcpClient.callTool).not.toHaveBeenCalled();
+    expect(ctx.approvals.create).not.toHaveBeenCalled();
+    expect(ctx.current().state).toBe('waiting');
+  });
+
+  it('claims an approved action before executing its stored arguments', async () => {
+    const ctx = mcpSetup();
+    ctx.setCurrent(makeTask({ state: 'waiting' }));
+    ctx.approvals.listApprovedNotExecuted.mockResolvedValue([approved()]);
+    await ctx.runner.tick();
+    expect(ctx.approvals.markExecuted.mock.invocationCallOrder[0]).toBeLessThan(
+      ctx.mcpClient.callTool.mock.invocationCallOrder[0]
+    );
+    expect(ctx.mcpClient.callTool).toHaveBeenCalledWith(
+      expect.anything(),
+      'create',
+      approved().request.arguments
+    );
+    expect(ctx.approvals.saveResult).toHaveBeenCalledWith(
+      'ap-mcp',
+      expect.objectContaining({ body: 'MCP result', error: null })
+    );
+  });
+
+  it.each([
+    'revoked',
+    'endpoint changed',
+    'disabled',
+    'tool removed',
+    'cancelled',
+    'paused',
+    'already claimed'
+  ] as const)('does not execute approval when %s', async (reason) => {
+    const ctx = mcpSetup();
+    ctx.setCurrent(makeTask({ state: 'waiting' }));
+    ctx.approvals.listApprovedNotExecuted.mockResolvedValue([approved()]);
+    if (reason === 'revoked') ctx.catalogs.listGrants.mockResolvedValue([]);
+    if (reason === 'endpoint changed')
+      ctx.catalogs.getConnections.mockResolvedValue([
+        { ...connection, baseUrl: 'https://other.test/mcp' }
+      ]);
+    if (reason === 'disabled')
+      ctx.catalogs.getConnections.mockResolvedValue([{ ...connection, disabledAt: new Date() }]);
+    if (reason === 'tool removed')
+      ctx.catalogs.getConnections.mockResolvedValue([{ ...connection, allowedTools: ['lookup'] }]);
+    if (reason === 'cancelled') ctx.setCurrent(makeTask({ state: 'cancelled' }));
+    if (reason === 'paused') ctx.setCurrent(makeTask({ state: 'waiting', pausedAt: new Date() }));
+    if (reason === 'already claimed') ctx.approvals.markExecuted.mockResolvedValue(false);
+    await ctx.runner.tick();
+    expect(ctx.mcpClient.callTool).not.toHaveBeenCalled();
+  });
+
+  it('never repeats an unattended call with an unknown outcome after a restart', async () => {
+    const ctx = mcpSetup();
+    ctx.tasks.listEvents.mockResolvedValue([
+      event(1, 'model.turn', { raw: {}, toolCalls: [call()] }),
+      event(2, 'connection.mcp.started', { callId: 'mcp-call' })
+    ]);
+    await ctx.runner.runTask(makeTask());
+    expect(ctx.mcpClient.callTool).not.toHaveBeenCalled();
+    expect(toolResult(ctx.tasks).results[0].content).toContain('unknown outcome');
+  });
+
+  it('recovers a recorded result after a crash without repeating the call', async () => {
+    const ctx = mcpSetup();
+    ctx.tasks.listEvents.mockResolvedValue([
+      event(1, 'model.turn', { raw: {}, toolCalls: [call()] }),
+      event(2, 'connection.mcp.result', {
+        callId: 'mcp-call',
+        result: { body: 'Recovered', isError: false, status: null, truncated: false, error: null }
+      })
+    ]);
+    await ctx.runner.runTask(makeTask());
+    expect(ctx.mcpClient.callTool).not.toHaveBeenCalled();
+    expect(toolResult(ctx.tasks).results[0].content).toBe('Recovered');
+  });
+
+  it('keeps other tools available when MCP discovery fails without leaking credentials', async () => {
+    const ctx = mcpSetup();
+    ctx.mcpClient.listTools.mockRejectedValue(new Error('Bearer secret'));
+    await ctx.runner.runTask(makeTask());
+    expect(ctx.client.complete.mock.calls[0][0].tools.some((tool) => tool.name === 'ask')).toBe(
+      true
+    );
+    expect(JSON.stringify(ctx.tasks.addEvent.mock.calls)).not.toContain('Bearer secret');
   });
 });

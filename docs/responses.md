@@ -151,3 +151,18 @@ uncancelled schedules appear. Both this preview and deletion require a human act
 
 `DELETE /agents/:agentId` returns `success({ deleted: true })` with status 200. Missing or already
 deleted agents return `agentNotFound`. Shared history and costs remain readable.
+
+## Connection types
+
+Connection responses include `kind` (`http` or `mcp`), `allowedTools`, and `approvalTools`.
+Existing HTTP request bodies may omit `kind`; HTTP responses retain all existing method/path
+fields. MCP connections use tool lists and return empty HTTP permission lists. Credentials
+remain write-only; `hasCredential` reports whether one is stored.
+
+`POST /connections/:connectionId/tools` returns `success` with an array of discovered tools
+(`name`, `description`, and `inputSchema`). Discovery does not grant or execute tools.
+
+Connection-call approval requests retain their existing HTTP shape. MCP requests have
+`kind: "mcp"`, `connectionId`, `connectionName`, `tool`, `arguments`, `baseUrl`, and `authHeader`.
+Their results use `status: null`, with `body`, `truncated`, `error`, and an optional `isError`
+flag from the MCP server. See [catalogs](catalogs.md#remote-mcp-tools-ca-64).

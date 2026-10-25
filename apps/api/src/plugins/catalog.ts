@@ -7,6 +7,7 @@ import {
   CredentialCipher,
   HumanPostgresRepository
 } from '../data';
+import { McpHttpClient } from '../integrations';
 import { CatalogLogger } from '../observability';
 import { CatalogService } from '../services';
 
@@ -23,7 +24,8 @@ const catalogPlugin: FastifyPluginAsync = async (fastify) => {
     new AgentPostgresRepository(fastify.pg),
     new HumanPostgresRepository(fastify.pg),
     cipher.ready,
-    new CatalogLogger(fastify.log)
+    new CatalogLogger(fastify.log),
+    new McpHttpClient()
   );
 
   fastify.decorate('catalogService', catalogService);

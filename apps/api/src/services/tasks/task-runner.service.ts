@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   AgentRepository,
   ApprovalRepository,
@@ -12,6 +13,7 @@ import {
 } from '../../data';
 import {
   ConnectionClient,
+  McpClient,
   ModelClient,
   ModelClientError,
   ModelToolCall,
@@ -31,6 +33,8 @@ import {
   Approval,
   ApprovalResult,
   Connection,
+  ConnectionCallRequest,
+  McpConnectionCallRequest,
   HTTP_METHODS,
   HttpMethod,
   Message,
@@ -157,7 +161,8 @@ export class TaskRunnerService {
     private readonly modelClients: Partial<Record<ModelProvider, ModelClient>>,
     taskLogger: TaskLogger,
     private readonly runnerLogger: TaskRunnerLogger,
-    private readonly options: TaskRunnerOptions
+    private readonly options: TaskRunnerOptions,
+    private readonly mcpClient?: McpClient
   ) {
     this.lifecycle = new TaskLifecycle(taskRepository, taskLogger);
   }
@@ -443,10 +448,11 @@ export class TaskRunnerService {
     // the next claim for instructions, and on the very next call for http_request.
     const { skills, connections } = await this.usableCatalog(agent.id, version);
     const system = buildSystemPrompt(agent, version, { skills, connections });
-    const tools =
-      connections.length > 0
-        ? [...AGENT_TOOL_DEFINITIONS, HTTP_REQUEST_TOOL]
-        : AGENT_TOOL_DEFINITIONS;
+    const tools = [
+      ...AGENT_TOOL_DEFINITIONS,
+      ...(connections.some((c) => c.kind !== 'mcp') ? [HTTP_REQUEST_TOOL] : []),
+      ...(await this.mcpTools(claimed, connections))
+    ];
     const prompt = await this.buildPrompt(claimed, agent);
 
     for (let turn = 0; turn < this.options.turnsPerClaim; turn++) {
@@ -662,6 +668,8 @@ export class TaskRunnerService {
   ): Promise<string | { content: string; stop: boolean }> {
     const input = (call.input ?? {}) as Record<string, unknown>;
     const agentActor: Actor = { type: 'agent', id: agent.id };
+
+    if (call.name.startsWith('mcp_')) return this.mcpRequest(task, agent, call);
 
     switch (call.name) {
       case AGENT_TOOLS.sendMessage: {
@@ -889,7 +897,7 @@ export class TaskRunnerService {
   }
 
   // Every call is checked now, not when the task started: the connection must be chosen in the
-  // task's configuration (directly or through a chosen skill), still granted, enabled, and allow
+  // task's explicit configuration, still granted, enabled, and allow
   // the method and path. Methods the connection marks for approval wait for a person.
   private async httpRequest(
     task: Task,
@@ -951,6 +959,241 @@ export class TaskRunnerService {
       callId
     });
     return `HTTP ${response.status}${response.truncated ? ' (cut off at 20,000 characters)' : ''}\n${response.body}`;
+  }
+
+  // Stable tool names include the connection ID and a hash of the server tool name.
+  private async mcpTools(task: Task, connections: Connection[]): Promise<ModelToolDefinition[]> {
+    const tools: ModelToolDefinition[] = [];
+    for (const connection of connections.filter((c) => c.kind === 'mcp')) {
+      try {
+        if (!this.mcpClient) throw new Error('The MCP client is unavailable.');
+        const credential = await this.catalogRepository.getConnectionCredential(connection.id);
+        const discovered = await this.mcpClient.listTools({
+          url: connection.baseUrl,
+          headers: credential ? { [connection.authHeader]: credential } : {}
+        });
+        for (const tool of discovered) {
+          if (!(connection.allowedTools ?? []).includes(tool.name)) continue;
+          tools.push({
+            name: mcpToolName(connection.id, tool.name),
+            description: `${connection.name}: ${tool.description}`,
+            inputSchema: tool.inputSchema
+          });
+        }
+      } catch {
+        await this.taskRepository.addEvent(task.id, 'connection.discovery.failed', SYSTEM, {
+          connectionId: connection.id,
+          reason: 'MCP discovery failed. Check the endpoint, credential, and supported schemas.'
+        });
+      }
+    }
+    return tools;
+  }
+
+  private async mcpRequest(
+    task: Task,
+    agent: Agent,
+    call: ModelToolCall
+  ): Promise<string | { content: string; stop: boolean }> {
+    const match = /^mcp_([a-f0-9]{32})_(.+)$/.exec(call.name);
+    if (!match) throw new AppError('toolAccessDenied', 'Unknown MCP tool.');
+    const compact = match[1];
+    const connectionId = `${compact.slice(0, 8)}-${compact.slice(8, 12)}-${compact.slice(12, 16)}-${compact.slice(16, 20)}-${compact.slice(20)}`;
+    const current = await this.catalogRepository.getConnection(connectionId);
+    const tool = (current?.allowedTools ?? []).find(
+      (name) => mcpToolName(connectionId, name) === call.name
+    );
+    if (!tool) {
+      await this.taskRepository.addEvent(
+        task.id,
+        EVENTS.connectionDenied,
+        { type: 'agent', id: agent.id },
+        {
+          callId: call.id,
+          connectionId,
+          tool: call.name,
+          reason: 'Unknown or disallowed MCP tool.'
+        }
+      );
+      this.runnerLogger.onConnectionDenied(
+        task.id,
+        connectionId,
+        'MCP',
+        call.name,
+        'Unknown or disallowed MCP tool.'
+      );
+      throw new AppError('toolAccessDenied', 'Unknown or disallowed MCP tool.');
+    }
+    const input = call.input;
+    if (!input || typeof input !== 'object' || Array.isArray(input))
+      throw new AppError('validationError', 'MCP tool arguments must be an object.');
+    const connection = await this.checkMcpCall(task, agent, { connectionId, tool }, call.id);
+    const request: McpConnectionCallRequest = {
+      kind: 'mcp',
+      connectionId,
+      connectionName: connection.name,
+      tool,
+      arguments: input as Record<string, unknown>,
+      baseUrl: connection.baseUrl,
+      authHeader: connection.authHeader
+    };
+    const clientKey = `tool:${task.id}:${call.id}`;
+    const existing = await this.approvalRepository.getByClientKey(clientKey);
+    // Once requested, an approval survives a crash even if the policy later becomes looser.
+    if (existing?.status === 'rejected') {
+      throw new AppError(
+        'toolAccessDenied',
+        `A person rejected this call: ${existing.reason ?? 'No reason given.'}`
+      );
+    }
+    if (existing?.result && existing.executedAt) {
+      if (existing.result.error || existing.result.isError)
+        throw new AppError('validationError', existing.result.error ?? existing.result.body);
+      return existing.result.body;
+    }
+    if (existing || (connection.approvalTools ?? connection.allowedTools ?? []).includes(tool)) {
+      const before = await this.lifecycle.requireTask(task.id);
+      const waits = await this.taskRepository.listWaits(task.id, { openOnly: false });
+      if (
+        !waits.some((wait) => wait.kind === 'approval') &&
+        (before.state !== 'working' || before.pausedAt)
+      ) {
+        throw new AppError('taskStateConflict', 'The task is paused or no longer working.');
+      }
+      const approval =
+        existing ??
+        (
+          await this.approvalRepository.create({
+            clientKey,
+            taskId: task.id,
+            agentId: agent.id,
+            request
+          })
+        ).approval;
+      const fresh = await this.lifecycle.requireTask(task.id);
+      const allWaits = await this.taskRepository.listWaits(task.id, { openOnly: false });
+      if (fresh.state === 'working' && !allWaits.some((wait) => wait.targetId === approval.id)) {
+        await this.lifecycle.waitFor(task.id, { type: 'agent', id: agent.id }, [
+          {
+            kind: 'approval',
+            targetId: approval.id,
+            description: `A person approves ${tool} on ${connection.name}`
+          }
+        ]);
+      }
+      this.runnerLogger.onApprovalRequested(task.id, approval.id);
+      return {
+        content: `${tool} on ${connection.name} needs a person's approval (approval ${approval.id}). Your work is paused until they decide.`,
+        stop: true
+      };
+    }
+    const result = await this.performMcpCall(task, agent.id, connection, request, call.id);
+    if (result.isError) throw new AppError('validationError', `MCP tool failed: ${result.body}`);
+    return `${result.truncated ? '(cut off at 20,000 characters)\n' : ''}${result.body}`;
+  }
+
+  private async checkMcpCall(
+    task: Task,
+    agent: Agent,
+    request: { connectionId: string; tool: string; baseUrl?: string; authHeader?: string },
+    callId: string
+  ): Promise<Connection> {
+    const version = await this.agentRepository.getVersion(task.agentVersionId);
+    const usable = version ? (await this.usableCatalog(agent.id, version)).connections : [];
+    const connection = usable.find((c) => c.id === request.connectionId && c.kind === 'mcp');
+    const reason = !connection
+      ? 'The MCP connection is not selected, granted, or enabled.'
+      : !(connection.allowedTools ?? []).includes(request.tool)
+        ? 'This MCP tool is not allowed.'
+        : request.baseUrl &&
+            (request.baseUrl !== connection.baseUrl || request.authHeader !== connection.authHeader)
+          ? 'The MCP endpoint changed after approval was requested. Request a new approval.'
+          : null;
+    if (reason || !connection) {
+      await this.taskRepository.addEvent(
+        task.id,
+        EVENTS.connectionDenied,
+        { type: 'agent', id: agent.id },
+        { callId, connectionId: request.connectionId, tool: request.tool, reason }
+      );
+      this.runnerLogger.onConnectionDenied(
+        task.id,
+        request.connectionId,
+        'MCP',
+        request.tool,
+        reason ?? 'Denied'
+      );
+      throw new AppError('toolAccessDenied', reason ?? 'MCP access denied.');
+    }
+    return connection;
+  }
+
+  private async performMcpCall(
+    task: Task,
+    agentId: string,
+    connection: Connection,
+    request: McpConnectionCallRequest,
+    callId: string
+  ): Promise<ApprovalResult> {
+    if (!this.mcpClient) throw new AppError('validationError', 'The MCP client is unavailable.');
+    const events = await this.loadEvents(task.id);
+    const previous = events.find(
+      (event) => event.type === 'connection.mcp.result' && event.data.callId === callId
+    );
+    if (previous) return previous.data.result as unknown as ApprovalResult;
+    if (
+      events.some(
+        (event) => event.type === 'connection.mcp.started' && event.data.callId === callId
+      )
+    ) {
+      throw new AppError(
+        'validationError',
+        'The previous MCP attempt has an unknown outcome. Check the external service before requesting a new call. It will not be retried automatically.'
+      );
+    }
+    const credential = await this.catalogRepository.getConnectionCredential(connection.id);
+    // Claim before contacting the service. A crash must not repeat an unattended action.
+    await this.taskRepository.addEvent(task.id, 'connection.mcp.started', SYSTEM, {
+      callId,
+      connectionId: connection.id,
+      tool: request.tool
+    });
+    let result;
+    try {
+      result = await this.mcpClient.callTool(
+        {
+          url: connection.baseUrl,
+          headers: credential ? { [connection.authHeader]: credential } : {}
+        },
+        request.tool,
+        request.arguments
+      );
+    } catch {
+      // Transport errors can contain credentials or full request headers. Keep them private.
+      throw new AppError(
+        'validationError',
+        'The MCP call failed. Check the endpoint, credentials, arguments, and server availability.'
+      );
+    }
+    await this.taskRepository.addEvent(
+      task.id,
+      EVENTS.connectionCall,
+      { type: 'agent', id: agentId },
+      {
+        callId,
+        connectionId: connection.id,
+        tool: request.tool,
+        arguments: request.arguments,
+        isError: result.isError,
+        truncated: result.truncated
+      }
+    );
+    const recorded: ApprovalResult = { ...result, status: null, error: null };
+    await this.taskRepository.addEvent(task.id, 'connection.mcp.result', SYSTEM, {
+      callId,
+      result: recorded
+    });
+    return recorded;
   }
 
   // Returns the connection if the agent may make this call right now, or records the refusal
@@ -1080,20 +1323,28 @@ export class TaskRunnerService {
     } else {
       const callId = `approval:${approval.id}`;
       try {
-        const connection = await this.checkConnectionCall(task, agent, {
-          name: approval.request.connectionName,
-          connectionId: approval.request.connectionId,
-          method: approval.request.method,
-          path: approval.request.path,
-          callId
-        });
-        const response = await this.performCall(task, agent.id, connection, {
-          method: approval.request.method,
-          path: approval.request.path,
-          body: approval.request.body,
-          callId
-        });
-        result = { ...response, error: null };
+        if (approval.request.kind === 'mcp') {
+          const connection = await this.checkMcpCall(task, agent, approval.request, callId);
+          result = {
+            ...(await this.performMcpCall(task, agent.id, connection, approval.request, callId)),
+            error: null
+          };
+        } else {
+          const connection = await this.checkConnectionCall(task, agent, {
+            name: approval.request.connectionName,
+            connectionId: approval.request.connectionId,
+            method: approval.request.method,
+            path: approval.request.path,
+            callId
+          });
+          const response = await this.performCall(task, agent.id, connection, {
+            method: approval.request.method,
+            path: approval.request.path,
+            body: approval.request.body,
+            callId
+          });
+          result = { ...response, error: null };
+        }
       } catch (error) {
         result = {
           status: null,
@@ -1150,7 +1401,8 @@ export class TaskRunnerService {
 
     const wanted = new Set(version.connectionIds);
     const connections = (await this.catalogRepository.getConnections([...wanted])).filter(
-      (connection) => grantedConnections.has(connection.id) && !connection.disabledAt
+      (connection) =>
+        wanted.has(connection.id) && grantedConnections.has(connection.id) && !connection.disabledAt
     );
     return { skills, connections };
   }
@@ -1573,27 +1825,23 @@ export class TaskRunnerService {
           break;
         }
         case EVENTS.approvalExecuted: {
-          const request = event.data.request as {
-            method: string;
-            path: string;
-            connectionName: string;
-          };
+          const request = event.data.request as ConnectionCallRequest;
+          const action =
+            request.kind === 'mcp' ? request.tool : `${request.method} ${request.path}`;
           const result = event.data.result as ApprovalResult;
           say(
-            result.error
-              ? `A person approved ${request.method} ${request.path} on ${request.connectionName}, but it could not be made: ${result.error}`
-              : `A person approved ${request.method} ${request.path} on ${request.connectionName}. It returned HTTP ${result.status}${result.truncated ? ' (cut off)' : ''}:\n${result.body}`
+            result.error || result.isError
+              ? `A person approved ${action} on ${request.connectionName}, but it failed: ${result.error ?? result.body}`
+              : `A person approved ${action} on ${request.connectionName}. It returned ${request.kind === 'mcp' ? 'MCP' : `HTTP ${result.status}`}${result.truncated ? ' (cut off)' : ''}:\n${result.body}`
           );
           break;
         }
         case EVENTS.approvalRejected: {
-          const request = event.data.request as {
-            method: string;
-            path: string;
-            connectionName: string;
-          };
+          const request = event.data.request as ConnectionCallRequest;
+          const action =
+            request.kind === 'mcp' ? request.tool : `${request.method} ${request.path}`;
           say(
-            `A person rejected ${request.method} ${request.path} on ${request.connectionName}${event.data.reason ? `: ${event.data.reason as string}` : '.'} It was not made.`
+            `A person rejected ${action} on ${request.connectionName}${event.data.reason ? `: ${event.data.reason as string}` : '.'} It was not made.`
           );
           break;
         }
@@ -1787,4 +2035,8 @@ function notRecorded(): ApprovalResult {
 
 function isFinishedState(state: Task['state']): boolean {
   return state === 'completed' || state === 'cancelled';
+}
+
+export function mcpToolName(connectionId: string, tool: string): string {
+  return `mcp_${connectionId.replaceAll('-', '')}_${createHash('sha256').update(tool).digest('hex').slice(0, 20)}`;
 }

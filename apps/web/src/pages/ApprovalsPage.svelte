@@ -61,8 +61,7 @@
       {#each (decided.data?.data ?? []).filter((a) => a.status !== 'pending') ?? [] as approval (approval.id)}
         <li>
           <strong>
-            {approval.request.method}
-            {approval.request.path}
+            {#if approval.request.kind === 'mcp'}{approval.request.tool}{:else}{approval.request.method} {approval.request.path}{/if}
           </strong>
 
           on {approval.request.connectionName}

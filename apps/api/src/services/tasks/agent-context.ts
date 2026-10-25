@@ -37,9 +37,10 @@ export function buildSystemPrompt(
     `### ${oneLine(skill.name)}`,
     skillVersion.instructions
   ]);
-  const connections = (extras.connections ?? []).map(
-    (connection) =>
-      `- ${oneLine(connection.name)}: ${oneLine(connection.description)} (methods: ${connection.allowedMethods.join(', ')}; paths: ${connection.allowedPathPrefixes.join(', ')})`
+  const connections = (extras.connections ?? []).map((connection) =>
+    connection.kind === 'mcp'
+      ? `- ${oneLine(connection.name)}: ${oneLine(connection.description)} (MCP tools: ${(connection.allowedTools ?? []).join(', ')}; use its named tools)`
+      : `- ${oneLine(connection.name)}: ${oneLine(connection.description)} (methods: ${connection.allowedMethods.join(', ')}; paths: ${connection.allowedPathPrefixes.join(', ')})`
   );
   return [
     '## Instructions',
@@ -66,7 +67,7 @@ export function buildSystemPrompt(
       ? [
           '',
           '## Connections',
-          'Outside APIs you can call with http_request. Each call is checked against these limits.',
+          'Outside services: HTTP APIs use http_request; MCP connections expose named tools. Each call is checked against these limits. If a listed MCP tool is unavailable, discovery may have failed; explain the missing capability and ask a person.',
           ...connections
         ]
       : [])
