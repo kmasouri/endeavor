@@ -22,6 +22,8 @@ Delivering the same message twice finds the same task (its run key is `message:<
 
 ## Membership
 
+The endeavor header’s member avatars open a compact People and agents dialog. It shows current members and a searchable people and agents list matching creation. People can select several additions and choose whether to hide earlier messages. Successful additions disappear from the choices; a failed addition keeps the remaining selection for retry. Details remains a separate panel for activity and artifacts.
+
 The web interface calls conversations **Endeavors**. Existing conversation URLs and APIs remain
 compatible. Endeavors opens the last accessible selection saved for the current person in this
 browser, falling back to another accessible endeavor or a first-endeavor prompt. Recent displays
