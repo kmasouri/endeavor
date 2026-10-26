@@ -85,12 +85,13 @@ test('container policy refuses network, mounts, privileges, and unlimited resour
     ['--user', '1000:1000'],
     ['--cap-drop', 'ALL'],
     ['--security-opt', 'no-new-privileges'],
-    ['--memory', '1024m'],
+    ['--memory', '2048m'],
     ['--pids-limit', '256'],
     ['--cpus', '1']
   ])
     assert.equal(args[args.indexOf(option) + 1], expected);
   assert.ok(args.includes('--read-only'));
+  assert.ok(args.includes('--init'));
   for (const forbidden of ['--volume', '-v', '--mount', '--privileged', '--pid', '--device'])
     assert.equal(args.includes(forbidden), false);
 });

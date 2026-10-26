@@ -18,6 +18,7 @@ export const CONTAINER_LABEL = 'io.endeavor.executor=ca78';
 export function containerArgs(id: string, image: string): string[] {
   return [
     'create',
+    '--init',
     '--pull',
     'never',
     '--name',
@@ -34,9 +35,9 @@ export function containerArgs(id: string, image: string): string[] {
     '--security-opt',
     'no-new-privileges',
     '--memory',
-    '1024m',
+    '2048m',
     '--memory-swap',
-    '1024m',
+    '2048m',
     '--cpus',
     '1',
     '--pids-limit',

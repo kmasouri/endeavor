@@ -104,8 +104,8 @@ archive downloads have a separate 20 MB cap. `list_repository_files` is paginate
 Each command receives a serialized snapshot in a fresh container. No host checkout, workspace
 volume, Docker socket, provider credential, platform environment, or other task's files are
 mounted or passed to it. The container has no network, a read-only root, user 1000, no Linux
-capabilities, no new privileges, bounded tmpfs space, CPU, memory, processes, file size, and
-open files. The broker fixes the image and limits; tool arguments cannot change them.
+capabilities, no new privileges, bounded tmpfs space, one CPU, 2 GiB memory, processes, file size, and
+open files. An init process reaps command descendants. The broker fixes the image and limits; tool arguments cannot change them.
 These controls are defense in depth around the shared host kernel, not a virtual machine.
 See [Docker security](https://docs.docker.com/engine/security/) and
 [resource limits](https://docs.docker.com/engine/containers/resource_constraints/).
