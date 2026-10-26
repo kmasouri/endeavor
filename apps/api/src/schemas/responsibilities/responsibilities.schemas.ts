@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const calendarRecurrenceSchema = z
+const calendarRecurrenceSchema = z
   .strictObject({
     frequency: z.enum(['daily', 'weekdays', 'weekly']),
     days: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(),
@@ -25,7 +25,6 @@ export const calendarRecurrenceSchema = z
         : rule.days === undefined,
     'Choose unique weekdays only for a weekly rule'
   );
-export type CalendarRecurrenceBody = z.infer<typeof calendarRecurrenceSchema>;
 
 export const responsibilityParamsSchema = z.object({ responsibilityId: z.uuid() });
 

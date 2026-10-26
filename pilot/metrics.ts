@@ -39,7 +39,7 @@ export interface TaskUsage {
 }
 
 // A task, or a wait, quiet for longer than this counts as stalled or missed.
-export const STALE_MINUTES = 15;
+const STALE_MINUTES = 15;
 
 export function taskUsage(events: EventLike[]): TaskUsage {
   const usage: TaskUsage = {

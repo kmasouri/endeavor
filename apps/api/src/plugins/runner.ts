@@ -38,7 +38,7 @@ declare module 'fastify' {
 
 // What a 'scripted' agent does when no test gives it a script: it answers every request at once
 // by echoing it. This lets you try the whole loop locally with no API key.
-export const echoScript: ModelScript = (request) => {
+const echoScript: ModelScript = (request) => {
   const answered = request.transcript.some((entry) => entry.role === 'assistant');
   if (answered) {
     return { text: '' };
@@ -59,7 +59,7 @@ export const echoScript: ModelScript = (request) => {
   };
 };
 
-export function buildModelClients(
+function buildModelClients(
   settings: typeof config
 ): Partial<Record<ModelProvider, ModelClient>> {
   return {

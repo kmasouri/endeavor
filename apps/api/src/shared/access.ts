@@ -9,6 +9,9 @@ import { Human, HumanRole } from './types';
 // The API still names the acting person in the x-actor-id header, so history shows who did what.
 export const ROLES_ENABLED = false;
 
+const ALL_ROLES: readonly HumanRole[] = ['admin', 'member'];
+export const ADMIN_ONLY: readonly HumanRole[] = ['admin'];
+
 export function requireHuman(
   human: Human | null,
   allowed: readonly HumanRole[] = ALL_ROLES,
@@ -27,6 +30,3 @@ export function requireHuman(
 export function hasFullAccess(human: Human, rolesEnabled: boolean = ROLES_ENABLED): boolean {
   return !rolesEnabled || human.role === 'admin';
 }
-
-export const ALL_ROLES: readonly HumanRole[] = ['admin', 'member'];
-export const ADMIN_ONLY: readonly HumanRole[] = ['admin'];

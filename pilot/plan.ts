@@ -97,7 +97,7 @@ export function activeFailure(path: string, window: number): SeededFailure | nul
   );
 }
 
-export function failuresIn(window: number): SeededFailure[] {
+function failuresIn(window: number): SeededFailure[] {
   return SEEDED_FAILURES.filter((failure) => failure.windows.includes(window));
 }
 

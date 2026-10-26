@@ -4,7 +4,7 @@ import fastifyStatic from '@fastify/static';
 import { FastifyInstance } from 'fastify';
 
 // The web interface lives at /app/ so its pages never clash with API paths like /agents.
-export const WEB_PREFIX = '/app/';
+const WEB_PREFIX = '/app/';
 
 // Serves the web interface (apps/web), once Vite has built it into apps/web/dist. Without a
 // build, nothing is served; use `npm run dev:web` for the interface with live reload.
