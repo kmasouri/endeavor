@@ -32,6 +32,7 @@ import {
   TaskLifecycle
 } from './task-lifecycle';
 import { isFinished } from './task-state';
+import { TASK_EVENTS } from './task-events';
 
 export interface CreateTaskRequest {
   ownerAgentId: string;
@@ -211,7 +212,7 @@ export class TaskService {
     }
 
     const paused = await this.lifecycle.applyChanges(task, { pausedAt: new Date() });
-    await this.taskRepository.addEvent(task.id, 'task.paused', humanActor(human.id), {
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.paused, humanActor(human.id), {
       reason: reason ?? null
     });
     this.taskLogger.onTaskPaused(task.id);
@@ -237,7 +238,7 @@ export class TaskService {
           })
         : await this.lifecycle.applyChanges(task, { pausedAt: null });
 
-    await this.taskRepository.addEvent(task.id, 'task.resumed', actor, { note: note ?? null });
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.resumed, actor, { note: note ?? null });
     this.taskLogger.onTaskResumed(task.id);
     return task;
   }
@@ -315,7 +316,7 @@ export class TaskService {
     }
     if (created) {
       await this.lifecycle.recordCreated(task, actor);
-      await this.taskRepository.addEvent(previous.id, 'task.restarted', actor, {
+      await this.taskRepository.addEvent(previous.id, TASK_EVENTS.restarted, actor, {
         newTaskId: task.id,
         reason: reason ?? null
       });
@@ -360,7 +361,7 @@ export class TaskService {
     }
 
     const migrated = await this.lifecycle.applyChanges(task, { agentVersionId: version.id });
-    await this.taskRepository.addEvent(task.id, 'task.version.migrated', humanActor(human.id), {
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.versionMigrated, humanActor(human.id), {
       fromVersionId: task.agentVersionId,
       toVersionId: version.id,
       toVersion: version.version,
@@ -407,7 +408,7 @@ export class TaskService {
           changes: { review }
         });
     await this.taskRepository.resolveWait(reviewWait.id, { review });
-    await this.taskRepository.addEvent(task.id, 'task.reviewed', actor, { review });
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.reviewed, actor, { review });
     return reviewed;
   }
 
@@ -445,10 +446,15 @@ export class TaskService {
       );
     }
     const decided = await this.decide(actorId, approval, 'approved', reason);
-    await this.taskRepository.addEvent(decided.taskId, 'approval.approved', humanActor(actorId), {
-      approvalId: decided.id,
-      reason: reason ?? null
-    });
+    await this.taskRepository.addEvent(
+      decided.taskId,
+      TASK_EVENTS.approvalApproved,
+      humanActor(actorId),
+      {
+        approvalId: decided.id,
+        reason: reason ?? null
+      }
+    );
     this.taskLogger.onApprovalApproved(decided.id, decided.taskId);
     return decided;
   }
@@ -458,7 +464,7 @@ export class TaskService {
     const approval = await this.requireVisibleApproval(actorId, approvalId);
     const decided = await this.decide(actorId, approval, 'rejected', reason);
     const actor = humanActor(actorId);
-    await this.taskRepository.addEvent(decided.taskId, 'approval.rejected', actor, {
+    await this.taskRepository.addEvent(decided.taskId, TASK_EVENTS.approvalRejected, actor, {
       approvalId: decided.id,
       request: decided.request,
       reason: reason ?? null

@@ -23,13 +23,8 @@ import {
   TaskEvent,
   TaskWait
 } from '../../shared/types';
-import {
-  mcpToolName,
-  budgetExceeded,
-  DEFAULT_RUNNER_OPTIONS,
-  TaskRunnerService,
-  workingMs
-} from './task-runner.service';
+import { buildMcpToolName } from './mcp-tool-names';
+import { DEFAULT_RUNNER_OPTIONS, TaskRunnerService } from './task-runner.service';
 
 const CONV = '00000000-0000-4000-8000-0000000000f1';
 const HUMAN = '00000000-0000-4000-8000-000000000001';
@@ -2007,63 +2002,6 @@ describe('TaskRunnerService', () => {
   });
 });
 
-describe('budgets', () => {
-  const at = (minutes: number) => new Date(Date.UTC(2026, 9, 22, 12, minutes));
-  const timed = (id: number, type: string, data: Record<string, unknown>, minutes: number) => ({
-    ...event(id, type, data),
-    createdAt: at(minutes)
-  });
-
-  it('counts only working, unpaused time', () => {
-    const events = [
-      timed(1, 'task.state.changed', { to: 'waiting' }, 10),
-      timed(2, 'task.state.changed', { to: 'working' }, 70),
-      timed(3, 'task.paused', {}, 75),
-      timed(4, 'task.resumed', {}, 100)
-    ];
-
-    // Working 0-10, then 70-75, then 100-110.
-    expect(workingMs({ createdAt: at(0) }, events, at(110)) / 60_000).toBe(25);
-  });
-
-  it('blocks on tokens once the budget is used', () => {
-    const limited = { ...version, limits: { maxTokens: 1000 } };
-    const events = [
-      event(1, 'model.turn', { usage: { inputTokens: 600, outputTokens: 100 } }),
-      event(2, 'model.turn', { usage: { inputTokens: 250, outputTokens: 60 } })
-    ];
-
-    expect(budgetExceeded(makeTask(), limited, events, 40)).toBe(
-      'Used 1010 of the 1000-token budget.'
-    );
-    expect(budgetExceeded(makeTask(), version, events, 40)).toBeNull();
-  });
-
-  it("never lets a version raise the runner's turn limit", () => {
-    const events = Array.from({ length: 40 }, (_, i) => event(i + 1, 'model.turn', {}));
-
-    expect(
-      budgetExceeded(makeTask(), { ...version, limits: { maxModelTurns: 1000 } }, events, 40)
-    ).toBe('Reached the limit of 40 model turns.');
-  });
-
-  it("uses the version's turn limit over the runner default", () => {
-    const events = [event(1, 'model.turn', {}), event(2, 'model.turn', {})];
-
-    expect(
-      budgetExceeded(makeTask(), { ...version, limits: { maxModelTurns: 2 } }, events, 40)
-    ).toBe('Reached the limit of 2 model turns.');
-  });
-
-  it('blocks on working minutes', () => {
-    const task = makeTask({ createdAt: at(0) });
-
-    expect(
-      budgetExceeded(task, { ...version, limits: { maxWorkingMinutes: 30 } }, [], 40, at(31))
-    ).toBe('Worked 31 of the 30 allowed minutes.');
-  });
-});
-
 describe('MCP connections', () => {
   const id = '00000000-0000-4000-8000-0000000000d1';
   const connection: Connection = {
@@ -2085,7 +2023,7 @@ describe('MCP connections', () => {
   };
   const call = (tool = 'lookup') => ({
     id: 'mcp-call',
-    name: mcpToolName(id, tool),
+    name: buildMcpToolName(id, tool),
     input: { title: 'Exact approved value' }
   });
   const grant = {
@@ -2144,14 +2082,14 @@ describe('MCP connections', () => {
     expect(request.tools.filter((tool) => tool.name.startsWith('mcp_'))).toEqual(
       ['lookup', 'create'].map((name) =>
         expect.objectContaining({
-          name: mcpToolName(id, name),
+          name: buildMcpToolName(id, name),
           description: `Records: Use ${name}`,
           inputSchema: expect.objectContaining({ type: 'object' })
         })
       )
     );
     expect(request.tools.some((tool) => tool.name === 'http_request')).toBe(false);
-    expect(mcpToolName(id, 'a'.repeat(128))).toHaveLength(57);
+    expect(buildMcpToolName(id, 'a'.repeat(128))).toHaveLength(57);
   });
 
   it('executes an unattended tool and records its result and arguments', async () => {
