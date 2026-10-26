@@ -42,7 +42,7 @@ export interface AgentDeletionImpact {
 }
 
 export interface AgentRepository {
-  deletionImpact(agentId: string): Promise<AgentDeletionImpact>;
+  getDeletionImpact(agentId: string): Promise<AgentDeletionImpact>;
   delete(agentId: string, actorId: string): Promise<boolean>;
   // Holds a shared database lock until the call finishes. Deletion waits for these calls.
   acquireExecution(agentId: string): Promise<(() => Promise<void>) | null>;

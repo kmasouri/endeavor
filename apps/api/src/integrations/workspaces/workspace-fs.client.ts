@@ -33,10 +33,10 @@ export class WorkspaceFsClient implements WorkspaceClient {
   }
 
   async list(taskId: string, folder = ''): Promise<WorkspaceListing> {
-    const { root, full } = this.locate(taskId, folder);
+    const { root, full } = this.resolveWorkspacePath(taskId, folder);
     let found;
     try {
-      await this.checkInside(root, full);
+      await this.ensureRealPathInside(root, full);
       found = await readdir(full, { recursive: true, withFileTypes: true });
     } catch (error) {
       if (isMissing(error)) {
@@ -70,10 +70,10 @@ export class WorkspaceFsClient implements WorkspaceClient {
   }
 
   async read(taskId: string, path: string): Promise<WorkspaceFile> {
-    const { root, full } = this.locate(taskId, path, { file: true });
+    const { root, full } = this.resolveWorkspacePath(taskId, path, { file: true });
     let buffer: Buffer;
     try {
-      await this.checkInside(root, full);
+      await this.ensureRealPathInside(root, full);
       buffer = await readFile(full);
     } catch (error) {
       if (isMissing(error) || (error as NodeJS.ErrnoException).code === 'EISDIR') {
@@ -93,7 +93,7 @@ export class WorkspaceFsClient implements WorkspaceClient {
   }
 
   async write(taskId: string, path: string, content: string): Promise<{ bytes: number }> {
-    const { root, full } = this.locate(taskId, path, { file: true });
+    const { root, full } = this.resolveWorkspacePath(taskId, path, { file: true });
     const bytes = Buffer.byteLength(content, 'utf8');
     if (bytes > this.limits.maxWriteBytes) {
       throw new AppError(
@@ -102,9 +102,9 @@ export class WorkspaceFsClient implements WorkspaceClient {
       );
     }
     await mkdir(dirname(full), { recursive: true });
-    await this.checkInside(root, dirname(full));
+    await this.ensureRealPathInside(root, dirname(full));
     try {
-      await this.checkInside(root, full);
+      await this.ensureRealPathInside(root, full);
     } catch (error) {
       if (!isMissing(error)) {
         throw error;
@@ -123,7 +123,7 @@ export class WorkspaceFsClient implements WorkspaceClient {
 
   // Turns a workspace path into a real path, and refuses anything that would leave the task's
   // folder, such as "../other-task/file" or "/etc/passwd".
-  private locate(
+  private resolveWorkspacePath(
     taskId: string,
     path: string,
     options: { file?: boolean } = {}
@@ -150,7 +150,7 @@ export class WorkspaceFsClient implements WorkspaceClient {
   }
 
   // A link inside the folder could point outside it. Follow links and check again.
-  private async checkInside(root: string, full: string): Promise<void> {
+  private async ensureRealPathInside(root: string, full: string): Promise<void> {
     const [realRoot, realFull] = await Promise.all([realpath(root), realpath(full)]);
     if (realFull !== realRoot && !realFull.startsWith(realRoot + sep)) {
       throw new AppError('workspacePathInvalid', 'Paths must stay inside your workspace.');

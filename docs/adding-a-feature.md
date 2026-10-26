@@ -62,7 +62,7 @@ export class OrderLogger {
   constructor(private readonly logger: FastifyBaseLogger) {}
 
   onOrderCreated(): void {
-    currentLogger(this.logger).info({ event: 'order.created' }, 'order created');
+    getCurrentLogger(this.logger).info({ event: 'order.created' }, 'order created');
   }
 }
 ```

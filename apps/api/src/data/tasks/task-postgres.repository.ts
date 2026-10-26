@@ -380,7 +380,7 @@ export class TaskPostgresRepository implements TaskRepository {
   }
 
   async sumCost(filter: CostFilter): Promise<CostSummary> {
-    const { where, values } = costWhere(filter);
+    const { where, values } = buildCostWhereClause(filter);
     const result = await this.db.query<{
       cost: string | null;
       tokens: string | null;
@@ -404,7 +404,7 @@ export class TaskPostgresRepository implements TaskRepository {
   }
 
   async listTaskCosts(filter: CostFilter, limit: number): Promise<TaskCost[]> {
-    const { where, values } = costWhere(filter);
+    const { where, values } = buildCostWhereClause(filter);
     const result = await this.db.query<{
       id: string;
       title: string;
@@ -591,14 +591,14 @@ function listFilters(input: Omit<ListTasksInput, 'limit' | 'offset'>): {
   }
   if (input.visibleToHumanId !== undefined) {
     values.push(input.visibleToHumanId);
-    const n = values.length;
+    const humanParam = values.length;
     conditions.push(
       `(conversation_id IN (
           SELECT conversation_id
           FROM endeavor.conversation_members
-          WHERE participant_type = 'human' AND participant_id = $${n} AND removed_at IS NULL
+          WHERE participant_type = 'human' AND participant_id = $${humanParam} AND removed_at IS NULL
         )
-        OR (requested_by_type = 'human' AND requested_by_id = $${n}))`
+        OR (requested_by_type = 'human' AND requested_by_id = $${humanParam}))`
     );
   }
 
@@ -674,7 +674,7 @@ function toTaskOutput(row: TaskOutputRow): TaskOutput {
 
 // The WHERE clause for cost queries. Only fixed column names are written into the SQL; every
 // value is a parameter.
-function costWhere(filter: CostFilter): { where: string; values: unknown[] } {
+function buildCostWhereClause(filter: CostFilter): { where: string; values: unknown[] } {
   const clauses = [`e.type IN ('model.turn', 'completion.checked')`];
   const values: unknown[] = [];
   if (filter.agentId) {

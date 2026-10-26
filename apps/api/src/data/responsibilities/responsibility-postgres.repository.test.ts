@@ -47,11 +47,9 @@ describe('responsibility persistence compatibility', () => {
       timeZone: 'America/New_York'
     };
     const slot = new Date('2026-11-02T14:00:00Z');
-    const query = jest
-      .fn()
-      .mockResolvedValue({
-        rows: [{ ...legacy, interval_minutes: null, recurrence, next_run_at: slot }]
-      });
+    const query = jest.fn().mockResolvedValue({
+      rows: [{ ...legacy, interval_minutes: null, recurrence, next_run_at: slot }]
+    });
     const repository = new ResponsibilityPostgresRepository({
       query
     } as unknown as FastifyInstance['pg']);

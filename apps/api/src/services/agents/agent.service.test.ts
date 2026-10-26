@@ -120,8 +120,8 @@ describe('AgentService', () => {
   it('previews affected work without deleting it', async () => {
     const { service, agents } = setup();
     const impact = { tasks: [{ id: 't', title: 'Brief', state: 'waiting' }], schedules: [] };
-    agents.deletionImpact.mockResolvedValue(impact);
-    await expect(service.deletionImpact(ADMIN_ID, AGENT_ID)).resolves.toEqual(impact);
+    agents.getDeletionImpact.mockResolvedValue(impact);
+    await expect(service.getDeletionImpact(ADMIN_ID, AGENT_ID)).resolves.toEqual(impact);
     expect(agents.delete).not.toHaveBeenCalled();
   });
 

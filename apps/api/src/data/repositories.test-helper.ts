@@ -58,7 +58,7 @@ export function mockAgentRepository(): jest.Mocked<AgentRepository> {
     countDirectory: jest.fn().mockResolvedValue(0),
     update: jest.fn(),
     setDisabled: jest.fn(),
-    deletionImpact: jest.fn().mockResolvedValue({ tasks: [], schedules: [] }),
+    getDeletionImpact: jest.fn().mockResolvedValue({ tasks: [], schedules: [] }),
     delete: jest.fn().mockResolvedValue(true),
     acquireExecution: jest.fn().mockImplementation(async () => async () => {}),
     addVersion: jest.fn(),

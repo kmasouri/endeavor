@@ -1,4 +1,4 @@
-import { graceMs, planRun } from './schedule';
+import { calculateGraceMs, planRun } from './schedule';
 
 const at = (minutes: number) => new Date(Date.UTC(2026, 9, 22, 0, minutes));
 const hourly = (policy: 'ask' | 'run_once' | 'skip') => ({
@@ -93,7 +93,7 @@ describe('planRun', () => {
   });
 
   it('gives short intervals a shorter grace period', () => {
-    expect(graceMs(10)).toBe(5 * 60_000);
-    expect(graceMs(600)).toBe(15 * 60_000);
+    expect(calculateGraceMs(10)).toBe(5 * 60_000);
+    expect(calculateGraceMs(600)).toBe(15 * 60_000);
   });
 });

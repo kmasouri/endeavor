@@ -12,15 +12,15 @@ import {
   addUsage,
   type EventLike,
   isStalled,
-  majorityWindow,
-  minutesBetween,
+  findMajorityWindow,
+  countMinutesBetween,
   money,
-  repeatedWork,
-  staleReplyWaits,
+  countRepeatedWork,
+  findStaleReplyWaits,
   type TaskLike,
-  taskUsage,
+  sumTaskUsage,
   type TaskUsage,
-  unsupportedDone
+  isUnsupportedDone
 } from './metrics.ts';
 import { ENDPOINTS, parseBrokenLines, scoreRun, SEEDED_FAILURES, WINDOW_COUNT } from './plan.ts';
 
@@ -119,9 +119,9 @@ async function reportBriefs(
       (item) =>
         writers.has(item.task.ownerAgentId) && item.task.requestMessageId === brief.messageId
     );
-    const usage = tasks.reduce((sum, item) => addUsage(sum, item.usage), emptyUsage());
+    const usage = tasks.reduce((sum, item) => addUsage(sum, item.usage), createEmptyUsage());
     const doneAt = writer?.task.state === 'completed' ? writer.task.finishedAt : null;
-    const minutes = doneAt ? minutesBetween(brief.startedAt, doneAt) : null;
+    const minutes = doneAt ? countMinutesBetween(brief.startedAt, doneAt) : null;
     const steering = messages.filter(
       (message) => message.authorType === 'human' && message.id !== brief.messageId
     ).length;
@@ -256,7 +256,7 @@ async function reportChecks(api: Api, state: PilotState): Promise<TaskReport[]> 
     const requests = (log?.requests ?? []).filter(
       (request) => request.at >= run.createdAt && request.at <= end
     );
-    const window = majorityWindow(requests.map((request) => request.window));
+    const window = findMajorityWindow(requests.map((request) => request.window));
     if (window !== null) windowsSeen.set(window, (windowsSeen.get(window) ?? 0) + 1);
     const called = new Set(requests.map((request) => request.path.split('?')[0]));
     // The report is the Checker's last message in the run. Earlier ones are its questions to
@@ -273,8 +273,8 @@ async function reportChecks(api: Api, state: PilotState): Promise<TaskReport[]> 
 
     const investigatorUsage = investigatorTasks
       .filter((item) => item.task.createdAt >= run.createdAt && item.task.createdAt <= end)
-      .reduce((sum, item) => addUsage(sum, item.usage), emptyUsage());
-    const runUsage = byId.get(run.id)?.usage ?? emptyUsage();
+      .reduce((sum, item) => addUsage(sum, item.usage), createEmptyUsage());
+    const runUsage = byId.get(run.id)?.usage ?? createEmptyUsage();
     const cost = runUsage.costUsd + investigatorUsage.costUsd;
     runCosts.push(cost);
 
@@ -287,8 +287,8 @@ async function reportChecks(api: Api, state: PilotState): Promise<TaskReport[]> 
         `${ENDPOINTS.filter((endpoint) => called.has(endpoint.path.split('?')[0])).length} of ${ENDPOINTS.length}`,
         reported.join(', ') || (/ALL OK/i.test(report) ? 'ALL OK' : '-'),
         score
-          ? SEEDED_FAILURES.filter((f) => f.windows.includes(score.window))
-              .map((f) => f.id)
+          ? SEEDED_FAILURES.filter((failure) => failure.windows.includes(score.window))
+              .map((failure) => failure.id)
               .join(', ') || '-'
           : '-',
         score?.caught.map((failure) => failure.id).join(', ') || '-',
@@ -313,8 +313,10 @@ async function reportChecks(api: Api, state: PilotState): Promise<TaskReport[]> 
   out(
     `- Seeded failures caught: ${caught.size} of ${SEEDED_FAILURES.length} (target: all ${SEEDED_FAILURES.length})${
       caught.size < SEEDED_FAILURES.length
-        ? `; not yet: ${SEEDED_FAILURES.filter((f) => !caught.has(f.id))
-            .map((f) => `${f.id} ${f.path} (windows ${f.windows.join(', ')})`)
+        ? `; not yet: ${SEEDED_FAILURES.filter((failure) => !caught.has(failure.id))
+            .map(
+              (failure) => `${failure.id} ${failure.path} (windows ${failure.windows.join(', ')})`
+            )
             .join('; ')}`
         : ''
     }`
@@ -339,8 +341,8 @@ function reportHealth(tasks: TaskReport[]): void {
   out();
   const unique = [...new Map(tasks.map((item) => [item.task.id, item])).values()];
   const stalled = unique.filter((item) => isStalled(item.task, now));
-  const staleWaits = unique.filter((item) => staleReplyWaits(item.task, now).length > 0);
-  const unsupported = unique.filter((item) => unsupportedDone(item.task, item.usage));
+  const staleWaits = unique.filter((item) => findStaleReplyWaits(item.task, now).length > 0);
+  const unsupported = unique.filter((item) => isUnsupportedDone(item.task, item.usage));
   const blocked = unique.filter((item) => item.task.state === 'blocked');
   const unpriced = unique.reduce((sum, item) => sum + item.usage.unpricedCalls, 0);
 
@@ -348,7 +350,7 @@ function reportHealth(tasks: TaskReport[]): void {
   out(`- Stalled (working, no change for 15+ minutes): ${list(stalled)}`);
   out(`- Reply waits open for 15+ minutes (missed replies?): ${list(staleWaits)}`);
   out(
-    `- Repeated work (two tasks for one request): ${repeatedWork(unique.map((item) => item.task))}`
+    `- Repeated work (two tasks for one request): ${countRepeatedWork(unique.map((item) => item.task))}`
   );
   // Completion checks are off unless COMPLETION_CHECK=true. Without them, your scores
   // measure unsupported "done" claims instead.
@@ -388,7 +390,7 @@ async function loadTasks(api: Api, path: string): Promise<TaskReport[]> {
   return Promise.all(
     tasks.map(async (task) => {
       const details = await api.get<TaskLike>(`/tasks/${task.id}`);
-      return { task: details, usage: taskUsage(await loadEvents(api, task.id)) };
+      return { task: details, usage: sumTaskUsage(await loadEvents(api, task.id)) };
     })
   );
 }
@@ -414,8 +416,8 @@ function readScores(): Record<string, Score> {
   }
 }
 
-function emptyUsage(): TaskUsage {
-  return taskUsage([]);
+function createEmptyUsage(): TaskUsage {
+  return sumTaskUsage([]);
 }
 
 function describe(task: TaskLike): string {

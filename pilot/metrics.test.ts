@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   isStalled,
-  majorityWindow,
-  repeatedWork,
-  staleReplyWaits,
+  findMajorityWindow,
+  countRepeatedWork,
+  findStaleReplyWaits,
   type TaskLike,
-  taskUsage,
-  unsupportedDone
+  sumTaskUsage,
+  isUnsupportedDone
 } from './metrics.ts';
 
 const NOW = new Date('2026-10-23T12:00:00Z');
@@ -27,8 +27,8 @@ function task(overrides: Partial<TaskLike> = {}): TaskLike {
   };
 }
 
-test('taskUsage adds up cost, tokens, asks, and checks', () => {
-  const usage = taskUsage([
+test('sumTaskUsage adds up cost, tokens, asks, and checks', () => {
+  const usage = sumTaskUsage([
     {
       type: 'model.turn',
       createdAt: '',
@@ -68,27 +68,27 @@ test('isStalled only flags working, unpaused tasks quiet for 15+ minutes', () =>
   );
 });
 
-test('staleReplyWaits finds open reply waits older than 15 minutes', () => {
+test('findStaleReplyWaits finds open reply waits older than 15 minutes', () => {
   const waits = [
     { kind: 'reply', createdAt: '2026-10-23T11:30:00Z', resolvedAt: null },
     { kind: 'reply', createdAt: '2026-10-23T11:55:00Z', resolvedAt: null },
     { kind: 'reply', createdAt: '2026-10-23T11:00:00Z', resolvedAt: '2026-10-23T11:05:00Z' },
     { kind: 'approval', createdAt: '2026-10-23T11:00:00Z', resolvedAt: null }
   ];
-  assert.equal(staleReplyWaits(task({ waits }), NOW).length, 1);
+  assert.equal(findStaleReplyWaits(task({ waits }), NOW).length, 1);
 });
 
-test('unsupportedDone flags completed tasks with no passed check', () => {
-  const none = taskUsage([]);
-  const passed = taskUsage([{ type: 'completion.checked', createdAt: '', data: { met: true } }]);
-  assert.equal(unsupportedDone(task({ state: 'completed' }), none), true);
-  assert.equal(unsupportedDone(task({ state: 'completed' }), passed), false);
-  assert.equal(unsupportedDone(task(), none), false);
+test('isUnsupportedDone flags completed tasks with no passed check', () => {
+  const none = sumTaskUsage([]);
+  const passed = sumTaskUsage([{ type: 'completion.checked', createdAt: '', data: { met: true } }]);
+  assert.equal(isUnsupportedDone(task({ state: 'completed' }), none), true);
+  assert.equal(isUnsupportedDone(task({ state: 'completed' }), passed), false);
+  assert.equal(isUnsupportedDone(task(), none), false);
 });
 
-test('repeatedWork counts extra tasks for the same agent and request', () => {
+test('countRepeatedWork counts extra tasks for the same agent and request', () => {
   assert.equal(
-    repeatedWork([
+    countRepeatedWork([
       task({ id: 'a' }),
       task({ id: 'b' }),
       task({ id: 'c', ownerAgentId: 'a2' }),
@@ -99,8 +99,8 @@ test('repeatedWork counts extra tasks for the same agent and request', () => {
   );
 });
 
-test('majorityWindow picks the most common window', () => {
-  assert.equal(majorityWindow([]), null);
-  assert.equal(majorityWindow([3, 3, 4]), 3);
-  assert.equal(majorityWindow([4]), 4);
+test('findMajorityWindow picks the most common window', () => {
+  assert.equal(findMajorityWindow([]), null);
+  assert.equal(findMajorityWindow([3, 3, 4]), 3);
+  assert.equal(findMajorityWindow([4]), 4);
 });

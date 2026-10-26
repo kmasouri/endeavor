@@ -12,9 +12,9 @@ import { paged, success } from '../../shared/response';
 
 type AgentActionRequest = FastifyRequest<{ Params: AgentParams; Headers: ActorHeaders }>;
 
-export async function agentDeletionImpactHandler(request: AgentActionRequest): Promise<unknown> {
+export async function getAgentDeletionImpactHandler(request: AgentActionRequest): Promise<unknown> {
   return success(
-    await request.server.agentService.deletionImpact(
+    await request.server.agentService.getDeletionImpact(
       request.headers['x-actor-id'],
       request.params.agentId
     )

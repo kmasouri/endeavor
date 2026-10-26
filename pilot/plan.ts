@@ -88,7 +88,7 @@ export const SEEDED_FAILURES: SeededFailure[] = [
 ];
 
 // The failure switched on for this path in this window, if any.
-export function activeFailure(path: string, window: number): SeededFailure | null {
+export function findActiveFailure(path: string, window: number): SeededFailure | null {
   const bare = path.split('?')[0];
   return (
     SEEDED_FAILURES.find(
@@ -97,12 +97,12 @@ export function activeFailure(path: string, window: number): SeededFailure | nul
   );
 }
 
-function failuresIn(window: number): SeededFailure[] {
+function listFailuresIn(window: number): SeededFailure[] {
   return SEEDED_FAILURES.filter((failure) => failure.windows.includes(window));
 }
 
 // Which window a moment falls in, given when window 0 started. Negative before the start.
-export function windowAt(at: Date, startedAt: Date, intervalMinutes: number): number {
+export function getWindowAt(at: Date, startedAt: Date, intervalMinutes: number): number {
   return Math.floor((at.getTime() - startedAt.getTime()) / (intervalMinutes * 60_000));
 }
 
@@ -127,9 +127,9 @@ export interface RunScore {
 // Scores one run: which active failures it named, which it missed, and which healthy paths it
 // called broken.
 export function scoreRun(window: number, reportedPaths: string[]): RunScore {
-  const active = failuresIn(window);
+  const active = listFailuresIn(window);
   const caught = active.filter((failure) => reportedPaths.includes(failure.path.split('?')[0]));
   const missed = active.filter((failure) => !caught.includes(failure));
-  const falseAlarms = reportedPaths.filter((path) => !activeFailure(path, window));
+  const falseAlarms = reportedPaths.filter((path) => !findActiveFailure(path, window));
   return { window, caught, missed, falseAlarms };
 }

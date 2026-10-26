@@ -228,7 +228,7 @@ async function main(): Promise<void> {
   if (!documents.some((document) => document.title === 'Test API reference')) {
     await api.post(`/conversations/${conversation}/documents`, {
       title: 'Test API reference',
-      content: apiReference()
+      content: buildApiReference()
     });
   }
 
@@ -419,7 +419,7 @@ BROKEN: /api/example - what is wrong - likely cause from the Investigator
 If nothing is broken, report "ALL OK". Don't write "BROKEN:" for an endpoint that is fine. Use the path without its query string.`;
 }
 
-function apiReference(): string {
+function buildApiReference(): string {
   const list = ENDPOINTS.map((endpoint) => `- GET ${endpoint.path}: ${endpoint.expect}`).join('\n');
   return `# Test API reference
 

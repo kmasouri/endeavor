@@ -61,7 +61,7 @@ const envSchema = z.object({
       if (!value) {
         return {};
       }
-      const parsed = priceTableSchema.safeParse(safeJson(value));
+      const parsed = priceTableSchema.safeParse(parseJsonOrUndefined(value));
       if (!parsed.success) {
         ctx.addIssue({
           code: 'custom',
@@ -88,7 +88,7 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
-function safeJson(value: string): unknown {
+function parseJsonOrUndefined(value: string): unknown {
   try {
     return JSON.parse(value);
   } catch {

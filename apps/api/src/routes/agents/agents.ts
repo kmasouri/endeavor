@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import {
   createAgentHandler,
-  agentDeletionImpactHandler,
+  getAgentDeletionImpactHandler,
   deleteAgentHandler,
   disableAgentHandler,
   enableAgentHandler,
@@ -35,7 +35,7 @@ export async function agentsRouter(fastifyInstance: FastifyInstance): Promise<vo
         params: agentParamsSchema
       }
     },
-    agentDeletionImpactHandler
+    getAgentDeletionImpactHandler
   );
   fastifyInstance.delete(
     '/agents/:agentId',

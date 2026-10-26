@@ -61,7 +61,7 @@ import {
   STOPPING_TOOLS
 } from './agent-tools';
 import { buildMcpToolName, isMcpToolName, parseMcpConnectionId } from './mcp-tool-names';
-import { costUsd, dollars, PriceTable, startOfMonth } from './pricing';
+import { calculateCostUsd, formatDollars, PriceTable, startOfMonth } from './pricing';
 import { planRun } from './schedule';
 import { startResponsibilityRun } from './scheduled-runs';
 import { countEventsOfType, countEventsSinceLast, findBudgetOverrun } from './task-budget';
@@ -546,7 +546,7 @@ export class TaskRunnerService {
   ): Promise<'continue' | 'stop' | number> {
     const release = await this.agentRepository.acquireExecution(agent.id);
     if (!release) return 'stop';
-    const agentActor: Actor = actorFor(agent);
+    const agentActor: Actor = toAgentActor(agent);
     // Model calls can be slow. Keep the lease alive while waiting, and drop the result if the
     // lease was lost anyway, because another worker may be running the task by now.
     let leaseHeld = true;
@@ -583,7 +583,7 @@ export class TaskRunnerService {
         toolCalls: result.toolCalls,
         stopReason: result.stopReason,
         usage: result.usage,
-        costUsd: costUsd(this.options.prices, version.model, result.usage),
+        costUsd: calculateCostUsd(this.options.prices, version.model, result.usage),
         servedModel: result.servedModel
       });
       this.runnerLogger.onModelTurn(task.id, version.provider, result.servedModel, result.usage);
@@ -718,7 +718,7 @@ export class TaskRunnerService {
     const waits = await this.taskRepository.listWaits(task.id, { openOnly: false });
     const currentTask = await this.lifecycle.requireTask(task.id);
     if (currentTask.state === 'working' && !waits.some((wait) => wait.targetId === question.id)) {
-      await this.lifecycle.waitFor(task.id, actorFor(agent), [
+      await this.lifecycle.waitFor(task.id, toAgentActor(agent), [
         { kind: 'reply', targetId: question.id, description: `Reply from ${askedName}` }
       ]);
     }
@@ -736,7 +736,7 @@ export class TaskRunnerService {
     const path = readOptionalString(input, 'path');
     if (path) {
       const file = await this.workspaceClient.read(task.id, path);
-      const outputId = await this.saveOutputOnce(task, actorFor(agent), callId, {
+      const outputId = await this.saveOutputOnce(task, toAgentActor(agent), callId, {
         title: readOptionalString(input, 'title') ?? path,
         content: formatFileForAgent(file),
         kind: 'file',
@@ -744,7 +744,7 @@ export class TaskRunnerService {
       });
       return `Saved ${path} as output ${outputId}.`;
     }
-    const outputId = await this.saveOutputOnce(task, actorFor(agent), callId, {
+    const outputId = await this.saveOutputOnce(task, toAgentActor(agent), callId, {
       title: readRequiredString(input, 'title'),
       content: readRequiredString(input, 'content'),
       kind: (readOptionalString(input, 'kind') ?? 'text') as 'text' | 'link' | 'data' | 'log',
@@ -759,7 +759,7 @@ export class TaskRunnerService {
     callId: string,
     input: ToolInput
   ): Promise<ToolOutcome> {
-    const agentActor = actorFor(agent);
+    const agentActor = toAgentActor(agent);
     const result = readRequiredString(input, 'result');
     const criteriaCheck = {
       met: input.criteria_met === true,
@@ -816,7 +816,7 @@ export class TaskRunnerService {
     input: ToolInput
   ): Promise<ToolOutcome> {
     const reason = readRequiredString(input, 'reason');
-    await this.lifecycle.blockTask(task.id, actorFor(agent), reason);
+    await this.lifecycle.blockTask(task.id, toAgentActor(agent), reason);
     await this.answerRequester(task, agent, `${callId}:answer`, `I can't proceed: ${reason}`);
     return 'Task blocked. A person will look at it.';
   }
@@ -869,7 +869,7 @@ export class TaskRunnerService {
       await this.taskRepository.addEvent(
         task.id,
         TASK_EVENTS.participantSuggested,
-        actorFor(agent),
+        toAgentActor(agent),
         { agentId: suggested.id, messageId: message.id }
       );
       this.runnerLogger.onParticipantSuggested(task.id, suggested.id);
@@ -883,7 +883,7 @@ export class TaskRunnerService {
     callId: string,
     input: ToolInput
   ): Promise<ToolOutcome> {
-    const agentActor = actorFor(agent);
+    const agentActor = toAgentActor(agent);
     const text = readRequiredString(input, 'note');
     if (text.length > MAX_NOTE_CHARS) {
       throw new AppError('validationError', 'Keep notes under 2,000 characters.');
@@ -1026,12 +1026,17 @@ export class TaskRunnerService {
     );
     if (!tool) {
       const reason = 'Unknown or disallowed MCP tool.';
-      await this.taskRepository.addEvent(task.id, TASK_EVENTS.connectionDenied, actorFor(agent), {
-        callId: call.id,
-        connectionId,
-        tool: call.name,
-        reason
-      });
+      await this.taskRepository.addEvent(
+        task.id,
+        TASK_EVENTS.connectionDenied,
+        toAgentActor(agent),
+        {
+          callId: call.id,
+          connectionId,
+          tool: call.name,
+          reason
+        }
+      );
       this.runnerLogger.onConnectionDenied(task.id, connectionId, 'MCP', call.name, reason);
       throw new AppError('toolAccessDenied', reason);
     }
@@ -1118,7 +1123,7 @@ export class TaskRunnerService {
     const currentTask = await this.lifecycle.requireTask(task.id);
     const waits = await this.taskRepository.listWaits(task.id, { openOnly: false });
     if (currentTask.state === 'working' && !waits.some((wait) => wait.targetId === approval.id)) {
-      await this.lifecycle.waitFor(task.id, actorFor(agent), [
+      await this.lifecycle.waitFor(task.id, toAgentActor(agent), [
         { kind: 'approval', targetId: approval.id, description: input.description }
       ]);
     }
@@ -1146,12 +1151,17 @@ export class TaskRunnerService {
           ? 'The MCP endpoint changed after approval was requested. Request a new approval.'
           : null;
     if (reason || !connection) {
-      await this.taskRepository.addEvent(task.id, TASK_EVENTS.connectionDenied, actorFor(agent), {
-        callId,
-        connectionId: request.connectionId,
-        tool: request.tool,
-        reason
-      });
+      await this.taskRepository.addEvent(
+        task.id,
+        TASK_EVENTS.connectionDenied,
+        toAgentActor(agent),
+        {
+          callId,
+          connectionId: request.connectionId,
+          tool: request.tool,
+          reason
+        }
+      );
       this.runnerLogger.onConnectionDenied(
         task.id,
         request.connectionId,
@@ -1247,13 +1257,18 @@ export class TaskRunnerService {
       : `You can't use a connection named "${call.name}". Usable: ${usable.map((candidate) => candidate.name).join(', ') || 'none'}.`;
     if (denied || !connection) {
       // Refused calls are recorded too, so admins can see attempts outside the rules.
-      await this.taskRepository.addEvent(task.id, TASK_EVENTS.connectionDenied, actorFor(agent), {
-        callId: call.callId,
-        connection: call.name,
-        method: call.method,
-        path: call.path,
-        reason: denied
-      });
+      await this.taskRepository.addEvent(
+        task.id,
+        TASK_EVENTS.connectionDenied,
+        toAgentActor(agent),
+        {
+          callId: call.callId,
+          connection: call.name,
+          method: call.method,
+          path: call.path,
+          reason: denied
+        }
+      );
       this.runnerLogger.onConnectionDenied(
         task.id,
         call.name,
@@ -1542,7 +1557,7 @@ export class TaskRunnerService {
         since: startOfMonth(now)
       });
       if (spent >= agent.monthlyBudgetUsd) {
-        return `${agent.name} spent ${dollars(spent)} this month, reaching its ${dollars(agent.monthlyBudgetUsd)} monthly budget. A person can raise the budget and resume this task.`;
+        return `${agent.name} spent ${formatDollars(spent)} this month, reaching its ${formatDollars(agent.monthlyBudgetUsd)} monthly budget. A person can raise the budget and resume this task.`;
       }
     }
     if (task.conversationId) {
@@ -1552,7 +1567,7 @@ export class TaskRunnerService {
           conversationId: conversation.id
         });
         if (spent >= conversation.budgetUsd) {
-          return `This conversation spent ${dollars(spent)}, reaching its ${dollars(conversation.budgetUsd)} budget. A person can raise the budget and resume this task.`;
+          return `This conversation spent ${formatDollars(spent)}, reaching its ${formatDollars(conversation.budgetUsd)} budget. A person can raise the budget and resume this task.`;
         }
       }
     }
@@ -1619,7 +1634,7 @@ export class TaskRunnerService {
       met,
       summary,
       usage: reply.usage,
-      costUsd: costUsd(this.options.prices, version.model, reply.usage)
+      costUsd: calculateCostUsd(this.options.prices, version.model, reply.usage)
     });
     this.runnerLogger.onCompletionChecked(task.id, met);
     return { met, summary, failures: failuresBefore + (met ? 0 : 1) };
@@ -1707,7 +1722,7 @@ export class TaskRunnerService {
         maxChars: MAX_DOCUMENT_CHARS
       }),
       this.loadParticipants(task.conversationId),
-      this.conversationRepository.getMember(task.conversationId, actorFor(agent))
+      this.conversationRepository.getMember(task.conversationId, toAgentActor(agent))
     ]);
 
     // Only history this agent may see: nothing from before it joined, if it joined that way.
@@ -1966,7 +1981,7 @@ function shortenForTitle(text: string): string {
   return flat.length > 60 ? `${flat.slice(0, 57)}...` : flat;
 }
 
-function actorFor(agent: Agent): { type: 'agent'; id: string } {
+function toAgentActor(agent: Agent): { type: 'agent'; id: string } {
   return { type: 'agent', id: agent.id };
 }
 

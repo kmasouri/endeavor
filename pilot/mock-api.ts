@@ -10,7 +10,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { dirname } from 'node:path';
-import { activeFailure, SEEDED_FAILURES, WINDOW_COUNT, windowAt } from './plan.ts';
+import { findActiveFailure, SEEDED_FAILURES, WINDOW_COUNT, getWindowAt } from './plan.ts';
 
 const PORT = Number(process.env.PILOT_API_PORT ?? 4100);
 const HOST = process.env.PILOT_API_HOST ?? '127.0.0.1';
@@ -113,8 +113,8 @@ const BROKEN: Record<string, (res: ServerResponse) => void> = {
     })
 };
 
-function currentWindow(now = new Date()): number {
-  return state.startedAt ? windowAt(now, state.startedAt, state.intervalMinutes) : -1;
+function getCurrentWindow(now = new Date()): number {
+  return state.startedAt ? getWindowAt(now, state.startedAt, state.intervalMinutes) : -1;
 }
 
 function send(res: ServerResponse, status: number, body: string, type: string): void {
@@ -149,7 +149,7 @@ async function handlePilot(req: IncomingMessage, res: ServerResponse, path: stri
     return sendJson(res, 200, { startedAt: startAt.toISOString(), intervalMinutes: interval });
   }
   if (req.method === 'GET' && path === '/_pilot/state') {
-    const window = currentWindow();
+    const window = getCurrentWindow();
     return sendJson(res, 200, {
       startedAt: state.startedAt?.toISOString() ?? null,
       intervalMinutes: state.intervalMinutes,
@@ -179,8 +179,8 @@ const server = createServer((req, res) => {
   }
 
   const now = new Date();
-  const window = currentWindow(now);
-  const failure = activeFailure(path, window);
+  const window = getCurrentWindow(now);
+  const failure = findActiveFailure(path, window);
   const healthy = HEALTHY[path];
   let status: number;
   if (req.method !== 'GET') {

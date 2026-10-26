@@ -1,5 +1,5 @@
 import { CalendarRecurrence, MissedRunPolicy } from '../../shared/types';
-import { nextCalendarRun } from './calendar';
+import { findNextCalendarRun } from './calendar';
 
 export interface RunPlan {
   // Whether to start a run now, and for which time slot (the run's key).
@@ -13,7 +13,7 @@ export interface RunPlan {
 }
 
 // How late a slot can be and still count as on time: half the interval, at most 15 minutes.
-export function graceMs(intervalMinutes: number): number {
+export function calculateGraceMs(intervalMinutes: number): number {
   return Math.min((intervalMinutes * 60_000) / 2, 15 * 60_000);
 }
 
@@ -39,11 +39,11 @@ export function planRun(
   let nextRunAt: Date;
   let intervalMs: number;
   if (input.recurrence) {
-    nextRunAt = nextCalendarRun(input.recurrence, latestSlot);
+    nextRunAt = findNextCalendarRun(input.recurrence, latestSlot);
     while (nextRunAt <= now) {
       latestSlot = nextRunAt;
       extraSlots++;
-      nextRunAt = nextCalendarRun(input.recurrence, latestSlot);
+      nextRunAt = findNextCalendarRun(input.recurrence, latestSlot);
     }
     intervalMs = nextRunAt.getTime() - latestSlot.getTime();
   } else {
@@ -52,7 +52,7 @@ export function planRun(
     latestSlot = new Date(latestSlot.getTime() + extraSlots * intervalMs);
     nextRunAt = new Date(latestSlot.getTime() + intervalMs);
   }
-  const onTime = now.getTime() - latestSlot.getTime() <= graceMs(intervalMs / 60_000);
+  const onTime = now.getTime() - latestSlot.getTime() <= calculateGraceMs(intervalMs / 60_000);
 
   if (onTime || input.missedRunPolicy === 'run_once') {
     return { start: true, ask: false, slot: latestSlot, skipped: extraSlots, nextRunAt };

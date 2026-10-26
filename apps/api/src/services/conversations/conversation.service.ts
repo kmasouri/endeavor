@@ -160,7 +160,7 @@ export class ConversationService {
     const members = await this.conversationRepository.listMembers(conversation.id);
     const mentions = input.mentions ?? [];
     for (const mention of mentions) {
-      if (!members.some((member) => sameParticipant(member.participant, mention))) {
+      if (!members.some((member) => isSameParticipant(member.participant, mention))) {
         throw new AppError('mentionNotMember', `${mention.type} ${mention.id} is not a member`);
       }
     }
@@ -181,7 +181,9 @@ export class ConversationService {
       mentions,
       repliedToAuthor,
       memberAgentIds: new Set(
-        members.filter((m) => m.participant.type === 'agent').map((m) => m.participant.id)
+        members
+          .filter((member) => member.participant.type === 'agent')
+          .map((member) => member.participant.id)
       ),
       authorAgentId: null
     });
@@ -315,6 +317,6 @@ export class ConversationService {
   }
 }
 
-function sameParticipant(a: ParticipantRef, b: ParticipantRef): boolean {
+function isSameParticipant(a: ParticipantRef, b: ParticipantRef): boolean {
   return a.type === b.type && a.id === b.id;
 }

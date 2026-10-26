@@ -1,5 +1,5 @@
 import { AgentVersion, Task, TaskEvent } from '../../shared/types';
-import { dollars } from './pricing';
+import { formatDollars } from './pricing';
 import { TASK_EVENTS } from './task-events';
 
 // Checks a task against its version's limits. Returns why it is over, or null.
@@ -30,7 +30,7 @@ export function findBudgetOverrun(
   if (maxCostUsd !== undefined) {
     const spentUsd = sumKnownCostUsd(events);
     if (spentUsd >= maxCostUsd) {
-      return `Spent ${dollars(spentUsd)} of the ${dollars(maxCostUsd)} budget for one task.`;
+      return `Spent ${formatDollars(spentUsd)} of the ${formatDollars(maxCostUsd)} budget for one task.`;
     }
   }
 

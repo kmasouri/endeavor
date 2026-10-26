@@ -7,7 +7,7 @@ export interface ModelPrice {
 
 export type PriceTable = Record<string, ModelPrice>;
 
-export function costUsd(
+export function calculateCostUsd(
   prices: PriceTable,
   model: string,
   usage: { inputTokens: number; outputTokens: number }
@@ -22,7 +22,7 @@ export function costUsd(
   );
 }
 
-export function dollars(amount: number): string {
+export function formatDollars(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 

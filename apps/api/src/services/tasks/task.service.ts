@@ -164,7 +164,7 @@ export class TaskService {
 
   // What an agent spent: in total, this month (UTC), and its costliest tasks, next to its
   // monthly budget.
-  async agentCosts(actorId: string, agentId: string): Promise<CostReport> {
+  async getAgentCosts(actorId: string, agentId: string): Promise<CostReport> {
     requireHuman(await this.humanRepository.getById(actorId));
     const agent = await this.agentRepository.getById(agentId);
     if (!agent) {
@@ -180,7 +180,7 @@ export class TaskService {
   }
 
   // What all agent work in a conversation spent, next to the conversation's budget.
-  async conversationCosts(actorId: string, conversationId: string): Promise<CostReport> {
+  async getConversationCosts(actorId: string, conversationId: string): Promise<CostReport> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const conversation = await this.conversationRepository.getById(conversationId);
     const member =
@@ -212,7 +212,7 @@ export class TaskService {
     }
 
     const paused = await this.lifecycle.applyChanges(task, { pausedAt: new Date() });
-    await this.taskRepository.addEvent(task.id, TASK_EVENTS.paused, humanActor(human.id), {
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.paused, toHumanActor(human.id), {
       reason: reason ?? null
     });
     this.taskLogger.onTaskPaused(task.id);
@@ -223,7 +223,7 @@ export class TaskService {
   // is how a blocked reason gets resolved.
   async resumeTask(actorId: string, taskId: string, note?: string): Promise<Task> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
-    const actor = humanActor(human.id);
+    const actor = toHumanActor(human.id);
     let task = await this.requireVisibleTask(human, taskId);
     if (isFinished(task) || (!task.pausedAt && task.state !== 'blocked')) {
       throw new AppError('taskStateConflict', `Task ${task.id} is ${describeState(task)}`);
@@ -247,7 +247,7 @@ export class TaskService {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const task = await this.requireVisibleTask(human, taskId);
 
-    const cancelled = await this.lifecycle.transition(task, 'cancelled', humanActor(human.id), {
+    const cancelled = await this.lifecycle.transition(task, 'cancelled', toHumanActor(human.id), {
       reason: reason ?? null,
       changes: { pausedAt: null, finishedAt: new Date() }
     });
@@ -260,7 +260,7 @@ export class TaskService {
   // to run it again, restart the newest one. Asking twice returns the same new task.
   // A restart with a reason is a revision request: the new run sees what was asked to change
   // and the previous result, while the previous run stays as it was.
-  private async revisionBrief(previous: Task, reason: string): Promise<string> {
+  private async buildRevisionBrief(previous: Task, reason: string): Promise<string> {
     const result = (await this.taskRepository.listOutputs(previous.id))
       .filter((output) => output.title === 'Result')
       .pop();
@@ -292,7 +292,7 @@ export class TaskService {
     }
 
     const agent = await this.requireAvailableAgent(previous.ownerAgentId);
-    const actor = humanActor(human.id);
+    const actor = toHumanActor(human.id);
 
     const { task, created } = await this.taskRepository.create({
       runKey,
@@ -300,7 +300,7 @@ export class TaskService {
       ownerAgentId: agent.id,
       agentVersionId: agent.currentVersionId as string,
       title: previous.title,
-      brief: reason ? await this.revisionBrief(previous, reason) : previous.brief,
+      brief: reason ? await this.buildRevisionBrief(previous, reason) : previous.brief,
       completionCriteria: previous.completionCriteria,
       reviewRequired: previous.reviewRequired,
       requestedByType: 'human',
@@ -361,12 +361,17 @@ export class TaskService {
     }
 
     const migrated = await this.lifecycle.applyChanges(task, { agentVersionId: version.id });
-    await this.taskRepository.addEvent(task.id, TASK_EVENTS.versionMigrated, humanActor(human.id), {
-      fromVersionId: task.agentVersionId,
-      toVersionId: version.id,
-      toVersion: version.version,
-      reason: input.reason ?? null
-    });
+    await this.taskRepository.addEvent(
+      task.id,
+      TASK_EVENTS.versionMigrated,
+      toHumanActor(human.id),
+      {
+        fromVersionId: task.agentVersionId,
+        toVersionId: version.id,
+        toVersion: version.version,
+        reason: input.reason ?? null
+      }
+    );
     this.taskLogger.onTaskVersionMigrated(task.id, task.agentVersionId, version.id, {
       humanId: human.id,
       reason: input.reason ?? null
@@ -382,7 +387,7 @@ export class TaskService {
     input: { approved: boolean; notes?: string }
   ): Promise<Task> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
-    const actor = humanActor(human.id);
+    const actor = toHumanActor(human.id);
     const task = await this.requireVisibleTask(human, taskId);
     const reviewWait = (await this.taskRepository.findOpenWaits('approval', task.id)).find(
       (wait) => wait.taskId === task.id
@@ -449,7 +454,7 @@ export class TaskService {
     await this.taskRepository.addEvent(
       decided.taskId,
       TASK_EVENTS.approvalApproved,
-      humanActor(actorId),
+      toHumanActor(actorId),
       {
         approvalId: decided.id,
         reason: reason ?? null
@@ -463,7 +468,7 @@ export class TaskService {
   async reject(actorId: string, approvalId: string, reason?: string): Promise<Approval> {
     const approval = await this.requireVisibleApproval(actorId, approvalId);
     const decided = await this.decide(actorId, approval, 'rejected', reason);
-    const actor = humanActor(actorId);
+    const actor = toHumanActor(actorId);
     await this.taskRepository.addEvent(decided.taskId, TASK_EVENTS.approvalRejected, actor, {
       approvalId: decided.id,
       request: decided.request,
@@ -581,6 +586,6 @@ export class TaskService {
   }
 }
 
-function humanActor(humanId: string): Actor {
+function toHumanActor(humanId: string): Actor {
   return { type: 'human', id: humanId };
 }

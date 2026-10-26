@@ -8,8 +8,8 @@ import {
   createTaskHandler,
   getTaskHandler,
   listTaskEventsHandler,
-  agentCostsHandler,
-  conversationCostsHandler,
+  getAgentCostsHandler,
+  getConversationCostsHandler,
   listConversationOutputsHandler,
   listTaskOutputsHandler,
   listTasksHandler,
@@ -102,7 +102,7 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
         params: agentCostParamsSchema
       }
     },
-    agentCostsHandler
+    getAgentCostsHandler
   );
 
   fastifyInstance.get(
@@ -116,7 +116,7 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
         params: conversationOutputsParamsSchema
       }
     },
-    conversationCostsHandler
+    getConversationCostsHandler
   );
 
   fastifyInstance.get(
