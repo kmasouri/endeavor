@@ -1,64 +1,79 @@
 <script lang="ts">
   import PageHeader from '../PageHeader.svelte';
-  import { api, type Approval } from '../api';
+  import type { Approval } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
-  import Hint from '../Hint.svelte';
   import { formatDateTime } from '../components';
   import { createLoad } from '../state.svelte';
   import { createNames } from '../names.svelte';
   import ApprovalCard from './ApprovalCard.svelte';
+  import { loadAll } from './agent-data';
+  import './creation.css';
+  import './list-filters.css';
 
-  let showDecided = $state(false);
+  let filter = $state('Pending');
   const pending = createLoad(
-    () => api.list<Approval>('/approvals?status=pending&limit=100'),
+    () => loadAll<Approval>('/approvals?status=pending'),
     () => [],
     4000
   );
   const decided = createLoad(
-    () =>
-      showDecided
-        ? api.list<Approval>('/approvals?limit=100')
-        : Promise.resolve({ data: [] as Approval[], page: { limit: 0, offset: 0, total: 0 } }),
-    () => [showDecided]
+    async () => {
+      if (filter !== 'History') return [];
+      const [approved, rejected] = await Promise.all([
+        loadAll<Approval>('/approvals?status=approved'),
+        loadAll<Approval>('/approvals?status=rejected')
+      ]);
+      return [...approved, ...rejected].sort((a, b) =>
+        (b.decidedAt ?? b.createdAt).localeCompare(a.decidedAt ?? a.createdAt)
+      );
+    },
+    () => [filter]
   );
   const name = createNames();
 </script>
 
-<PageHeader title="Approvals" subtitle="Requests waiting for a person’s decision." />
+<div class="approvals-page creation-page">
+  <PageHeader title="Approvals" subtitle="Review requests and past decisions." />
+  <div class="list-filters approval-filters" aria-label="Filter approvals">
+    {#each ['Pending', 'History'] as value (value)}
+      <button aria-pressed={filter === value} onclick={() => (filter = value)}>{value}</button>
+    {/each}
+  </div>
 
-<div class="narrow wide">
-  <Hint>
-    Agents work on their own within their access. Some actions, set per connection, wait for a
-    person first. The agent's task waits until you decide, and it's told your reason.
-  </Hint>
+  {#if filter === 'Pending'}
+    <p class="hint">
+      Agents work on their own within their access. Some actions, set per connection, wait for a
+      person first. The agent's task waits until you decide, and it's told your reason.
+    </p>
 
-  <ErrorNote error={pending.error} />
+    <ErrorNote error={pending.error} />
 
-  {#if pending.data?.data.length === 0}
-    <p class="muted">Nothing waiting for you.</p>
-  {/if}
+    {#if !pending.data && !pending.error}
+      <p class="muted">Loading requests…</p>
+    {:else if pending.data?.length === 0}
+      <p class="muted">Nothing waiting for you.</p>
+    {/if}
 
-  {#each pending.data?.data ?? [] as approval (approval.id)}
-    <div class="panel">
-      <p class="muted small">
-        {name({ type: 'agent', id: approval.agentId })} asked {formatDateTime(approval.createdAt)} for
+    {#each pending.data ?? [] as approval (approval.id)}
+      <div class="panel">
+        <p class="muted small">
+          {name({ type: 'agent', id: approval.agentId })} asked {formatDateTime(approval.createdAt)} for
 
-        <a href={`#/tasks/${approval.taskId}`}> this task </a>
-      </p>
+          <a href={`#/tasks/${approval.taskId}`}> this task </a>
+        </p>
 
-      <ApprovalCard {approval} onDone={() => (pending.reload(), decided.reload())} />
-    </div>
-  {/each}
-
-  <label class="check">
-    <input type="checkbox" bind:checked={showDecided} />
-
-    Show past decisions
-  </label>
-
-  {#if showDecided}
+        <ApprovalCard {approval} onDone={() => (pending.reload(), decided.reload())} />
+      </div>
+    {/each}
+  {:else}
+    <ErrorNote error={decided.error} />
+    {#if !decided.data && !decided.error}
+      <p class="muted">Loading past decisions…</p>
+    {:else if decided.data?.length === 0}
+      <p class="muted">No past decisions yet.</p>
+    {/if}
     <ul class="list">
-      {#each (decided.data?.data ?? []).filter((approval) => approval.status !== 'pending') ?? [] as approval (approval.id)}
+      {#each decided.data ?? [] as approval (approval.id)}
         <li>
           <strong>
             {#if approval.request.kind === 'mcp'}{approval.request.tool}{:else}{approval.request.method} {approval.request.path}{/if}
@@ -94,3 +109,9 @@
     </ul>
   {/if}
 </div>
+
+<style>
+  .approval-filters {
+    margin: 24px 0;
+  }
+</style>

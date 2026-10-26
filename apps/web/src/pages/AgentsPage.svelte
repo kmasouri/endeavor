@@ -7,6 +7,7 @@
   import { loadAll } from './agent-data';
   import AgentStatus from './AgentStatus.svelte';
   import './agents.css';
+  import './list-filters.css';
   const agents = createLoad(
     () => loadAll<Agent>('/agents?includeDisabled=true'),
     () => []
@@ -69,7 +70,7 @@
     </section>
   {:else if agents.data}
     <div class="agent-toolbar">
-      <div class="agent-filters" aria-label="Filter agents">
+      <div class="list-filters" aria-label="Filter agents">
         {#each ['All', 'Enabled', 'Disabled'] as value (value)}<button
             aria-pressed={filter === value}
             onclick={() => (filter = value)}>{value}</button
