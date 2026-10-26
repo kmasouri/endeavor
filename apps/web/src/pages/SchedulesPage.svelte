@@ -91,7 +91,6 @@
           <div class="schedule-empty-clock"><Icon name="schedules" /></div>
           <h2 id="schedules-empty-title" tabindex="-1">No schedules yet</h2>
           <p>Set up recurring work for an agent.<br />Choose when it runs and where it posts results.</p>
-
         </section>
       {/if}
       {#snippet rows(items: Responsibility[])}

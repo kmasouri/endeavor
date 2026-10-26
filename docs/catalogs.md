@@ -56,6 +56,9 @@ New skill versions contain no associations, so upgrading skills can remove histo
 
 ## Approvals
 
+The Approvals page opens on Pending. History shows approved and rejected requests, newest
+decision first, with the reason and recorded result. Both views load every API page.
+
 A connection's `approvalMethods` (for example `["POST", "DELETE"]`) are methods that need a person's approval before each call. If you leave it out when creating a connection, every allowed method except GET needs approval: reading is free, and changing anything waits for a person. Send `[]` to need no approvals. A matching call is never made right away:
 
 1. The runner saves a pending approval with the exact request, the task waits, and the agent's turn ends.

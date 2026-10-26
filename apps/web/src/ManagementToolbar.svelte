@@ -5,7 +5,7 @@
   } = $props();
 </script>
 <div class="management-toolbar">
-  <div class="management-filters" aria-label={`Filter ${name}`}>
+  <div class="list-filters" aria-label={`Filter ${name}`}>
     {#each filters as value (value)}
       <button aria-pressed={filter === value} onclick={() => (filter = value)}>{value}</button>
     {/each}
