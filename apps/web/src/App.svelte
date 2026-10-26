@@ -34,11 +34,44 @@
   import SettingsPage from './pages/SettingsPage.svelte';
   import { timeDisplay } from './time-display.svelte';
   import { applyTheme, conversationChannelName } from './appearance';
+  import { clampSidebarWidth, readSidebarWidth, sidebarWidth, writeSidebarWidth } from './sidebar-width';
 
   let guard = $state<() => boolean>(() => true);
   let dirty = $state(false);
   let savedPerson = $state<Human | null>(null);
   let collapsed = $state(window.innerWidth < 700);
+  let width = $state(readSidebarWidth());
+  let resizing = $state(false);
+  const resizeTo = (next: number) => {
+    width = clampSidebarWidth(next);
+    writeSidebarWidth(width);
+  };
+  const startResize = (event: PointerEvent) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    resizing = true;
+  };
+  const moveResize = (event: PointerEvent) => {
+    if (resizing) width = clampSidebarWidth(event.clientX);
+  };
+  const endResize = () => {
+    if (!resizing) return;
+    resizing = false;
+    writeSidebarWidth(width);
+  };
+  const resizeWithKeys = (event: KeyboardEvent) => {
+    const step = event.shiftKey ? 64 : 16;
+    const next = {
+      ArrowLeft: width - step,
+      ArrowRight: width + step,
+      Home: sidebarWidth.min,
+      End: sidebarWidth.max
+    }[event.key];
+    if (next === undefined) return;
+    event.preventDefault();
+    resizeTo(next);
+  };
   let picking = $state(false);
   let switching = $state(false);
   let creating = $state(false);
@@ -192,7 +225,12 @@
   <PickPerson people={people.data} onPick={choose} />
   <ErrorNote error={switchError} />
 {:else}
-  <div class="shell" class:sidebar-collapsed={collapsed}>
+  <div
+    class="shell"
+    class:sidebar-collapsed={collapsed}
+    class:sidebar-resizing={resizing}
+    style:--sidebar-chosen-width={`${width}px`}
+  >
     <header class="app-bar">
       <div class="row app-brand">
         <button class="quiet icon-button" aria-label={collapsed ? 'Open sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} aria-controls="main-sidebar" onclick={() => (collapsed = !collapsed)}><Icon name="panel" /></button>
@@ -273,6 +311,28 @@
         </div>
       </div>
     </aside>
+    {#if !collapsed}
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+      <div
+        class="sidebar-resizer"
+        role="separator"
+        tabindex="0"
+        aria-label="Resize sidebar"
+        aria-controls="main-sidebar"
+        aria-orientation="vertical"
+        aria-valuemin={sidebarWidth.min}
+        aria-valuemax={sidebarWidth.max}
+        aria-valuenow={width}
+        title="Drag to resize. Double-click to reset."
+        onpointerdown={startResize}
+        onpointermove={moveResize}
+        onpointerup={endResize}
+        onpointercancel={endResize}
+        onlostpointercapture={endResize}
+        ondblclick={() => resizeTo(sidebarWidth.initial)}
+        onkeydown={resizeWithKeys}
+      ></div>
+    {/if}
 
     <main class:conversation-main={section === 'conversations' && Boolean(id)}>
       {#key `${actorId}:${hash}`}
