@@ -280,7 +280,7 @@ test('restores the last accessible selection, preserves links, and searches olde
   ).toHaveAttribute('title', 'website-reliability');
   await page.getByRole('link', { name: '#heat-pump-brief', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
-  for (const destination of ['Agents', 'Schedules', 'Approvals', 'Skills and connections', 'Setup', 'Work']) {
+  for (const destination of ['Agents', 'Schedules', 'Approvals', 'Skills', 'Connections', 'Setup', 'Work']) {
     await page.getByRole('navigation', { name: 'Main', exact: true })
       .getByRole('link', { name: destination, exact: true }).click();
     await expect(page.locator('.sidebar-conversations')).toHaveCount(0);

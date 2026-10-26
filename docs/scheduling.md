@@ -104,3 +104,11 @@ refer to `2026-10-26T04:30:00Z`. The source rule still says Monday in New York f
 Schedule layout regressions are covered by the committed Playwright suite in `apps/web/e2e/`,
 run by `npm run check`. Tests exercise the production CSS bundle, including expanded cancelled
 rows, one-line badges in both themes at desktop and phone widths, alignment, and empty states.
+
+## Managing schedules in the web interface
+
+The Schedules list follows the Agents page layout. Search titles, agent names, and recurrence
+summaries, or filter by All, Active, Paused, and Cancelled. All includes cancelled schedules;
+they remain available for inspecting past runs. The count reflects the current search and
+status filter. Create schedule stays in the page header, including when no schedules exist.
+Opening a row shows its full-width details and existing run, pause, resume, and cancel actions.

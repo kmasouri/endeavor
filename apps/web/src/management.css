@@ -1,0 +1,61 @@
+.management-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 24px 0;
+  flex-wrap: wrap;
+}
+.management-toolbar input { max-width: 300px; }
+.management-filters { display: flex; flex-wrap: wrap; gap: 4px; }
+.management-filters button {
+  background: transparent;
+  color: var(--text-300);
+  padding: 7px 14px;
+}
+.management-filters button[aria-pressed='true'] {
+  color: var(--text-100);
+  background: var(--bg-selected);
+}
+.management-list { list-style: none; padding: 0; margin: 8px 0 12px; }
+.management-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 210px 106px 14px;
+  gap: 16px;
+  align-items: center;
+  padding: 18px 4px;
+  border-top: 1px solid var(--border-100);
+  color: var(--text-100);
+  text-decoration: none;
+}
+.management-list li:last-child { border-bottom: 1px solid var(--border-100); }
+.management-row:hover { background: var(--bg-200); text-decoration: none; }
+.management-row > div { min-width: 0; }
+.management-row h3 { margin: 0; font-size: 14px; }
+.management-row p { margin: 3px 0 0; font-size: 13px; color: var(--text-300); }
+.management-row p, .management-meta { overflow-wrap: anywhere; }
+.management-meta { font-size: 12px; color: var(--text-300); }
+.management-meta small { display: block; font-size: inherit; margin-top: 3px; }
+.management-icon { display: grid; place-items: center; color: var(--text-300); }
+.management-status {
+  display: inline-flex;
+  width: fit-content;
+  white-space: nowrap;
+  border: 1px solid var(--border-200);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 12px;
+  color: var(--text-300);
+}
+.management-status.enabled { color: var(--success); border-color: var(--success); background: var(--success-bg); }
+.management-empty { padding: 64px 20px 40px; text-align: center; }
+.management-empty h2 { font-size: 20px; }
+.management-empty p { color: var(--text-300); }
+@media (max-width: 700px) {
+  .management-toolbar { flex-direction: column; align-items: stretch; }
+  .management-toolbar input { max-width: none; }
+  .management-row { grid-template-columns: 28px minmax(0, 1fr) auto; gap: 8px 12px; }
+  .management-meta { grid-column: 2 / 4; grid-row: 2; }
+  .management-row > .management-status { grid-column: 3; grid-row: 1; }
+  .management-row > .chevron { display: none; }
+}

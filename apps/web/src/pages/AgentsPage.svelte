@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ManagementToolbar from '../ManagementToolbar.svelte';
   import Avatar from '../Avatar.svelte';
   import PageHeader from '../PageHeader.svelte';
   import { type Agent, api, type CostReport } from '../api';
@@ -68,20 +69,7 @@
       </p>
     </section>
   {:else if agents.data}
-    <div class="agent-toolbar">
-      <div class="agent-filters" aria-label="Filter agents">
-        {#each ['All', 'Enabled', 'Disabled'] as value (value)}<button
-            aria-pressed={filter === value}
-            onclick={() => (filter = value)}>{value}</button
-          >{/each}
-      </div>
-      <input
-        type="search"
-        aria-label="Search agents"
-        placeholder="Search agents"
-        bind:value={search}
-      />
-    </div>
+    <ManagementToolbar name="agents" filters={['All', 'Enabled', 'Disabled']} bind:filter bind:search />
     <div class="label muted">Agents · {shown.length}</div>
     <ErrorNote error={spending.error} />
     <ul class="agent-list" aria-label="Agents">
