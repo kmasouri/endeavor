@@ -100,8 +100,14 @@ export class ExecutionService {
         !this.active.has(task) &&
         Date.now() - record.touchedAt > 86_400_000
       ) {
-        await rm(this.file(task), { force: true });
-        this.records.delete(task);
+        // Expiry and a new tool call must not delete the same checkout concurrently.
+        this.busy.add(task);
+        try {
+          await rm(this.file(task), { force: true });
+          this.records.delete(task);
+        } finally {
+          this.busy.delete(task);
+        }
       }
     }
   }
