@@ -1020,8 +1020,8 @@ export class TaskRunnerService {
     if (!connectionId) {
       throw new AppError('toolAccessDenied', 'Unknown MCP tool.');
     }
-    const current = await this.catalogRepository.getConnection(connectionId);
-    const tool = (current?.allowedTools ?? []).find(
+    const storedConnection = await this.catalogRepository.getConnection(connectionId);
+    const tool = (storedConnection?.allowedTools ?? []).find(
       (name) => buildMcpToolName(connectionId, name) === call.name
     );
     if (!tool) {
