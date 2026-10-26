@@ -81,10 +81,8 @@ are accepted only while the schedule is enabled and its next slot is still in th
 Manual runs of enabled or paused schedules leave recurrence and its next slot unchanged.
 Cancelled schedules cannot be resumed or started manually. None of these actions stop an active task.
 
-Migration `032_calendar_recurrence.sql` leaves existing intervals, UTC slots, history, and catch-up
-questions unchanged. It adds a nullable rule and allows a null interval only for calendar rules.
-The migration also adds the open-run index. If an existing database has duplicate open runs for one
-responsibility, resolve those runs before migrating; the migration never deletes task history.
+A schedule has either an interval or a calendar rule, never both; a database check enforces this.
+A unique index allows at most one open run per responsibility.
 
 ## Web interface
 

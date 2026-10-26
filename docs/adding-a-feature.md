@@ -6,7 +6,7 @@ Start at the bottom layer and work up. That way each new file can use the ones y
 
 ## 1. Table
 
-Create `apps/api/db/schema/002_orders.sql`. Use the Postgres schema name from `000_schema.sql`:
+Create a file in `apps/api/db/schema/` with the next free number, like `012_orders.sql`. Use the Postgres schema name from `000_schema.sql`:
 
 ```sql
 CREATE TABLE IF NOT EXISTS <schema>.orders (

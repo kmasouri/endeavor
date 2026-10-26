@@ -1,6 +1,7 @@
 # Runs the whole platform on this computer: `npm run up`, then open http://localhost:3000.
 # For development with `npm run dev`, start only Postgres: `npm run db:up`.
 # Existing installations must migrate volumes first; see docs/rebranding.md.
+# A database built before CA-70 needs a one-time rebuild; see docs/local.md.
 name: endeavor
 
 services:

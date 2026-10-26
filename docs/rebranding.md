@@ -61,12 +61,10 @@ Do not use `docker compose down -v` during migration.
    Preserve its encryption key, model keys, ports, budgets, and other settings. Keep the same web
    origin so existing browsers can migrate their preferences. Start the new project with
    `docker compose --profile pilot up -d --build` if the pilot was previously enabled.
-5. Startup runs the new `033_endeavor_schema.sql`. It renames the schema and migration ledger in
-   the same transaction. Runtime repositories now query `endeavor`. The migration runner finds the
-   existing ledger, supports a fresh database, records the rename in the new schema, and creates
-   no duplicate legacy schema on restart. It refuses an ambiguous database containing both schemas.
-   Migrations `000` through `032` are immutable historical files; fresh installs replay them and
-   then rename the schema before the app starts.
+5. Rename the Postgres schema with `ALTER SCHEMA bold_cedar_007 RENAME TO endeavor`, then rebuild
+   the database from the current schema files, keeping its data (see
+   [Rebuilding the database](local.md#rebuilding-the-database)). The schema files (CA-70) create
+   `endeavor` directly and no longer carry the rename.
 6. Verify health, people/preferences, every application table's count/content hash, history,
    encrypted connection records, task files, pilot state, and volume mounts. Test restoring the
    logical backup into a disposable database and migrating it. Compare restored data as well.

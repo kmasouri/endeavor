@@ -343,7 +343,7 @@ The app uses Postgres through `@fastify/postgres`. It only connects when the fir
 
 If `DATABASE_URL` is set, the app uses it and ignores `DATABASE_HOST`, `DATABASE_PORT`, `DATABASE_NAME`, `DATABASE_USER`, and `DATABASE_PASSWORD`.
 
-Table definitions are SQL files in `apps/api/db/schema/`. `000_schema.sql` creates the Postgres schema, and the other files create the tables in it. `npm run db:migrate` (`apps/api/src/migrate.ts`) runs them in filename order, each in its own transaction, and records each one in `schema_migrations` so it runs only once. Migration `033_endeavor_schema.sql` renames the original schema and its ledger to `endeavor`. The runner detects either schema, preserves the existing ledger, and refuses duplicate namespaces. Fresh installations replay the immutable early migrations before the rename. To change a table, add a new file; never edit one that has been merged.
+Table definitions are SQL files in `apps/api/db/schema/`. `000_schema.sql` creates the Postgres schema, and the other files create the tables in it. `npm run db:migrate` (`apps/api/src/migrate.ts`) runs them in filename order, each in its own transaction, and records each one in `schema_migrations` so it runs only once. Each file creates one feature's tables in their current form. To change a table, add a new file; never edit one that has been merged. If the ledger lists a file that no longer exists, the runner stops: the database was built from older files and needs a rebuild (see `docs/local.md`).
 
 ## Tests
 
