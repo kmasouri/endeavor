@@ -9,6 +9,7 @@ import {
   MessageRepository,
   NoteRepository,
   ResponsibilityRepository,
+  TaskCapabilityRepository,
   TaskRepository
 } from '../../data';
 import {
@@ -29,13 +30,19 @@ import { addressedAgentIds } from '../../shared/addressing';
 import { connectionCallDenied } from '../../shared/connection-access';
 import { AppError } from '../../shared/errors';
 import {
+  ACCESS_DURATIONS,
+  AccessDuration,
   Actor,
   Agent,
   AgentVersion,
   Approval,
+  ApprovalRequest,
   ApprovalResult,
+  CapabilityAccessRequest,
   Connection,
   ConnectionCallRequest,
+  GrantTargetType,
+  isAccessRequest,
   McpConnectionCallRequest,
   HTTP_METHODS,
   HttpMethod,
@@ -63,6 +70,14 @@ import {
   HTTP_REQUEST_TOOL,
   STOPPING_TOOLS
 } from './agent-tools';
+import {
+  addOngoingAccess,
+  describeScope,
+  isEmptyScope,
+  limitConnection,
+  narrowScope,
+  scopeOf
+} from './capability-access';
 import { buildMcpToolName, isMcpToolName, parseMcpConnectionId } from './mcp-tool-names';
 import { calculateCostUsd, formatDollars, PriceTable, startOfMonth } from './pricing';
 import { planRun } from './schedule';
@@ -128,6 +143,8 @@ const NUDGE_TEXT =
   'You ended your turn without finishing. Use complete_task, ask, or report_blocked to finish, or send_message to post an update.';
 const SYSTEM_ACTOR: Actor = { type: 'system', id: null };
 const MAX_NOTE_CHARS = 2000;
+// How many discoverable skills, and connections, find_capabilities and request_access look at.
+const MAX_DISCOVERABLE = 200;
 
 // What a tool call gives back: the text the agent sees, or that text plus a flag saying the
 // call ended the agent's turn (such as a call that now waits for approval).
@@ -147,6 +164,7 @@ export class TaskRunnerService {
     private readonly humanRepository: HumanRepository,
     private readonly catalogRepository: CatalogRepository,
     private readonly approvalRepository: ApprovalRepository,
+    private readonly taskCapabilityRepository: TaskCapabilityRepository,
     private readonly noteRepository: NoteRepository,
     private readonly documentRepository: DocumentRepository,
     private readonly responsibilityRepository: ResponsibilityRepository,
@@ -442,7 +460,7 @@ export class TaskRunnerService {
 
     // Only skills and connections that are still granted and enabled. A revoke takes effect on
     // the next claim for instructions, and on the very next call for http_request.
-    const { skills, connections } = await this.loadUsableCatalog(agent.id, version);
+    const { skills, connections } = await this.loadUsableCatalog(agent.id, version, claimed.id);
     const system = buildSystemPrompt(agent, version, { skills, connections });
     const tools = [
       ...AGENT_TOOL_DEFINITIONS,
@@ -679,6 +697,10 @@ export class TaskRunnerService {
         return this.runSaveNoteTool(task, agent, call.id, input);
       case AGENT_TOOLS.httpRequest:
         return this.runHttpRequestTool(task, agent, call.id, input);
+      case AGENT_TOOLS.findCapabilities:
+        return this.runFindCapabilitiesTool(task, agent, input);
+      case AGENT_TOOLS.requestAccess:
+        return this.runRequestAccessTool(task, agent, call.id, input);
       // Files live in the task's own folder, so these need no grant. Writing the same file
       // again after a crash gives the same result.
       case AGENT_TOOLS.listFiles:
@@ -1107,7 +1129,7 @@ export class TaskRunnerService {
     agent: Agent,
     input: {
       clientKey: string;
-      request: ConnectionCallRequest;
+      request: ApprovalRequest;
       description: string;
       existing?: Approval | null;
     }
@@ -1125,6 +1147,7 @@ export class TaskRunnerService {
           clientKey: input.clientKey,
           taskId: task.id,
           agentId: agent.id,
+          kind: isAccessRequest(input.request) ? 'capability_access' : 'connection_call',
           request: input.request
         })
       ).approval;
@@ -1146,7 +1169,9 @@ export class TaskRunnerService {
     callId: string
   ): Promise<Connection> {
     const version = await this.agentRepository.getVersion(task.agentVersionId);
-    const usable = version ? (await this.loadUsableCatalog(agent.id, version)).connections : [];
+    const usable = version
+      ? (await this.loadUsableCatalog(agent.id, version, task.id)).connections
+      : [];
     const connection = usable.find(
       (candidate) => candidate.id === request.connectionId && candidate.kind === 'mcp'
     );
@@ -1259,7 +1284,9 @@ export class TaskRunnerService {
     call: { name: string; connectionId?: string; method: HttpMethod; path: string; callId: string }
   ): Promise<Connection> {
     const version = await this.agentRepository.getVersion(task.agentVersionId);
-    const usable = version ? (await this.loadUsableCatalog(agent.id, version)).connections : [];
+    const usable = version
+      ? (await this.loadUsableCatalog(agent.id, version, task.id)).connections
+      : [];
     // An approved call is matched by ID, so it can only go to the connection a person approved.
     const connection = call.connectionId
       ? usable.find((candidate) => candidate.id === call.connectionId)
@@ -1388,13 +1415,20 @@ export class TaskRunnerService {
     const release = await this.agentRepository.acquireExecution(approval.agentId);
     if (!release) return;
     try {
-      await this.executeApprovedCallWhileHeld(approval);
+      if (isAccessRequest(approval.request)) {
+        await this.applyApprovedAccess(approval, approval.request);
+      } else {
+        await this.executeApprovedCallWhileHeld(approval, approval.request);
+      }
     } finally {
       await release();
     }
   }
 
-  private async executeApprovedCallWhileHeld(approval: Approval): Promise<void> {
+  private async executeApprovedCallWhileHeld(
+    approval: Approval,
+    request: ConnectionCallRequest
+  ): Promise<void> {
     const task = await this.taskRepository.getById(approval.taskId);
     const agent = await this.agentRepository.getById(approval.agentId);
     if (!task || !agent) {
@@ -1421,24 +1455,24 @@ export class TaskRunnerService {
     } else {
       const callId = `approval:${approval.id}`;
       try {
-        if (approval.request.kind === 'mcp') {
-          const connection = await this.checkMcpCall(task, agent, approval.request, callId);
+        if (request.kind === 'mcp') {
+          const connection = await this.checkMcpCall(task, agent, request, callId);
           result = {
-            ...(await this.performMcpCall(task, agent.id, connection, approval.request, callId)),
+            ...(await this.performMcpCall(task, agent.id, connection, request, callId)),
             error: null
           };
         } else {
           const connection = await this.checkHttpCall(task, agent, {
-            name: approval.request.connectionName,
-            connectionId: approval.request.connectionId,
-            method: approval.request.method,
-            path: approval.request.path,
+            name: request.connectionName,
+            connectionId: request.connectionId,
+            method: request.method,
+            path: request.path,
             callId
           });
           const response = await this.performHttpCall(task, agent.id, connection, {
-            method: approval.request.method,
-            path: approval.request.path,
-            body: approval.request.body,
+            method: request.method,
+            path: request.path,
+            body: request.body,
             callId
           });
           result = { ...response, error: null };
@@ -1479,37 +1513,377 @@ export class TaskRunnerService {
   }
 
   // What the agent may use right now: skills chosen in the version that are still granted and
-  // enabled, and explicitly selected connections that are still granted and
-  // enabled. Grants are read fresh each time, so a revoke applies at once.
+  // enabled, and explicitly selected connections that are still granted and enabled. Access a
+  // person added to this task counts too: task-only access lasts while the task is open, and
+  // ongoing access also needs the agent's live grant. Added connections are limited to the
+  // scope the person approved. Grants are read fresh each time, so a revoke applies at once.
   private async loadUsableCatalog(
     agentId: string,
-    version: AgentVersion
+    version: AgentVersion,
+    taskId: string
   ): Promise<{ skills: { skill: Skill; version: SkillVersion }[]; connections: Connection[] }> {
-    const [skillVersions, grants] = await Promise.all([
-      this.catalogRepository.getSkillVersions(version.skillVersionIds),
-      this.catalogRepository.listGrants(agentId, { activeOnly: true })
+    const [grants, capabilities] = await Promise.all([
+      this.catalogRepository.listGrants(agentId, { activeOnly: true }),
+      this.taskCapabilityRepository.listForTask(taskId, { activeOnly: true })
     ]);
-    const granted = (type: 'skill' | 'connection') =>
+    const granted = (type: GrantTargetType) =>
       new Set(grants.filter((grant) => grant.targetType === type).map((grant) => grant.targetId));
     const grantedSkills = granted('skill');
     const grantedConnections = granted('connection');
+    const added = capabilities.filter(
+      (capability) =>
+        capability.duration === 'task' || granted(capability.targetType).has(capability.targetId)
+    );
+    const addedSkillVersionIds = new Set(
+      added.flatMap((capability) => capability.skillVersionId ?? [])
+    );
 
+    const skillVersions = await this.catalogRepository.getSkillVersions([
+      ...version.skillVersionIds,
+      ...addedSkillVersionIds
+    ]);
     const skillRows = await this.catalogRepository.getSkills(
       skillVersions.map((skillVersion) => skillVersion.skillId)
     );
-    const skills = skillVersions.flatMap((skillVersion) => {
+    const skills: { skill: Skill; version: SkillVersion }[] = [];
+    for (const skillVersion of skillVersions) {
       const skill = skillRows.find((row) => row.id === skillVersion.skillId);
-      return skill && !skill.disabledAt && grantedSkills.has(skill.id)
-        ? [{ skill, version: skillVersion }]
-        : [];
-    });
+      const allowed =
+        (version.skillVersionIds.includes(skillVersion.id) &&
+          grantedSkills.has(skillVersion.skillId)) ||
+        addedSkillVersionIds.has(skillVersion.id);
+      if (
+        skill &&
+        !skill.disabledAt &&
+        allowed &&
+        !skills.some((entry) => entry.skill.id === skill.id)
+      ) {
+        skills.push({ skill, version: skillVersion });
+      }
+    }
 
     const wanted = new Set(version.connectionIds);
-    const connections = (await this.catalogRepository.getConnections([...wanted])).filter(
-      (connection) =>
-        wanted.has(connection.id) && grantedConnections.has(connection.id) && !connection.disabledAt
+    const addedConnections = added.filter(
+      (capability) => capability.targetType === 'connection' && capability.scope
     );
+    const rows = await this.catalogRepository.getConnections([
+      ...new Set([...wanted, ...addedConnections.map((capability) => capability.targetId)])
+    ]);
+    const connections: Connection[] = [];
+    for (const connection of rows.filter((row) => !row.disabledAt)) {
+      if (wanted.has(connection.id) && grantedConnections.has(connection.id)) {
+        connections.push(connection);
+        continue;
+      }
+      const capability = addedConnections.find((entry) => entry.targetId === connection.id);
+      if (capability?.scope) {
+        const limited = limitConnection(connection, capability.scope);
+        if (!isEmptyScope(scopeOf(limited))) connections.push(limited);
+      }
+    }
     return { skills, connections };
+  }
+
+  // Access requests
+
+  // Lists what people made discoverable. It shows names, descriptions, and scope only, and
+  // grants nothing.
+  private async runFindCapabilitiesTool(
+    task: Task,
+    agent: Agent,
+    input: ToolInput
+  ): Promise<ToolOutcome> {
+    const query = readOptionalString(input, 'query')?.trim().toLowerCase() ?? '';
+    const matches = (entry: { name: string; description: string }) =>
+      !query || `${entry.name} ${entry.description}`.toLowerCase().includes(query);
+    const [discoverable, usable] = await Promise.all([
+      this.catalogRepository.listDiscoverable(MAX_DISCOVERABLE),
+      this.loadUsableForTask(task, agent)
+    ]);
+    const skills = discoverable.skills.filter(matches);
+    const connections = discoverable.connections.filter(matches);
+    if (skills.length === 0 && connections.length === 0) {
+      return 'Nothing discoverable matches. Explain what is missing instead.';
+    }
+    const versions = await this.catalogRepository.getSkillVersions(
+      skills.flatMap((skill) => skill.currentVersionId ?? [])
+    );
+    const status = (usableNow: boolean) =>
+      usableNow ? 'You can use it now.' : 'Ask with request_access to use it.';
+    const lines = [
+      ...skills.map((skill) => {
+        const number = versions.find((version) => version.id === skill.currentVersionId)?.version;
+        return `- Skill "${skill.name}" (version ${number ?? '?'}): ${oneLine(skill.description)} ${status(usable.skills.some((entry) => entry.skill.id === skill.id))}`;
+      }),
+      ...connections.map((connection) => {
+        const approvals =
+          connection.kind === 'mcp'
+            ? (connection.approvalTools ?? []).join(', ')
+            : connection.approvalMethods.join(', ');
+        return `- Connection "${connection.name}" (${connection.kind === 'mcp' ? 'MCP' : 'HTTP'}): ${oneLine(connection.description)} Allows ${describeScope(scopeOf(connection))}.${approvals ? ` Each call to ${approvals} also needs a person's OK.` : ''} ${status(usable.connections.some((entry) => entry.id === connection.id))}`;
+      })
+    ];
+    return lines.join('\n');
+  }
+
+  // Asks a person for access to a discoverable skill or connection. The task waits for the
+  // decision. A pending request is reused, and a declined one is not asked again.
+  private async runRequestAccessTool(
+    task: Task,
+    agent: Agent,
+    callId: string,
+    input: ToolInput
+  ): Promise<ToolOutcome> {
+    const clientKey = `tool:${task.id}:${callId}`;
+    const replayed = await this.approvalRepository.getByClientKey(clientKey);
+    if (replayed && isAccessRequest(replayed.request)) {
+      if (replayed.status === 'pending') {
+        await this.requestApproval(task, agent, {
+          clientKey,
+          request: replayed.request,
+          existing: replayed,
+          description: describeAccessWait(replayed.request)
+        });
+      }
+      return waitingForAccess(replayed.request, replayed.id);
+    }
+
+    const type = readRequiredString(input, 'type');
+    if (type !== 'skill' && type !== 'connection') {
+      throw new AppError('validationError', 'type must be "skill" or "connection".');
+    }
+    const name = readRequiredString(input, 'name').trim();
+    const reason = readRequiredString(input, 'reason').trim();
+    const recommended = readOptionalString(input, 'recommended_duration') ?? null;
+    if (recommended !== null && !ACCESS_DURATIONS.includes(recommended as AccessDuration)) {
+      throw new AppError('validationError', 'recommended_duration must be "task" or "ongoing".');
+    }
+
+    const discoverable = await this.catalogRepository.listDiscoverable(MAX_DISCOVERABLE);
+    const entries: { id: string; name: string }[] =
+      type === 'skill' ? discoverable.skills : discoverable.connections;
+    const entry = entries.find((candidate) => candidate.name.toLowerCase() === name.toLowerCase());
+    if (!entry) {
+      throw new AppError(
+        'toolAccessDenied',
+        `There is no discoverable ${type} named "${name}". Use find_capabilities to see what you can ask for.`
+      );
+    }
+    const usable = await this.loadUsableForTask(task, agent);
+    if (
+      type === 'skill'
+        ? usable.skills.some((skill) => skill.skill.id === entry.id)
+        : usable.connections.some((connection) => connection.id === entry.id)
+    ) {
+      return `You can already use ${entry.name}.`;
+    }
+
+    const previous = (await this.approvalRepository.listForTask(task.id)).filter(
+      (approval) =>
+        isAccessRequest(approval.request) &&
+        approval.request.targetType === type &&
+        approval.request.targetId === entry.id
+    );
+    const pending = previous.find((approval) => approval.status === 'pending');
+    if (pending && isAccessRequest(pending.request)) {
+      await this.requestApproval(task, agent, {
+        clientKey: `tool:${task.id}:${callId}`,
+        request: pending.request,
+        existing: pending,
+        description: describeAccessWait(pending.request)
+      });
+      return waitingForAccess(pending.request, pending.id);
+    }
+    const declined = previous.filter((approval) => approval.status === 'rejected').pop();
+    if (declined) {
+      throw new AppError(
+        'toolAccessDenied',
+        `A person already declined access to ${entry.name} for this task${declined.reason ? `: ${declined.reason}` : '.'} Continue without it or explain the limitation. Don't ask again.`
+      );
+    }
+
+    const request = await this.buildAccessRequest(type, entry.id, {
+      reason,
+      recommendedDuration: recommended as AccessDuration | null,
+      durationReason: readOptionalString(input, 'duration_reason')?.trim() || null
+    });
+    const approval = await this.requestApproval(task, agent, {
+      clientKey,
+      request,
+      description: describeAccessWait(request)
+    });
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.accessRequested, toAgentActor(agent), {
+      approvalId: approval.id,
+      targetType: request.targetType,
+      targetId: request.targetId,
+      name: request.name,
+      reason: request.reason
+    });
+    this.runnerLogger.onAccessRequested(task.id, approval.id, request.targetType, request.targetId);
+    return waitingForAccess(request, approval.id);
+  }
+
+  private async buildAccessRequest(
+    type: GrantTargetType,
+    targetId: string,
+    details: Pick<CapabilityAccessRequest, 'reason' | 'recommendedDuration' | 'durationReason'>
+  ): Promise<CapabilityAccessRequest> {
+    if (type === 'skill') {
+      const skill = await this.catalogRepository.getSkill(targetId);
+      const [version] = skill?.currentVersionId
+        ? await this.catalogRepository.getSkillVersions([skill.currentVersionId])
+        : [];
+      if (!skill || !version) {
+        throw new AppError('catalogEntryUnavailable', 'That skill has no saved version.');
+      }
+      return {
+        kind: 'access',
+        targetType: 'skill',
+        targetId,
+        name: skill.name,
+        description: skill.description,
+        skillVersionId: version.id,
+        skillVersion: version.version,
+        scope: null,
+        ...details
+      };
+    }
+    const connection = await this.catalogRepository.getConnection(targetId);
+    if (!connection) {
+      throw new AppError('connectionNotFound', 'That connection no longer exists.');
+    }
+    return {
+      kind: 'access',
+      targetType: 'connection',
+      targetId,
+      name: connection.name,
+      description: connection.description,
+      skillVersionId: null,
+      skillVersion: null,
+      scope: scopeOf(connection),
+      ...details
+    };
+  }
+
+  private async loadUsableForTask(task: Task, agent: Agent) {
+    const version = await this.agentRepository.getVersion(task.agentVersionId);
+    return version
+      ? this.loadUsableCatalog(agent.id, version, task.id)
+      : { skills: [], connections: [] };
+  }
+
+  // Adds approved access to the waiting task without changing its pinned configuration, and for
+  // ongoing access also to the agent's configuration. The task, the capability, and the scope
+  // are checked again first. Each step can run again safely after a crash.
+  private async applyApprovedAccess(
+    approval: Approval,
+    request: CapabilityAccessRequest
+  ): Promise<void> {
+    const task = await this.taskRepository.getById(approval.taskId);
+    if (!task || !approval.decidedByHumanId) return;
+    if (task.pausedAt && !isFinishedState(task.state)) return;
+    const humanId = approval.decidedByHumanId;
+    const duration = approval.duration ?? 'task';
+    let result: ApprovalResult;
+    try {
+      if (task.state !== 'waiting') {
+        throw new AppError(
+          'taskStateConflict',
+          `The task is ${task.state}, so access was not added.`
+        );
+      }
+      const scope = await this.checkAccessTarget(request);
+      const events = await this.loadEvents(task.id);
+      const human: Actor = { type: 'human', id: humanId };
+      if (
+        duration === 'ongoing' &&
+        !events.some(
+          (event) =>
+            event.type === TASK_EVENTS.accessOngoingAdded && event.data.approvalId === approval.id
+        )
+      ) {
+        await addOngoingAccess(
+          { agentRepository: this.agentRepository, catalogRepository: this.catalogRepository },
+          {
+            agentId: approval.agentId,
+            target: {
+              type: request.targetType,
+              id: request.targetId,
+              skillVersionId: request.skillVersionId
+            },
+            humanId
+          }
+        );
+        await this.taskRepository.addEvent(task.id, TASK_EVENTS.accessOngoingAdded, human, {
+          approvalId: approval.id,
+          targetType: request.targetType,
+          targetId: request.targetId
+        });
+      }
+      const { capability, created } = await this.taskCapabilityRepository.add({
+        taskId: task.id,
+        approvalId: approval.id,
+        targetType: request.targetType,
+        targetId: request.targetId,
+        skillVersionId: request.skillVersionId,
+        scope,
+        duration,
+        grantedByHumanId: humanId
+      });
+      if (created) {
+        await this.taskRepository.addEvent(task.id, TASK_EVENTS.accessGranted, human, {
+          approvalId: approval.id,
+          capabilityId: capability.id,
+          targetType: request.targetType,
+          targetId: request.targetId,
+          name: request.name,
+          duration,
+          skillVersionId: request.skillVersionId,
+          scope
+        });
+      }
+      result = {
+        status: null,
+        body: `Access to ${request.name} was added ${duration === 'task' ? 'for this task' : 'for this task and your future work'}.${scope ? ` It allows ${describeScope(scope)}.` : ''}`,
+        truncated: false,
+        error: null
+      };
+    } catch (error) {
+      result = { status: null, body: '', truncated: false, error: (error as Error).message };
+    }
+    if (!(await this.approvalRepository.markExecuted(approval.id, result))) return;
+    this.runnerLogger.onAccessGranted(task.id, approval.id, duration, !result.error, result.error);
+    await this.finishApproval(approval, result);
+  }
+
+  // The capability must still be enabled. A connection's scope is the overlap of what the
+  // person saw and what the connection allows now.
+  private async checkAccessTarget(request: CapabilityAccessRequest) {
+    if (request.targetType === 'skill') {
+      const skill = await this.catalogRepository.getSkill(request.targetId);
+      if (!skill || skill.disabledAt) {
+        throw new AppError(
+          'catalogEntryUnavailable',
+          `${request.name} is disabled, so access was not added.`
+        );
+      }
+      return null;
+    }
+    const connection = await this.catalogRepository.getConnection(request.targetId);
+    if (!connection || connection.disabledAt || !request.scope) {
+      throw new AppError(
+        'catalogEntryUnavailable',
+        `${request.name} is disabled, so access was not added.`
+      );
+    }
+    const scope = narrowScope(request.scope, scopeOf(connection));
+    if (isEmptyScope(scope)) {
+      throw new AppError(
+        'catalogEntryUnavailable',
+        `${request.name} no longer allows anything that was approved, so access was not added.`
+      );
+    }
+    return scope;
   }
 
   // Posts the result or reason in reply to the message that asked for the work.
@@ -1940,7 +2314,17 @@ export class TaskRunnerService {
           break;
         }
         case TASK_EVENTS.approvalExecuted: {
-          const request = event.data.request as ConnectionCallRequest;
+          const approved = event.data.request as ApprovalRequest;
+          if (isAccessRequest(approved)) {
+            const result = event.data.result as ApprovalResult;
+            say(
+              result.error
+                ? `A person allowed access to ${approved.name}, but it was not added: ${result.error}`
+                : `A person allowed your request. ${result.body} You can use it now.`
+            );
+            break;
+          }
+          const request = approved;
           const action = describeConnectionAction(request);
           const result = event.data.result as ApprovalResult;
           say(
@@ -1951,7 +2335,14 @@ export class TaskRunnerService {
           break;
         }
         case TASK_EVENTS.approvalRejected: {
-          const request = event.data.request as ConnectionCallRequest;
+          const rejected = event.data.request as ApprovalRequest;
+          if (isAccessRequest(rejected)) {
+            say(
+              `A person declined access to ${rejected.name}${event.data.reason ? `: ${event.data.reason as string}` : '.'} Continue without it or explain the limitation. Don't ask again for it.`
+            );
+            break;
+          }
+          const request = rejected;
           const action = describeConnectionAction(request);
           say(
             `A person rejected ${action} on ${request.connectionName}${event.data.reason ? `: ${event.data.reason as string}` : '.'} It was not made.`
@@ -1973,6 +2364,17 @@ export class TaskRunnerService {
     }
     return { transcript, pendingCalls };
   }
+}
+
+function describeAccessWait(request: CapabilityAccessRequest): string {
+  return `A person decides on ${request.targetType} access to ${request.name}`;
+}
+
+function waitingForAccess(request: CapabilityAccessRequest, approvalId: string): ToolOutcome {
+  return {
+    content: `Asked a person for access to ${request.name} (request ${approvalId}). Your work is paused until they decide.`,
+    stop: true
+  };
 }
 
 function getAuthorRef(message: Message): ParticipantRef | null {

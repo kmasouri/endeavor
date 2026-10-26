@@ -68,6 +68,48 @@ A connection's `approvalMethods` (for example `["POST", "DELETE"]`) are methods 
 
 A second decision on the same approval gets `approvalAlreadyDecided`.
 
+## Discovery and access requests (CA-38)
+
+A person can mark a skill or connection **discoverable** (`discoverable: true` on create,
+`PATCH /skills/:skillId`, or `PATCH /connections/:connectionId`; the catalog shows a checkbox).
+Entries are private by default. Discovery shows agents only the name, description, skill
+version, and connection scope. It never shows credentials or connected content, and it grants
+nothing.
+
+1. An agent calls `find_capabilities` to list enabled, discoverable entries and see whether it
+   can already use each one.
+2. It calls `request_access` with the type, name, and a plain-language reason. It may recommend
+   a duration and say why. The request records the exact skill version or the connection's
+   current scope. The task waits, and the request appears in the conversation and on the
+   Approvals page as an access request, separate from approving one action.
+3. A person chooses **For this task** (the default) or **Ongoing**, then **Allow for this task**,
+   **Allow ongoing**, or **Don't allow** (`POST /approvals/:id/approve` with
+   `duration: "task" | "ongoing"`, or `POST /approvals/:id/reject`). Only people can decide.
+   The capability must still be enabled, and the task must still be waiting.
+4. The runner adds the access to the waiting task as a recorded task capability, without
+   changing the task's pinned version. For ongoing access it also adds the item to the agent's
+   configuration as a new version, with its grant. Then the task wakes with the decision.
+
+Rules:
+
+- Task-only access belongs to that agent and task. It survives pauses, waits, and restarts of
+  the service, and ends when the task completes or is cancelled. It never carries over to other
+  agents, follow-up tasks, restarted tasks, or later scheduled runs.
+- Ongoing access is part of the agent's configuration, so recurring responsibilities can use it
+  without asking on every run. Remove it from the configuration to take it away; that also
+  takes it away from tasks that got it through the request.
+- A pending request for the same capability and task is reused. After a decline, the agent is
+  told not to ask again for that task. A stale request for a finished task adds nothing.
+- A connection added to a task is limited to the overlap of the approved scope and its current
+  scope, so later catalog edits can narrow it but never widen it. Ongoing access follows the
+  connection's current scope like any configured connection.
+- Every call still passes the live checks above, and per-call action approvals still apply.
+  Approving access never runs an action that was waiting for approval.
+- `GET /tasks/:taskId/capabilities` lists the access added to a task, and
+  `DELETE /tasks/:taskId/capabilities/:capabilityId` revokes it from the next call. The task page
+  shows both. Task events record the request (`access.requested`), the decision, the added
+  access (`access.granted`, `access.ongoing.added`), and revocations (`access.revoked`).
+
 ## Not yet
 
 - Explicitly supplied documents, and knowledge-source connections beyond plain HTTP calls, come with saved notes and context (CA-21).
@@ -171,7 +213,7 @@ Creation uses `#/skills/new` and `#/connections/new`. Older `#/catalogs` links, 
 
 Set `APP_PUBLIC_URL` to the browser origin used to open Endeavor, for example
 `http://localhost:3100`. It must be HTTPS, or HTTP on localhost. Do not derive it from
-request headers. Keep `CREDENTIALS_KEY` stable. Apply migration 012 before starting the app.
+request headers. Keep `CREDENTIALS_KEY` stable. Apply migration 014 before starting the app.
 
 Create an MCP connection with its endpoint and an empty tool list. Open its connection configuration page, then
 open **Sign in with OAuth**, then **Sign in**. The browser opens the service's consent page

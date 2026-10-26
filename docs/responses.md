@@ -181,3 +181,19 @@ flag from the MCP server. See [catalogs](catalogs.md#remote-mcp-tools-ca-64).
 
 Status, connect, and disconnect require the acting person's header. OAuth responses use
 `Cache-Control: no-store`. A successful sign-in changes no agent grants or tool permissions.
+
+## Access requests (CA-38)
+
+Every approval now has `kind` (`connection_call` or `capability_access`) and `duration`
+(`null`, or `"task"` / `"ongoing"` once an access request is approved). An access request's
+`request` has `kind: "access"`, `targetType` (`skill` or `connection`), `targetId`, `name`,
+`description`, `skillVersionId` and `skillVersion` (skills), `scope` (connections:
+`{ kind: "http", methods, pathPrefixes }` or `{ kind: "mcp", tools }`), the agent's `reason`,
+and an optional `recommendedDuration` and `durationReason`. Once the runner applies it, `result`
+has `status: null` and a `body` describing the added access, or an `error` saying why nothing
+was added. Skills and connections return `discoverable`.
+
+`GET /tasks/:taskId/capabilities` returns `success` with every access entry added to the task,
+including revoked ones: `id`, `approvalId`, `targetType`, `targetId`, `name`, `skillVersionId`,
+`scope`, `duration`, `grantedByHumanId`, `grantedAt`, `revokedByHumanId`, and `revokedAt`.
+`DELETE /tasks/:taskId/capabilities/:capabilityId` returns the entry after revoking it.

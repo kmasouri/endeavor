@@ -11,6 +11,13 @@ export class CatalogLogger {
     );
   }
 
+  onSkillDiscoveryChanged(skillId: string, discoverable: boolean): void {
+    getCurrentLogger(this.logger).info(
+      { event: 'catalog.skill.discovery_changed', skillId, discoverable },
+      'skill discovery changed'
+    );
+  }
+
   onSkillSaved(skillId: string, version: number): void {
     getCurrentLogger(this.logger).info(
       { event: 'catalog.skill.saved', skillId, version },

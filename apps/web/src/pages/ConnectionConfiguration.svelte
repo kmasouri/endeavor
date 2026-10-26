@@ -2,6 +2,7 @@
   import { api, type Connection } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import { createAction } from '../state.svelte';
+  import DiscoverableToggle from './DiscoverableToggle.svelte';
   import EnableButton from './EnableButton.svelte';
   import ConnectionOAuth from './ConnectionOAuth.svelte';
 
@@ -74,6 +75,11 @@
       onChanged={props.onChanged}
     />
   </div>
+  <DiscoverableToggle
+    path={`/connections/${connection.id}`}
+    discoverable={connection.discoverable}
+    onChanged={props.onChanged}
+  />
 
   <fieldset class="stack">
     <legend>Access</legend>

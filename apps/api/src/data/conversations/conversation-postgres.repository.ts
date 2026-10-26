@@ -171,6 +171,61 @@ export class ConversationPostgresRepository implements ConversationRepository {
 
     return result.rows[0] ? toMember(result.rows[0]) : null;
   }
+
+  async markRead(input: {
+    conversationId: string;
+    humanId: string;
+    messageId: string;
+  }): Promise<void> {
+    await this.db.query(
+      `INSERT INTO endeavor.conversation_reads (
+         conversation_id, human_id, last_read_message_id, last_read_at
+       )
+       SELECT m.conversation_id, $2, m.id, m.created_at
+       FROM endeavor.messages m
+       WHERE m.id = $3
+         AND m.conversation_id = $1
+       ON CONFLICT (conversation_id, human_id) DO UPDATE
+       SET last_read_message_id = EXCLUDED.last_read_message_id,
+           last_read_at = EXCLUDED.last_read_at,
+           updated_at = now()
+       WHERE (conversation_reads.last_read_at, conversation_reads.last_read_message_id)
+           < (EXCLUDED.last_read_at, EXCLUDED.last_read_message_id)`,
+      [input.conversationId, input.humanId, input.messageId]
+    );
+  }
+
+  async countUnread(input: {
+    humanId: string;
+    conversationIds: string[];
+  }): Promise<Map<string, number>> {
+    if (input.conversationIds.length === 0) {
+      return new Map();
+    }
+    const result = await this.db.query<{ conversation_id: string; unread: number }>(
+      `SELECT m.conversation_id, count(*)::int AS unread
+       FROM endeavor.messages m
+       JOIN endeavor.conversation_members cm
+         ON cm.conversation_id = m.conversation_id
+        AND cm.participant_type = 'human'
+        AND cm.participant_id = $1
+        AND cm.removed_at IS NULL
+       LEFT JOIN endeavor.conversation_reads r
+         ON r.conversation_id = m.conversation_id
+        AND r.human_id = $1
+       WHERE m.conversation_id = ANY($2::uuid[])
+         AND NOT (m.author_type = 'human' AND m.author_id IS NOT DISTINCT FROM $1)
+         AND (cm.history_from IS NULL OR m.created_at >= cm.history_from)
+         AND (
+           r.conversation_id IS NULL
+           OR (m.created_at, m.id) > (r.last_read_at, r.last_read_message_id)
+         )
+       GROUP BY m.conversation_id`,
+      [input.humanId, input.conversationIds]
+    );
+
+    return new Map(result.rows.map((row) => [row.conversation_id, row.unread]));
+  }
 }
 
 function toConversation(row: ConversationRow): Conversation {

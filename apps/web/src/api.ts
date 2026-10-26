@@ -50,6 +50,8 @@ export const api = {
   list: <T>(path: string) => request<{ data: T[]; page: Page }>('GET', path),
   post: <T>(path: string, body: unknown = {}) =>
     request<{ data: T }>('POST', path, body).then((body) => body.data),
+  put: <T>(path: string, body: unknown) =>
+    request<{ data: T }>('PUT', path, body).then((body) => body.data),
   patch: <T>(path: string, body: unknown) =>
     request<{ data: T }>('PATCH', path, body).then((body) => body.data),
   delete: (path: string) => request<unknown>('DELETE', path)
@@ -78,6 +80,8 @@ export interface Conversation {
   id: string;
   title: string;
   createdAt: string;
+  // Messages from others you haven't seen. Only the conversations list sends it.
+  unreadCount?: number;
 }
 
 export interface Member {
@@ -156,6 +160,7 @@ export interface Skill {
   name: string;
   description: string;
   currentVersionId: string | null;
+  discoverable: boolean;
   disabledAt: string | null;
 }
 
@@ -183,6 +188,7 @@ export interface Connection {
   allowedMethods: HttpMethod[];
   allowedPathPrefixes: string[];
   approvalMethods: HttpMethod[];
+  discoverable: boolean;
   disabledAt: string | null;
 }
 
@@ -255,10 +261,31 @@ export interface TaskOutput {
   createdAt: string;
 }
 
+export type AccessDuration = 'task' | 'ongoing';
+
+export type ConnectionScope =
+  | { kind: 'http'; methods: HttpMethod[]; pathPrefixes: string[] }
+  | { kind: 'mcp'; tools: string[] };
+
+// An agent asking for access to a skill or connection it found. The person picks the duration.
+export interface AccessRequest {
+  kind: 'access';
+  targetType: 'skill' | 'connection';
+  targetId: string;
+  name: string;
+  description: string;
+  skillVersion: number | null;
+  scope: ConnectionScope | null;
+  reason: string;
+  recommendedDuration: AccessDuration | null;
+  durationReason: string | null;
+}
+
 export interface Approval {
   id: string;
   taskId: string;
   agentId: string;
+  kind: 'connection_call' | 'capability_access';
   request:
     | { kind?: 'http'; connectionName: string; method: string; path: string; body: string | null }
     | {
@@ -267,12 +294,25 @@ export interface Approval {
         tool: string;
         arguments: Record<string, unknown>;
         baseUrl: string;
-      };
+      }
+    | AccessRequest;
+  duration: AccessDuration | null;
   status: 'pending' | 'approved' | 'rejected';
   reason: string | null;
   decidedAt: string | null;
   result: { status: number | null; body: string; error: string | null } | null;
   createdAt: string;
+}
+
+// Access a person added to one task after a request. The task's version is unchanged.
+export interface TaskCapability {
+  id: string;
+  targetType: 'skill' | 'connection';
+  targetId: string;
+  scope: ConnectionScope | null;
+  duration: AccessDuration;
+  grantedAt: string;
+  revokedAt: string | null;
 }
 
 export interface Responsibility {

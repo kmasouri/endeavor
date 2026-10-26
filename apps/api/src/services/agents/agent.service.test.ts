@@ -310,6 +310,7 @@ describe('AgentService', () => {
         name: 'Citations',
         description: '',
         currentVersionId: 'sv7',
+        discoverable: false,
         disabledAt: null,
         createdAt: new Date(),
         updatedAt: new Date()
@@ -434,6 +435,7 @@ describe('AgentService', () => {
         name: 'Old',
         description: '',
         currentVersionId: 'sv1',
+        discoverable: false,
         disabledAt: new Date(),
         createdAt: new Date(),
         updatedAt: new Date()

@@ -11,6 +11,7 @@ const connection: Connection = {
   allowedMethods: ['GET'],
   allowedPathPrefixes: ['/invoices', '/customers/'],
   approvalMethods: [],
+  discoverable: false,
   disabledAt: null,
   createdAt: new Date(),
   updatedAt: new Date()

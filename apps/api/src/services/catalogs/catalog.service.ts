@@ -42,6 +42,7 @@ export interface ConnectionChanges {
   allowedMethods?: HttpMethod[];
   allowedPathPrefixes?: string[];
   approvalMethods?: HttpMethod[];
+  discoverable?: boolean;
 }
 
 // The shared catalogs: reusable skills and connections that admins define once. Being in a
@@ -233,12 +234,12 @@ export class CatalogService {
 
   async createSkill(
     actorId: string,
-    input: { name: string; description: string; instructions: string }
+    input: { name: string; description: string; instructions: string; discoverable?: boolean }
   ): Promise<SkillDetails> {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     const { skill, version } = await this.catalogRepository
       .createSkill(
-        { name: input.name, description: input.description },
+        { name: input.name, description: input.description, discoverable: input.discoverable },
         {
           instructions: input.instructions,
           createdByHumanId: admin.id
@@ -322,6 +323,19 @@ export class CatalogService {
     return this.getSkill(skillId);
   }
 
+  // Discovery lets agents find the skill and ask for access. It grants nothing.
+  async updateSkill(
+    actorId: string,
+    skillId: string,
+    changes: { discoverable: boolean }
+  ): Promise<SkillDetails> {
+    requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
+    await this.requireSkill(skillId);
+    await this.catalogRepository.setSkillDiscoverable(skillId, changes.discoverable);
+    this.catalogLogger.onSkillDiscoveryChanged(skillId, changes.discoverable);
+    return this.getSkill(skillId);
+  }
+
   // Connections
 
   async createConnection(
@@ -338,6 +352,7 @@ export class CatalogService {
       allowedMethods?: HttpMethod[];
       allowedPathPrefixes?: string[];
       approvalMethods?: HttpMethod[];
+      discoverable?: boolean;
     }
   ): Promise<Connection> {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
@@ -358,6 +373,7 @@ export class CatalogService {
         approvalMethods:
           input.approvalMethods ??
           (input.allowedMethods ?? []).filter((method) => method !== 'GET'),
+        discoverable: input.discoverable ?? false,
         createdByHumanId: admin.id
       })
       .catch(toNameTaken);

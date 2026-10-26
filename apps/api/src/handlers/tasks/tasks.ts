@@ -3,6 +3,8 @@ import {
   ActorHeaders,
   AgentCostParams,
   ApprovalParams,
+  ApproveBody,
+  TaskCapabilityParams,
   ListApprovalsQuery,
   CreateTaskBody,
   ConversationOutputsParams,
@@ -217,12 +219,37 @@ type DecisionRequest = FastifyRequest<{
   Headers: ActorHeaders;
 }>;
 
-export async function approveHandler(request: DecisionRequest): Promise<unknown> {
+export async function approveHandler(
+  request: FastifyRequest<{ Params: ApprovalParams; Body: ApproveBody; Headers: ActorHeaders }>
+): Promise<unknown> {
   return success(
     await request.server.taskService.approve(
       request.headers['x-actor-id'],
       request.params.approvalId,
-      request.body?.reason
+      { reason: request.body?.reason, duration: request.body?.duration }
+    )
+  );
+}
+
+export async function listTaskCapabilitiesHandler(
+  request: FastifyRequest<{ Params: TaskParams; Headers: ActorHeaders }>
+): Promise<unknown> {
+  return success(
+    await request.server.taskService.listTaskCapabilities(
+      request.headers['x-actor-id'],
+      request.params.taskId
+    )
+  );
+}
+
+export async function revokeTaskCapabilityHandler(
+  request: FastifyRequest<{ Params: TaskCapabilityParams; Headers: ActorHeaders }>
+): Promise<unknown> {
+  return success(
+    await request.server.taskService.revokeTaskCapability(
+      request.headers['x-actor-id'],
+      request.params.taskId,
+      request.params.capabilityId
     )
   );
 }

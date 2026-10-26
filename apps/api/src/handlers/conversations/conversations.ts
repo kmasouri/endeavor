@@ -9,6 +9,7 @@ import {
   CreateConversationBody,
   ListConversationsQuery,
   ListMessagesQuery,
+  MarkReadBody,
   PostMessageBody
 } from '../../schemas';
 import { paged, success } from '../../shared/response';
@@ -108,6 +109,22 @@ export async function listMessagesHandler(
       request.headers['x-actor-id'],
       request.params.conversationId,
       request.query
+    )
+  );
+}
+
+export async function markReadHandler(
+  request: FastifyRequest<{
+    Params: ConversationParams;
+    Body: MarkReadBody;
+    Headers: ActorHeaders;
+  }>
+): Promise<unknown> {
+  return success(
+    await request.server.conversationService.markRead(
+      request.headers['x-actor-id'],
+      request.params.conversationId,
+      request.body
     )
   );
 }

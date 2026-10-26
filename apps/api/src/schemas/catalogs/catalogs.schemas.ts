@@ -4,11 +4,17 @@ import { HTTP_METHODS } from '../../shared/types';
 export const skillParamsSchema = z.object({ skillId: z.uuid() });
 export const connectionParamsSchema = z.object({ connectionId: z.uuid() });
 
+// Discoverable entries can be found by agents, which can then ask a person for access.
+const discoverable = z.boolean();
+
 export const createSkillBodySchema = z.strictObject({
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().min(1),
-  instructions: z.string().trim().min(1)
+  instructions: z.string().trim().min(1),
+  discoverable: discoverable.optional()
 });
+
+export const updateSkillBodySchema = z.strictObject({ discoverable });
 
 export const addSkillVersionBodySchema = z
   .strictObject({
@@ -44,7 +50,8 @@ export const createConnectionBodySchema = z.union([
     approvalTools: z.never().optional(),
     authHeader: connectionFields.authHeader.optional(),
     credential: connectionFields.credential.optional(),
-    approvalMethods: connectionFields.approvalMethods.optional()
+    approvalMethods: connectionFields.approvalMethods.optional(),
+    discoverable: discoverable.optional()
   }),
   z.strictObject({
     name: connectionFields.name,
@@ -54,7 +61,8 @@ export const createConnectionBodySchema = z.union([
     authHeader: connectionFields.authHeader.optional(),
     credential: connectionFields.credential.optional(),
     allowedTools: toolNames,
-    approvalTools: toolNames.optional()
+    approvalTools: toolNames.optional(),
+    discoverable: discoverable.optional()
   })
 ]);
 
@@ -70,7 +78,8 @@ export const updateConnectionBodySchema = z
     credential: connectionFields.credential.nullable().optional(),
     allowedMethods: connectionFields.allowedMethods.optional(),
     allowedPathPrefixes: connectionFields.allowedPathPrefixes.optional(),
-    approvalMethods: connectionFields.approvalMethods.optional()
+    approvalMethods: connectionFields.approvalMethods.optional(),
+    discoverable: discoverable.optional()
   })
   .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
 
@@ -102,6 +111,7 @@ export const listGrantsQuerySchema = z.strictObject({
 export type SkillParams = z.infer<typeof skillParamsSchema>;
 export type ConnectionParams = z.infer<typeof connectionParamsSchema>;
 export type CreateSkillBody = z.infer<typeof createSkillBodySchema>;
+export type UpdateSkillBody = z.infer<typeof updateSkillBodySchema>;
 export type AddSkillVersionBody = z.infer<typeof addSkillVersionBodySchema>;
 export type CreateConnectionBody = z.infer<typeof createConnectionBodySchema>;
 export type UpdateConnectionBody = z.infer<typeof updateConnectionBodySchema>;

@@ -23,6 +23,7 @@ const skill: Skill = {
   name: 'Citations',
   description: 'Cite sources',
   currentVersionId: 'sv1',
+  discoverable: false,
   disabledAt: null,
   createdAt: new Date(),
   updatedAt: new Date()
@@ -45,6 +46,7 @@ const connection: Connection = {
   allowedMethods: ['GET'],
   allowedPathPrefixes: ['/'],
   approvalMethods: [],
+  discoverable: false,
   disabledAt: null,
   createdAt: new Date(),
   updatedAt: new Date()
@@ -82,6 +84,7 @@ function setup(credentialsReady = true) {
   }));
   const logger = {
     onSkillSaved: jest.fn(),
+    onSkillDiscoveryChanged: jest.fn(),
     onConnectionSaved: jest.fn(),
     onGranted: jest.fn(),
     onRevoked: jest.fn()
@@ -323,5 +326,28 @@ describe('MCP catalog policy', () => {
       'MCP permissions'
     );
     expect(catalogs.updateConnection).not.toHaveBeenCalled();
+  });
+});
+
+describe('catalog discovery', () => {
+  it('keeps new entries private unless a person marks them discoverable', async () => {
+    const { service, catalogs } = setup();
+    await service.createConnection(ADMIN, {
+      name: 'Wikipedia',
+      description: 'Read pages',
+      baseUrl: 'https://wiki.test',
+      allowedMethods: ['GET'],
+      allowedPathPrefixes: ['/wiki']
+    });
+    expect(catalogs.createConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ discoverable: false })
+    );
+  });
+
+  it('marks a skill discoverable without granting any agent access', async () => {
+    const { service, catalogs } = setup();
+    await service.updateSkill(ADMIN, skill.id, { discoverable: true });
+    expect(catalogs.setSkillDiscoverable).toHaveBeenCalledWith(skill.id, true);
+    expect(catalogs.grant).not.toHaveBeenCalled();
   });
 });

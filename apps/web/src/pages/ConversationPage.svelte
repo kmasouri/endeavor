@@ -27,10 +27,12 @@
   import ApprovalCard from './ApprovalCard.svelte';
   import TaskStatus from './TaskStatus.svelte';
   import ArtifactCard from './ArtifactCard.svelte';
-  let { conversationId, me, onReady }: {
+  let { conversationId, me, onReady, onRead }: {
     conversationId: string;
     me: Human;
     onReady?: (conversation: ConversationDetails) => boolean;
+    // Called after the conversation is marked read, so the sidebar can refresh its counts.
+    onRead?: () => void;
   } = $props();
   let draft = $state('');
   let showDetails = $state(false);
@@ -78,6 +80,22 @@
       void tick().then(() => document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus());
     }
   });
+  // Seeing the conversation marks it read up to the newest message shown, again whenever a
+  // new one arrives while it is open.
+  let markedRead: string | null = null;
+  $effect(() => {
+    const newest = messages.data?.data.at(-1);
+    if (!newest) return;
+    const key = `${conversationId}:${newest.id}`;
+    if (key === markedRead) return;
+    markedRead = key;
+    api.put(`/conversations/${conversationId}/read`, { messageId: newest.id }).then(
+      () => onRead?.(),
+      () => {
+        if (markedRead === key) markedRead = null;
+      }
+    );
+  });
   let conversation = $derived(details.data!);
   let taskList = $derived(tasks.data?.data ?? []);
   let taskIds = $derived(new Set(taskList.map((task) => task.id)));
@@ -95,6 +113,22 @@
     (ref.type === 'system'
       ? 'Platform'
       : (directory.data?.find((agent) => agent.id === ref.id)?.name ?? (ref.type === 'agent' ? 'Deleted agent' : 'Someone')));
+  const waitingApproval = (task: Task) =>
+    task.state === 'waiting' && !task.pausedAt
+      ? conversationApprovals.find((approval) => approval.taskId === task.id)
+      : undefined;
+  const liveStatus = (task: Task) =>
+    task.pausedAt
+      ? 'is paused'
+      : task.state === 'working'
+        ? 'is working'
+        : task.state === 'blocked'
+          ? 'is stuck'
+          : 'is waiting';
+  const describeApproval = (approval: Approval | undefined) =>
+    approval?.request.kind === 'access'
+      ? `${approval.request.targetType} access to ${approval.request.name}`
+      : 'an action';
   const onAdd = (id: string) =>
     api
       .post(`/conversations/${conversationId}/members`, { type: 'agent', id })
@@ -210,8 +244,16 @@
                 class="agent-label">agent</span
               >
             </div>
-            <h2>Needs your OK</h2>
-            <ApprovalCard {approval} onDone={reload} />
+            <h2>
+              Needs your OK{approval.request.kind === 'access'
+                ? ` · ${approval.request.targetType === 'skill' ? 'Skill' : 'Connection'} access`
+                : ''}
+            </h2>
+            <ApprovalCard
+              {approval}
+              agentName={nameOf({ type: 'agent', id: approval.agentId })}
+              onDone={reload}
+            />
           </section>{/each}
         {#each busy.filter((task) => (task.pausedAt || task.state !== 'working') && !(messages.data?.data ?? []).some((message) => message.authorType === 'agent' && message.authorId === task.ownerAgentId)) as task (task.id)}<div
             class="conversation-state"
@@ -232,13 +274,9 @@
         {#if busy.length}<div class="live-status caption" aria-live="polite">
             {#each busy as task (task.id)}<span
                 ><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
-                {task.pausedAt
-                  ? 'is paused'
-                  : task.state === 'working'
-                    ? 'is working'
-                    : task.state === 'blocked'
-                      ? 'is stuck'
-                      : 'is waiting'}</span
+                {#if waitingApproval(task)}is <span class="waiting-ok">waiting for your OK</span>
+                  <span class="muted">· {describeApproval(waitingApproval(task))}</span
+                  >{:else}{liveStatus(task)}{/if}</span
               >{/each}
           </div>{/if}
         <Composer

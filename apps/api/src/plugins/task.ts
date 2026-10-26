@@ -3,10 +3,14 @@ import fp from 'fastify-plugin';
 import {
   AgentPostgresRepository,
   ApprovalPostgresRepository,
+  CatalogPostgresRepository,
   ConversationPostgresRepository,
+  CredentialCipher,
   HumanPostgresRepository,
+  TaskCapabilityPostgresRepository,
   TaskPostgresRepository
 } from '../data';
+import { config } from '../config';
 import { TaskLogger } from '../observability';
 import { TaskService } from '../services';
 
@@ -23,6 +27,8 @@ const taskPlugin: FastifyPluginAsync = async (fastify) => {
     new HumanPostgresRepository(fastify.pg),
     new ConversationPostgresRepository(fastify.pg),
     new ApprovalPostgresRepository(fastify.pg),
+    new TaskCapabilityPostgresRepository(fastify.pg),
+    new CatalogPostgresRepository(fastify.pg, new CredentialCipher(config.CREDENTIALS_KEY)),
     new TaskLogger(fastify.log)
   );
 

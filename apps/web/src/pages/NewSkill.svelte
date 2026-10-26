@@ -8,11 +8,12 @@
   let name = $state('');
   let description = $state('');
   let instructions = $state('');
+  let discoverable = $state(false);
   const action = createAction();
   const create = (event: SubmitEvent) => {
     event.preventDefault();
     void action
-      .run(() => api.post('/skills', { name, description, instructions }))
+      .run(() => api.post('/skills', { name, description, instructions, discoverable }))
       .then((ok) => {
         if (ok) {
           go('/skills');
@@ -41,6 +42,10 @@
         Description
 
         <input bind:value={description} required />
+      </label>
+      <label class="check">
+        <input type="checkbox" bind:checked={discoverable} />
+        Agents can find this and ask for access. Finding it grants nothing.
       </label>
     </fieldset>
     <fieldset class="stack">

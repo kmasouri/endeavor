@@ -603,6 +603,10 @@ pre {
   color: var(--text-100);
   font-weight: 500;
 }
+.sidebar-conversations > a.unread {
+  color: var(--text-100);
+  font-weight: 700;
+}
 .sidebar-conversations {
   display: flex;
   flex-direction: column;
@@ -1252,6 +1256,9 @@ mark.mention-you {
 .conversation-approval {
   background: var(--waiting-bg);
   border-color: var(--waiting-border);
+}
+.waiting-ok {
+  color: var(--waiting);
 }
 .conversation-approval h2 {
   color: var(--waiting);

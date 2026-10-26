@@ -389,3 +389,24 @@ from their plugins. They do not call another service. Session transitions hold a
 transaction lock so workers cannot rotate the same refresh token concurrently or restore
 credentials after a completed disconnect. Existing catalog grants, tool allowlists, approvals,
 and task history still govern all agent calls. See [OAuth setup](catalogs.md#oauth-sign-in-ca-65).
+
+## Capability discovery and access requests (CA-38)
+
+People mark skills and connections `discoverable`. Agents call `find_capabilities` to see those
+entries (name, description, and scope only) and `request_access` to ask a person. A request is
+an approval of kind `capability_access`, so it uses the same durable list, visibility rules,
+decision endpoints, and recovery as call approvals. The task waits on it like any approval.
+
+A person approves for the task (the default) or ongoing. The runner applies an approved
+request on its next tick, after checking the task is still waiting and the capability is still
+enabled. It records a `task_capabilities` row: the exact skill version, or the connection scope
+narrowed to what the connection allows now. This adds access to the waiting task without
+changing its pinned configuration version. Ongoing access also adds the item to the agent's
+configuration as a new version, with its grant, through the same rules as
+`POST /agents/:agentId/grants`. Each step is safe to repeat after a crash.
+
+`loadUsableCatalog` merges the task's active capabilities with its configured skills and
+connections. Task-only entries need no agent grant and end with the task. Ongoing entries also
+need the agent's live grant, so removing the item from the configuration takes it away from the
+task too. Added connections are limited to the overlap of the approved and current scopes, and
+every call still passes enabled-state, method/path or tool, and per-call approval checks.
