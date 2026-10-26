@@ -82,3 +82,30 @@ Here, agents' workspaces go in `apps/api/workspaces/`, which git ignores. Set `W
 For the web interface with live reload, also run `npm run dev:web` and open `http://localhost:5173/app/`. It sends API calls to `npm run dev` on port 3000. Without it, `npm run build` puts the interface in `apps/web/dist`, and the server serves it at `/app/`.
 
 Don't run `npm run up` and `npm run dev` at the same time: both use port 3000.
+
+## Rebuilding the database
+
+The files in `apps/api/db/schema/` create the current tables directly. In CA-70 they replaced the
+earlier string of changes. A database built from the older files has those older names in its
+`schema_migrations` ledger, so `db:migrate` and the app's startup stop with a message that sends
+you here. Rebuild it once, keeping every row:
+
+```bash
+mkdir -p ~/endeavor-backups && umask 077
+docker compose stop app
+# 1. A full backup. Keep it until you have checked the app.
+docker compose exec -T postgres pg_dump -U endeavor -d endeavor -Fc > ~/endeavor-backups/full.dump
+# 2. The rows only, without the old ledger.
+docker compose exec -T postgres pg_dump -U endeavor -d endeavor -Fc --data-only \
+  --schema=endeavor --exclude-table=endeavor.schema_migrations > ~/endeavor-backups/data.dump
+# 3. Drop the tables and build them again from the schema files.
+docker compose exec -T postgres psql -U endeavor -d endeavor -c 'DROP SCHEMA endeavor CASCADE'
+npm run db:migrate       # with DATABASE_URL pointing at this Postgres
+# 4. Put the rows back. Triggers and foreign keys are off while it loads.
+docker compose exec -T postgres pg_restore -U endeavor -d endeavor --data-only \
+  --disable-triggers --single-transaction < ~/endeavor-backups/data.dump
+docker compose up -d --build app
+```
+
+Compare each table's row count before and after. If anything goes wrong, restore the full
+backup with `pg_restore --clean --if-exists`.

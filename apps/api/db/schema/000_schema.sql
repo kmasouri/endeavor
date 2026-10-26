@@ -1,1 +1,2 @@
-CREATE SCHEMA IF NOT EXISTS bold_cedar_007;
+-- Every table lives in this Postgres schema.
+CREATE SCHEMA IF NOT EXISTS endeavor;

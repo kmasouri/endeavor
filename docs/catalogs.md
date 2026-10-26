@@ -149,6 +149,3 @@ Run these without an external account, model API key, or database:
 npm test -w apps/api -- --runInBand mcp-http.client.test.ts task-runner.service.test.ts
 npm run test:e2e -w apps/web -- connections.test.ts
 ```
-
-Run `npm run db:migrate` before starting the updated application on an existing database.
-Migration `036_mcp_connections.sql` preserves every existing connection as HTTP.

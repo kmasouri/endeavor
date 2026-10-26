@@ -54,10 +54,7 @@ while typing the next word, then is removed on blur or submission. The server ap
 rule to direct API clients. A database check protects all stored names, including writes that
 bypass the API.
 
-Migration `034_conversation_names.sql` normalizes existing titles without changing conversation
-IDs, members, messages, task links, or saved navigation. A legacy title with no usable characters
-becomes `endeavor-<conversation UUID>`. Legacy titles over 200 characters are shortened. Existing
-API clients can continue sending human-readable titles; responses now return the canonical name.
+API clients can send human-readable titles; responses return the canonical name.
 The pilot setup reuses its canonical schedule conversation name to avoid creating duplicates.
 
 Only people add members. Adding a member with `history: "from_now"` hides older messages from them. An agent can't add anyone.
