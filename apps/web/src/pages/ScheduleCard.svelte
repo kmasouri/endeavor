@@ -4,7 +4,7 @@
   import ErrorNote from '../ErrorNote.svelte';
   import StateBadge from '../StateBadge.svelte';
   import ScheduleBadge from './ScheduleBadge.svelte';
-  import { policyLabels, recurrenceSummary, scheduleInstant } from '../schedules';
+  import { policyLabels, summarizeRecurrence, scheduleInstant } from '../schedules';
   import { timeDisplay } from '../time-display.svelte';
   import { createAction, createLoad } from '../state.svelte';
 
@@ -33,7 +33,7 @@
 </script>
 
 <div class="row wrap"><h2 class="grow" tabindex="-1">{s.title}</h2><ScheduleBadge status={s.status} /></div>
-<p class="schedule-meta"><Avatar name={agentName} id={s.agentId} agent size="sm" /> {agentName} <span class="agent-label">agent</span> · {recurrenceSummary(s, timeDisplay.format === '12h')}</p>
+<p class="schedule-meta"><Avatar name={agentName} id={s.agentId} agent size="sm" /> {agentName} <span class="agent-label">agent</span> · {summarizeRecurrence(s, timeDisplay.format === '12h')}</p>
 {#if s.status !== 'cancelled'}
   <div class="row wrap schedule-actions">
     <button class="secondary" disabled={action.busy} onclick={() => post(s.status === 'enabled' ? '/pause' : '/resume')}>{s.status === 'enabled' ? 'Pause schedule' : 'Resume schedule'}</button>

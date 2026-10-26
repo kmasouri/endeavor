@@ -2,7 +2,7 @@
   import { api, type DirectoryEntry, type Human, type Member } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
-  import { when } from '../components';
+  import { formatDateTime } from '../components';
   import { createAction, createLoad } from '../state.svelte';
 
   let props: {
@@ -19,7 +19,7 @@
   let choice = $state('');
   let history = $state<'all' | 'from_now'>('all');
   const action = createAction();
-  let inside = $derived(new Set(props.members.map((m) => m.participant.id)));
+  let inside = $derived(new Set(props.members.map((member) => member.participant.id)));
   let agentChoices = $derived(props.directory.filter((agent) => !inside.has(agent.id)));
   let peopleChoices = $derived((people.data ?? []).filter((person) => !inside.has(person.id)));
   const add = (event: SubmitEvent) => {
@@ -62,7 +62,7 @@
 
       {#if member.historyFrom}
         <div class="muted small">
-          Sees messages from {when(member.historyFrom)}
+          Sees messages from {formatDateTime(member.historyFrom)}
         </div>
       {/if}
     </li>

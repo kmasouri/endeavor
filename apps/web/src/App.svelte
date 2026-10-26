@@ -23,7 +23,7 @@
   import ConversationPage from './pages/ConversationPage.svelte';
   import NewEndeavor from './pages/NewEndeavor.svelte';
   import SearchEndeavors from './pages/SearchEndeavors.svelte';
-  import { loadEndeavors, lastEndeavor, rememberEndeavor } from './endeavors';
+  import { loadEndeavors, readLastEndeavor, rememberEndeavor } from './endeavors';
   import SetupPage from './pages/SetupPage.svelte';
   import FirstPerson from './FirstPerson.svelte';
   import PickPerson from './PickPerson.svelte';
@@ -67,7 +67,7 @@
     () => [actorId],
     10000
   );
-  let catchUps = $derived((schedules.data?.data ?? []).filter((s) => s.catchUp).length);
+  let catchUps = $derived((schedules.data?.data ?? []).filter((schedule) => schedule.catchUp).length);
   const pending = createLoad(
     () =>
       actorId
@@ -121,11 +121,11 @@
     timeDisplay.format = me?.preferences.timeFormat ?? '12h';
   });
   let [section, id] = $derived(route);
-  let recent = $derived([...new Map([...additions, ...(conversations.data ?? [])].map((c) => [c.id, c])).values()]);
+  let recent = $derived([...new Map([...additions, ...(conversations.data ?? [])].map((conversation) => [conversation.id, conversation])).values()]);
   $effect(() => {
     if (!actorId || !conversations.data || (section && section !== 'conversations') || id) return;
-    const saved = lastEndeavor(actorId);
-    const selected = recent.find((c) => c.id === saved) ?? recent[0];
+    const saved = readLastEndeavor(actorId);
+    const selected = recent.find((conversation) => conversation.id === saved) ?? recent[0];
     if (selected) window.location.hash = `/conversations/${selected.id}`;
   });
   const openConversation = (id: string) => {

@@ -4,7 +4,7 @@
   import Hint from '../Hint.svelte';
   import { createAction, createLoad } from '../state.svelte';
 
-  const money = (amount: number) => `$${amount.toFixed(2)}`;
+  const formatMoney = (amount: number) => `$${amount.toFixed(2)}`;
 
   let props: {
     kind: 'agent' | 'conversation';
@@ -23,8 +23,8 @@
   let budget = $state('');
   const action = createAction();
   let field = $derived(props.kind === 'agent' ? 'monthlyBudgetUsd' : 'budgetUsd');
-  let r = $derived(report.data);
-  let spent = $derived(props.kind === 'agent' ? r?.thisMonth : r?.total);
+  let costReport = $derived(report.data);
+  let spent = $derived(props.kind === 'agent' ? costReport?.thisMonth : costReport?.total);
   const save = (value: number | null) =>
     void action
       .run(() => api.patch(base, { [field]: value }))
@@ -46,15 +46,15 @@
 
 <ErrorNote error={report.error} />
 
-{#if r && spent}
+{#if costReport && spent}
   <p>
-    <strong>{money(spent.costUsd)}</strong>
+    <strong>{formatMoney(spent.costUsd)}</strong>
 
-    {#if props.kind === 'agent'}{` this month · ${money(r.total.costUsd)} in total`}{/if}
+    {#if props.kind === 'agent'}{` this month · ${formatMoney(costReport.total.costUsd)} in total`}{/if}
 
-    {#if r.budgetUsd !== null}
-      <span class={spent.costUsd >= r.budgetUsd ? 'error' : 'muted'}>
-        of a {money(r.budgetUsd)} budget
+    {#if costReport.budgetUsd !== null}
+      <span class={spent.costUsd >= costReport.budgetUsd ? 'error' : 'muted'}>
+        of a {formatMoney(costReport.budgetUsd)} budget
       </span>
     {/if}
     <span class="muted small"> · {spent.tokens.toLocaleString()} tokens</span>
@@ -67,15 +67,15 @@
     </Hint>
   {/if}
 
-  {#if props.kind === 'agent' && r.tasks.length > 0}
+  {#if props.kind === 'agent' && costReport.tasks.length > 0}
     <details>
       <summary>Costliest tasks</summary>
 
       <ul class="list small">
-        {#each r.tasks ?? [] as t (t.taskId)}
+        {#each costReport.tasks ?? [] as taskCost (taskCost.taskId)}
           <li>
-            <a href={`#/tasks/${t.taskId}`}>{t.title}</a>
-            · {money(t.costUsd)}
+            <a href={`#/tasks/${taskCost.taskId}`}>{taskCost.title}</a>
+            · {formatMoney(taskCost.costUsd)}
           </li>
         {/each}
       </ul>
@@ -84,10 +84,10 @@
 {/if}
 
 {#if props.kind === 'conversation'}
-  {#if r && spent && r.budgetUsd !== null}<progress
+  {#if costReport && spent && costReport.budgetUsd !== null}<progress
       aria-label="Conversation spending"
       value={spent.costUsd}
-      max={r.budgetUsd}
+      max={costReport.budgetUsd}
     ></progress>{/if}
   <button class="text-button" onclick={() => (editing = !editing)}
     >Change this conversation's budget</button
@@ -103,7 +103,7 @@
     />
     <button disabled={action.busy || !(Number(budget) > 0)}>Set budget</button>
 
-    {#if r?.budgetUsd !== null && r?.budgetUsd !== undefined}
+    {#if costReport?.budgetUsd !== null && costReport?.budgetUsd !== undefined}
       <button type="button" class="secondary" disabled={action.busy} onclick={() => save(null)}>
         Remove budget
       </button>

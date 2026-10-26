@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { Message, Task } from './api';
-import { conversationArtifacts, type ConversationOutput } from './conversation-artifacts.ts';
+import { collectConversationArtifacts, type ConversationOutput } from './conversation-artifacts.ts';
 
 const output: ConversationOutput = {
   id: 'o1',
@@ -24,9 +24,13 @@ const message: Message = {
 };
 
 test('a generated answer already posted by its agent is shown only as a message', () => {
-  assert.deepEqual(conversationArtifacts([output], [message], []), []);
+  assert.deepEqual(collectConversationArtifacts([output], [message], []), []);
   assert.deepEqual(
-    conversationArtifacts([{ ...output, content: '\n' + output.content + '\r\n' }], [message], []),
+    collectConversationArtifacts(
+      [{ ...output, content: '\n' + output.content + '\r\n' }],
+      [message],
+      []
+    ),
     []
   );
 });
@@ -38,15 +42,18 @@ test('distinct deliverables, links, and answers not posted to chat keep their ca
     { ...output, uri: 'https://example.com/brief' },
     { ...output, content: 'A different result' }
   ])
-    assert.deepEqual(conversationArtifacts([item], [message], []), [item]);
-  assert.deepEqual(conversationArtifacts([output], [], []), [output]);
+    assert.deepEqual(collectConversationArtifacts([item], [message], []), [item]);
+  assert.deepEqual(collectConversationArtifacts([output], [], []), [output]);
 });
 
 test('text from another task or a human does not hide an agent output', () => {
-  assert.deepEqual(conversationArtifacts([output], [{ ...message, taskId: 't2' }], []), [output]);
-  assert.deepEqual(conversationArtifacts([output], [{ ...message, authorType: 'human' }], []), [
+  assert.deepEqual(collectConversationArtifacts([output], [{ ...message, taskId: 't2' }], []), [
     output
   ]);
+  assert.deepEqual(
+    collectConversationArtifacts([output], [{ ...message, authorType: 'human' }], []),
+    [output]
+  );
 });
 
 test('pending review stays visible even if a matching message exists', () => {
@@ -57,5 +64,5 @@ test('pending review stays visible even if a matching message exists', () => {
     criteriaCheck: { met: true, summary: 'Ready' },
     review: null
   } as Task;
-  assert.deepEqual(conversationArtifacts([output], [message], [task]), [output]);
+  assert.deepEqual(collectConversationArtifacts([output], [message], [task]), [output]);
 });

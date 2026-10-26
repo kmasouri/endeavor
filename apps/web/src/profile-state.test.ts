@@ -22,7 +22,7 @@ async function loadRunes(file: string) {
 const { createProfileEditor } = (await loadRunes(
   './profile-state.svelte.ts'
 )) as typeof import('./profile-state.svelte');
-const { timeDisplay, shortTime, when } = (await loadRunes(
+const { timeDisplay, formatShortTime, formatDateTime } = (await loadRunes(
   './time-display.svelte.ts'
 )) as typeof import('./time-display.svelte');
 const person: Human = {
@@ -150,7 +150,7 @@ test('a new person gets their own saved preferences and drafts', () => {
 test('message and run times honor the person format without mutating the original instant', () => {
   const instant = '2026-10-24T21:31:00Z';
   timeDisplay.format = '12h';
-  const before = shortTime(instant);
+  const before = formatShortTime(instant);
   assert.equal(
     before,
     new Intl.DateTimeFormat(undefined, {
@@ -161,16 +161,16 @@ test('message and run times honor the person format without mutating the origina
   );
   timeDisplay.format = '24h';
   assert.equal(
-    shortTime(instant),
+    formatShortTime(instant),
     new Intl.DateTimeFormat(undefined, {
       hour: 'numeric',
       minute: '2-digit',
       hourCycle: 'h23'
     }).format(Date.parse(instant))
   );
-  assert.notEqual(shortTime(instant), before);
+  assert.notEqual(formatShortTime(instant), before);
   assert.equal(
-    when(instant),
+    formatDateTime(instant),
     new Intl.DateTimeFormat(undefined, {
       dateStyle: 'medium',
       timeStyle: 'short',

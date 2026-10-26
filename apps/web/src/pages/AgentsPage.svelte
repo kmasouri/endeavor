@@ -16,7 +16,7 @@
       new Map(
         await Promise.all(
           (agents.data ?? []).map(
-            async (a) => [a.id, await api.get<CostReport>(`/agents/${a.id}/costs`)] as const
+            async (agent) => [agent.id, await api.get<CostReport>(`/agents/${agent.id}/costs`)] as const
           )
         )
       ),
@@ -27,9 +27,9 @@
   let search = $state('');
   let shown = $derived(
     (agents.data ?? []).filter(
-      (a) =>
-        (filter === 'All' || (filter === 'Disabled' ? !!a.disabledAt : !a.disabledAt)) &&
-        a.name.toLowerCase().includes(search.toLowerCase().trim())
+      (agent) =>
+        (filter === 'All' || (filter === 'Disabled' ? !!agent.disabledAt : !agent.disabledAt)) &&
+        agent.name.toLowerCase().includes(search.toLowerCase().trim())
     )
   );
 </script>

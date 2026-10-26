@@ -5,7 +5,7 @@
   import EnableButton from './EnableButton.svelte';
 
   let props: { connection: Connection; onChanged: () => void } = $props();
-  let c = $derived(props.connection);
+  let connection = $derived(props.connection);
   let credential = $state('');
   let discovered = $state<{ name: string; description: string }[] | null>(null);
   let allowedTools = $state<string[] | null>(null);
@@ -13,7 +13,7 @@
   const action = createAction();
   const visibleTools = $derived([
     ...(discovered ?? []),
-    ...(c.allowedTools ?? [])
+    ...(connection.allowedTools ?? [])
       .filter((name) => !discovered?.some((tool) => tool.name === name))
       .map((name) => ({
         name,
@@ -23,28 +23,28 @@
 
   function discover() {
     void action.run(async () => {
-      discovered = await api.post(`/connections/${c.id}/tools`, {});
+      discovered = await api.post(`/connections/${connection.id}/tools`, {});
     });
   }
 
   function toggleAllowed(name: string, checked: boolean) {
-    const selected = allowedTools ?? c.allowedTools ?? [];
+    const selected = allowedTools ?? connection.allowedTools ?? [];
     allowedTools = checked ? [...selected, name] : selected.filter((value) => value !== name);
     if (checked) {
-      approvalTools = [...new Set([...(approvalTools ?? c.approvalTools ?? []), name])];
+      approvalTools = [...new Set([...(approvalTools ?? connection.approvalTools ?? []), name])];
     }
   }
 
   function toggleApproval(name: string, checked: boolean) {
-    const selected = approvalTools ?? c.approvalTools ?? [];
+    const selected = approvalTools ?? connection.approvalTools ?? [];
     approvalTools = checked ? [...selected, name] : selected.filter((value) => value !== name);
   }
 
   function saveTools() {
     void action
-      .run(() => api.patch(`/connections/${c.id}`, {
-        allowedTools: allowedTools ?? c.allowedTools ?? [],
-        approvalTools: approvalTools ?? c.approvalTools ?? []
+      .run(() => api.patch(`/connections/${connection.id}`, {
+        allowedTools: allowedTools ?? connection.allowedTools ?? [],
+        approvalTools: approvalTools ?? connection.approvalTools ?? []
       }))
       .then((ok) => {
         if (ok) {
@@ -57,37 +57,37 @@
 
   const setSecret = (value: string | null) =>
     void action
-      .run(() => api.patch(`/connections/${c.id}`, { credential: value }))
+      .run(() => api.patch(`/connections/${connection.id}`, { credential: value }))
       .then((ok) => ok && ((credential = ''), props.onChanged()));
 </script>
 
 <li>
   <div class="row">
     <span class="grow">
-      <strong>{c.name}</strong>
-      {#if c.disabledAt}<span class="badge">disabled</span>{/if}
-      <span class="badge">{c.hasCredential ? 'credential saved' : 'no credential'}</span>
-      <div class="muted small">{c.description} · {c.baseUrl}</div>
+      <strong>{connection.name}</strong>
+      {#if connection.disabledAt}<span class="badge">disabled</span>{/if}
+      <span class="badge">{connection.hasCredential ? 'credential saved' : 'no credential'}</span>
+      <div class="muted small">{connection.description} · {connection.baseUrl}</div>
       <div class="muted small">
-        {#if c.kind === 'mcp'}
-          MCP · Allowed tools: {(c.allowedTools ?? []).join(', ') || 'none'}
-          · needs approval: {(c.approvalTools ?? []).join(', ') || 'none'}
+        {#if connection.kind === 'mcp'}
+          MCP · Allowed tools: {(connection.allowedTools ?? []).join(', ') || 'none'}
+          · needs approval: {(connection.approvalTools ?? []).join(', ') || 'none'}
         {:else}
-          HTTP API · Allowed: {c.allowedMethods.join(', ')} on {c.allowedPathPrefixes.join(', ')}
-          {#if c.approvalMethods.length > 0}
-            {` · needs approval: ${c.approvalMethods.join(', ')}`}
+          HTTP API · Allowed: {connection.allowedMethods.join(', ')} on {connection.allowedPathPrefixes.join(', ')}
+          {#if connection.approvalMethods.length > 0}
+            {` · needs approval: ${connection.approvalMethods.join(', ')}`}
           {/if}
         {/if}
       </div>
     </span>
     <EnableButton
-      path={`/connections/${c.id}`}
-      disabled={Boolean(c.disabledAt)}
+      path={`/connections/${connection.id}`}
+      disabled={Boolean(connection.disabledAt)}
       onChanged={props.onChanged}
     />
   </div>
 
-  {#if c.kind === 'mcp'}
+  {#if connection.kind === 'mcp'}
     <details>
       <summary>Discover and manage tools</summary>
       <button type="button" class="secondary" disabled={action.busy} onclick={discover}>
@@ -102,7 +102,7 @@
             <label class="check">
               <input
                 type="checkbox"
-                checked={(allowedTools ?? c.allowedTools ?? []).includes(tool.name)}
+                checked={(allowedTools ?? connection.allowedTools ?? []).includes(tool.name)}
                 onchange={(event) => toggleAllowed(tool.name, event.currentTarget.checked)}
               />
               <span>Allowed</span>
@@ -110,8 +110,8 @@
             <label class="check">
               <input
                 type="checkbox"
-                disabled={!(allowedTools ?? c.allowedTools ?? []).includes(tool.name)}
-                checked={(approvalTools ?? c.approvalTools ?? []).includes(tool.name)}
+                disabled={!(allowedTools ?? connection.allowedTools ?? []).includes(tool.name)}
+                checked={(approvalTools ?? connection.approvalTools ?? []).includes(tool.name)}
                 onchange={(event) => toggleApproval(tool.name, event.currentTarget.checked)}
               />
               <span>Needs approval</span>
@@ -138,10 +138,10 @@
         type="password"
         autocomplete="off"
         bind:value={credential}
-        placeholder={`New value for the ${c.authHeader} header`}
+        placeholder={`New value for the ${connection.authHeader} header`}
       />
       <button disabled={action.busy || !credential}>Replace</button>
-      {#if c.hasCredential}
+      {#if connection.hasCredential}
         <button type="button" class="secondary" disabled={action.busy} onclick={() => setSecret(null)}>
           Remove
         </button>

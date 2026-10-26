@@ -33,8 +33,8 @@
     void action.run(async () => {
       const created = await api.post<Conversation>('/conversations', {
         title: name,
-        agentIds: choices.filter((m) => m.type === 'agent' && selected.includes(`agent:${m.id}`)).map((m) => m.id),
-        humanIds: choices.filter((m) => m.type === 'human' && selected.includes(`human:${m.id}`)).map((m) => m.id)
+        agentIds: choices.filter((choice) => choice.type === 'agent' && selected.includes(`agent:${choice.id}`)).map((choice) => choice.id),
+        humanIds: choices.filter((choice) => choice.type === 'human' && selected.includes(`human:${choice.id}`)).map((choice) => choice.id)
       });
       onCreated(created);
     });

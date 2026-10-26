@@ -12,7 +12,7 @@
     onRetry: () => void;
   } = $props();
   let query = $state('');
-  let results = $derived(conversations.filter((c) => conversationName(c.title).toLowerCase().includes(query.trim().toLowerCase())));
+  let results = $derived(conversations.filter((conversation) => conversationName(conversation.title).toLowerCase().includes(query.trim().toLowerCase())));
 </script>
 
 <Modal title="Find an endeavor" {onClose}>

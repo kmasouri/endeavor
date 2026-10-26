@@ -15,13 +15,13 @@
     () => [],
     4000
   );
-  let mine = $derived((approvals.data?.data ?? []).filter((a) => a.taskId === taskId));
+  let taskApprovals = $derived((approvals.data?.data ?? []).filter((approval) => approval.taskId === taskId));
 </script>
 
-{#if mine.length > 0}
+{#if taskApprovals.length > 0}
   <h3>Needs your approval</h3>
 
-  {#each mine ?? [] as approval (approval.id)}
+  {#each taskApprovals ?? [] as approval (approval.id)}
     <ApprovalCard {approval} onDone={() => (approvals.reload(), onDone())} />
   {/each}
 {/if}

@@ -11,12 +11,12 @@
     type Task,
     type TaskOutput
   } from '../api';
-  import { conversationArtifacts } from '../conversation-artifacts';
+  import { collectConversationArtifacts } from '../conversation-artifacts';
   import ErrorNote from '../ErrorNote.svelte';
   import Avatar from '../Avatar.svelte';
   import Icon from '../Icon.svelte';
   import { conversationName } from '../appearance';
-  import { when, shortTime } from '../components';
+  import { formatDateTime, formatShortTime } from '../components';
   import { createLoad } from '../state.svelte';
   import KnowledgeSources from './KnowledgeSources.svelte';
   import Spending from './Spending.svelte';
@@ -80,21 +80,21 @@
   });
   let conversation = $derived(details.data!);
   let taskList = $derived(tasks.data?.data ?? []);
-  let memberIds = $derived(new Set(taskList.map((t) => t.id)));
-  let mine = $derived((approvals.data?.data ?? []).filter((a) => memberIds.has(a.taskId)));
-  let busy = $derived(taskList.filter((t) => !['completed', 'cancelled'].includes(t.state)));
+  let taskIds = $derived(new Set(taskList.map((task) => task.id)));
+  let conversationApprovals = $derived((approvals.data?.data ?? []).filter((approval) => taskIds.has(approval.taskId)));
+  let busy = $derived(taskList.filter((task) => !['completed', 'cancelled'].includes(task.state)));
   let artifacts = $derived(
-    conversationArtifacts(outputs.data?.data ?? [], messages.data?.data ?? [], taskList)
+    collectConversationArtifacts(outputs.data?.data ?? [], messages.data?.data ?? [], taskList)
   );
   let unattached = $derived(
-    artifacts.filter((o) => !(messages.data?.data ?? []).some((m) => m.taskId === o.taskId))
+    artifacts.filter((output) => !(messages.data?.data ?? []).some((message) => message.taskId === output.taskId))
   );
   const nameOf = (ref: { type: string; id: string | null }) =>
-    conversation.members.find((m) => m.participant.type === ref.type && m.participant.id === ref.id)
+    conversation.members.find((member) => member.participant.type === ref.type && member.participant.id === ref.id)
       ?.name ??
     (ref.type === 'system'
       ? 'Platform'
-      : (directory.data?.find((a) => a.id === ref.id)?.name ?? (ref.type === 'agent' ? 'Deleted agent' : 'Someone')));
+      : (directory.data?.find((agent) => agent.id === ref.id)?.name ?? (ref.type === 'agent' ? 'Deleted agent' : 'Someone')));
   const onAdd = (id: string) =>
     api
       .post(`/conversations/${conversationId}/members`, { type: 'agent', id })
@@ -111,9 +111,9 @@
     document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus();
   };
   const revise = (output: TaskOutput & { taskId: string }) => {
-    const task = taskList.find((t) => t.id === output.taskId);
+    const task = taskList.find((candidate) => candidate.id === output.taskId);
     replyTo =
-      messages.data?.data.findLast((m) => m.taskId === output.taskId && m.authorType === 'agent') ??
+      messages.data?.data.findLast((message) => message.taskId === output.taskId && message.authorType === 'agent') ??
       null;
     draft = `${task ? '@' + nameOf({ type: 'agent', id: task.ownerAgentId }) + ' ' : ''}Please revise "${output.title}": `;
     document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus();
@@ -127,8 +127,8 @@
         <div class="heading">
           <h1 title={conversation.title}>{conversationName(conversation.title)}</h1>
           <p>
-            {conversation.members.filter((m) => m.participant.type === 'human').length} people · {conversation.members.filter(
-              (m) => m.participant.type === 'agent'
+            {conversation.members.filter((member) => member.participant.type === 'human').length} people · {conversation.members.filter(
+              (member) => member.participant.type === 'agent'
             ).length} agents · Agents answer when you mention them
           </p>
         </div>
@@ -207,13 +207,13 @@
         {#each unattached as output (output.id)}<div class="orphan-artifact">
             <ArtifactCard
               {output}
-              task={taskList.find((t) => t.id === output.taskId)}
-              cost={costs.data?.tasks.find((t) => t.taskId === output.taskId)?.costUsd}
+              task={taskList.find((task) => task.id === output.taskId)}
+              cost={costs.data?.tasks.find((taskCost) => taskCost.taskId === output.taskId)?.costUsd}
               onReply={() => revise(output)}
               onChanged={reload}
             />
           </div>{/each}
-        {#each mine as approval (approval.id)}<section class="conversation-approval inline-panel">
+        {#each conversationApprovals as approval (approval.id)}<section class="conversation-approval inline-panel">
             <div class="row">
               <Avatar
                 name={nameOf({ type: 'agent', id: approval.agentId })}
@@ -226,7 +226,7 @@
             <h2>Needs your OK</h2>
             <ApprovalCard {approval} onDone={reload} />
           </section>{/each}
-        {#each busy.filter((t) => (t.pausedAt || t.state !== 'working') && !(messages.data?.data ?? []).some((m) => m.authorType === 'agent' && m.authorId === t.ownerAgentId)) as task (task.id)}<div
+        {#each busy.filter((task) => (task.pausedAt || task.state !== 'working') && !(messages.data?.data ?? []).some((message) => message.authorType === 'agent' && message.authorId === task.ownerAgentId)) as task (task.id)}<div
             class="conversation-state"
           >
             <div class="row">
@@ -282,7 +282,7 @@
         </div>
         <section>
           <h2 class="label">People</h2>
-          {#each conversation.members.filter((m) => m.participant.type === 'human') as member (member.participant.id)}<div
+          {#each conversation.members.filter((member) => member.participant.type === 'human') as member (member.participant.id)}<div
               class="person-line row"
             >
               <Avatar name={member.name} id={member.participant.id} /><span
@@ -303,7 +303,7 @@
               href={`#/tasks/${output.taskId}`}
               ><Icon name="file" /><span class="grow ellipsis">{output.title}</span><time
                 class="caption muted"
-                title={when(output.createdAt)}>{shortTime(output.createdAt)}</time
+                title={formatDateTime(output.createdAt)}>{formatShortTime(output.createdAt)}</time
               ></a
             >{/each}{#if !artifacts.length}<p class="caption muted">None yet.</p>{/if}
         </section>

@@ -17,7 +17,7 @@ const short = (value: string): string => {
 };
 
 // Summarize recorded actions, never model reasoning or raw tool response bodies.
-export function agentSteps(events: TaskEvent[]): AgentStep[] {
+export function buildAgentSteps(events: TaskEvent[]): AgentStep[] {
   const calls = new Map<string, { name: string; input: Record<string, unknown> }>();
   const steps: AgentStep[] = [];
   for (const event of events) {

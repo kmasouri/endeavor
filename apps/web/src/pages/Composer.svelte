@@ -12,7 +12,7 @@
   import Avatar from '../Avatar.svelte';
   import Icon from '../Icon.svelte';
   import { createAction } from '../state.svelte';
-  import { messagePreview } from '../message-format';
+  import { buildMessagePreview } from '../message-format';
   import { conversationName } from '../appearance';
   let {
     conversationId,
@@ -46,24 +46,24 @@
   let query = $derived(/(?:^|\s)@([^@\n]*)$/.exec(body.slice(0, caret))?.[1]);
   let candidates = $derived(
     [
-      ...members.filter((m) => !m.deleted).map((m) => ({
-        id: m.participant.id,
-        name: m.name,
-        type: m.participant.type,
+      ...members.filter((member) => !member.deleted).map((member) => ({
+        id: member.participant.id,
+        name: member.name,
+        type: member.participant.type,
         inside: true,
-        purpose: m.purpose
+        purpose: member.purpose
       })),
       ...directory
-        .filter((a) => !members.some((m) => m.participant.id === a.id))
-        .map((a) => ({
-          id: a.id,
-          name: a.name,
+        .filter((agent) => !members.some((member) => member.participant.id === agent.id))
+        .map((agent) => ({
+          id: agent.id,
+          name: agent.name,
           type: 'agent' as const,
           inside: false,
-          purpose: a.purpose
+          purpose: agent.purpose
         }))
     ]
-      .filter((m) => query !== undefined && m.name.toLowerCase().includes(query.toLowerCase()))
+      .filter((member) => query !== undefined && member.name.toLowerCase().includes(query.toLowerCase()))
       .slice(0, 8)
   );
   let picker = $derived(query !== undefined && !dismissed);
@@ -74,7 +74,7 @@
     if (!ok) return;
     const start = body.slice(0, caret).lastIndexOf('@');
     body = body.slice(0, start) + `@${member.name} ` + body.slice(caret);
-    if (!mentions.some((m) => m.id === member.id))
+    if (!mentions.some((mention) => mention.id === member.id))
       mentions = [...mentions, { type: member.type, id: member.id }];
     caret = start + member.name.length + 2;
     dismissed = true;
@@ -87,18 +87,18 @@
     // Text pasted or typed in full works just like selecting a member in the picker.
     const selectedMembers = directory
       .filter(
-        (a) =>
-          mentions.some((m) => m.id === a.id) && !members.some((m) => m.participant.id === a.id)
+        (agent) =>
+          mentions.some((mention) => mention.id === agent.id) && !members.some((member) => member.participant.id === agent.id)
       )
-      .map((a) => ({ name: a.name, participant: { type: 'agent' as const, id: a.id } }));
-    const refs = [...members.filter((m) => !m.deleted), ...selectedMembers]
-      .filter((m) =>
+      .map((agent) => ({ name: agent.name, participant: { type: 'agent' as const, id: agent.id } }));
+    const refs = [...members.filter((member) => !member.deleted), ...selectedMembers]
+      .filter((member) =>
         new RegExp(
-          `(?:^|\\s)@${m.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_])`,
+          `(?:^|\\s)@${member.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_])`,
           'iu'
         ).test(body)
       )
-      .map((m) => m.participant);
+      .map((member) => member.participant);
     void action
       .run(() =>
         api.post(`/conversations/${conversationId}/messages`, {
@@ -123,16 +123,16 @@
   {#if replyTo}<div class="reply-bar row">
       <Icon name="reply" /><span class="grow ellipsis"
         >Replying to <strong
-          >{members.find((m) => m.participant.id === replyTo?.authorId)?.name ?? 'Platform'}</strong
-        >: {messagePreview(replyTo.body)}</span
+          >{members.find((member) => member.participant.id === replyTo?.authorId)?.name ?? 'Platform'}</strong
+        >: {buildMessagePreview(replyTo.body)}</span
       ><button class="quiet icon-button" aria-label="Cancel reply" onclick={() => (replyTo = null)}
         ><Icon name="close" /></button
       >
     </div>{/if}
   <form
     class="composer"
-    onsubmit={(e) => {
-      e.preventDefault();
+    onsubmit={(event) => {
+      event.preventDefault();
       send();
     }}
   >
@@ -146,7 +146,7 @@
             role="option"
             aria-selected={i === selected}
             disabled={action.busy}
-            onmousedown={(e) => e.preventDefault()}
+            onmousedown={(event) => event.preventDefault()}
             onclick={() => void pick(member)}
           >
             <Avatar name={member.name} id={member.id} agent={member.type === 'agent'} />
@@ -161,13 +161,13 @@
                 ? 'Add to conversation'
                 : member.type === 'agent'
                   ? tasks.some(
-                      (t) => t.ownerAgentId === member.id && t.state === 'working' && !t.pausedAt
+                      (task) => task.ownerAgentId === member.id && task.state === 'working' && !task.pausedAt
                     )
                     ? 'Working'
                     : tasks.some(
-                          (t) =>
-                            t.ownerAgentId === member.id &&
-                            !['completed', 'cancelled'].includes(t.state)
+                          (task) =>
+                            task.ownerAgentId === member.id &&
+                            !['completed', 'cancelled'].includes(task.state)
                         )
                       ? 'Busy'
                       : 'Free'
@@ -191,26 +191,26 @@
       aria-controls={picker ? 'mention-picker' : undefined}
       placeholder={`Message ${conversationName(title)}`}
       rows={1}
-      oninput={(e) => {
-        caret = e.currentTarget.selectionStart;
+      oninput={(event) => {
+        caret = event.currentTarget.selectionStart;
         selected = 0;
         dismissed = false;
       }}
-      onclick={(e) => {
-        caret = e.currentTarget.selectionStart;
+      onclick={(event) => {
+        caret = event.currentTarget.selectionStart;
         dismissed = false;
       }}
-      onkeydown={(e) => {
-        if (picker && e.key === 'Escape') {
+      onkeydown={(event) => {
+        if (picker && event.key === 'Escape') {
           dismissed = true;
-          e.preventDefault();
-        } else if (picker && ['ArrowDown', 'ArrowUp'].includes(e.key)) {
-          e.preventDefault();
+          event.preventDefault();
+        } else if (picker && ['ArrowDown', 'ArrowUp'].includes(event.key)) {
+          event.preventDefault();
           selected =
-            (selected + (e.key === 'ArrowDown' ? 1 : -1) + candidates.length) %
+            (selected + (event.key === 'ArrowDown' ? 1 : -1) + candidates.length) %
             Math.max(1, candidates.length);
-        } else if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-          e.preventDefault();
+        } else if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+          event.preventDefault();
           if (picker && candidates.length) void pick(candidates[selected] ?? candidates[0]);
           else send();
         }

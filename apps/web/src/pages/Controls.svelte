@@ -10,16 +10,16 @@
     latestVersionId?: string;
     onDone: () => void;
   } = $props();
-  let t = $derived(props.task);
+  let task = $derived(props.task);
   let reason = $state('');
   const action = createAction();
-  let finished = $derived(t.state === 'completed' || t.state === 'cancelled');
+  let finished = $derived(task.state === 'completed' || task.state === 'cancelled');
   const act = (path: string) =>
     void action
       .run(async () => {
         const result = await api.post<{
           id: string;
-        }>(`/tasks/${t.id}/${path}`, reason ? { reason } : {});
+        }>(`/tasks/${task.id}/${path}`, reason ? { reason } : {});
         if (path === 'restart') {
           go(`/tasks/${result.id}`);
         }
@@ -41,11 +41,11 @@
   />
 
   <div class="row wrap">
-    {#if !finished && !t.pausedAt}
+    {#if !finished && !task.pausedAt}
       <button class="secondary" disabled={action.busy} onclick={() => act('pause')}> Pause </button>
     {/if}
 
-    {#if !finished && (t.pausedAt || t.state === 'blocked')}
+    {#if !finished && (task.pausedAt || task.state === 'blocked')}
       <button disabled={action.busy} onclick={() => act('resume')}> Resume </button>
     {/if}
 
@@ -71,7 +71,7 @@
       </button>
     {/if}
 
-    {#if !finished && props.latestVersionId && props.latestVersionId !== t.agentVersionId}
+    {#if !finished && props.latestVersionId && props.latestVersionId !== task.agentVersionId}
       <button class="secondary" disabled={action.busy} onclick={() => act('version')}>
         Move to the agent's newest version
       </button>
@@ -80,5 +80,5 @@
 
   <ErrorNote error={action.error} />
 
-  <PendingApprovals taskId={t.id} onDone={props.onDone} />
+  <PendingApprovals taskId={task.id} onDone={props.onDone} />
 </div>

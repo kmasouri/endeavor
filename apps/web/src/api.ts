@@ -46,12 +46,12 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 }
 
 export const api = {
-  get: <T>(path: string) => request<{ data: T }>('GET', path).then((r) => r.data),
+  get: <T>(path: string) => request<{ data: T }>('GET', path).then((body) => body.data),
   list: <T>(path: string) => request<{ data: T[]; page: Page }>('GET', path),
   post: <T>(path: string, body: unknown = {}) =>
-    request<{ data: T }>('POST', path, body).then((r) => r.data),
+    request<{ data: T }>('POST', path, body).then((body) => body.data),
   patch: <T>(path: string, body: unknown) =>
-    request<{ data: T }>('PATCH', path, body).then((r) => r.data),
+    request<{ data: T }>('PATCH', path, body).then((body) => body.data),
   delete: (path: string) => request<unknown>('DELETE', path)
 };
 

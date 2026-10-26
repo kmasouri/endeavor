@@ -5,7 +5,7 @@
   import PageHeader from '../PageHeader.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import { createProfileEditor } from '../profile-state.svelte';
-  import { deviceTimezone, shortTime } from '../time-display.svelte';
+  import { getDeviceTimezone, formatShortTime } from '../time-display.svelte';
   import './settings.css';
 
   let {
@@ -29,7 +29,7 @@
   let previewName = $derived(editor.name.trim() || 'Your name');
   let dirty = $derived(tab === 'profile' ? editor.profileDirty : editor.preferencesDirty);
   const previewInstant = new Date().toISOString();
-  const timezone = deviceTimezone();
+  const timezone = getDeviceTimezone();
   $effect(() => {
     onDirty(editor.dirty || editor.busy);
   });
@@ -99,7 +99,7 @@
             <div>
               <div class="row wrap">
                 <strong>{previewName}</strong><span class="caption muted"
-                  >{shortTime(previewInstant)}</span
+                  >{formatShortTime(previewInstant)}</span
                 >
               </div>
               <p>Let's take a look at the latest draft.</p>

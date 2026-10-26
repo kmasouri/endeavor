@@ -42,7 +42,7 @@
   >
     <strong>{task.pausedAt ? 'Paused' : task.state === 'blocked' ? 'Stuck' : 'Waiting'}</strong>
     {#if task.stateReason}<p>{task.stateReason}</p>{/if}
-    {#if !task.pausedAt && task.state === 'waiting'}{#each details.data?.waits.filter((w) => !w.resolvedAt) ?? [] as wait (wait.id)}<p
+    {#if !task.pausedAt && task.state === 'waiting'}{#each details.data?.waits.filter((wait) => !wait.resolvedAt) ?? [] as wait (wait.id)}<p
         >
           {wait.description}
         </p>{/each}<ErrorNote error={details.error} />{/if}

@@ -16,7 +16,7 @@ export async function loadEndeavors(): Promise<Conversation[]> {
   ];
 }
 
-export function lastEndeavor(actorId: string): string | null {
+export function readLastEndeavor(actorId: string): string | null {
   try {
     return localStorage.getItem(`endeavor.lastConversation.${actorId}`);
   } catch {

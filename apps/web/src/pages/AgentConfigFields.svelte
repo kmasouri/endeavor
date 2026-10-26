@@ -73,7 +73,7 @@
       }
     });
   };
-  let ready = $derived(providers.data?.find((p) => p.provider === provider));
+  let ready = $derived(providers.data?.find((providerInfo) => providerInfo.provider === provider));
 </script>
 
 <label>
@@ -104,11 +104,11 @@
         report();
       }}
     >
-      {#each providers.data ?? [] as p (p.provider)}
-        <option value={p.provider}>
-          {p.provider}
+      {#each providers.data ?? [] as providerInfo (providerInfo.provider)}
+        <option value={providerInfo.provider}>
+          {providerInfo.provider}
 
-          {#if !p.ready}
+          {#if !providerInfo.ready}
             (not set up)
           {/if}
         </option>
@@ -159,7 +159,7 @@
   {#if current?.legacyConnectionIds?.length}
     <p class="error" role="status">
       This version relied on inherited connections: {current.legacyConnectionIds
-        .map((id) => connections.data?.find((c) => c.id === id)?.name ?? id)
+        .map((id) => connections.data?.find((connection) => connection.id === id)?.name ?? id)
         .join(', ')}. Select any you still need, save, and move open tasks to the reviewed version.
     </p>
   {/if}

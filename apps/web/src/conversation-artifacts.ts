@@ -4,7 +4,7 @@ export type ConversationOutput = TaskOutput & { taskId: string };
 
 // The runner saves its completed answer as a generic Result and posts the same text to chat.
 // That record belongs in run inspection; it is not a second deliverable in the conversation.
-export function conversationArtifacts(
+export function collectConversationArtifacts(
   outputs: ConversationOutput[],
   messages: Message[],
   tasks: Task[]

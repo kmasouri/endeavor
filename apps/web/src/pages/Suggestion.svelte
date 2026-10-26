@@ -16,7 +16,7 @@
     props.message.authorType === 'agent' && SUGGESTION.exec(props.message.body)?.[1]
   );
   let agent = $derived(name ? props.directory.find((entry) => entry.name === name) : undefined);
-  let added = $derived(props.members.some((m) => m.participant.id === agent?.id));
+  let added = $derived(props.members.some((member) => member.participant.id === agent?.id));
 
 
 </script>

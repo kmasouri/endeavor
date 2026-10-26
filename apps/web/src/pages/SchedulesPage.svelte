@@ -7,7 +7,7 @@
   import ErrorNote from '../ErrorNote.svelte';
   import { createAction, createLoad } from '../state.svelte';
   import { createNames } from '../names.svelte';
-  import { recurrenceSummary, scheduleInstant } from '../schedules';
+  import { summarizeRecurrence, scheduleInstant } from '../schedules';
   import { timeDisplay } from '../time-display.svelte';
   import ScheduleCard from './ScheduleCard.svelte';
   import ScheduleBadge from './ScheduleBadge.svelte';
@@ -27,9 +27,9 @@
   const name = createNames();
   let view = $state<'list' | 'new' | 'details'>('list');
   let selected = $state<Responsibility | null>(null);
-  let current = $derived(schedules.data?.find((s) => s.id === selected?.id) ?? selected);
-  let active = $derived((schedules.data ?? []).filter((s) => s.status !== 'cancelled'));
-  let cancelled = $derived((schedules.data ?? []).filter((s) => s.status === 'cancelled'));
+  let current = $derived(schedules.data?.find((schedule) => schedule.id === selected?.id) ?? selected);
+  let active = $derived((schedules.data ?? []).filter((schedule) => schedule.status !== 'cancelled'));
+  let cancelled = $derived((schedules.data ?? []).filter((schedule) => schedule.status === 'cancelled'));
   const action = createAction();
   let notice = $state('');
   const instant = (value: string) => scheduleInstant(value, undefined, timeDisplay.format === '12h');
@@ -64,7 +64,7 @@
       <button class="schedule-back" onclick={() => navigate('list')}>← Back to schedules</button>
       {#key current.id}<ScheduleCard schedule={current} agentName={name({ type: 'agent', id: current.agentId })} onChanged={schedules.reload} />{/key}
     {:else}
-      {#each active.filter((s) => s.catchUp) as schedule (schedule.id)}
+      {#each active.filter((schedule) => schedule.catchUp) as schedule (schedule.id)}
         <div class="schedule-catchup">
           <strong><Icon name="schedules" size={16} /> {schedule.title} missed {schedule.catchUp!.missed} run{schedule.catchUp!.missed === 1 ? '' : 's'}</strong>
           <p>This computer was off. Run it once now, or wait for the next run at {instant(schedule.nextRunAt)}. If unanswered, this question lapses then.</p>
@@ -95,7 +95,7 @@
               <strong>{schedule.title}</strong>
               <span class="schedule-meta"><Avatar name={name({ type: 'agent', id: schedule.agentId })} id={schedule.agentId} agent size="sm" />
                 {name({ type: 'agent', id: schedule.agentId })} <span class="agent-label">agent</span>
-                <span>· {recurrenceSummary(schedule, timeDisplay.format === '12h')}</span>
+                <span>· {summarizeRecurrence(schedule, timeDisplay.format === '12h')}</span>
               </span>
             </span>
             <span class="schedule-next">{schedule.status === 'enabled' ? instant(schedule.nextRunAt) : 'No new runs'}</span>
