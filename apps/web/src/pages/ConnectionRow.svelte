@@ -2,6 +2,7 @@
   import { api, type Connection } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import { createAction } from '../state.svelte';
+  import DiscoverableToggle from './DiscoverableToggle.svelte';
   import EnableButton from './EnableButton.svelte';
 
   let props: { connection: Connection; onChanged: () => void } = $props();
@@ -79,6 +80,11 @@
           {/if}
         {/if}
       </div>
+      <DiscoverableToggle
+        path={`/connections/${connection.id}`}
+        discoverable={connection.discoverable}
+        onChanged={props.onChanged}
+      />
     </span>
     <EnableButton
       path={`/connections/${connection.id}`}

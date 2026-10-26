@@ -252,6 +252,8 @@ export interface Skill {
   name: string;
   description: string;
   currentVersionId: string | null;
+  // Agents can find it with find_capabilities and ask for access. Grants nothing by itself.
+  discoverable: boolean;
   disabledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -287,6 +289,8 @@ export interface Connection {
   allowedPathPrefixes: string[];
   // Methods that need a person's approval before each call.
   approvalMethods: HttpMethod[];
+  // Agents can find it with find_capabilities and ask for access. Grants nothing by itself.
+  discoverable: boolean;
   disabledAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
@@ -327,6 +331,57 @@ export interface McpConnectionCallRequest {
 
 export type ConnectionCallRequest = HttpConnectionCallRequest | McpConnectionCallRequest;
 
+// How long approved access lasts: for the requesting task only, or ongoing for the agent.
+export const ACCESS_DURATIONS = ['task', 'ongoing'] as const;
+export type AccessDuration = (typeof ACCESS_DURATIONS)[number];
+
+// What a connection lets an agent do: HTTP methods and path prefixes, or MCP tool names.
+export type ConnectionScope =
+  | { kind: 'http'; methods: HttpMethod[]; pathPrefixes: string[] }
+  | { kind: 'mcp'; tools: string[] };
+
+// An agent asking a person for access to a skill or connection it found. The skill version
+// and connection scope are what the person sees and approves.
+export interface CapabilityAccessRequest {
+  kind: 'access';
+  targetType: GrantTargetType;
+  targetId: string;
+  name: string;
+  description: string;
+  // Skills: the exact version requested.
+  skillVersionId: string | null;
+  skillVersion: number | null;
+  // Connections: the scope at the time of the request.
+  scope: ConnectionScope | null;
+  reason: string;
+  // The agent may recommend a duration and say why. The person decides.
+  recommendedDuration: AccessDuration | null;
+  durationReason: string | null;
+}
+
+export type ApprovalRequest = ConnectionCallRequest | CapabilityAccessRequest;
+
+export function isAccessRequest(request: ApprovalRequest): request is CapabilityAccessRequest {
+  return request.kind === 'access';
+}
+
+// A skill or connection added to one task after an access request. The task's pinned
+// configuration version is unchanged.
+export interface TaskCapability {
+  id: string;
+  taskId: string;
+  approvalId: string;
+  targetType: GrantTargetType;
+  targetId: string;
+  skillVersionId: string | null;
+  scope: ConnectionScope | null;
+  duration: AccessDuration;
+  grantedByHumanId: string;
+  grantedAt: Date;
+  revokedByHumanId: string | null;
+  revokedAt: Date | null;
+}
+
 export interface ApprovalResult {
   isError?: boolean;
   status: number | null;
@@ -336,14 +391,16 @@ export interface ApprovalResult {
   error: string | null;
 }
 
-// An action an agent asked to take that needs a person's approval first.
+// An action an agent asked to take, or access it asked for, that needs a person's approval.
 export interface Approval {
   id: string;
   taskId: string;
   agentId: string;
-  kind: 'connection_call';
-  request: ConnectionCallRequest;
+  kind: 'connection_call' | 'capability_access';
+  request: ApprovalRequest;
   status: ApprovalStatus;
+  // Access requests only: the duration the person chose.
+  duration: AccessDuration | null;
   decidedByHumanId: string | null;
   decidedAt: Date | null;
   reason: string | null;

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, type Skill, type SkillDetails } from '../api';
   import { createLoad } from '../state.svelte';
+  import DiscoverableToggle from './DiscoverableToggle.svelte';
   import EnableButton from './EnableButton.svelte';
   import SkillVersionForm from './SkillVersionForm.svelte';
 
@@ -29,6 +30,12 @@
       <div class="muted small">
         {props.skill.description}
       </div>
+
+      <DiscoverableToggle
+        path={`/skills/${props.skill.id}`}
+        discoverable={props.skill.discoverable}
+        onChanged={props.onChanged}
+      />
     </span>
 
     <button class="secondary" onclick={() => (open = !open)}>

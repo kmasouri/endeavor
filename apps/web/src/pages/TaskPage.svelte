@@ -17,6 +17,7 @@
   import OpenConcerns from './OpenConcerns.svelte';
   import ReviewPanel from './ReviewPanel.svelte';
   import Controls from './Controls.svelte';
+  import TaskAccess from './TaskAccess.svelte';
 
   let {
     taskId
@@ -204,6 +205,8 @@
       </div>
 
       <Controls task={loadedTask} latestVersionId={latest?.id} onDone={reload} />
+
+      <TaskAccess {taskId} open={!['completed', 'cancelled'].includes(loadedTask.state)} />
 
       <div class="panel">
         <h2>Waiting on</h2>

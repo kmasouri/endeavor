@@ -4,21 +4,27 @@ import {
   CostSummary,
   TaskCost,
   ApprovalRepository,
+  CatalogRepository,
   ConversationRepository,
   CreateTaskOutputInput,
   CreateTaskWaitInput,
   HumanRepository,
   ListTasksInput,
+  TaskCapabilityRepository,
   TaskRepository
 } from '../../data';
 import { TaskLogger } from '../../observability';
 import { ADMIN_ONLY, requireHuman, hasFullAccess } from '../../shared/access';
 import { AppError } from '../../shared/errors';
 import {
+  AccessDuration,
   Actor,
   Agent,
   Approval,
   ApprovalStatus,
+  CapabilityAccessRequest,
+  isAccessRequest,
+  TaskCapability,
   Human,
   Task,
   TaskEvent,
@@ -61,6 +67,8 @@ export class TaskService {
     private readonly humanRepository: HumanRepository,
     private readonly conversationRepository: ConversationRepository,
     private readonly approvalRepository: ApprovalRepository,
+    private readonly taskCapabilityRepository: TaskCapabilityRepository,
+    private readonly catalogRepository: CatalogRepository,
     private readonly taskLogger: TaskLogger
   ) {
     this.lifecycle = new TaskLifecycle(taskRepository, taskLogger);
@@ -440,24 +448,37 @@ export class TaskService {
     return this.requireVisibleApproval(actorId, approvalId);
   }
 
-  // The task keeps waiting: the runner makes the call, records the result, and then wakes it.
-  async approve(actorId: string, approvalId: string, reason?: string): Promise<Approval> {
+  // The task keeps waiting: the runner makes the call (or adds the access), records the result,
+  // and then wakes it. Access requests last for the task unless the person chooses ongoing.
+  async approve(
+    actorId: string,
+    approvalId: string,
+    input: { reason?: string; duration?: AccessDuration } = {}
+  ): Promise<Approval> {
     const approval = await this.requireVisibleApproval(actorId, approvalId);
     const task = await this.lifecycle.requireTask(approval.taskId);
     if (task.state !== 'waiting') {
       throw new AppError(
         'taskStateConflict',
-        `The task is ${task.state}, so this action can't be approved. Reject it instead`
+        `The task is ${task.state}, so this can't be approved. Reject it instead`
       );
     }
-    const decided = await this.decide(actorId, approval, 'approved', reason);
+    let duration: AccessDuration | null = null;
+    if (isAccessRequest(approval.request)) {
+      duration = input.duration ?? 'task';
+      await this.requireRequestableTarget(approval.request);
+    } else if (input.duration) {
+      throw new AppError('validationError', 'duration is only for access requests');
+    }
+    const decided = await this.decide(actorId, approval, 'approved', input.reason, duration);
     await this.taskRepository.addEvent(
       decided.taskId,
       TASK_EVENTS.approvalApproved,
       toHumanActor(actorId),
       {
         approvalId: decided.id,
-        reason: reason ?? null
+        reason: input.reason ?? null,
+        ...(duration && { duration })
       }
     );
     this.taskLogger.onApprovalApproved(decided.id, decided.taskId);
@@ -488,13 +509,15 @@ export class TaskService {
     actorId: string,
     approval: Approval,
     status: 'approved' | 'rejected',
-    reason: string | undefined
+    reason: string | undefined,
+    duration: AccessDuration | null = null
   ): Promise<Approval> {
     const decided = await this.approvalRepository.decide({
       approvalId: approval.id,
       status,
       humanId: actorId,
-      reason: reason ?? null
+      reason: reason ?? null,
+      duration
     });
     if (!decided) {
       const latest = await this.approvalRepository.getById(approval.id);
@@ -504,6 +527,67 @@ export class TaskService {
       );
     }
     return decided;
+  }
+
+  // Access added to one task after access requests, including revoked entries.
+  async listTaskCapabilities(
+    actorId: string,
+    taskId: string
+  ): Promise<(TaskCapability & { name: string })[]> {
+    await this.requireVisibleTask(actorId, taskId);
+    const capabilities = await this.taskCapabilityRepository.listForTask(taskId, {
+      activeOnly: false
+    });
+    const ids = (type: TaskCapability['targetType']) =>
+      capabilities.filter((entry) => entry.targetType === type).map((entry) => entry.targetId);
+    const [skills, connections] = await Promise.all([
+      this.catalogRepository.getSkills(ids('skill')),
+      this.catalogRepository.getConnections(ids('connection'))
+    ]);
+    const names = new Map([...skills, ...connections].map((entry) => [entry.id, entry.name]));
+    return capabilities.map((entry) => ({
+      ...entry,
+      name: names.get(entry.targetId) ?? 'Removed'
+    }));
+  }
+
+  // Applies from the task's next call. Ongoing access stays in the agent's configuration.
+  async revokeTaskCapability(
+    actorId: string,
+    taskId: string,
+    capabilityId: string
+  ): Promise<TaskCapability> {
+    const human = requireHuman(await this.humanRepository.getById(actorId));
+    await this.requireVisibleTask(human, taskId);
+    const capability = await this.taskCapabilityRepository.getById(capabilityId);
+    if (!capability || capability.taskId !== taskId) {
+      throw new AppError('taskCapabilityNotFound', `Access ${capabilityId} was not found`);
+    }
+    const revoked = await this.taskCapabilityRepository.revoke(capabilityId, human.id);
+    if (!revoked) {
+      return capability;
+    }
+    await this.taskRepository.addEvent(taskId, TASK_EVENTS.accessRevoked, toHumanActor(human.id), {
+      capabilityId,
+      targetType: revoked.targetType,
+      targetId: revoked.targetId
+    });
+    this.taskLogger.onTaskAccessRevoked(taskId, capabilityId);
+    return revoked;
+  }
+
+  // Checked when deciding, and again by the runner when adding the access.
+  private async requireRequestableTarget(request: CapabilityAccessRequest): Promise<void> {
+    const target =
+      request.targetType === 'skill'
+        ? await this.catalogRepository.getSkill(request.targetId)
+        : await this.catalogRepository.getConnection(request.targetId);
+    if (!target || target.disabledAt) {
+      throw new AppError(
+        'catalogEntryUnavailable',
+        `${request.name} is disabled or gone, so access can't be allowed. Don't allow it instead`
+      );
+    }
   }
 
   private async requireVisibleApproval(actorId: string, approvalId: string): Promise<Approval> {

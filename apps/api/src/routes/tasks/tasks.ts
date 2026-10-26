@@ -12,6 +12,8 @@ import {
   getConversationCostsHandler,
   listConversationOutputsHandler,
   listTaskOutputsHandler,
+  listTaskCapabilitiesHandler,
+  revokeTaskCapabilityHandler,
   listTasksHandler,
   migrateTaskVersionHandler,
   pauseTaskHandler,
@@ -22,6 +24,8 @@ import {
 import {
   actorHeadersSchema,
   approvalParamsSchema,
+  approveBodySchema,
+  taskCapabilityParamsSchema,
   listApprovalsQuerySchema,
   createTaskBodySchema,
   agentCostParamsSchema,
@@ -244,11 +248,11 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
     {
       schema: {
         description:
-          'Approve the action. The runner makes the call, records the result, and wakes the task.',
+          'Approve the action. The runner makes the call, records the result, and wakes the task. For an access request, send duration: "task" (the default) adds access to the waiting task only; "ongoing" also adds the item to the agent\'s configuration as a new version. The capability and scope are checked again first.',
         tags: ['approvals'],
         headers: actorHeadersSchema,
         params: approvalParamsSchema,
-        body: taskActionBodySchema
+        body: approveBodySchema
       }
     },
     approveHandler
@@ -258,7 +262,8 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
     '/approvals/:approvalId/reject',
     {
       schema: {
-        description: 'Reject the action. It is never made; the agent is told why.',
+        description:
+          'Reject the action or access request. Nothing is made or granted; the agent is told why.',
         tags: ['approvals'],
         headers: actorHeadersSchema,
         params: approvalParamsSchema,
@@ -266,5 +271,33 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
       }
     },
     rejectHandler
+  );
+
+  fastifyInstance.get(
+    '/tasks/:taskId/capabilities',
+    {
+      schema: {
+        description:
+          "Skills and connections a person added to this task after an access request, including revoked ones. The task's pinned configuration version is unchanged.",
+        tags: ['tasks'],
+        headers: actorHeadersSchema,
+        params: taskParamsSchema
+      }
+    },
+    listTaskCapabilitiesHandler
+  );
+
+  fastifyInstance.delete(
+    '/tasks/:taskId/capabilities/:capabilityId',
+    {
+      schema: {
+        description:
+          'Revoke access added to this task. It applies from the next call. Ongoing access stays in the agent configuration; remove it there to take it away from future work.',
+        tags: ['tasks'],
+        headers: actorHeadersSchema,
+        params: taskCapabilityParamsSchema
+      }
+    },
+    revokeTaskCapabilityHandler
   );
 }

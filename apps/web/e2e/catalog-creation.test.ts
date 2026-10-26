@@ -122,7 +122,8 @@ test('skill creation keeps values after failure and returns to Skills after retr
     body: {
       name: 'Citations',
       description: 'Cite each source',
-      instructions: 'Include a source for each claim.'
+      instructions: 'Include a source for each claim.',
+      discoverable: false
     }
   });
 });
@@ -156,6 +157,7 @@ test('HTTP connection preserves access settings after failure and returns to Con
     name: 'Records',
     description: 'Read and write records',
     baseUrl: 'https://records.test',
+    discoverable: false,
     authHeader: 'Authorization',
     credential: 'Bearer secret',
     allowedMethods: ['GET', 'POST'],

@@ -95,6 +95,22 @@
     (ref.type === 'system'
       ? 'Platform'
       : (directory.data?.find((agent) => agent.id === ref.id)?.name ?? (ref.type === 'agent' ? 'Deleted agent' : 'Someone')));
+  const waitingApproval = (task: Task) =>
+    task.state === 'waiting' && !task.pausedAt
+      ? conversationApprovals.find((approval) => approval.taskId === task.id)
+      : undefined;
+  const liveStatus = (task: Task) =>
+    task.pausedAt
+      ? 'is paused'
+      : task.state === 'working'
+        ? 'is working'
+        : task.state === 'blocked'
+          ? 'is stuck'
+          : 'is waiting';
+  const describeApproval = (approval: Approval | undefined) =>
+    approval?.request.kind === 'access'
+      ? `${approval.request.targetType} access to ${approval.request.name}`
+      : 'an action';
   const onAdd = (id: string) =>
     api
       .post(`/conversations/${conversationId}/members`, { type: 'agent', id })
@@ -223,8 +239,16 @@
                 class="agent-label">agent</span
               >
             </div>
-            <h2>Needs your OK</h2>
-            <ApprovalCard {approval} onDone={reload} />
+            <h2>
+              Needs your OK{approval.request.kind === 'access'
+                ? ` · ${approval.request.targetType === 'skill' ? 'Skill' : 'Connection'} access`
+                : ''}
+            </h2>
+            <ApprovalCard
+              {approval}
+              agentName={nameOf({ type: 'agent', id: approval.agentId })}
+              onDone={reload}
+            />
           </section>{/each}
         {#each busy.filter((task) => (task.pausedAt || task.state !== 'working') && !(messages.data?.data ?? []).some((message) => message.authorType === 'agent' && message.authorId === task.ownerAgentId)) as task (task.id)}<div
             class="conversation-state"
@@ -245,13 +269,9 @@
         {#if busy.length}<div class="live-status caption" aria-live="polite">
             {#each busy as task (task.id)}<span
                 ><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
-                {task.pausedAt
-                  ? 'is paused'
-                  : task.state === 'working'
-                    ? 'is working'
-                    : task.state === 'blocked'
-                      ? 'is stuck'
-                      : 'is waiting'}</span
+                {#if waitingApproval(task)}is <span class="waiting-ok">waiting for your OK</span>
+                  <span class="muted">· {describeApproval(waitingApproval(task))}</span
+                  >{:else}{liveStatus(task)}{/if}</span
               >{/each}
           </div>{/if}
         <Composer

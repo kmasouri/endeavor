@@ -21,6 +21,7 @@ interface SkillRow {
   name: string;
   description: string;
   current_version_id: string | null;
+  discoverable: boolean;
   disabled_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
@@ -48,6 +49,7 @@ interface ConnectionRow {
   allowed_methods: HttpMethod[];
   allowed_path_prefixes: string[];
   approval_methods: HttpMethod[];
+  discoverable: boolean;
   disabled_at: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -73,7 +75,8 @@ const UPDATABLE_CONNECTION_COLUMNS = {
   authHeader: 'auth_header',
   allowedMethods: 'allowed_methods',
   allowedPathPrefixes: 'allowed_path_prefixes',
-  approvalMethods: 'approval_methods'
+  approvalMethods: 'approval_methods',
+  discoverable: 'discoverable'
 } as const;
 
 export class CatalogPostgresRepository implements CatalogRepository {
@@ -83,7 +86,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
   ) {}
 
   async createSkill(
-    input: { name: string; description: string },
+    input: { name: string; description: string; discoverable?: boolean },
     firstVersion: CreateSkillVersionInput
   ): Promise<{ skill: Skill; version: SkillVersion }> {
     const skillId = randomUUID();
@@ -91,8 +94,8 @@ export class CatalogPostgresRepository implements CatalogRepository {
     const result = await this.db
       .query<{ skill: SkillRow; version: SkillVersionRow }>(
         `WITH skill AS (
-           INSERT INTO endeavor.skills (id, name, description, current_version_id)
-           VALUES ($1, $2, $3, $4)
+           INSERT INTO endeavor.skills (id, name, description, current_version_id, discoverable)
+           VALUES ($1, $2, $3, $4, $7)
            RETURNING *
          ), version AS (
            INSERT INTO endeavor.skill_versions (
@@ -110,7 +113,8 @@ export class CatalogPostgresRepository implements CatalogRepository {
           input.description,
           versionId,
           firstVersion.instructions,
-          firstVersion.createdByHumanId
+          firstVersion.createdByHumanId,
+          input.discoverable ?? false
         ]
       )
       .catch((error) => rethrowNameConflict(error, input.name));
@@ -227,9 +231,10 @@ export class CatalogPostgresRepository implements CatalogRepository {
       .query<ConnectionRow>(
         `INSERT INTO endeavor.connections (
            id, name, description, base_url, auth_header, credential_ciphertext, allowed_methods,
-           allowed_path_prefixes, created_by_human_id, approval_methods, kind, allowed_tools, approval_tools
+           allowed_path_prefixes, created_by_human_id, approval_methods, kind, allowed_tools, approval_tools,
+           discoverable
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
          RETURNING *`,
         [
           randomUUID(),
@@ -244,7 +249,8 @@ export class CatalogPostgresRepository implements CatalogRepository {
           input.approvalMethods,
           input.kind ?? 'http',
           input.allowedTools ?? [],
-          input.approvalTools ?? []
+          input.approvalTools ?? [],
+          input.discoverable ?? false
         ]
       )
       .catch((error) => rethrowNameConflict(error, input.name));
@@ -316,6 +322,42 @@ export class CatalogPostgresRepository implements CatalogRepository {
       )
       .catch((error) => rethrowNameConflict(error, changes.name ?? ''));
     return result.rows[0] ? toConnection(result.rows[0]) : null;
+  }
+
+  async setSkillDiscoverable(skillId: string, discoverable: boolean): Promise<Skill | null> {
+    const result = await this.db.query<SkillRow>(
+      `UPDATE endeavor.skills
+       SET discoverable = $2, updated_at = now()
+       WHERE id = $1
+       RETURNING *`,
+      [skillId, discoverable]
+    );
+    return result.rows[0] ? toSkill(result.rows[0]) : null;
+  }
+
+  async listDiscoverable(limit: number): Promise<{ skills: Skill[]; connections: Connection[] }> {
+    const [skills, connections] = await Promise.all([
+      this.db.query<SkillRow>(
+        `SELECT *
+         FROM endeavor.skills
+         WHERE discoverable AND disabled_at IS NULL AND current_version_id IS NOT NULL
+         ORDER BY lower(name)
+         LIMIT $1`,
+        [limit]
+      ),
+      this.db.query<ConnectionRow>(
+        `SELECT *
+         FROM endeavor.connections
+         WHERE discoverable AND disabled_at IS NULL
+         ORDER BY lower(name)
+         LIMIT $1`,
+        [limit]
+      )
+    ]);
+    return {
+      skills: skills.rows.map(toSkill),
+      connections: connections.rows.map(toConnection)
+    };
   }
 
   async setConnectionDisabled(connectionId: string, disabled: boolean): Promise<Connection | null> {
@@ -427,6 +469,7 @@ function toSkill(row: SkillRow): Skill {
     name: row.name,
     description: row.description,
     currentVersionId: row.current_version_id,
+    discoverable: row.discoverable ?? false,
     disabledAt: row.disabled_at === null ? null : toDate(row.disabled_at),
     createdAt: toDate(row.created_at),
     updatedAt: toDate(row.updated_at)
@@ -458,6 +501,7 @@ function toConnection(row: ConnectionRow): Connection {
     allowedMethods: row.allowed_methods,
     allowedPathPrefixes: row.allowed_path_prefixes,
     approvalMethods: row.approval_methods,
+    discoverable: row.discoverable ?? false,
     disabledAt: row.disabled_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at

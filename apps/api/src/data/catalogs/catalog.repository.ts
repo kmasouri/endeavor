@@ -34,13 +34,14 @@ export interface ConnectionInput {
   allowedMethods: HttpMethod[];
   allowedPathPrefixes: string[];
   approvalMethods: HttpMethod[];
+  discoverable?: boolean;
   createdByHumanId: string | null;
 }
 
 export interface CatalogRepository {
   // Saves the skill and its version 1 in one statement.
   createSkill(
-    input: { name: string; description: string },
+    input: { name: string; description: string; discoverable?: boolean },
     firstVersion: CreateSkillVersionInput
   ): Promise<{ skill: Skill; version: SkillVersion }>;
   getSkill(skillId: string): Promise<Skill | null>;
@@ -52,6 +53,9 @@ export interface CatalogRepository {
   getSkillVersions(versionIds: string[]): Promise<SkillVersion[]>;
   listSkillVersions(skillId: string): Promise<SkillVersion[]>;
   setSkillDisabled(skillId: string, disabled: boolean): Promise<Skill | null>;
+  setSkillDiscoverable(skillId: string, discoverable: boolean): Promise<Skill | null>;
+  // Enabled skills and connections a person marked discoverable, by name.
+  listDiscoverable(limit: number): Promise<{ skills: Skill[]; connections: Connection[] }>;
 
   createConnection(input: ConnectionInput): Promise<Connection>;
   getConnection(connectionId: string): Promise<Connection | null>;

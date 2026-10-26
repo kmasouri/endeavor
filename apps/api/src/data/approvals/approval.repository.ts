@@ -1,8 +1,9 @@
 import {
+  AccessDuration,
   Approval,
+  ApprovalRequest,
   ApprovalResult,
-  ApprovalStatus,
-  ConnectionCallRequest
+  ApprovalStatus
 } from '../../shared/types';
 
 export interface ApprovalRepository {
@@ -11,10 +12,13 @@ export interface ApprovalRepository {
     clientKey: string;
     taskId: string;
     agentId: string;
-    request: ConnectionCallRequest;
+    kind: Approval['kind'];
+    request: ApprovalRequest;
   }): Promise<{ approval: Approval; created: boolean }>;
   getByClientKey(clientKey: string): Promise<Approval | null>;
   getById(approvalId: string): Promise<Approval | null>;
+  // Every approval for one task, oldest first.
+  listForTask(taskId: string): Promise<Approval[]>;
   list(input: {
     status?: ApprovalStatus;
     // Only approvals on tasks this person may see.
@@ -29,6 +33,8 @@ export interface ApprovalRepository {
     status: 'approved' | 'rejected';
     humanId: string;
     reason: string | null;
+    // Access requests only.
+    duration?: AccessDuration | null;
   }): Promise<Approval | null>;
   listApprovedNotExecuted(limit: number): Promise<Approval[]>;
   // Carried-out approvals whose task still has an open wait on them, such as after a crash.

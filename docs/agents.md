@@ -92,9 +92,10 @@ version to the current one; completed and cancelled tasks are excluded.
 
 An ongoing grant through `POST /agents/:id/grants` adds the chosen item to the current
 configuration as a new version. Existing tasks keep their pin until explicitly moved. Repeated
-grants for an already chosen item restore access without adding duplicate versions. This API
-supports ongoing access decisions; structured capability requests and task-only access in
-endeavors remain CA-38. Per-call action approvals still allow only the exact call shown.
+grants for an already chosen item restore access without adding duplicate versions. Approving
+an agent's access request as **Ongoing** uses the same rule; see
+[discovery and access requests](catalogs.md#discovery-and-access-requests-ca-38). Per-call action
+approvals still allow only the exact call shown.
 
 ## Permanent deletion
 

@@ -4,22 +4,26 @@ import {
   mockDocumentRepository,
   mockNoteRepository,
   mockResponsibilityRepository,
+  mockTaskCapabilityRepository,
   mockCatalogRepository,
   mockConversationRepository,
   mockHumanRepository,
   mockMessageRepository,
   mockTaskRepository
 } from '../../data/repositories.test-helper';
-import { ModelClient, ModelClientError, ModelTurnResult } from '../../integrations';
+import { ModelClient, ModelClientError, ModelToolCall, ModelTurnResult } from '../../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../../observability';
 import { AppError } from '../../shared/errors';
 import {
   Agent,
   AgentVersion,
+  Approval,
+  CapabilityAccessRequest,
   Connection,
   ConversationMember,
   Message,
   Task,
+  TaskCapability,
   TaskEvent,
   TaskWait
 } from '../../shared/types';
@@ -149,6 +153,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
   const humans = mockHumanRepository();
   const catalogs = mockCatalogRepository();
   const approvals = mockApprovalRepository();
+  const capabilities = mockTaskCapabilityRepository();
   const notes = mockNoteRepository();
   const documents = mockDocumentRepository();
   const responsibilities = mockResponsibilityRepository();
@@ -215,6 +220,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
     humans,
     catalogs,
     approvals,
+    capabilities,
     notes,
     documents,
     responsibilities,
@@ -237,6 +243,8 @@ function setup(options: { client?: ModelClient | null } = {}) {
       onRequestChainTooDeep: jest.fn(),
       onConnectionDenied: jest.fn(),
       onApprovalRequested: jest.fn(),
+      onAccessRequested: jest.fn(),
+      onAccessGranted: jest.fn(),
       onScheduledRun: jest.fn(),
       onScheduledRunSkipped: jest.fn(),
       onScheduledRunFailed: jest.fn(),
@@ -253,6 +261,7 @@ function setup(options: { client?: ModelClient | null } = {}) {
     agentRepo,
     catalogs,
     approvals,
+    capabilities,
     notes,
     documents,
     responsibilities,
@@ -1100,6 +1109,7 @@ describe('TaskRunnerService', () => {
       allowedMethods: ['GET'],
       allowedPathPrefixes: ['/invoices'],
       approvalMethods: [],
+      discoverable: false,
       disabledAt: null,
       createdAt: new Date(),
       updatedAt: new Date()
@@ -1312,6 +1322,7 @@ describe('TaskRunnerService', () => {
         taskId: TASK,
         agentId: RESEARCHER,
         kind: 'connection_call' as const,
+        duration: null,
         request: {
           connectionId: 'conn-1',
           connectionName: 'Billing API',
@@ -1367,6 +1378,7 @@ describe('TaskRunnerService', () => {
           taskId: TASK,
           agentId: RESEARCHER,
           kind: 'connection_call',
+          duration: null,
           request: {
             connectionId: 'conn-1',
             connectionName: 'Billing API',
@@ -1402,6 +1414,7 @@ describe('TaskRunnerService', () => {
           taskId: TASK,
           agentId: RESEARCHER,
           kind: 'connection_call',
+          duration: null,
           request: {
             connectionId: 'conn-1',
             connectionName: 'Billing API',
@@ -1437,6 +1450,7 @@ describe('TaskRunnerService', () => {
           taskId: TASK,
           agentId: RESEARCHER,
           kind: 'connection_call',
+          duration: null,
           request: {
             connectionId: 'conn-1',
             connectionName: 'Billing API',
@@ -1467,6 +1481,7 @@ describe('TaskRunnerService', () => {
           taskId: TASK,
           agentId: RESEARCHER,
           kind: 'connection_call',
+          duration: null,
           request: {
             connectionId: 'conn-1',
             connectionName: 'Billing API',
@@ -1565,6 +1580,7 @@ describe('TaskRunnerService', () => {
           name: id === 's1' ? 'Citations' : 'Revoked',
           description: '',
           currentVersionId: null,
+          discoverable: false,
           disabledAt: null,
           createdAt: new Date(),
           updatedAt: new Date()
@@ -2017,6 +2033,7 @@ describe('MCP connections', () => {
     approvalMethods: [],
     allowedTools: ['lookup', 'create'],
     approvalTools: ['create'],
+    discoverable: false,
     disabledAt: null,
     createdAt: new Date(),
     updatedAt: new Date()
@@ -2056,6 +2073,7 @@ describe('MCP connections', () => {
       taskId: TASK,
       agentId: RESEARCHER,
       kind: 'connection_call' as const,
+      duration: null,
       request: {
         kind: 'mcp' as const,
         connectionId: id,
@@ -2241,5 +2259,447 @@ describe('MCP connections', () => {
       true
     );
     expect(JSON.stringify(ctx.tasks.addEvent.mock.calls)).not.toContain('Bearer secret');
+  });
+});
+
+describe('access requests', () => {
+  const wiki: Connection = {
+    id: 'conn-wiki',
+    kind: 'http',
+    name: 'Wikipedia',
+    description: 'Search and read English Wikipedia pages.',
+    baseUrl: 'https://wiki.test',
+    authHeader: 'Authorization',
+    hasCredential: true,
+    allowedMethods: ['GET'],
+    allowedPathPrefixes: ['/wiki'],
+    approvalMethods: [],
+    discoverable: true,
+    disabledAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  const style = {
+    id: 'skill-style',
+    name: 'House style',
+    description: 'How briefs are written',
+    currentVersionId: 'sv-style-3',
+    discoverable: true,
+    disabledAt: null,
+    createdAt: new Date(),
+    updatedAt: new Date()
+  };
+  const styleVersion = {
+    id: 'sv-style-3',
+    skillId: 'skill-style',
+    version: 3,
+    instructions: 'Write short sentences.',
+    createdByHumanId: HUMAN,
+    createdAt: new Date()
+  };
+  const wikiRequest: CapabilityAccessRequest = {
+    kind: 'access',
+    targetType: 'connection',
+    targetId: 'conn-wiki',
+    name: 'Wikipedia',
+    description: wiki.description,
+    skillVersionId: null,
+    skillVersion: null,
+    scope: { kind: 'http', methods: ['GET'], pathPrefixes: ['/wiki'] },
+    reason: 'Check the claims in the brief.',
+    recommendedDuration: null,
+    durationReason: null
+  };
+  const accessApproval = (overrides: Partial<Approval> = {}): Approval => ({
+    id: 'ap-access',
+    taskId: TASK,
+    agentId: RESEARCHER,
+    kind: 'capability_access',
+    request: wikiRequest,
+    status: 'pending',
+    duration: null,
+    decidedByHumanId: null,
+    decidedAt: null,
+    reason: null,
+    executedAt: null,
+    result: null,
+    createdAt: new Date(),
+    ...overrides
+  });
+  const capability = (overrides: Partial<TaskCapability> = {}): TaskCapability => ({
+    id: 'cap-1',
+    taskId: TASK,
+    approvalId: 'ap-access',
+    targetType: 'connection',
+    targetId: 'conn-wiki',
+    skillVersionId: null,
+    scope: { kind: 'http', methods: ['GET'], pathPrefixes: ['/wiki'] },
+    duration: 'task',
+    grantedByHumanId: HUMAN,
+    grantedAt: new Date(),
+    revokedByHumanId: null,
+    revokedAt: null,
+    ...overrides
+  });
+  const requestCall = (input: Record<string, unknown>) => ({
+    id: 'call-access',
+    name: 'request_access',
+    input
+  });
+  const openWait = {
+    id: 'w1',
+    taskId: TASK,
+    kind: 'approval' as const,
+    targetId: 'ap-access',
+    description: '',
+    createdAt: new Date(),
+    resolvedAt: null,
+    resolution: null
+  };
+
+  function setupDiscovery() {
+    const ctx = setup();
+    ctx.agentRepo.addVersion.mockResolvedValue({ ...version, id: 'v-next', version: 2 });
+    ctx.catalogs.listDiscoverable.mockResolvedValue({ skills: [style], connections: [wiki] });
+    ctx.catalogs.getConnection.mockResolvedValue(wiki);
+    ctx.catalogs.getSkill.mockResolvedValue(style);
+    ctx.catalogs.getSkillVersions.mockImplementation(async (ids) =>
+      ids.includes(styleVersion.id) ? [styleVersion] : []
+    );
+    ctx.catalogs.getSkills.mockImplementation(async (ids) =>
+      ids.includes(style.id) ? [style] : []
+    );
+    ctx.catalogs.getConnections.mockImplementation(async (ids) =>
+      ids.includes(wiki.id) ? [wiki] : []
+    );
+    return ctx;
+  }
+
+  async function runCall(ctx: ReturnType<typeof setup>, call: ModelToolCall) {
+    ctx.tasks.listEvents
+      .mockResolvedValueOnce([event(1, 'model.turn', { raw: {}, toolCalls: [call] })])
+      .mockResolvedValue([]);
+    await ctx.runner.runTask(makeTask());
+    return toolResult(ctx.tasks).results[0];
+  }
+
+  it('lists discoverable entries with their scope, and grants nothing', async () => {
+    const ctx = setupDiscovery();
+    const result = await runCall(ctx, {
+      id: 'call-find',
+      name: 'find_capabilities',
+      input: { query: 'wiki' }
+    });
+    expect(result.isError).toBe(false);
+    expect(result.content).toContain('Connection "Wikipedia" (HTTP)');
+    expect(result.content).toContain('methods: GET; paths: /wiki');
+    expect(result.content).toContain('Ask with request_access');
+    expect(result.content).not.toContain('House style');
+    expect(ctx.catalogs.getConnectionCredential).not.toHaveBeenCalled();
+    expect(ctx.catalogs.grant).not.toHaveBeenCalled();
+    expect(ctx.approvals.create).not.toHaveBeenCalled();
+  });
+
+  it('asks a person for a connection with its exact scope and waits for the decision', async () => {
+    const ctx = setupDiscovery();
+    ctx.approvals.create.mockResolvedValue({ approval: accessApproval(), created: true });
+    const result = await runCall(
+      ctx,
+      requestCall({
+        type: 'connection',
+        name: 'wikipedia',
+        reason: 'Check the claims in the brief.',
+        recommended_duration: 'task'
+      })
+    );
+    expect(result.content).toContain('Asked a person for access to Wikipedia');
+    expect(ctx.approvals.create).toHaveBeenCalledWith({
+      clientKey: `tool:${TASK}:call-access`,
+      taskId: TASK,
+      agentId: RESEARCHER,
+      kind: 'capability_access',
+      request: { ...wikiRequest, recommendedDuration: 'task' }
+    });
+    expect(ctx.tasks.addWaits).toHaveBeenCalledWith(TASK, [
+      expect.objectContaining({ kind: 'approval', targetId: 'ap-access' })
+    ]);
+    expect(eventTypes(ctx.tasks)).toContain('access.requested');
+    expect(ctx.catalogs.grant).not.toHaveBeenCalled();
+    expect(ctx.client.complete).toHaveBeenCalledTimes(0);
+  });
+
+  it('pins the exact skill version in a skill request and asks for no connection', async () => {
+    const ctx = setupDiscovery();
+    ctx.approvals.create.mockResolvedValue({ approval: accessApproval(), created: true });
+    await runCall(ctx, requestCall({ type: 'skill', name: 'House style', reason: 'Match tone.' }));
+    expect(ctx.approvals.create.mock.calls[0][0].request).toEqual(
+      expect.objectContaining({
+        targetType: 'skill',
+        targetId: 'skill-style',
+        skillVersionId: 'sv-style-3',
+        skillVersion: 3,
+        scope: null
+      })
+    );
+  });
+
+  it('refuses entries that are not discoverable', async () => {
+    const ctx = setupDiscovery();
+    ctx.catalogs.listDiscoverable.mockResolvedValue({ skills: [], connections: [] });
+    const result = await runCall(
+      ctx,
+      requestCall({ type: 'connection', name: 'Wikipedia', reason: 'Need it.' })
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('no discoverable connection');
+    expect(ctx.approvals.create).not.toHaveBeenCalled();
+  });
+
+  it('reuses a pending request for the same capability and task', async () => {
+    const ctx = setupDiscovery();
+    ctx.approvals.listForTask.mockResolvedValue([accessApproval()]);
+    const result = await runCall(
+      ctx,
+      requestCall({ type: 'connection', name: 'Wikipedia', reason: 'Need it.' })
+    );
+    expect(result.content).toContain('request ap-access');
+    expect(ctx.approvals.create).not.toHaveBeenCalled();
+  });
+
+  it('does not ask again after a person declined', async () => {
+    const ctx = setupDiscovery();
+    ctx.approvals.listForTask.mockResolvedValue([
+      accessApproval({ status: 'rejected', reason: 'Use the provided sources.' })
+    ]);
+    const result = await runCall(
+      ctx,
+      requestCall({ type: 'connection', name: 'Wikipedia', reason: 'Need it.' })
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content).toContain('already declined');
+    expect(result.content).toContain('Use the provided sources.');
+    expect(ctx.approvals.create).not.toHaveBeenCalled();
+  });
+
+  it('task-only approval adds access to the waiting task without changing its version', async () => {
+    const ctx = setupDiscovery();
+    ctx.setCurrent(makeTask({ state: 'waiting' }));
+    ctx.approvals.listApprovedNotExecuted.mockResolvedValue([
+      accessApproval({ status: 'approved', duration: 'task', decidedByHumanId: HUMAN })
+    ]);
+    ctx.capabilities.add.mockResolvedValue({ capability: capability(), created: true });
+    ctx.tasks.findOpenWaits.mockResolvedValue([openWait]);
+    ctx.tasks.resolveWait.mockResolvedValue({ ...openWait, resolvedAt: new Date() });
+
+    await ctx.runner.tick();
+
+    expect(ctx.capabilities.add).toHaveBeenCalledWith({
+      taskId: TASK,
+      approvalId: 'ap-access',
+      targetType: 'connection',
+      targetId: 'conn-wiki',
+      skillVersionId: null,
+      scope: { kind: 'http', methods: ['GET'], pathPrefixes: ['/wiki'] },
+      duration: 'task',
+      grantedByHumanId: HUMAN
+    });
+    expect(ctx.agentRepo.addVersion).not.toHaveBeenCalled();
+    expect(ctx.catalogs.grant).not.toHaveBeenCalled();
+    expect(ctx.tasks.update).not.toHaveBeenCalledWith(
+      TASK,
+      expect.anything(),
+      expect.objectContaining({ agentVersionId: expect.anything() })
+    );
+    expect(ctx.approvals.markExecuted).toHaveBeenCalledWith(
+      'ap-access',
+      expect.objectContaining({ error: null })
+    );
+    expect(eventTypes(ctx.tasks)).toEqual(
+      expect.arrayContaining(['access.granted', 'approval.executed'])
+    );
+    expect(ctx.tasks.resolveWait).toHaveBeenCalledWith('w1', {
+      approvalId: 'ap-access',
+      approved: true
+    });
+  });
+
+  it('ongoing approval adds the connection to configuration as a new version and to the task', async () => {
+    const ctx = setupDiscovery();
+    ctx.setCurrent(makeTask({ state: 'waiting' }));
+    ctx.approvals.listApprovedNotExecuted.mockResolvedValue([
+      accessApproval({ status: 'approved', duration: 'ongoing', decidedByHumanId: HUMAN })
+    ]);
+    ctx.capabilities.add.mockResolvedValue({
+      capability: capability({ duration: 'ongoing' }),
+      created: true
+    });
+
+    await ctx.runner.tick();
+
+    expect(ctx.agentRepo.addVersion).toHaveBeenCalledWith(
+      RESEARCHER,
+      expect.objectContaining({ connectionIds: ['conn-wiki'], createdByHumanId: HUMAN }),
+      expect.objectContaining({
+        expectedVersionId: version.id,
+        grant: [{ type: 'connection', id: 'conn-wiki' }]
+      })
+    );
+    expect(ctx.capabilities.add).toHaveBeenCalledWith(
+      expect.objectContaining({ duration: 'ongoing' })
+    );
+    expect(eventTypes(ctx.tasks)).toContain('access.ongoing.added');
+  });
+
+  it('ongoing approval for a skill pins the approved version', async () => {
+    const ctx = setupDiscovery();
+    ctx.setCurrent(makeTask({ state: 'waiting' }));
+    ctx.approvals.listApprovedNotExecuted.mockResolvedValue([
+      accessApproval({
+        status: 'approved',
+        duration: 'ongoing',
+        decidedByHumanId: HUMAN,
+        request: {
+          ...wikiRequest,
+          targetType: 'skill',
+          targetId: 'skill-style',
+          name: 'House style',
+          skillVersionId: 'sv-style-3',
+          skillVersion: 3,
+          scope: null
+        }
+      })
+    ]);
+    ctx.capabilities.add.mockResolvedValue({ capability: capability(), created: true });
+
+    await ctx.runner.tick();
+
+    expect(ctx.agentRepo.addVersion).toHaveBeenCalledWith(
+      RESEARCHER,
+      expect.objectContaining({ skillVersionIds: ['sv-style-3'] }),
+      expect.objectContaining({ grant: [{ type: 'skill', id: 'skill-style' }] })
+    );
+    expect(ctx.capabilities.add).toHaveBeenCalledWith(
+      expect.objectContaining({ skillVersionId: 'sv-style-3', scope: null })
+    );
+  });
+
+  it('never widens the approved scope when the catalog grew before the decision ran', async () => {
+    const ctx = setupDiscovery();
+    ctx.catalogs.getConnection.mockResolvedValue({
+      ...wiki,
+      allowedMethods: ['GET', 'DELETE'],
+      allowedPathPrefixes: ['/']
+    });
+    ctx.setCurrent(makeTask({ state: 'waiting' }));
+    ctx.approvals.listApprovedNotExecuted.mockResolvedValue([
+      accessApproval({ status: 'approved', duration: 'task', decidedByHumanId: HUMAN })
+    ]);
+    ctx.capabilities.add.mockResolvedValue({ capability: capability(), created: true });
+
+    await ctx.runner.tick();
+
+    expect(ctx.capabilities.add).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scope: { kind: 'http', methods: ['GET'], pathPrefixes: ['/wiki'] }
+      })
+    );
+  });
+
+  it('does not add access for a stale request on a finished task', async () => {
+    const ctx = setupDiscovery();
+    ctx.setCurrent(makeTask({ state: 'completed' }));
+    ctx.approvals.listApprovedNotExecuted.mockResolvedValue([
+      accessApproval({ status: 'approved', duration: 'ongoing', decidedByHumanId: HUMAN })
+    ]);
+
+    await ctx.runner.tick();
+
+    expect(ctx.capabilities.add).not.toHaveBeenCalled();
+    expect(ctx.agentRepo.addVersion).not.toHaveBeenCalled();
+    expect(ctx.approvals.markExecuted).toHaveBeenCalledWith(
+      'ap-access',
+      expect.objectContaining({ error: expect.stringContaining('completed') })
+    );
+  });
+
+  it('does not add access to a capability disabled after the decision', async () => {
+    const ctx = setupDiscovery();
+    ctx.catalogs.getConnection.mockResolvedValue({ ...wiki, disabledAt: new Date() });
+    ctx.setCurrent(makeTask({ state: 'waiting' }));
+    ctx.approvals.listApprovedNotExecuted.mockResolvedValue([
+      accessApproval({ status: 'approved', duration: 'task', decidedByHumanId: HUMAN })
+    ]);
+
+    await ctx.runner.tick();
+
+    expect(ctx.capabilities.add).not.toHaveBeenCalled();
+    expect(ctx.approvals.markExecuted).toHaveBeenCalledWith(
+      'ap-access',
+      expect.objectContaining({ error: expect.stringContaining('disabled') })
+    );
+  });
+
+  it('lets the task call a connection added for it, within the approved scope only', async () => {
+    const ctx = setupDiscovery();
+    ctx.catalogs.getConnections.mockResolvedValue([
+      { ...wiki, allowedMethods: ['GET', 'DELETE'], allowedPathPrefixes: ['/'] }
+    ]);
+    ctx.capabilities.listForTask.mockResolvedValue([capability()]);
+    ctx.connectionClient.request.mockResolvedValue({ status: 200, body: 'ok', truncated: false });
+
+    const allowed = await runCall(ctx, {
+      id: 'call-ok',
+      name: 'http_request',
+      input: { connection: 'Wikipedia', method: 'GET', path: '/wiki/Heat_pump' }
+    });
+    expect(allowed.isError).toBe(false);
+    expect(ctx.connectionClient.request).toHaveBeenCalledTimes(1);
+
+    ctx.tasks.addEvent.mockClear();
+    const outside = await runCall(ctx, {
+      id: 'call-outside',
+      name: 'http_request',
+      input: { connection: 'Wikipedia', method: 'DELETE', path: '/wiki/Heat_pump' }
+    });
+    expect(outside.isError).toBe(true);
+    expect(ctx.connectionClient.request).toHaveBeenCalledTimes(1);
+  });
+
+  it('ongoing task access stops working once the agent grant is revoked', async () => {
+    const ctx = setupDiscovery();
+    ctx.capabilities.listForTask.mockResolvedValue([capability({ duration: 'ongoing' })]);
+    ctx.catalogs.listGrants.mockResolvedValue([]);
+    const result = await runCall(ctx, {
+      id: 'call-revoked',
+      name: 'http_request',
+      input: { connection: 'Wikipedia', method: 'GET', path: '/wiki/Heat_pump' }
+    });
+    expect(result.isError).toBe(true);
+    expect(ctx.connectionClient.request).not.toHaveBeenCalled();
+  });
+
+  it('adds a skill granted for the task to the prompt at its pinned version', async () => {
+    const ctx = setupDiscovery();
+    ctx.capabilities.listForTask.mockResolvedValue([
+      capability({
+        targetType: 'skill',
+        targetId: 'skill-style',
+        skillVersionId: 'sv-style-3',
+        scope: null
+      })
+    ]);
+    await ctx.runner.runTask(makeTask());
+    expect(ctx.client.complete.mock.calls[0][0].system).toContain('Write short sentences.');
+  });
+
+  it('tells the agent when a person declined, so it can go on without it', async () => {
+    const ctx = setupDiscovery();
+    ctx.tasks.listEvents.mockResolvedValue([
+      event(1, 'approval.rejected', { request: wikiRequest, reason: 'Not for this brief.' })
+    ]);
+    await ctx.runner.runTask(makeTask());
+    const transcript = JSON.stringify(ctx.client.complete.mock.calls[0][0].transcript);
+    expect(transcript).toContain('declined access to Wikipedia: Not for this brief.');
+    expect(transcript).toContain('Continue without it');
   });
 });

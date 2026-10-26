@@ -8,6 +8,7 @@ import {
   MessageRepository,
   NoteRepository,
   ResponsibilityRepository,
+  TaskCapabilityRepository,
   TaskRepository
 } from '.';
 
@@ -115,6 +116,8 @@ export function mockCatalogRepository(): jest.Mocked<CatalogRepository> {
     getSkillVersions: jest.fn().mockResolvedValue([]),
     listSkillVersions: jest.fn().mockResolvedValue([]),
     setSkillDisabled: jest.fn(),
+    setSkillDiscoverable: jest.fn(),
+    listDiscoverable: jest.fn().mockResolvedValue({ skills: [], connections: [] }),
     createConnection: jest.fn(),
     getConnection: jest.fn().mockResolvedValue(null),
     getConnections: jest.fn().mockResolvedValue([]),
@@ -134,6 +137,7 @@ export function mockApprovalRepository(): jest.Mocked<ApprovalRepository> {
     getByClientKey: jest.fn().mockResolvedValue(null),
     create: jest.fn(),
     getById: jest.fn().mockResolvedValue(null),
+    listForTask: jest.fn().mockResolvedValue([]),
     list: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
     decide: jest.fn().mockResolvedValue(null),
@@ -141,6 +145,15 @@ export function mockApprovalRepository(): jest.Mocked<ApprovalRepository> {
     listExecutedAwaitingWake: jest.fn().mockResolvedValue([]),
     markExecuted: jest.fn().mockResolvedValue(true),
     saveResult: jest.fn()
+  };
+}
+
+export function mockTaskCapabilityRepository(): jest.Mocked<TaskCapabilityRepository> {
+  return {
+    add: jest.fn(),
+    getById: jest.fn().mockResolvedValue(null),
+    listForTask: jest.fn().mockResolvedValue([]),
+    revoke: jest.fn().mockResolvedValue(null)
   };
 }
 

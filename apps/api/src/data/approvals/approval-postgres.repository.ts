@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import {
+  AccessDuration,
   Approval,
+  ApprovalRequest,
   ApprovalResult,
-  ApprovalStatus,
-  ConnectionCallRequest
+  ApprovalStatus
 } from '../../shared/types';
 import { ApprovalRepository } from './approval.repository';
 
@@ -12,9 +13,10 @@ interface ApprovalRow {
   id: string;
   task_id: string;
   agent_id: string;
-  kind: 'connection_call';
-  request: ConnectionCallRequest;
+  kind: Approval['kind'];
+  request: ApprovalRequest;
   status: ApprovalStatus;
+  duration: AccessDuration | null;
   decided_by_human_id: string | null;
   decided_at: Date | null;
   reason: string | null;
@@ -30,14 +32,15 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
     clientKey: string;
     taskId: string;
     agentId: string;
-    request: ConnectionCallRequest;
+    kind: Approval['kind'];
+    request: ApprovalRequest;
   }): Promise<{ approval: Approval; created: boolean }> {
     const result = await this.db.query<ApprovalRow>(
       `INSERT INTO endeavor.approvals (id, client_key, task_id, agent_id, kind, request)
-       VALUES ($1, $2, $3, $4, 'connection_call', $5)
+       VALUES ($1, $2, $3, $4, $5, $6)
        ON CONFLICT (client_key) DO NOTHING
        RETURNING *`,
-      [randomUUID(), input.clientKey, input.taskId, input.agentId, input.request]
+      [randomUUID(), input.clientKey, input.taskId, input.agentId, input.kind, input.request]
     );
     if (result.rows[0]) {
       return { approval: toApproval(result.rows[0]), created: true };
@@ -63,6 +66,14 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
       [approvalId]
     );
     return result.rows[0] ? toApproval(result.rows[0]) : null;
+  }
+
+  async listForTask(taskId: string): Promise<Approval[]> {
+    const result = await this.db.query<ApprovalRow>(
+      `SELECT * FROM endeavor.approvals WHERE task_id = $1 ORDER BY created_at, id`,
+      [taskId]
+    );
+    return result.rows.map(toApproval);
   }
 
   async list(input: {
@@ -97,14 +108,15 @@ export class ApprovalPostgresRepository implements ApprovalRepository {
     status: 'approved' | 'rejected';
     humanId: string;
     reason: string | null;
+    duration?: AccessDuration | null;
   }): Promise<Approval | null> {
     const result = await this.db.query<ApprovalRow>(
       `UPDATE endeavor.approvals
-       SET status = $2, decided_by_human_id = $3, decided_at = now(), reason = $4
+       SET status = $2, decided_by_human_id = $3, decided_at = now(), reason = $4, duration = $5
        WHERE id = $1
          AND status = 'pending'
        RETURNING *`,
-      [input.approvalId, input.status, input.humanId, input.reason]
+      [input.approvalId, input.status, input.humanId, input.reason, input.duration ?? null]
     );
     return result.rows[0] ? toApproval(result.rows[0]) : null;
   }
@@ -183,6 +195,7 @@ function toApproval(row: ApprovalRow): Approval {
     kind: row.kind,
     request: row.request,
     status: row.status,
+    duration: row.duration ?? null,
     decidedByHumanId: row.decided_by_human_id,
     decidedAt: row.decided_at,
     reason: row.reason,

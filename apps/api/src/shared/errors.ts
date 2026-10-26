@@ -70,6 +70,11 @@ export const ERRORS = {
     statusCode: 409,
     message: 'This approval was already decided'
   },
+  taskCapabilityNotFound: {
+    code: 40011,
+    statusCode: 404,
+    message: 'Access added to this task was not found'
+  },
 
   // 50xxx: agents
   agentNotFound: { code: 50001, statusCode: 404, message: 'Agent not found' },
