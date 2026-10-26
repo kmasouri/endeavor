@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { lstat, mkdir, readFile, readdir, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-const deadline = setTimeout(() => process.exit(124), 295_000);
+const deadline = setTimeout(() => process.exit(124), 595_000);
 deadline.unref();
 const maxBytes = 20_000_000;
 let raw = '';

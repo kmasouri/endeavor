@@ -273,3 +273,9 @@ MCP discovery and calls made by the task runner include `X-Endeavor-Task-Id`, de
 authorized task rather than model input. The execution service uses it to isolate checkouts
 and execution evidence. Catalog discovery has no task identity and grants no workspace access.
 Approval execution retains the original task identity. Other MCP services may ignore the header.
+
+Server output remains untrusted data. The MCP protocol envelope is checked by the SDK. Its
+optional structured output schema is checked with Zod when representable; vendor schemas
+that Zod cannot convert remain opaque data. Tool input schemas and arguments still must
+convert and validate before transport. Server metadata is excluded from model results, and
+identical content repeated in structuredContent is emitted only once.
