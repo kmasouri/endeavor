@@ -89,7 +89,9 @@ export function mockConversationRepository(): jest.Mocked<ConversationRepository
     count: jest.fn().mockResolvedValue(0),
     addMember: jest.fn(),
     listMembers: jest.fn().mockResolvedValue([]),
-    getMember: jest.fn().mockResolvedValue(null)
+    getMember: jest.fn().mockResolvedValue(null),
+    markRead: jest.fn(),
+    countUnread: jest.fn().mockResolvedValue(new Map())
   };
 }
 

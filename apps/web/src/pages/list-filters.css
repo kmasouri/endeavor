@@ -1,0 +1,13 @@
+.list-filters {
+  display: flex;
+  gap: 4px;
+}
+.list-filters button {
+  background: transparent;
+  color: var(--text-300);
+  padding: 7px 14px;
+}
+.list-filters button[aria-pressed='true'] {
+  color: var(--text-100);
+  background: var(--bg-selected);
+}

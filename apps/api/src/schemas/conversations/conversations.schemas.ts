@@ -51,6 +51,11 @@ export const postMessageBodySchema = z.strictObject({
   clientKey: z.string().trim().min(1).max(200).optional()
 });
 
+export const markReadBodySchema = z.strictObject({
+  // The newest message the person has seen.
+  messageId: z.uuid()
+});
+
 export const listConversationsQuerySchema = z.strictObject({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0)
@@ -78,5 +83,6 @@ export type CreateConversationBody = z.infer<typeof createConversationBodySchema
 export type AddMemberBody = z.infer<typeof addMemberBodySchema>;
 export type UpdateConversationBody = z.infer<typeof updateConversationBodySchema>;
 export type PostMessageBody = z.infer<typeof postMessageBodySchema>;
+export type MarkReadBody = z.infer<typeof markReadBodySchema>;
 export type ListConversationsQuery = z.infer<typeof listConversationsQuerySchema>;
 export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;

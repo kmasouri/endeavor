@@ -30,6 +30,11 @@ export interface ConversationDetails extends Conversation {
   members: MemberDetails[];
 }
 
+export interface ConversationSummary extends Conversation {
+  // Messages from others the acting person hasn't seen. Always 0 where they aren't a member.
+  unreadCount: number;
+}
+
 // Shared conversations between humans and agents. Humans post here through the API; agents
 // post through the runner. Posting a message only saves it and records which agents it is
 // addressed to. The runner turns those into work.
@@ -91,7 +96,7 @@ export class ConversationService {
   async listConversations(
     actorId: string,
     input: { limit: number; offset: number }
-  ): Promise<{ conversations: Conversation[]; total: number }> {
+  ): Promise<{ conversations: ConversationSummary[]; total: number }> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const participant: ParticipantRef | null = hasFullAccess(human)
       ? null
@@ -100,7 +105,41 @@ export class ConversationService {
       this.conversationRepository.list({ participant, ...input }),
       this.conversationRepository.count({ participant })
     ]);
-    return { conversations, total };
+    const unread = await this.conversationRepository.countUnread({
+      humanId: human.id,
+      conversationIds: conversations.map((conversation) => conversation.id)
+    });
+    return {
+      conversations: conversations.map((conversation) => ({
+        ...conversation,
+        unreadCount: unread.get(conversation.id) ?? 0
+      })),
+      total
+    };
+  }
+
+  // Opening a conversation marks it read up to the newest message shown. Reading an older
+  // message again never makes newer ones unread.
+  async markRead(
+    actorId: string,
+    conversationId: string,
+    input: { messageId: string }
+  ): Promise<{ conversationId: string; unreadCount: number }> {
+    const { conversation, human } = await this.requireAccess(actorId, conversationId);
+    const message = await this.messageRepository.getById(input.messageId);
+    if (!message || message.conversationId !== conversation.id) {
+      throw new AppError('messageNotFound', `Message ${input.messageId} was not found`);
+    }
+    await this.conversationRepository.markRead({
+      conversationId: conversation.id,
+      humanId: human.id,
+      messageId: message.id
+    });
+    const unread = await this.conversationRepository.countUnread({
+      humanId: human.id,
+      conversationIds: [conversation.id]
+    });
+    return { conversationId: conversation.id, unreadCount: unread.get(conversation.id) ?? 0 };
   }
 
   async updateConversation(

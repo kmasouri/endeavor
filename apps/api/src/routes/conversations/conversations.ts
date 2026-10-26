@@ -8,6 +8,7 @@ import {
   getConversationHandler,
   listConversationsHandler,
   listMessagesHandler,
+  markReadHandler,
   postMessageHandler,
   updateConversationHandler
 } from '../../handlers';
@@ -20,6 +21,7 @@ import {
   createConversationBodySchema,
   listConversationsQuerySchema,
   listMessagesQuerySchema,
+  markReadBodySchema,
   postMessageBodySchema,
   updateConversationBodySchema
 } from '../../schemas';
@@ -43,7 +45,8 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     '/conversations',
     {
       schema: {
-        description: 'Conversations, newest first. In v1 every person sees all of them.',
+        description:
+          'Conversations, newest first. In v1 every person sees all of them. Each has unreadCount: messages from others you have not seen yet (always 0 where you are not a member).',
         tags: ['conversations'],
         headers: actorHeadersSchema,
         querystring: listConversationsQuerySchema
@@ -121,6 +124,21 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
       }
     },
     listMessagesHandler
+  );
+
+  fastifyInstance.put(
+    '/conversations/:conversationId/read',
+    {
+      schema: {
+        description:
+          'Mark the conversation read up to messageId, the newest message you have seen. It never moves back to an older message. Returns your unreadCount.',
+        tags: ['conversations'],
+        headers: actorHeadersSchema,
+        params: conversationParamsSchema,
+        body: markReadBodySchema
+      }
+    },
+    markReadHandler
   );
 
   fastifyInstance.post(

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import ManagementToolbar from '../ManagementToolbar.svelte';
   import PageHeader from '../PageHeader.svelte';
   import Avatar from '../Avatar.svelte';
   import Icon from '../Icon.svelte';
@@ -29,7 +30,12 @@
   let selected = $state<Responsibility | null>(null);
   let current = $derived(schedules.data?.find((schedule) => schedule.id === selected?.id) ?? selected);
   let active = $derived((schedules.data ?? []).filter((schedule) => schedule.status !== 'cancelled'));
-  let cancelled = $derived((schedules.data ?? []).filter((schedule) => schedule.status === 'cancelled'));
+  let filter = $state('All');
+  let search = $state('');
+  const shown = $derived((schedules.data ?? []).filter((schedule) =>
+    (filter === 'All' || schedule.status === ({ Active: 'enabled', Paused: 'paused', Cancelled: 'cancelled' } as Record<string, string>)[filter]) &&
+    `${schedule.title} ${name({ type: 'agent', id: schedule.agentId })} ${summarizeRecurrence(schedule, timeDisplay.format === '12h')}`.toLowerCase().includes(search.trim().toLowerCase())
+  ));
   const action = createAction();
   let notice = $state('');
   const instant = (value: string) => scheduleInstant(value, undefined, timeDisplay.format === '12h');
@@ -49,7 +55,7 @@
 
 <div class="schedules-page">
   <PageHeader title="Schedules" subtitle="Recurring work for your agents.">
-    {#snippet actions()}{#if view === 'list' && schedules.data && active.length > 0}<button onclick={() => navigate('new')}><Icon name="plus" size={16} /> New schedule</button>{/if}{/snippet}
+    {#snippet actions()}{#if view === 'list'}<button onclick={() => navigate('new')}><Icon name="plus" size={16} /> Create schedule</button>{/if}{/snippet}
   </PageHeader>
 
   <div class="schedules-view">
@@ -75,16 +81,16 @@
         </div>
       {/each}
       <ErrorNote error={action.error} />
-      {#if active.length > 0}
-        <h2 class="schedule-eyebrow" tabindex="-1">Schedules · {active.length}</h2>
+      {#if schedules.data}
+        <ManagementToolbar name="schedules" filters={['All', 'Active', 'Paused', 'Cancelled']} bind:filter bind:search />
+        <h2 class="schedule-eyebrow" tabindex="-1">Schedules · {shown.length}</h2>
       {/if}
       {#if !schedules.data && !schedules.error}<p class="muted">Loading schedules…</p>{/if}
-      {#if schedules.data && !active.length && !schedules.error}
+      {#if schedules.data?.length === 0 && !schedules.error}
         <section class="schedule-empty" aria-labelledby="schedules-empty-title">
           <div class="schedule-empty-clock"><Icon name="schedules" /></div>
-          <h2 id="schedules-empty-title" tabindex="-1">No active schedules</h2>
+          <h2 id="schedules-empty-title" tabindex="-1">No schedules yet</h2>
           <p>Set up recurring work for an agent.<br />Choose when it runs and where it posts results.</p>
-          <button onclick={() => navigate('new')}><Icon name="plus" size={16} /> Create schedule</button>
         </section>
       {/if}
       {#snippet rows(items: Responsibility[])}
@@ -104,12 +110,8 @@
           </button>
         {/each}
       {/snippet}
-      <div class="schedule-list">{@render rows(active)}</div>
-      {#if cancelled.length}
-        <details class="schedule-cancelled"><summary>Cancelled schedules · {cancelled.length}</summary>
-          <div class="schedule-list">{@render rows(cancelled)}</div>
-        </details>
-      {/if}
+      <div class="schedule-list" aria-label="Schedules">{@render rows(shown)}</div>
+      {#if schedules.data?.length && !shown.length}<p class="muted">No schedules match your filters.</p>{/if}
     {/if}
   </div>
 </div>

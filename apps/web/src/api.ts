@@ -50,6 +50,8 @@ export const api = {
   list: <T>(path: string) => request<{ data: T[]; page: Page }>('GET', path),
   post: <T>(path: string, body: unknown = {}) =>
     request<{ data: T }>('POST', path, body).then((body) => body.data),
+  put: <T>(path: string, body: unknown) =>
+    request<{ data: T }>('PUT', path, body).then((body) => body.data),
   patch: <T>(path: string, body: unknown) =>
     request<{ data: T }>('PATCH', path, body).then((body) => body.data),
   delete: (path: string) => request<unknown>('DELETE', path)
@@ -78,6 +80,8 @@ export interface Conversation {
   id: string;
   title: string;
   createdAt: string;
+  // Messages from others you haven't seen. Only the conversations list sends it.
+  unreadCount?: number;
 }
 
 export interface Member {

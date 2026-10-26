@@ -4,10 +4,10 @@ People keep two shared catalogs. Being in a catalog gives no agent access. Choos
 
 ## Creating catalog entries
 
-The catalog's **New skill** and **New connection** buttons open dedicated pages at
-`#/catalogs/skills/new` and `#/catalogs/connections/new`. They share the new-agent page's
+The **Create skill** and **Create connection** buttons open dedicated pages at
+`#/skills/new` and `#/connections/new`. They share the new-agent page's
 layout: a back link, heading, grouped fields, and a sticky Cancel/Create footer.
-Cancel and successful saves return to the matching catalog tab. Failed saves keep the
+Cancel and successful saves return to the matching catalog list. Failed saves keep the
 entered values and show the error on the form. Connection creation includes Profile,
 Authentication, and Access sections for both HTTP APIs and MCP servers.
 
@@ -55,6 +55,9 @@ Before resuming affected work, a person should:
 New skill versions contain no associations, so upgrading skills can remove historical review information. Review the old agent version in history when transitioning. Connection choices still never change automatically. The pilot setup selects each agent's connections explicitly; existing pilot agents must be reviewed using the steps above.
 
 ## Approvals
+
+The Approvals page opens on Pending. History shows approved and rejected requests, newest
+decision first, with the reason and recorded result. Both views load every API page.
 
 A connection's `approvalMethods` (for example `["POST", "DELETE"]`) are methods that need a person's approval before each call. If you leave it out when creating a connection, every allowed method except GET needs approval: reading is free, and changing anything waits for a person. Send `[]` to need no approvals. A matching call is never made right away:
 
@@ -191,3 +194,18 @@ Run these without an external account, model API key, or database:
 npm test -w apps/api -- --runInBand mcp-http.client.test.ts task-runner.service.test.ts
 npm run test:e2e -w apps/web -- connections.test.ts
 ```
+
+## Managing the catalogs
+
+Skills and Connections have separate sidebar entries at `#/skills` and `#/connections`.
+Their lists use the same centered frame, status filters, search, and create action as Agents.
+Search checks names and descriptions; connection search also checks the endpoint URL.
+All pages of each catalog are loaded before filtering, including disabled entries.
+
+Open a row to configure it at `#/skills/:id` or `#/connections/:id`. Skill changes create a
+new instruction version. Connection details keep credential replacement/removal and MCP
+tool discovery and access settings together on a dedicated page. Enable and disable
+controls show failed requests without changing the displayed status.
+
+Creation uses `#/skills/new` and `#/connections/new`. Older `#/catalogs` links, including
+`?tab=connections` and the original creation URLs, still open the matching destination.

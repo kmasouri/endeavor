@@ -68,6 +68,7 @@ async function mockApi(page: Page) {
       return reply(paged([{ id: 'a1', name: 'Researcher', purpose: 'Research' }]));
     if (url.pathname === '/approvals') return reply(paged([accessRequest]));
     if (url.pathname === '/connections') return reply(paged([wikipedia]));
+    if (url.pathname === '/connections/c1') return reply({ data: wikipedia });
     return reply(paged([]));
   });
   return writes;
@@ -127,7 +128,7 @@ test('the access request card fits a phone screen', async ({ page }) => {
 
 test('mark a connection discoverable from the catalog', async ({ page }) => {
   const writes = await mockApi(page);
-  await page.goto('/app/#/catalogs?tab=connections');
+  await page.goto('/app/#/connections/c1');
   await page.getByLabel('Agents can find this and ask for access').check();
   await expect
     .poll(() => writes.find((write) => write.path === '/connections/c1'))

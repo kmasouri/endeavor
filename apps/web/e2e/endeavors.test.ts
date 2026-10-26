@@ -40,6 +40,7 @@ async function mockApi(page: Page, options: Options = {}) {
     conversations: options.empty ? [] : [...initial],
     posts: [] as Record<string, unknown>[],
     fail: options.fail ?? false,
+    members: [] as { type: string; id: string; history: string }[],
     writes: [] as string[]
   };
   const errors: string[] = [];
@@ -94,13 +95,18 @@ async function mockApi(page: Page, options: Options = {}) {
         paged(options.pages ? accessible.slice(offset, offset + 1) : accessible, accessible.length)
       );
     }
+    if (url.pathname.endsWith('/members') && request.method() === 'POST') {
+      if (state.fail) return reply({ error: { message: 'Please try again.' } }, 503);
+      state.members.push(request.postDataJSON());
+      return reply({ data: {} }, 201);
+    }
     const match = /^\/conversations\/([^/]+)$/.exec(url.pathname);
     if (match) {
       const conversation = state.conversations.find((c) => c.id === match[1]);
       if (!conversation) return reply({ error: { message: 'Unavailable' } }, 404);
       const posted = conversation.id === 'created' ? state.posts.at(-1) : undefined;
-      const humanIds = (posted?.humanIds ?? []) as string[];
-      const agentIds = (posted?.agentIds ?? []) as string[];
+      const humanIds = [...((posted?.humanIds ?? []) as string[]), ...state.members.filter((m) => m.type === 'human').map((m) => m.id)];
+      const agentIds = [...((posted?.agentIds ?? []) as string[]), ...state.members.filter((m) => m.type === 'agent').map((m) => m.id)];
       return reply({
         data: {
           ...conversation,
@@ -274,7 +280,7 @@ test('restores the last accessible selection, preserves links, and searches olde
   ).toHaveAttribute('title', 'website-reliability');
   await page.getByRole('link', { name: '#heat-pump-brief', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
-  for (const destination of ['Agents', 'Schedules', 'Approvals', 'Skills and connections', 'Setup', 'Work']) {
+  for (const destination of ['Agents', 'Schedules', 'Approvals', 'Skills', 'Connections', 'Setup', 'Work']) {
     await page.getByRole('navigation', { name: 'Main', exact: true })
       .getByRole('link', { name: destination, exact: true }).click();
     await expect(page.locator('.sidebar-conversations')).toHaveCount(0);
@@ -439,4 +445,54 @@ for (const theme of ['dark', 'light'] as const) {
       expect(errors).toEqual([]);
     });
   }
+}
+
+for (const width of [1440, 390, 320]) {
+  test(`member dialog at ${width}px: avatars, search, retry, history and focus`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { state, errors } = await mockApi(page, { fail: true });
+    await page.goto('/app/#/conversations/site');
+    const opener = page.getByRole('button', { name: /members. Show who's here/ });
+    await expect(opener).toBeVisible();
+    await expect(page.locator('.add-members-button')).toHaveCount(0);
+    await opener.click();
+    const dialog = page.getByRole('dialog', { name: 'People and agents', exact: true });
+    const search = dialog.getByLabel('Find people or agents');
+    await expect(search).toBeFocused();
+    await expect(dialog.getByRole('region', { name: 'Current members' }).getByText('Kayvan', { exact: true })).toBeVisible();
+    await search.fill('evidence');
+    await dialog.getByRole('checkbox', { name: 'Add Researcher', exact: true }).check();
+    await expect(dialog.getByRole('checkbox', { name: 'Add Lee', exact: true })).toHaveCount(0);
+    await search.fill('Lee');
+    await dialog.getByRole('checkbox', { name: 'Add Lee', exact: true }).check();
+    const history = dialog.getByLabel('Hide earlier messages from them');
+    await history.check();
+    expect((await history.boundingBox())!.width).toBeLessThan(30);
+    await dialog.getByRole('button', { name: 'Add (2)', exact: true }).click();
+    await expect(dialog.getByText('Please try again.', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('checkbox', { name: 'Add Lee', exact: true })).toBeChecked();
+    expect(state.members).toEqual([]);
+    state.fail = false;
+    await dialog.getByRole('button', { name: 'Add (2)', exact: true }).click();
+    await expect(dialog.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
+    await expect(dialog.getByRole('region', { name: 'Current members' }).getByText('Researcher', { exact: true })).toBeVisible();
+    expect(state.members).toEqual([
+      { type: 'human', id: 'person-2', history: 'from_now' },
+      { type: 'agent', id: 'agent-1', history: 'from_now' }
+    ]);
+    const bounds = (await dialog.boundingBox())!;
+    expect(bounds.width).toBeLessThanOrEqual(560);
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    if (width <= 700) expect((await opener.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await page.screenshot({ path: `/tmp/ca74-members-${width}.png` });
+    await dialog.getByRole('button', { name: 'Done', exact: true }).focus();
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+    await expect(opener).toBeFocused();
+    expect(errors).toEqual([]);
+  });
 }

@@ -16,14 +16,14 @@
       .run(() => api.post('/skills', { name, description, instructions, discoverable }))
       .then((ok) => {
         if (ok) {
-          go('/catalogs?tab=skills');
+          go('/skills');
         }
       });
   };
 </script>
 
 <div class="creation-page">
-  <a class="creation-back" href="#/catalogs?tab=skills">← Skills</a>
+  <a class="creation-back" href="#/skills">← Skills</a>
   <PageHeader
     title="New skill"
     subtitle="Give it a name and reusable instructions for your agents."
@@ -62,7 +62,7 @@
     </fieldset>
     <ErrorNote error={action.error} />
     <div class="savebar">
-      <a href="#/catalogs?tab=skills">Cancel</a>
+      <a href="#/skills">Cancel</a>
       <button disabled={action.busy || !name.trim() || !description.trim() || !instructions.trim()}>Create skill</button>
     </div>
   </form>

@@ -49,6 +49,7 @@ test('create an MCP connection, discover tools, save access, and review exact ar
         data: [{ id: 'p1', name: 'Kayvan', preferences: { theme: 'dark', timeFormat: '12h' } }]
       });
     if (url.pathname === '/connections') return reply(paged(connections));
+    if (url.pathname === '/connections/c1') return reply({ data: connections[0] });
     if (url.pathname === '/approvals')
       return reply(
         paged([
@@ -72,7 +73,7 @@ test('create an MCP connection, discover tools, save access, and review exact ar
   });
 
   await page.goto('/app/#/catalogs?tab=connections');
-  await page.getByRole('button', { name: 'New connection', exact: true }).click();
+  await page.getByRole('button', { name: '+ Create connection', exact: true }).click();
   const form = page
     .locator('form')
     .filter({ has: page.getByRole('button', { name: 'Create connection', exact: true }) });
@@ -85,6 +86,7 @@ test('create an MCP connection, discover tools, save access, and review exact ar
   await expect(page.getByText('Records', { exact: true })).toBeVisible();
   expect(writes[0].body).toMatchObject({ kind: 'mcp', allowedTools: [], approvalTools: [] });
   expect(writes[0].body).not.toHaveProperty('allowedMethods');
+  await page.getByRole('link', { name: /Records Record tools/ }).click();
   await page.getByText('Discover and manage tools', { exact: true }).click();
   await page.getByRole('button', { name: 'Discover tools', exact: true }).click();
   const lookup = page.getByRole('group', { name: 'lookup', exact: true });

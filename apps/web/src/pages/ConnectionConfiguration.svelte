@@ -62,37 +62,34 @@
       .then((ok) => ok && ((credential = ''), props.onChanged()));
 </script>
 
-<li>
+<div class="stack">
   <div class="row">
-    <span class="grow">
-      <strong>{connection.name}</strong>
-      {#if connection.disabledAt}<span class="badge">disabled</span>{/if}
-      <span class="badge">{connection.hasCredential ? 'credential saved' : 'no credential'}</span>
-      <div class="muted small">{connection.description} · {connection.baseUrl}</div>
-      <div class="muted small">
-        {#if connection.kind === 'mcp'}
-          MCP · Allowed tools: {(connection.allowedTools ?? []).join(', ') || 'none'}
-          · needs approval: {(connection.approvalTools ?? []).join(', ') || 'none'}
-        {:else}
-          HTTP API · Allowed: {connection.allowedMethods.join(', ')} on {connection.allowedPathPrefixes.join(', ')}
-          {#if connection.approvalMethods.length > 0}
-            {` · needs approval: ${connection.approvalMethods.join(', ')}`}
-          {/if}
-        {/if}
-      </div>
-      <DiscoverableToggle
-        path={`/connections/${connection.id}`}
-        discoverable={connection.discoverable}
-        onChanged={props.onChanged}
-      />
-    </span>
+    <div class="grow">
+      <h2>Configuration</h2>
+      <p class="muted small">{connection.kind === 'mcp' ? 'MCP server' : 'HTTP API'} · {connection.hasCredential ? 'Credential saved' : 'No credential'}</p>
+    </div>
     <EnableButton
       path={`/connections/${connection.id}`}
       disabled={Boolean(connection.disabledAt)}
       onChanged={props.onChanged}
     />
   </div>
+  <DiscoverableToggle
+    path={`/connections/${connection.id}`}
+    discoverable={connection.discoverable}
+    onChanged={props.onChanged}
+  />
 
+  <fieldset class="stack">
+    <legend>Access</legend>
+    <div><span class="muted small">Endpoint</span><p>{connection.baseUrl}</p></div>
+    {#if connection.kind === 'mcp'}
+      <p class="muted small">Allowed tools: {(connection.allowedTools ?? []).join(', ') || 'none'}. Needs approval: {(connection.approvalTools ?? []).join(', ') || 'none'}.</p>
+    {:else}
+      <p class="muted small">Allowed methods: {connection.allowedMethods.join(', ')}. Paths: {connection.allowedPathPrefixes.join(', ')}. Needs approval: {connection.approvalMethods.join(', ') || 'none'}.</p>
+    {/if}
+    <p class="muted small">Access is granted separately on each agent. Credentials are encrypted and never shown again.</p>
+  </fieldset>
   {#if connection.kind === 'mcp'}
     <details>
       <summary>Discover and manage tools</summary>
@@ -133,7 +130,7 @@
   <details>
     <summary>Replace or remove the credential</summary>
     <form
-      class="row"
+      class="row wrap credential-form"
       onsubmit={(event) => {
         event.preventDefault();
         setSecret(credential);
@@ -141,6 +138,7 @@
     >
       <input
         class="grow"
+        aria-label="New credential"
         type="password"
         autocomplete="off"
         bind:value={credential}
@@ -155,4 +153,11 @@
     </form>
     <ErrorNote error={action.error} />
   </details>
-</li>
+</div>
+
+<style>
+  .credential-form input {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
+</style>

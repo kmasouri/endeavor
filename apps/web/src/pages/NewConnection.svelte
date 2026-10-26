@@ -50,14 +50,14 @@
       )
       .then((ok) => {
         if (ok) {
-          go('/catalogs?tab=connections');
+          go('/connections');
         }
       });
   };
 </script>
 
 <div class="creation-page">
-  <a class="creation-back" href="#/catalogs?tab=connections">← Connections</a>
+  <a class="creation-back" href="#/connections">← Connections</a>
   <PageHeader
     title="New connection"
     subtitle="Connect an HTTP API or MCP server and choose what agents can call."
@@ -159,7 +159,7 @@
     </fieldset>
     <ErrorNote error={action.error} />
     <div class="savebar">
-      <a href="#/catalogs?tab=connections">Cancel</a>
+      <a href="#/connections">Cancel</a>
       <button disabled={action.busy || !name.trim() || !description.trim() || !baseUrl.trim()}>Create connection</button>
     </div>
   </form>

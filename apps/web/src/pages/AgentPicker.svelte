@@ -115,5 +115,5 @@
       <span class="caption muted">{matches.length} matches · showing up to 5</span>
     </div>
   {/if}
-  <a class="caption" href={`#/catalogs?tab=${kind}s`}>Browse {kind}s</a>
+  <a class="caption" href={`#/${kind}s`}>Browse {kind}s</a>
 </div>

@@ -107,3 +107,72 @@ describe('conversation creation', () => {
     await app.close();
   });
 });
+
+describe('marking a conversation read', () => {
+  const CONVERSATION = '00000000-0000-4000-8000-0000000000f1';
+  const MESSAGE = '00000000-0000-4000-8000-0000000000e1';
+
+  it.each([{}, { messageId: 'not-a-uuid' }, { messageId: MESSAGE, extra: true }])(
+    'rejects an invalid body: %j',
+    async (payload) => {
+      const app = setupApp();
+      await app.ready();
+      const markRead = jest.spyOn(app.conversationService, 'markRead');
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/conversations/${CONVERSATION}/read`,
+        headers: { 'x-actor-id': ACTOR },
+        payload
+      });
+      expect(response.statusCode).toBe(400);
+      expect(markRead).not.toHaveBeenCalled();
+      await app.close();
+    }
+  );
+
+  it('passes the message to the service and returns the unread count', async () => {
+    const app = setupApp();
+    await app.ready();
+    const markRead = jest
+      .spyOn(app.conversationService, 'markRead')
+      .mockResolvedValue({ conversationId: CONVERSATION, unreadCount: 0 });
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/conversations/${CONVERSATION}/read`,
+      headers: { 'x-actor-id': ACTOR },
+      payload: { messageId: MESSAGE }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual({ conversationId: CONVERSATION, unreadCount: 0 });
+    expect(markRead).toHaveBeenCalledWith(ACTOR, CONVERSATION, { messageId: MESSAGE });
+    await app.close();
+  });
+});
+
+describe('listing conversations', () => {
+  it('returns each conversation with its unread count', async () => {
+    const app = setupApp();
+    await app.ready();
+    jest.spyOn(app.conversationService, 'listConversations').mockResolvedValue({
+      conversations: [
+        {
+          id: PERSON,
+          title: 'website-check',
+          createdByHumanId: ACTOR,
+          budgetUsd: null,
+          createdAt: new Date(),
+          unreadCount: 3
+        }
+      ],
+      total: 1
+    });
+    const response = await app.inject({
+      method: 'GET',
+      url: '/conversations',
+      headers: { 'x-actor-id': ACTOR }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data[0].unreadCount).toBe(3);
+    await app.close();
+  });
+});

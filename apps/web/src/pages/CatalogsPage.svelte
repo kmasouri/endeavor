@@ -1,88 +1,51 @@
 <script lang="ts">
   import PageHeader from '../PageHeader.svelte';
-  import { api, type Connection, type Skill } from '../api';
+  import Icon from '../Icon.svelte';
+  import ManagementToolbar from '../ManagementToolbar.svelte';
+  import { type Connection, type Skill } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
-  import Hint from '../Hint.svelte';
   import { createLoad, go } from '../state.svelte';
-  import SkillRow from './SkillRow.svelte';
-  import ConnectionRow from './ConnectionRow.svelte';
-  import './catalogs.css';
-
-  const tab = $state<'skills' | 'connections'>(
-    new URLSearchParams(window.location.hash.split('?')[1]).get('tab') === 'connections'
-      ? 'connections'
-      : 'skills'
-  );
-
-  const skills = createLoad(
-    () => api.list<Skill>('/skills?limit=100'),
-    () => []
-  );
-  const connections = createLoad(
-    () => api.list<Connection>('/connections?limit=100'),
-    () => []
-  );
-  let connectionList = $derived(connections.data?.data ?? []);
+  import { loadAll } from './agent-data';
+  import './creation.css';
+  let { kind }: { kind: 'skills' | 'connections' } = $props();
+  const entries = createLoad<(Skill | Connection)[]>(() => kind === 'skills' ? loadAll<Skill>('/skills') : loadAll<Connection>('/connections'), () => [kind]);
+  const title = $derived(kind === 'skills' ? 'Skills' : 'Connections');
+  const singular = $derived(kind === 'skills' ? 'skill' : 'connection');
+  let filter = $state('All');
+  let search = $state('');
+  const shown = $derived((entries.data ?? []).filter((entry) =>
+    (filter === 'All' || (filter === 'Disabled' ? !!entry.disabledAt : !entry.disabledAt)) &&
+    `${entry.name} ${entry.description} ${'baseUrl' in entry ? entry.baseUrl : ''}`.toLowerCase().includes(search.trim().toLowerCase())
+  ));
 </script>
-
-<PageHeader
-  title="Skills and connections"
-  subtitle="Reusable instructions and connections for your agents."
->
-  {#snippet actions()}
-    <button onclick={() => go(`/catalogs/${tab}/new`)}>
-      New {tab === 'skills' ? 'skill' : 'connection'}
-    </button>
-  {/snippet}
-</PageHeader>
-
-<div class="catalogs narrow wide">
-  <nav class="catalog-tabs" aria-label="Catalog">
-    <button
-      class:active={tab === 'skills'}
-      aria-current={tab === 'skills' ? 'page' : undefined}
-      onclick={() => go('/catalogs?tab=skills')}>Skills</button
-    >
-    <button
-      class:active={tab === 'connections'}
-      aria-current={tab === 'connections' ? 'page' : undefined}
-      onclick={() => go('/catalogs?tab=connections')}>Connections</button
-    >
-  </nav>
-
-  {#if tab === 'skills'}
-    <section class="panel">
-      <h2>Skills</h2>
-
-      <Hint>
-        Skills are reusable instructions only. Choose skills and connection access independently on
-        each agent. Editing a skill saves a new version and never changes API access.
-      </Hint>
-
-      <ErrorNote error={skills.error} />
-
-      <ul class="list">
-        {#each skills.data?.data ?? [] as skill (skill.id)}
-          <SkillRow {skill} onChanged={skills.reload} />
-        {/each}
-      </ul>
-    </section>
-  {:else}
-    <section class="panel">
-      <h2>Connections</h2>
-
-      <Hint>
-        A connection gives agents access to an HTTP API or MCP server. The platform adds the
-        credential and checks each call against its allowed methods, paths, or tools. Credentials are stored encrypted and never shown again.
-      </Hint>
-
-      <ErrorNote error={connections.error} />
-
-      <ul class="list">
-        {#each connectionList ?? [] as connection (connection.id)}
-          <ConnectionRow {connection} onChanged={connections.reload} />
-        {/each}
-      </ul>
-    </section>
+<div class="creation-page">
+  <PageHeader {title} subtitle={kind === 'skills' ? 'Reusable instructions for your agents.' : 'HTTP APIs and MCP servers your agents can use.'}>
+    {#snippet actions()}<button onclick={() => go(`/${kind}/new`)}>+ Create {singular}</button>{/snippet}
+  </PageHeader>
+  <ErrorNote error={entries.error} />
+  {#if !entries.data && !entries.error}<p class="muted">Loading {kind}…</p>{/if}
+  {#if entries.data}
+    <ManagementToolbar name={kind} filters={['All', 'Enabled', 'Disabled']} bind:filter bind:search />
+    <div class="label muted">{title} · {shown.length}</div>
+    <ul class="management-list" aria-label={title}>
+      {#each shown as entry (entry.id)}
+        <li><a class="management-row" href={`#/${kind}/${entry.id}`}>
+          <span class="management-icon"><Icon name={kind === 'skills' ? 'file' : 'connections'} /></span>
+          <div><h3>{entry.name}</h3><p>{entry.description}</p></div>
+          <div class="management-meta">
+            {#if 'baseUrl' in entry}
+              {entry.kind === 'mcp' ? 'MCP server' : 'HTTP API'}
+              <small>{entry.hasCredential ? 'Credential saved' : 'No credential'}</small>
+            {:else}Versioned instructions{/if}
+          </div>
+          <span class="management-status" class:enabled={!entry.disabledAt}>{entry.disabledAt ? 'Disabled' : 'Enabled'}</span>
+          <span class="chevron" aria-hidden="true">›</span>
+        </a></li>
+      {/each}
+    </ul>
+    {#if !entries.data.length}
+      <section class="management-empty"><h2>No {kind} yet</h2><p>Create a {singular} to make it available in agent configuration.</p></section>
+    {:else if !shown.length}<p class="muted">No {kind} match your filters.</p>{/if}
+    <p class="caption muted">{kind === 'skills' ? 'Skills provide instructions. Choose connection access separately on each agent.' : 'Adding a connection grants no access. Choose it on each agent to allow its use.'}</p>
   {/if}
 </div>

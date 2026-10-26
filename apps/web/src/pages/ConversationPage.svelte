@@ -27,14 +27,16 @@
   import ApprovalCard from './ApprovalCard.svelte';
   import TaskStatus from './TaskStatus.svelte';
   import ArtifactCard from './ArtifactCard.svelte';
-  let { conversationId, me, onReady }: {
+  let { conversationId, me, onReady, onRead }: {
     conversationId: string;
     me: Human;
     onReady?: (conversation: ConversationDetails) => boolean;
+    // Called after the conversation is marked read, so the sidebar can refresh its counts.
+    onRead?: () => void;
   } = $props();
   let draft = $state('');
   let showDetails = $state(false);
-  let adding = $state(false);
+  let showMembers = $state(false);
   let attaching = $state(false);
   let replyTo = $state<Message | null>(null);
   const details = createLoad(
@@ -77,6 +79,22 @@
     if (details.data && onReady?.(details.data)) {
       void tick().then(() => document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus());
     }
+  });
+  // Seeing the conversation marks it read up to the newest message shown, again whenever a
+  // new one arrives while it is open.
+  let markedRead: string | null = null;
+  $effect(() => {
+    const newest = messages.data?.data.at(-1);
+    if (!newest) return;
+    const key = `${conversationId}:${newest.id}`;
+    if (key === markedRead) return;
+    markedRead = key;
+    api.put(`/conversations/${conversationId}/read`, { messageId: newest.id }).then(
+      () => onRead?.(),
+      () => {
+        if (markedRead === key) markedRead = null;
+      }
+    );
   });
   let conversation = $derived(details.data!);
   let taskList = $derived(tasks.data?.data ?? []);
@@ -137,6 +155,13 @@
 </script>
 
 {#if details.error}<ErrorNote error={details.error} />{:else if !details.data}<p>Loading…</p>{:else}
+  {#if showMembers}<Members
+    {conversationId}
+    {me}
+    members={conversation.members}
+    onChanged={details.reload}
+    onClose={() => (showMembers = false)}
+  />{/if}
   <div class="conversation-layout" class:with-details={showDetails}>
     <section class="thread">
       <header class="conversation-header">
@@ -152,7 +177,7 @@
           <button
             class="secondary members-button"
             aria-label={`${conversation.members.length} members. Show who's here`}
-            onclick={() => (showDetails = true)}
+            onclick={() => (showMembers = true)}
           >
             {#each conversation.members.slice(0, 4) as member (member.participant.id)}<Avatar
                 name={member.name}
@@ -163,9 +188,6 @@
                 >+{conversation.members.length - 4}</span
               >{/if}
           </button>
-          <button class="secondary add-members-button" onclick={() => (adding = !adding)}
-            ><Icon name="plus" /><span>Add people or agents</span></button
-          >
           <button
             class="secondary"
             class:chosen={showDetails}
@@ -177,23 +199,6 @@
         </div>
       </header>
       <div class="conversation-scroll">
-        {#if adding}<section class="inline-panel">
-            <div class="row">
-              <h2 class="grow">Add people or agents</h2>
-              <button
-                class="quiet icon-button"
-                aria-label="Close member picker"
-                onclick={() => (adding = false)}><Icon name="close" /></button
-              >
-            </div>
-            <Members
-              {conversationId}
-              {me}
-              members={conversation.members}
-              directory={directory.data ?? []}
-              onChanged={details.reload}
-            />
-          </section>{/if}
         {#if attaching}<section class="inline-panel">
             <div class="row">
               <h2 class="grow">Attach context</h2>
