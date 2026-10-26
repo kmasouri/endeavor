@@ -16,7 +16,7 @@ export async function loadAll<T>(path: string): Promise<T[]> {
   return result;
 }
 
-export function versionChanges(next: AgentVersion, previous?: AgentVersion): string[] {
+export function listVersionChanges(next: AgentVersion, previous?: AgentVersion): string[] {
   if (!previous) return ['Created'];
   const changes: string[] = [];
   if (next.instructions !== previous.instructions) changes.push('Updated instructions');

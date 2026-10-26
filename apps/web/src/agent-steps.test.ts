@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { TaskEvent } from './api';
-import { agentSteps } from './agent-steps.ts';
+import { buildAgentSteps } from './agent-steps.ts';
 const event = (id: number, type: string, data: Record<string, unknown>): TaskEvent => ({
   id,
   type,
@@ -11,7 +11,7 @@ const event = (id: number, type: string, data: Record<string, unknown>): TaskEve
 });
 
 test('chat steps summarize actual requests and outputs without raw event or response text', () => {
-  const steps = agentSteps([
+  const steps = buildAgentSteps([
     event(1, 'task.created', {}),
     event(2, 'model.turn', {
       text: 'Private model text',
@@ -59,7 +59,7 @@ test('chat steps summarize actual requests and outputs without raw event or resp
 
 test('a proposed request does not appear as completed before a recorded call', () => {
   assert.deepEqual(
-    agentSteps([
+    buildAgentSteps([
       event(1, 'model.turn', {
         toolCalls: [{ id: 'call', name: 'http_request', input: { connection: 'Wikipedia' } }]
       })
@@ -69,7 +69,7 @@ test('a proposed request does not appear as completed before a recorded call', (
 });
 
 test('help, failed calls, and blocked work remain clear and plain', () => {
-  const steps = agentSteps([
+  const steps = buildAgentSteps([
     event(1, 'model.turn', {
       toolCalls: [{ id: 'ask', name: 'ask', input: { to: 'Reviewer' } }]
     }),
@@ -87,7 +87,7 @@ test('help, failed calls, and blocked work remain clear and plain', () => {
 
 test('unexpected metadata is ignored without exposing raw payloads', () => {
   assert.deepEqual(
-    agentSteps([
+    buildAgentSteps([
       event(1, 'model.turn', { toolCalls: [null, 3, 'raw'] }),
       event(2, 'tool.results', { results: [null, 'raw'] })
     ]),

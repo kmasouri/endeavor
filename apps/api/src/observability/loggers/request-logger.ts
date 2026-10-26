@@ -9,6 +9,6 @@ declare module '@fastify/request-context' {
 
 // Returns the logger of the request that is running right now, so log lines get its request ID.
 // Outside a request (startup, background jobs) it returns the fallback logger.
-export function currentLogger(fallback: FastifyBaseLogger): FastifyBaseLogger {
+export function getCurrentLogger(fallback: FastifyBaseLogger): FastifyBaseLogger {
   return requestContext.get('log') ?? fallback;
 }

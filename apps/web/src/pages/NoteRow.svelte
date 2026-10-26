@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import { type AgentNote, api } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
-  import { when } from '../components';
+  import { formatDateTime } from '../components';
   import { createAction } from '../state.svelte';
 
   let props: {
@@ -11,11 +11,11 @@
     name: (actor: { type: string; id: string | null }) => string;
     onChanged: () => void;
   } = $props();
-  let n = $derived(props.note);
+  let note = $derived(props.note);
   let editing = $state(false);
-  let body = $state(untrack(() => n.body));
+  let body = $state(untrack(() => note.body));
   const action = createAction();
-  let path = $derived(`/agents/${props.agentId}/notes/${n.id}`);
+  let path = $derived(`/agents/${props.agentId}/notes/${note.id}`);
   const save = (event: SubmitEvent) => {
     event.preventDefault();
     void action
@@ -37,33 +37,33 @@
     </form>
   {:else}
     <p class="body">
-      {n.body}
+      {note.body}
     </p>
   {/if}
 
   <div class="muted small">
-    Written by {props.name(n.createdBy)}
-    {when(n.createdAt)}
+    Written by {props.name(note.createdBy)}
+    {formatDateTime(note.createdAt)}
 
-    {#if n.sourceConversationId}
+    {#if note.sourceConversationId}
       in
 
-      <a href={`#/conversations/${n.sourceConversationId}`}> a conversation </a>
+      <a href={`#/conversations/${note.sourceConversationId}`}> a conversation </a>
     {/if}
 
-    {#if n.sourceTaskId}
+    {#if note.sourceTaskId}
       during
 
-      <a href={`#/tasks/${n.sourceTaskId}`}> a task </a>
+      <a href={`#/tasks/${note.sourceTaskId}`}> a task </a>
     {/if}
 
-    {#if n.updatedByHumanId}
-      {` · corrected by ${props.name({ type: 'human', id: n.updatedByHumanId })}`}
+    {#if note.updatedByHumanId}
+      {` · corrected by ${props.name({ type: 'human', id: note.updatedByHumanId })}`}
     {/if}
 
     ·
 
-    {#if n.scope === 'agent'}
+    {#if note.scope === 'agent'}
       used in all its work
     {:else}
       used only in that conversation
@@ -79,10 +79,10 @@
         disabled={action.busy}
         onclick={() =>
           void action
-            .run(() => api.patch(path, { scope: n.scope === 'agent' ? 'conversation' : 'agent' }))
+            .run(() => api.patch(path, { scope: note.scope === 'agent' ? 'conversation' : 'agent' }))
             .then(props.onChanged)}
       >
-        {#if n.scope === 'agent'}
+        {#if note.scope === 'agent'}
           Use only in its conversation
         {:else}
           Use in all its work

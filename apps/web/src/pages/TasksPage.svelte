@@ -5,7 +5,7 @@
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
   import StateBadge from '../StateBadge.svelte';
-  import { when } from '../components';
+  import { formatDateTime } from '../components';
   import { createLoad } from '../state.svelte';
   import { createNames } from '../names.svelte';
 
@@ -41,8 +41,8 @@
     >
       <option value="">all tasks</option>
 
-      {#each TASK_STATES ?? [] as s (s)}
-        <option value={s}> {s} </option>
+      {#each TASK_STATES ?? [] as state (state)}
+        <option value={state}> {state} </option>
       {/each}
     </select>
   </label>
@@ -74,7 +74,7 @@
           >
           asked by
           {name({ type: task.requestedByType, id: task.requestedById })} ·
-          {when(task.createdAt)}
+          {formatDateTime(task.createdAt)}
           {#if task.stateReason}{` · ${task.stateReason}`}{/if}
         </div>
       </li>

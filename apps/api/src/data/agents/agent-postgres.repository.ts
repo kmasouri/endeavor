@@ -60,7 +60,7 @@ const UNIQUE_VIOLATION = '23505';
 export class AgentPostgresRepository implements AgentRepository {
   constructor(private readonly db: FastifyInstance['pg']) {}
 
-  async deletionImpact(agentId: string): Promise<AgentDeletionImpact> {
+  async getDeletionImpact(agentId: string): Promise<AgentDeletionImpact> {
     const [tasks, schedules] = await Promise.all([
       this.db.query<{ id: string; title: string; state: string }>(
         `SELECT id, title, state FROM endeavor.tasks
@@ -212,7 +212,7 @@ export class AgentPostgresRepository implements AgentRepository {
            FROM agent
            RETURNING *
          )
-         ${accessCtes('$1', '$12', 'version')}
+         ${buildAccessCtes('$1', '$12', 'version')}
          SELECT row_to_json(agent.*) AS agent, row_to_json(v.*) AS version
          FROM agent, LATERAL (SELECT ${VERSION_COLUMNS} FROM version av) v`,
         [
@@ -233,7 +233,10 @@ export class AgentPostgresRepository implements AgentRepository {
       .catch((error) => rethrowNameConflict(error, input.name));
 
     const row = result.rows[0];
-    return { agent: toAgent(fromJson(row.agent)), version: toAgentVersion(fromJson(row.version)) };
+    return {
+      agent: toAgent(parseJsonDates(row.agent)),
+      version: toAgentVersion(parseJsonDates(row.version))
+    };
   }
 
   async getByName(name: string): Promise<Agent | null> {
@@ -375,7 +378,7 @@ export class AgentPostgresRepository implements AgentRepository {
              SET current_version_id = (SELECT id FROM saved), updated_at = now()
              WHERE id = $2 AND EXISTS (SELECT 1 FROM saved)
            )
-           ${accessCtes('$2', '$10', 'saved')}
+           ${buildAccessCtes('$2', '$10', 'saved')}
            SELECT ${VERSION_COLUMNS} FROM saved av`,
           [
             randomUUID(),
@@ -458,7 +461,7 @@ function rethrowNameConflict(error: unknown, name: string): never {
 }
 
 // row_to_json gives timestamps as strings. Turn them back into dates.
-function fromJson<Row extends { created_at: Date }>(row: Row): Row {
+function parseJsonDates<Row extends { created_at: Date }>(row: Row): Row {
   const dated = { ...row } as Record<string, unknown>;
   for (const key of ['created_at', 'updated_at', 'disabled_at', 'deleted_at']) {
     if (typeof dated[key] === 'string') {
@@ -502,7 +505,7 @@ function toAgentVersion(row: AgentVersionRow): AgentVersion {
 
 // The service supplies the access changes. Save them in the same statement as the version,
 // so a failed save cannot leave an item removed from configuration but still usable.
-function accessCtes(agent: string, parameter: string, saved: string): string {
+function buildAccessCtes(agent: string, parameter: string, saved: string): string {
   return `, granted AS (
     INSERT INTO endeavor.agent_grants (agent_id, target_type, target_id, granted_by_human_id)
     SELECT ${agent}::uuid, entry->>'type', (entry->>'id')::uuid,

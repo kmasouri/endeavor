@@ -38,7 +38,7 @@ export interface AiSdkProvider {
 // OpenAI through its Responses API: its current models only accept tools there. Reasoning comes
 // back encrypted inside each turn and nothing is stored at OpenAI, so a task can resume days
 // later from our own records. OPENAI_BASE_URL can point at a compatible API.
-export function openAiProvider(apiKey: string, baseUrl: string): AiSdkProvider {
+export function createOpenAiProvider(apiKey: string, baseUrl: string): AiSdkProvider {
   const openai = createOpenAI({ apiKey, baseURL: baseUrl });
   return {
     model: (name) => openai.responses(name),
@@ -55,7 +55,7 @@ const ANTHROPIC_FALLBACK_MODELS = new Set([
   'claude-sonnet-5-5'
 ]);
 
-export function anthropicProvider(apiKey: string): AiSdkProvider {
+export function createAnthropicProvider(apiKey: string): AiSdkProvider {
   const anthropic = createAnthropic({ apiKey });
   return {
     model: (name) => anthropic(name),

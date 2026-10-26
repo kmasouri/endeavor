@@ -8,7 +8,21 @@ export interface MessageBlock {
   items: InlineText[][];
   ordered?: boolean;
 }
-export function safeLink(value: string): string | null {
+interface MentionName {
+  name: string;
+  you?: boolean;
+}
+
+const MARKDOWN_TOKEN = /(`[^`]+`|\[[^\]]+\]\([^\s)]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+const BARE_URL = /^(?:https?:\/\/|www\.)[^\s<>"`]+/i;
+const WORD_CHAR = /[\p{L}\p{N}_]/u;
+const BRACKET_PAIRS = [
+  ['(', ')'],
+  ['[', ']'],
+  ['{', '}']
+];
+
+export function toSafeHref(value: string): string | null {
   try {
     const url = new URL(value);
     return ['https:', 'http:'].includes(url.protocol) ? url.href : null;
@@ -16,122 +30,168 @@ export function safeLink(value: string): string | null {
     return null;
   }
 }
+
 // Keep user text as text. Svelte escapes it when rendering; no HTML is accepted.
-export function formatMessage(
-  text: string,
-  names: { name: string; you?: boolean }[] = []
-): MessageBlock[] {
-  const sorted = [...names].sort((a, b) => b.name.length - a.name.length);
-  const inline = (line: string): InlineText[] => {
-    const tokens: InlineText[] = [];
-    const plain = (part: string) => {
-      let buffer = '';
-      let i = 0;
-      while (i < part.length) {
-        // Keep sentence punctuation outside links, but retain balanced URL parentheses.
-        const candidate = /^(?:https?:\/\/|www\.)[^\s<>"`]+/i.exec(part.slice(i))?.[0];
-        if (candidate && (i === 0 || !/[\p{L}\p{N}_]/u.test(part[i - 1]))) {
-          let label = candidate;
-          let previous = '';
-          while (label !== previous) {
-            previous = label;
-            label = label.replace(/[.,!?;:]+$/, '');
-            for (const [open, close] of [
-              ['(', ')'],
-              ['[', ']'],
-              ['{', '}']
-            ]) {
-              while (label.endsWith(close) && label.split(close).length > label.split(open).length)
-                label = label.slice(0, -1);
-            }
-          }
-          const href = safeLink(/^www\./i.test(label) ? `https://${label}` : label);
-          if (href) {
-            if (buffer) tokens.push({ kind: 'text', text: buffer });
-            buffer = '';
-            tokens.push({ kind: 'link', text: label, href });
-            i += label.length;
-            continue;
-          }
-        }
-        const mention =
-          part[i] === '@' &&
-          sorted.find(
-            (n) =>
-              part.slice(i + 1, i + 1 + n.name.length).toLowerCase() === n.name.toLowerCase() &&
-              !/[\p{L}\p{N}_]/u.test(part[i + 1 + n.name.length] ?? '')
-          );
-        if (mention) {
-          if (buffer) tokens.push({ kind: 'text', text: buffer });
-          buffer = '';
-          tokens.push({
-            kind: mention.you ? 'you' : 'mention',
-            text: part.slice(i, i + mention.name.length + 1)
-          });
-          i += mention.name.length + 1;
-        } else {
-          buffer += part[i];
-          i++;
-        }
-      }
-      if (buffer) tokens.push({ kind: 'text', text: buffer });
-    };
-    let last = 0;
-    for (const match of line.matchAll(/(`[^`]+`|\[[^\]]+\]\([^\s)]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g)) {
-      plain(line.slice(last, match.index));
-      const token = match[0];
-      if (token.startsWith('`')) tokens.push({ kind: 'code', text: token.slice(1, -1) });
-      else if (token.startsWith('[')) {
-        const parts = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token)!;
-        const href = safeLink(parts[2]);
-        tokens.push(href ? { kind: 'link', text: parts[1], href } : { kind: 'text', text: token });
-      } else if (token.startsWith('**')) tokens.push({ kind: 'strong', text: token.slice(2, -2) });
-      else tokens.push({ kind: 'em', text: token.slice(1, -1) });
-      last = match.index! + token.length;
-    }
-    plain(line.slice(last));
-    return tokens;
-  };
+export function formatMessage(text: string, names: MentionName[] = []): MessageBlock[] {
+  // Longest names first, so "Ana Lopez" wins over "Ana".
+  const mentionNames = [...names].sort((a, b) => b.name.length - a.name.length);
+  const parseLine = (line: string) => parseInline(line, mentionNames);
   const blocks: MessageBlock[] = [];
-  let code = false;
-  let buffer: string[] = [];
+  let inCodeBlock = false;
+  let codeLines: string[] = [];
   for (const line of text.split('\n')) {
     if (line.startsWith('```')) {
-      if (code) {
-        blocks.push({ kind: 'code', items: [[{ kind: 'text', text: buffer.join('\n') }]] });
-        buffer = [];
+      if (inCodeBlock) {
+        blocks.push(buildCodeBlock(codeLines));
+        codeLines = [];
       }
-      code = !code;
+      inCodeBlock = !inCodeBlock;
       continue;
     }
-    if (code) {
-      buffer.push(line);
+    if (inCodeBlock) {
+      codeLines.push(line);
       continue;
     }
-    const item = /^(?:[-*] |\d+\. )(.+)/.exec(line);
-    if (item) {
+    const listItem = /^(?:[-*] |\d+\. )(.+)/.exec(line);
+    if (listItem) {
       const ordered = /^\d/.test(line);
       const previous = blocks.at(-1);
-      if (previous?.kind === 'list' && previous.ordered === ordered)
-        previous.items.push(inline(item[1]));
-      else blocks.push({ kind: 'list', ordered, items: [inline(item[1])] });
+      if (previous?.kind === 'list' && previous.ordered === ordered) {
+        previous.items.push(parseLine(listItem[1]));
+      } else {
+        blocks.push({ kind: 'list', ordered, items: [parseLine(listItem[1])] });
+      }
       continue;
     }
     const heading = /^(#{1,3}) (.+)/.exec(line);
-    blocks.push({
-      kind: heading ? 'heading' : line.startsWith('> ') ? 'quote' : 'paragraph',
-      items: [inline(heading ? heading[2] : line.startsWith('> ') ? line.slice(2) : line)]
-    });
+    if (heading) {
+      blocks.push({ kind: 'heading', items: [parseLine(heading[2])] });
+    } else if (line.startsWith('> ')) {
+      blocks.push({ kind: 'quote', items: [parseLine(line.slice(2))] });
+    } else {
+      blocks.push({ kind: 'paragraph', items: [parseLine(line)] });
+    }
   }
-  if (code) blocks.push({ kind: 'code', items: [[{ kind: 'text', text: buffer.join('\n') }]] });
+  // An unclosed code block runs to the end of the message.
+  if (inCodeBlock) {
+    blocks.push(buildCodeBlock(codeLines));
+  }
   return blocks;
 }
 
 // Reply context stays one line and shows the words rather than Markdown markers.
-export function messagePreview(text: string): string {
+export function buildMessagePreview(text: string): string {
   return formatMessage(text)
     .flatMap((block) => block.items.map((item) => item.map((token) => token.text).join('')))
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function buildCodeBlock(lines: string[]): MessageBlock {
+  return { kind: 'code', items: [[{ kind: 'text', text: lines.join('\n') }]] };
+}
+
+// Splits one line into Markdown tokens (code, links, bold, italic) and the plain text between.
+function parseInline(line: string, mentionNames: MentionName[]): InlineText[] {
+  const tokens: InlineText[] = [];
+  let plainStart = 0;
+  for (const match of line.matchAll(MARKDOWN_TOKEN)) {
+    tokens.push(...parsePlainText(line.slice(plainStart, match.index), mentionNames));
+    tokens.push(parseMarkdownToken(match[0]));
+    plainStart = match.index + match[0].length;
+  }
+  tokens.push(...parsePlainText(line.slice(plainStart), mentionNames));
+  return tokens;
+}
+
+function parseMarkdownToken(token: string): InlineText {
+  if (token.startsWith('`')) {
+    return { kind: 'code', text: token.slice(1, -1) };
+  }
+  if (token.startsWith('[')) {
+    const [, label, target] = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token)!;
+    const href = toSafeHref(target);
+    return href ? { kind: 'link', text: label, href } : { kind: 'text', text: token };
+  }
+  if (token.startsWith('**')) {
+    return { kind: 'strong', text: token.slice(2, -2) };
+  }
+  return { kind: 'em', text: token.slice(1, -1) };
+}
+
+// Finds bare URLs and @mentions in text that has no Markdown. Everything else stays text.
+function parsePlainText(text: string, mentionNames: MentionName[]): InlineText[] {
+  const tokens: InlineText[] = [];
+  let pendingText = '';
+  const flushText = () => {
+    if (pendingText) {
+      tokens.push({ kind: 'text', text: pendingText });
+      pendingText = '';
+    }
+  };
+  let index = 0;
+  while (index < text.length) {
+    const startsWord = index === 0 || !WORD_CHAR.test(text[index - 1]);
+    const url = startsWord ? BARE_URL.exec(text.slice(index))?.[0] : undefined;
+    if (url) {
+      const label = trimLinkLabel(url);
+      const href = toSafeHref(/^www\./i.test(label) ? `https://${label}` : label);
+      if (href) {
+        flushText();
+        tokens.push({ kind: 'link', text: label, href });
+        index += label.length;
+        continue;
+      }
+    }
+    const mention = text[index] === '@' ? findMentionAt(text, index + 1, mentionNames) : undefined;
+    if (mention) {
+      flushText();
+      const length = mention.name.length + 1;
+      tokens.push({
+        kind: mention.you ? 'you' : 'mention',
+        text: text.slice(index, index + length)
+      });
+      index += length;
+      continue;
+    }
+    pendingText += text[index];
+    index++;
+  }
+  flushText();
+  return tokens;
+}
+
+// Keeps sentence punctuation outside links, but keeps balanced URL brackets, as in
+// https://en.wikipedia.org/wiki/Mercury_(planet).
+function trimLinkLabel(url: string): string {
+  let label = url;
+  let previous = '';
+  while (label !== previous) {
+    previous = label;
+    label = label.replace(/[.,!?;:]+$/, '');
+    for (const [open, close] of BRACKET_PAIRS) {
+      while (label.endsWith(close) && countOf(label, close) > countOf(label, open)) {
+        label = label.slice(0, -1);
+      }
+    }
+  }
+  return label;
+}
+
+function countOf(text: string, char: string): number {
+  return text.split(char).length - 1;
+}
+
+// The mention name that starts at this index and ends at a word boundary, if any.
+function findMentionAt(
+  text: string,
+  index: number,
+  mentionNames: MentionName[]
+): MentionName | undefined {
+  return mentionNames.find(
+    (entry) =>
+      text.slice(index, index + entry.name.length).toLowerCase() === entry.name.toLowerCase() &&
+      !WORD_CHAR.test(text[index + entry.name.length] ?? '')
+  );
 }

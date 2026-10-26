@@ -8,9 +8,9 @@
     type Task,
     type TaskOutput
   } from '../api';
-  import { conversationArtifacts } from '../conversation-artifacts';
-  import { messagePreview } from '../message-format';
-  import { when, shortTime } from '../components';
+  import { collectConversationArtifacts } from '../conversation-artifacts';
+  import { buildMessagePreview } from '../message-format';
+  import { formatDateTime, formatShortTime } from '../components';
   import FormattedText from '../FormattedText.svelte';
   import Avatar from '../Avatar.svelte';
   import Icon from '../Icon.svelte';
@@ -42,17 +42,17 @@
       end?.scrollIntoView({ block: 'end' });
     });
   });
-  let artifacts = $derived(conversationArtifacts(props.outputs, props.messages, props.tasks));
-  let byId = $derived.by(() => new Map(props.messages.map((m) => [m.id, m])));
+  let artifacts = $derived(collectConversationArtifacts(props.outputs, props.messages, props.tasks));
+  let byId = $derived.by(() => new Map(props.messages.map((message) => [message.id, message])));
   let lastForTask = $derived.by(
-    () => new Map(props.messages.filter((m) => m.taskId).map((m) => [m.taskId, m.id]))
+    () => new Map(props.messages.filter((message) => message.taskId).map((message) => [message.taskId, message.id]))
   );
   let lastForAgent = $derived.by(
     () =>
-      new Map(props.messages.filter((m) => m.authorType === 'agent').map((m) => [m.authorId, m.id]))
+      new Map(props.messages.filter((message) => message.authorType === 'agent').map((message) => [message.authorId, message.id]))
   );
   let names = $derived(
-    props.members.map((m) => ({ name: m.name, you: m.participant.id === props.meId }))
+    props.members.map((member) => ({ name: member.name, you: member.participant.id === props.meId }))
   );
   const copy = async (message: Message) => {
     try {
@@ -80,7 +80,7 @@
       Date.parse(message.createdAt) - Date.parse(previous.createdAt) < 300000}
     {@const replyTo = message.inReplyToMessageId ? byId.get(message.inReplyToMessageId) : null}
     {@const name = props.nameOf({ type: message.authorType, id: message.authorId })}
-    {@const you = message.mentions.some((m) => m.id === props.meId && m.type === 'human')}
+    {@const you = message.mentions.some((mention) => mention.id === props.meId && mention.type === 'human')}
     {#if !previous || new Date(previous.createdAt).toDateString() !== new Date(message.createdAt).toDateString()}<li
         class="date-divider"
       >
@@ -104,9 +104,9 @@
         <a
           class="reply-preview"
           href={`#m-${replyTo.id}`}
-          aria-label={`Reply to ${replyName}: ${messagePreview(replyTo.body)}`}
-          onclick={(e) => {
-            e.preventDefault();
+          aria-label={`Reply to ${replyName}: ${buildMessagePreview(replyTo.body)}`}
+          onclick={(event) => {
+            event.preventDefault();
             document.getElementById(`m-${replyTo.id}`)?.scrollIntoView({ block: 'center' });
           }}
         >
@@ -129,7 +129,7 @@
           <strong class="reply-name">{replyName}</strong>{#if replyTo.authorType === 'agent'}<span
               class="agent-label">agent</span
             >{/if}
-          <span class="reply-excerpt">{messagePreview(replyTo.body)}</span>
+          <span class="reply-excerpt">{buildMessagePreview(replyTo.body)}</span>
         </a>
       {/if}
       <div class="message-avatar">
@@ -144,27 +144,27 @@
         {#if !grouped}<div class="meta">
             <strong>{name}</strong>{#if message.authorType === 'agent'}<span class="agent-label"
                 >agent</span
-              >{/if}<time class="caption muted" title={when(message.createdAt)}
-              >{shortTime(message.createdAt)}</time
+              >{/if}<time class="caption muted" title={formatDateTime(message.createdAt)}
+              >{formatShortTime(message.createdAt)}</time
             >
-          </div>{:else}<time class="group-time caption muted" title={when(message.createdAt)}
-            >{shortTime(message.createdAt)}</time
+          </div>{:else}<time class="group-time caption muted" title={formatDateTime(message.createdAt)}
+            >{formatShortTime(message.createdAt)}</time
           >{/if}
         <div class="message-body"><FormattedText text={message.body} {names} /></div>
         {#if message.taskId && lastForTask.get(message.taskId) === message.id}
-          {#if !props.outputs.some((o) => o.taskId === message.taskId) || artifacts.some((o) => o.taskId === message.taskId)}<RunSteps
+          {#if !props.outputs.some((output) => output.taskId === message.taskId) || artifacts.some((output) => output.taskId === message.taskId)}<RunSteps
               taskId={message.taskId}
             />{/if}
-          {#each artifacts.filter((o) => o.taskId === message.taskId) as output (output.id)}<ArtifactCard
+          {#each artifacts.filter((output) => output.taskId === message.taskId) as output (output.id)}<ArtifactCard
               {output}
-              task={props.tasks.find((t) => t.id === message.taskId)}
-              cost={props.costs?.tasks.find((t) => t.taskId === message.taskId)?.costUsd}
+              task={props.tasks.find((task) => task.id === message.taskId)}
+              cost={props.costs?.tasks.find((taskCost) => taskCost.taskId === message.taskId)?.costUsd}
               onReply={() => props.onRevise(output)}
               onChanged={props.onChanged}
             />{/each}
         {/if}
         {#if lastForAgent.get(message.authorId) === message.id}
-          {#each props.tasks.filter((t) => t.ownerAgentId === message.authorId && !['completed', 'cancelled'].includes(t.state)) as task (task.id)}<TaskStatus
+          {#each props.tasks.filter((task) => task.ownerAgentId === message.authorId && !['completed', 'cancelled'].includes(task.state)) as task (task.id)}<TaskStatus
               {task}
               costs={props.costs}
               onChanged={props.onChanged}

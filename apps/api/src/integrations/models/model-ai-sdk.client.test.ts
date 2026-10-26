@@ -1,9 +1,9 @@
 import { APICallError } from 'ai';
 import { MockLanguageModelV4 } from 'ai/test';
 import {
-  anthropicProvider,
+  createAnthropicProvider,
   ModelAiSdkClient,
-  openAiProvider,
+  createOpenAiProvider,
   toMessages
 } from './model-ai-sdk.client';
 import { ModelClientError, ModelTurnRequest } from './model.client';
@@ -154,7 +154,7 @@ describe('ModelAiSdkClient', () => {
         warnings: []
       }
     });
-    const openai = openAiProvider('sk-test', 'https://api.openai.com/v1');
+    const openai = createOpenAiProvider('sk-test', 'https://api.openai.com/v1');
     const client = new ModelAiSdkClient('openai', { model: () => model, options: openai.options });
 
     await client.complete(request);
@@ -165,13 +165,13 @@ describe('ModelAiSdkClient', () => {
   });
 
   it('turns on the Anthropic refusal fallback only for models that accept it', () => {
-    const anthropic = anthropicProvider('sk-test');
+    const anthropic = createAnthropicProvider('sk-test');
     expect(anthropic.options?.('claude-opus-5-5')).toEqual({ anthropic: { fallbacks: 'default' } });
     expect(anthropic.options?.('claude-haiku-5-5')).toBeUndefined();
   });
 
   it('uses the OpenAI Responses API', () => {
-    const model = openAiProvider('sk-test', 'https://api.openai.com/v1').model('gpt-6-luna');
+    const model = createOpenAiProvider('sk-test', 'https://api.openai.com/v1').model('gpt-6-luna');
     expect(typeof model === 'object' && model.provider).toBe('openai.responses');
   });
 });

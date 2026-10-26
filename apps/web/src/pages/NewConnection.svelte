@@ -42,7 +42,7 @@
             : {
                 allowedMethods,
                 allowedPathPrefixes: names(prefixes),
-                approvalMethods: approvalMethods.filter((m) => allowedMethods.includes(m))
+                approvalMethods: approvalMethods.filter((method) => allowedMethods.includes(method))
               })
         })
       )
@@ -124,7 +124,7 @@
           <fieldset class="method-group">
             <legend>Need a person's approval</legend>
             <CheckGroup
-              options={methodOptions.filter((o) => allowedMethods.includes(o.value))}
+              options={methodOptions.filter((option) => allowedMethods.includes(option.value))}
               selected={approvalMethods}
               onChange={(value) => (approvalMethods = value)}
             />

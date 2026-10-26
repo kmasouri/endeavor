@@ -1,15 +1,15 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatMessage, safeLink, messagePreview } from './message-format.ts';
+import { formatMessage, toSafeHref, buildMessagePreview } from './message-format.ts';
 test('message formatting retains HTML as inert text and rejects script links', () => {
   const blocks = formatMessage(
     '<img src=x onerror=alert(1)> [click](javascript:evil) **<script>** `</code><script>`'
   );
   assert.ok(blocks[0].items[0].every((t) => t.kind !== 'link'));
   assert.equal(blocks[0].items[0][0].text, '<img src=x onerror=alert(1)> ');
-  assert.equal(safeLink('javascript:alert(1)'), null);
-  assert.equal(safeLink('data:text/html,hello'), null);
-  assert.equal(safeLink('https://example.com'), 'https://example.com/');
+  assert.equal(toSafeHref('javascript:alert(1)'), null);
+  assert.equal(toSafeHref('data:text/html,hello'), null);
+  assert.equal(toSafeHref('https://example.com'), 'https://example.com/');
 });
 test('mentions use full names, including names with spaces', () => {
   const tokens = formatMessage('@Sam, @Sammy and @Research Agent.', [
@@ -38,7 +38,7 @@ test('lists, code blocks and links have separate structures', () => {
 
 test('reply previews flatten formatting and line breaks into readable context', () => {
   assert.equal(
-    messagePreview(
+    buildMessagePreview(
       'Saved **Why bees matter**\n\n1. *Food* and [sources](https://example.com)\n```\nresults\n```'
     ),
     'Saved Why bees matter Food and sources results'

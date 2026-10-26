@@ -8,6 +8,7 @@ import { TaskLogger } from '../../observability';
 import { AppError } from '../../shared/errors';
 import { Actor, Task, TaskOutput, TaskState, TaskWait } from '../../shared/types';
 import { canTransition, isFinished } from './task-state';
+import { TASK_EVENTS } from './task-events';
 
 export interface TaskDetails extends Task {
   waits: TaskWait[];
@@ -55,7 +56,7 @@ export class TaskLifecycle {
       throw new AppError('taskWaitNotFound', `Wait ${waitId} is not open`);
     }
 
-    await this.taskRepository.addEvent(wait.taskId, 'task.wait.resolved', actor, {
+    await this.taskRepository.addEvent(wait.taskId, TASK_EVENTS.waitResolved, actor, {
       waitId: wait.id,
       kind: wait.kind,
       resolution
@@ -90,7 +91,7 @@ export class TaskLifecycle {
     }
 
     const output = await this.taskRepository.addOutput(task.id, input);
-    await this.taskRepository.addEvent(task.id, 'task.output.added', actor, {
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.outputAdded, actor, {
       outputId: output.id,
       kind: output.kind,
       title: output.title
@@ -172,7 +173,7 @@ export class TaskLifecycle {
       state: to,
       ...(options.reason !== undefined && { stateReason: options.reason })
     });
-    await this.taskRepository.addEvent(task.id, 'task.state.changed', actor, {
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.stateChanged, actor, {
       from: task.state,
       to,
       reason: options.reason ?? null
@@ -198,7 +199,7 @@ export class TaskLifecycle {
   }
 
   async recordCreated(task: Task, actor: Actor): Promise<void> {
-    await this.taskRepository.addEvent(task.id, 'task.created', actor, {
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.created, actor, {
       agentVersionId: task.agentVersionId,
       restartedFromTaskId: task.restartedFromTaskId
     });

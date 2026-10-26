@@ -70,7 +70,7 @@ You can save an agent on a provider that isn't ready. Its `providerReady` is `fa
 ## Adding a provider
 
 1. Add its name to `MODEL_PROVIDERS` in `apps/api/src/shared/types.ts`.
-2. Add the AI SDK's package for it (`@ai-sdk/<provider>`, pinned to an exact version), and a small `AiSdkProvider` next to `openAiProvider()` in `apps/api/src/integrations/models/model-ai-sdk.client.ts`, with any provider options it needs. Build it in `buildModelClients()` in `apps/api/src/plugins/runner.ts`.
+2. Add the AI SDK's package for it (`@ai-sdk/<provider>`, pinned to an exact version), and a small `AiSdkProvider` next to `createOpenAiProvider()` in `apps/api/src/integrations/models/model-ai-sdk.client.ts`, with any provider options it needs. Build it in `buildModelClients()` in `apps/api/src/plugins/runner.ts`.
 3. Add its key to `apps/api/src/config.ts`, `README.md`, and `.env.example`, and turn it on in `readyProviders()` in `apps/api/src/plugins/agent.ts`.
 
 Nothing else changes: conversations and tasks only use the `ModelClient` interface. A provider the AI SDK doesn't cover can still get its own `ModelClient`; give it its own `transcriptFormat`.

@@ -10,7 +10,7 @@
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
   import StateBadge from '../StateBadge.svelte';
-  import { when } from '../components';
+  import { formatDateTime } from '../components';
   import { createLoad } from '../state.svelte';
   import { createNames } from '../names.svelte';
   import EventDetail from './EventDetail.svelte';
@@ -46,8 +46,8 @@
     () => [task.data?.ownerAgentId]
   );
   const name = createNames();
-  let t = $derived(task.data!);
-  let version = $derived(versions.data?.find((v) => v.id === t.agentVersionId));
+  let loadedTask = $derived(task.data!);
+  let version = $derived(versions.data?.find((candidate) => candidate.id === loadedTask.agentVersionId));
   let latest = $derived(versions.data?.[0]);
   const reload = () => (task.reload(), events.reload(), outputs.reload());
 </script>
@@ -57,50 +57,50 @@
 {:else if !task.data}
   <p>Loading…</p>
 {:else}
-  <PageHeader title={t.title} subtitle="Work, outputs, and execution history." />
+  <PageHeader title={loadedTask.title} subtitle="Work, outputs, and execution history." />
   <div class="columns">
     <section>
-      <StateBadge state={t.state} paused={Boolean(t.pausedAt)} />
+      <StateBadge state={loadedTask.state} paused={Boolean(loadedTask.pausedAt)} />
 
-      {#if t.stateReason}
-        <p class={t.state === 'blocked' ? 'error' : 'muted'}>
-          {t.stateReason}
+      {#if loadedTask.stateReason}
+        <p class={loadedTask.state === 'blocked' ? 'error' : 'muted'}>
+          {loadedTask.stateReason}
         </p>
       {/if}
 
       <div class="panel">
         <h2>The request</h2>
 
-        <p class="body">{t.brief}</p>
+        <p class="body">{loadedTask.brief}</p>
 
         <h3>Done when</h3>
 
-        <p class="body">{t.completionCriteria}</p>
+        <p class="body">{loadedTask.completionCriteria}</p>
 
-        {#if t.criteriaCheck}
+        {#if loadedTask.criteriaCheck}
           <h3>Agent's check against the criteria</h3>
 
           <p class="body">
-            {#if t.criteriaCheck.met}Met.
+            {#if loadedTask.criteriaCheck.met}Met.
             {:else}Not met.
             {/if}
-            {t.criteriaCheck.summary}
+            {loadedTask.criteriaCheck.summary}
           </p>
         {/if}
 
-        {#if t.review}
+        {#if loadedTask.review}
           <p class="muted">
             Reviewed:
-            {#if t.review.approved}approved{:else}sent back{/if}
+            {#if loadedTask.review.approved}approved{:else}sent back{/if}
 
-            {#if t.review.notes}{` (${t.review.notes})`}{/if}
+            {#if loadedTask.review.notes}{` (${loadedTask.review.notes})`}{/if}
           </p>
         {/if}
       </div>
 
-      <OpenConcerns task={t} events={events.data ?? []} />
+      <OpenConcerns task={loadedTask} events={events.data ?? []} />
 
-      <ReviewPanel task={t} onDone={reload} />
+      <ReviewPanel task={loadedTask} onDone={reload} />
 
       <div class="panel">
         <h2>Outputs and evidence</h2>
@@ -114,7 +114,7 @@
             <strong>{output.title}</strong>
             <span class="badge">{output.kind}</span>
 
-            <span class="muted small">{when(output.createdAt)}</span>
+            <span class="muted small">{formatDateTime(output.createdAt)}</span>
 
             {#if output.uri}
               <div>
@@ -141,7 +141,7 @@
             <li>
               <strong>{event.type}</strong>
 
-              <span class="muted small"> {name(event.actor)} · {when(event.createdAt)} </span>
+              <span class="muted small"> {name(event.actor)} · {formatDateTime(event.createdAt)} </span>
 
               <EventDetail {event} />
             </li>
@@ -157,8 +157,8 @@
         <ul class="list small">
           <li>
             Owner:
-            <a href={`#/agents/${t.ownerAgentId}`}>
-              {name({ type: 'agent', id: t.ownerAgentId })}
+            <a href={`#/agents/${loadedTask.ownerAgentId}`}>
+              {name({ type: 'agent', id: loadedTask.ownerAgentId })}
             </a>
           </li>
 
@@ -170,31 +170,31 @@
           </li>
 
           <li>
-            Asked by: {name({ type: t.requestedByType, id: t.requestedById })},
-            {when(t.createdAt)}
+            Asked by: {name({ type: loadedTask.requestedByType, id: loadedTask.requestedById })},
+            {formatDateTime(loadedTask.createdAt)}
           </li>
 
-          {#if t.conversationId}
+          {#if loadedTask.conversationId}
             <li>
-              <a href={`#/conversations/${t.conversationId}`}>Open the conversation</a>
+              <a href={`#/conversations/${loadedTask.conversationId}`}>Open the conversation</a>
             </li>
           {/if}
 
-          {#if t.parentTaskId}
+          {#if loadedTask.parentTaskId}
             <li>
               Helping with
-              <a href={`#/tasks/${t.parentTaskId}`}>another task</a>
+              <a href={`#/tasks/${loadedTask.parentTaskId}`}>another task</a>
             </li>
           {/if}
 
-          {#if t.restartedFromTaskId}
+          {#if loadedTask.restartedFromTaskId}
             <li>
               Restarted from
-              <a href={`#/tasks/${t.restartedFromTaskId}`}>an earlier run</a>
+              <a href={`#/tasks/${loadedTask.restartedFromTaskId}`}>an earlier run</a>
             </li>
           {/if}
 
-          {#if t.responsibilityId}
+          {#if loadedTask.responsibilityId}
             <li>
               A run of a
               <a href="#/schedules">schedule</a>
@@ -203,23 +203,23 @@
         </ul>
       </div>
 
-      <Controls task={t} latestVersionId={latest?.id} onDone={reload} />
+      <Controls task={loadedTask} latestVersionId={latest?.id} onDone={reload} />
 
       <div class="panel">
         <h2>Waiting on</h2>
 
-        {#if t.waits.length === 0}
+        {#if loadedTask.waits.length === 0}
           <p class="muted">Nothing.</p>
         {/if}
 
         <ul class="list small">
-          {#each t.waits ?? [] as wait (wait.id)}
+          {#each loadedTask.waits ?? [] as wait (wait.id)}
             <li>
               {wait.description}
               <span class="badge">{wait.kind}</span>
 
               <div class="muted">
-                {#if wait.resolvedAt}{`Done ${when(wait.resolvedAt)}`}{:else}{`Since ${when(wait.createdAt)}`}{/if}
+                {#if wait.resolvedAt}{`Done ${formatDateTime(wait.resolvedAt)}`}{:else}{`Since ${formatDateTime(wait.createdAt)}`}{/if}
               </div>
             </li>
           {/each}

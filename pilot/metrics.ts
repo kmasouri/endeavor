@@ -39,9 +39,9 @@ export interface TaskUsage {
 }
 
 // A task, or a wait, quiet for longer than this counts as stalled or missed.
-export const STALE_MINUTES = 15;
+const STALE_MINUTES = 15;
 
-export function taskUsage(events: EventLike[]): TaskUsage {
+export function sumTaskUsage(events: EventLike[]): TaskUsage {
   const usage: TaskUsage = {
     costUsd: 0,
     tokens: 0,
@@ -87,7 +87,7 @@ export function addUsage(a: TaskUsage, b: TaskUsage): TaskUsage {
   return sum;
 }
 
-export function minutesBetween(from: string, to: string | Date): number {
+export function countMinutesBetween(from: string, to: string | Date): number {
   return (new Date(to).getTime() - new Date(from).getTime()) / 60_000;
 }
 
@@ -96,28 +96,28 @@ export function isStalled(task: TaskLike, now: Date): boolean {
   return (
     task.state === 'working' &&
     !task.pausedAt &&
-    minutesBetween(task.updatedAt, now) > STALE_MINUTES
+    countMinutesBetween(task.updatedAt, now) > STALE_MINUTES
   );
 }
 
 // Reply waits still open after a while. A person may simply not have answered yet, so the
 // report lists these for a look rather than calling them failures outright.
-export function staleReplyWaits(task: TaskLike, now: Date): WaitLike[] {
+export function findStaleReplyWaits(task: TaskLike, now: Date): WaitLike[] {
   return (task.waits ?? []).filter(
     (wait) =>
       wait.kind === 'reply' &&
       !wait.resolvedAt &&
-      minutesBetween(wait.createdAt, now) > STALE_MINUTES
+      countMinutesBetween(wait.createdAt, now) > STALE_MINUTES
   );
 }
 
 // Completed without a passed completion check. Only meaningful when COMPLETION_CHECK=true.
-export function unsupportedDone(task: TaskLike, usage: TaskUsage): boolean {
+export function isUnsupportedDone(task: TaskLike, usage: TaskUsage): boolean {
   return task.state === 'completed' && usage.checksPassed === 0;
 }
 
 // More than one task for the same agent and the same request message.
-export function repeatedWork(tasks: TaskLike[]): number {
+export function countRepeatedWork(tasks: TaskLike[]): number {
   const seen = new Map<string, number>();
   for (const task of tasks) {
     if (!task.requestMessageId) continue;
@@ -128,7 +128,7 @@ export function repeatedWork(tasks: TaskLike[]): number {
 }
 
 // The window most of a run's requests fell in, or null if it made none.
-export function majorityWindow(windows: number[]): number | null {
+export function findMajorityWindow(windows: number[]): number | null {
   const counts = new Map<number, number>();
   for (const window of windows) counts.set(window, (counts.get(window) ?? 0) + 1);
   let best: number | null = null;

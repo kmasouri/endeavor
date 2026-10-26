@@ -270,7 +270,7 @@ Each feature has a logger with one method per event. The service gets it in its 
 this.itemLogger.onItemCreated();
 ```
 
-Every log line still gets the request ID. The `@fastify/request-context` plugin remembers which request is running, and `currentLogger()` in `apps/api/src/observability/loggers/request-logger.ts` picks up that request's logger. Outside a request, such as at startup, it uses the app logger instead.
+Every log line still gets the request ID. The `@fastify/request-context` plugin remembers which request is running, and `getCurrentLogger()` in `apps/api/src/observability/loggers/request-logger.ts` picks up that request's logger. Outside a request, such as at startup, it uses the app logger instead.
 
 Every event log has an `event` field:
 

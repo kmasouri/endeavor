@@ -3,7 +3,7 @@
   import { api, type Approval } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
-  import { when } from '../components';
+  import { formatDateTime } from '../components';
   import { createLoad } from '../state.svelte';
   import { createNames } from '../names.svelte';
   import ApprovalCard from './ApprovalCard.svelte';
@@ -41,7 +41,7 @@
   {#each pending.data?.data ?? [] as approval (approval.id)}
     <div class="panel">
       <p class="muted small">
-        {name({ type: 'agent', id: approval.agentId })} asked {when(approval.createdAt)} for
+        {name({ type: 'agent', id: approval.agentId })} asked {formatDateTime(approval.createdAt)} for
 
         <a href={`#/tasks/${approval.taskId}`}> this task </a>
       </p>
@@ -58,7 +58,7 @@
 
   {#if showDecided}
     <ul class="list">
-      {#each (decided.data?.data ?? []).filter((a) => a.status !== 'pending') ?? [] as approval (approval.id)}
+      {#each (decided.data?.data ?? []).filter((approval) => approval.status !== 'pending') ?? [] as approval (approval.id)}
         <li>
           <strong>
             {#if approval.request.kind === 'mcp'}{approval.request.tool}{:else}{approval.request.method} {approval.request.path}{/if}
@@ -74,7 +74,7 @@
             {name({ type: 'agent', id: approval.agentId })}
 
             {#if approval.decidedAt}
-              {` · decided ${when(approval.decidedAt)}`}
+              {` · decided ${formatDateTime(approval.decidedAt)}`}
             {/if}
 
             {#if approval.reason}

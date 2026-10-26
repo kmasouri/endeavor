@@ -863,7 +863,7 @@ describe('TaskService', () => {
         .mockResolvedValueOnce({ costUsd: 12, tokens: 9000, unpricedCalls: 0 })
         .mockResolvedValueOnce({ costUsd: 3, tokens: 2000, unpricedCalls: 1 });
 
-      const report = await service.agentCosts(HUMAN_ID, agent.id);
+      const report = await service.getAgentCosts(HUMAN_ID, agent.id);
 
       expect(report).toMatchObject({
         total: { costUsd: 12 },

@@ -15,7 +15,7 @@ export const policyLabels = {
   skip: 'Skip missed runs'
 } as const;
 
-export function timezoneLabel(timeZone: string): string {
+export function formatTimezoneLabel(timeZone: string): string {
   return (
     new Intl.DateTimeFormat(undefined, { timeZone, timeZoneName: 'longGeneric' })
       .formatToParts(new Date())
@@ -24,7 +24,7 @@ export function timezoneLabel(timeZone: string): string {
 }
 
 // Source weekdays and wall-clock time always stay in the source timezone.
-export function recurrenceSummary(
+export function summarizeRecurrence(
   schedule: Pick<Responsibility, 'intervalMinutes' | 'recurrence'>,
   hour12 = true
 ): string {
@@ -46,7 +46,7 @@ export function recurrenceSummary(
             .sort((a, b) => a - b)
             .map((day) => weekdays[day - 1])
             .join(', ')}`;
-  return `${repeat} at ${clock} · ${timezoneLabel(rule.timeZone)} (${rule.timeZone})`;
+  return `${repeat} at ${clock} · ${formatTimezoneLabel(rule.timeZone)} (${rule.timeZone})`;
 }
 
 // Actual instants are formatted separately from the rule, in the viewer's timezone.

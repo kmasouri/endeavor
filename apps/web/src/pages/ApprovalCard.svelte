@@ -16,23 +16,23 @@
     void action
       .run(() => api.post(`/approvals/${approval.id}/${verb}`, reason ? { reason } : {}))
       .then((ok) => ok && onDone());
-  let r = $derived(approval.request);
+  let request = $derived(approval.request);
 </script>
 
 <div class="stack">
   <div>
     <strong>
-      {#if r.kind === 'mcp'}{r.tool}{:else}{r.method} {r.path}{/if}
+      {#if request.kind === 'mcp'}{request.tool}{:else}{request.method} {request.path}{/if}
     </strong>
 
-    on {r.connectionName}
+    on {request.connectionName}
   </div>
 
-  {#if r.kind === 'mcp'}
-    <div class="muted small">{r.baseUrl}</div>
-    <pre>{JSON.stringify(r.arguments, null, 2)}</pre>
-  {:else if r.body}
-    <pre>{r.body}</pre>
+  {#if request.kind === 'mcp'}
+    <div class="muted small">{request.baseUrl}</div>
+    <pre>{JSON.stringify(request.arguments, null, 2)}</pre>
+  {:else if request.body}
+    <pre>{request.body}</pre>
   {/if}
 
   <input bind:value={reason} placeholder="Reason (optional)" />

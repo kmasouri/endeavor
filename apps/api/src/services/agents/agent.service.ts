@@ -61,10 +61,10 @@ export class AgentService {
     private readonly agentLogger: AgentLogger
   ) {}
 
-  async deletionImpact(actorId: string, agentId: string) {
+  async getDeletionImpact(actorId: string, agentId: string) {
     requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     await this.requireAgent(agentId);
-    return this.agentRepository.deletionImpact(agentId);
+    return this.agentRepository.getDeletionImpact(agentId);
   }
 
   async deleteAgent(actorId: string, agentId: string): Promise<{ deleted: true }> {
@@ -97,7 +97,7 @@ export class AgentService {
           limits: input.limits ?? {},
           createdByHumanId: admin.id
         },
-        await this.chosenAccess(admin.id, null, { skillVersionIds, connectionIds })
+        await this.loadChosenAccess(admin.id, null, { skillVersionIds, connectionIds })
       )
       .catch(toNameTaken);
     this.agentLogger.onAgentCreated(agent.id);
@@ -186,9 +186,9 @@ export class AgentService {
       current.instructions === instructions &&
       current.provider === provider &&
       current.model === model &&
-      sameIds(current.skillVersionIds, skillVersionIds) &&
-      sameIds(current.connectionIds, connectionIds) &&
-      sameLimits(current.limits, limits)
+      haveSameIds(current.skillVersionIds, skillVersionIds) &&
+      haveSameIds(current.connectionIds, connectionIds) &&
+      haveSameLimits(current.limits, limits)
     ) {
       return this.toDetails(agent, current);
     }
@@ -205,7 +205,7 @@ export class AgentService {
           limits,
           createdByHumanId: admin.id
         },
-        await this.chosenAccess(admin.id, current, { skillVersionIds, connectionIds })
+        await this.loadChosenAccess(admin.id, current, { skillVersionIds, connectionIds })
       )
       .catch((error: unknown) => {
         if (error instanceof AgentConfigConflictError)
@@ -272,7 +272,7 @@ export class AgentService {
     const unique = [...new Set(skillIds)];
     const skills = await this.catalogRepository.getSkills(unique);
     return unique.map((skillId) => {
-      const skill = skills.find((s) => s.id === skillId);
+      const skill = skills.find((skill) => skill.id === skillId);
       if (!skill) {
         throw new AppError('skillNotFound', `Skill ${skillId} was not found`);
       }
@@ -287,7 +287,7 @@ export class AgentService {
     const unique = [...new Set(connectionIds)];
     const found = await this.catalogRepository.getConnections(unique);
     for (const id of unique) {
-      const connection = found.find((c) => c.id === id);
+      const connection = found.find((connection) => connection.id === id);
       if (!connection) {
         throw new AppError('connectionNotFound', `Connection ${id} was not found`);
       }
@@ -299,14 +299,14 @@ export class AgentService {
   }
 
   // Re-choosing restores access; unchanged choices keep any explicit revocation.
-  private async chosenAccess(
+  private async loadChosenAccess(
     actorId: string,
     previous: Pick<AgentVersion, 'id' | 'skillVersionIds' | 'connectionIds'> | null,
     next: Pick<AgentVersion, 'skillVersionIds' | 'connectionIds'>
   ): Promise<AgentAccessChanges> {
     const [before, after] = await Promise.all([
-      this.chosenTargets(previous),
-      this.chosenTargets(next)
+      this.loadChosenTargets(previous),
+      this.loadChosenTargets(next)
     ]);
     const targets = (keys: string[]) =>
       keys.map((key) => {
@@ -321,7 +321,7 @@ export class AgentService {
     };
   }
 
-  private async chosenTargets(
+  private async loadChosenTargets(
     version: Pick<AgentVersion, 'skillVersionIds' | 'connectionIds'> | null
   ): Promise<Set<string>> {
     if (!version) {
@@ -386,12 +386,12 @@ function toDirectoryEntry(agent: Agent, version: AgentVersion): DirectoryEntry {
   };
 }
 
-function sameIds(a: string[], b: string[]): boolean {
+function haveSameIds(a: string[], b: string[]): boolean {
   return a.length === b.length && [...a].sort().join() === [...b].sort().join();
 }
 
 // jsonb doesn't keep key order, so compare the values, not the JSON text.
-function sameLimits(a: AgentLimits, b: AgentLimits): boolean {
+function haveSameLimits(a: AgentLimits, b: AgentLimits): boolean {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof AgentLimits>;
   return [...keys].every((key) => a[key] === b[key]);
 }

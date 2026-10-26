@@ -1,7 +1,7 @@
 <script lang="ts">
   import { api, type TaskEvent } from '../api';
   import { createLoad } from '../state.svelte';
-  import { agentSteps } from '../agent-steps';
+  import { buildAgentSteps } from '../agent-steps';
   import ErrorNote from '../ErrorNote.svelte';
   let { taskId }: { taskId: string } = $props();
   const runId = $derived(taskId);
@@ -21,7 +21,7 @@
     },
     () => [runId, requested]
   );
-  let steps = $derived(agentSteps(events.data ?? []));
+  let steps = $derived(buildAgentSteps(events.data ?? []));
   let visible = $derived(showAll ? steps : steps.slice(0, 6));
   let panelId = $derived(`steps-${runId}`);
   const toggle = () => {

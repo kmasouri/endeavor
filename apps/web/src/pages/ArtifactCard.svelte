@@ -1,8 +1,8 @@
 <script lang="ts">
   import { type Task, type TaskOutput } from '../api';
-  import { safeLink } from '../message-format';
+  import { toSafeHref } from '../message-format';
   import FormattedText from '../FormattedText.svelte';
-  import { when, shortTime } from '../components';
+  import { formatDateTime, formatShortTime } from '../components';
   import Icon from '../Icon.svelte';
   import ReviewPanel from './ReviewPanel.svelte';
   let {
@@ -36,15 +36,15 @@
     {#if output.content}<div class="artifact-preview" class:reading>
         <FormattedText text={reading ? output.content : output.content.slice(0, 300)} />
       </div>{/if}
-    <time class="caption muted" title={when(output.createdAt)}>{shortTime(output.createdAt)}</time>
+    <time class="caption muted" title={formatDateTime(output.createdAt)}>{formatShortTime(output.createdAt)}</time>
   </div>
   <div class="artifact-actions row wrap">
     <button class:secondary={pendingReview} onclick={() => (reading = !reading)}
       >{reading ? 'Show less' : 'Read it'}</button
     >
-    {#if output.uri && safeLink(output.uri)}<a
+    {#if output.uri && toSafeHref(output.uri)}<a
         class="secondary"
-        href={safeLink(output.uri)!}
+        href={toSafeHref(output.uri)!}
         target="_blank"
         rel="noreferrer">Open source</a
       >{/if}

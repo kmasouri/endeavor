@@ -69,22 +69,22 @@ export async function listTaskEventsHandler(
   );
 }
 
-export async function agentCostsHandler(
+export async function getAgentCostsHandler(
   request: FastifyRequest<{ Params: AgentCostParams; Headers: ActorHeaders }>
 ): Promise<unknown> {
   return success(
-    await request.server.taskService.agentCosts(
+    await request.server.taskService.getAgentCosts(
       request.headers['x-actor-id'],
       request.params.agentId
     )
   );
 }
 
-export async function conversationCostsHandler(
+export async function getConversationCostsHandler(
   request: FastifyRequest<{ Params: ConversationOutputsParams; Headers: ActorHeaders }>
 ): Promise<unknown> {
   return success(
-    await request.server.taskService.conversationCosts(
+    await request.server.taskService.getConversationCosts(
       request.headers['x-actor-id'],
       request.params.conversationId
     )

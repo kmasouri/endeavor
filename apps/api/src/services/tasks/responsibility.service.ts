@@ -16,7 +16,7 @@ import {
   ResponsibilityStatus,
   Task
 } from '../../shared/types';
-import { nextCalendarRun } from './calendar';
+import { findNextCalendarRun } from './calendar';
 import { startResponsibilityRun } from './scheduled-runs';
 import { TaskLifecycle } from './task-lifecycle';
 
@@ -86,7 +86,7 @@ export class ResponsibilityService {
       recurrence: input.recurrence ?? null,
       missedRunPolicy: input.missedRunPolicy ?? 'ask',
       nextRunAt: input.recurrence
-        ? nextCalendarRun(input.recurrence, new Date())
+        ? findNextCalendarRun(input.recurrence, new Date())
         : (input.startAt ?? new Date()),
       createdByHumanId: admin.id
     });
@@ -154,7 +154,7 @@ export class ResponsibilityService {
       );
     }
     if (changes.recurrence) {
-      nextRunAt = nextCalendarRun(changes.recurrence, new Date());
+      nextRunAt = findNextCalendarRun(changes.recurrence, new Date());
     }
     if (!nextRunAt && changes.intervalMinutes !== undefined) {
       const sooner = new Date(
@@ -196,7 +196,7 @@ export class ResponsibilityService {
     const nextRunAt =
       status === 'enabled'
         ? responsibility.recurrence
-          ? nextCalendarRun(responsibility.recurrence, new Date())
+          ? findNextCalendarRun(responsibility.recurrence, new Date())
           : responsibility.nextRunAt < new Date()
             ? new Date()
             : undefined

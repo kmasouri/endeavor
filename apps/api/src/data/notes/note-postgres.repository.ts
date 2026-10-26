@@ -73,7 +73,7 @@ export class NotePostgresRepository implements NoteRepository {
     limit: number;
     offset: number;
   }): Promise<AgentNote[]> {
-    const { where, values } = visibilityFilter(input.agentId, input.visibility);
+    const { where, values } = buildVisibilityFilter(input.agentId, input.visibility);
     const result = await this.db.query<NoteRow>(
       `SELECT *
        FROM endeavor.agent_notes
@@ -86,7 +86,7 @@ export class NotePostgresRepository implements NoteRepository {
   }
 
   async count(input: { agentId: string; visibility: NoteVisibility }): Promise<number> {
-    const { where, values } = visibilityFilter(input.agentId, input.visibility);
+    const { where, values } = buildVisibilityFilter(input.agentId, input.visibility);
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total FROM endeavor.agent_notes WHERE ${where}`,
       values
@@ -125,7 +125,7 @@ export class NotePostgresRepository implements NoteRepository {
   }
 }
 
-function visibilityFilter(
+function buildVisibilityFilter(
   agentId: string,
   visibility: NoteVisibility
 ): { where: string; values: unknown[] } {

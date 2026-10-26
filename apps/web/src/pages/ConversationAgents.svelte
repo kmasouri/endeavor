@@ -15,26 +15,26 @@
   let showFree = $state(false);
   const action = createAction();
   const activeTasks = (id: string) =>
-    tasks.filter((t) => t.ownerAgentId === id && !['completed', 'cancelled'].includes(t.state));
-  let agents = $derived(members.filter((m) => m.participant.type === 'agent' && !m.deleted));
+    tasks.filter((task) => task.ownerAgentId === id && !['completed', 'cancelled'].includes(task.state));
+  let agents = $derived(members.filter((member) => member.participant.type === 'agent' && !member.deleted));
   let busy = $derived(
     agents
-      .filter((m) => activeTasks(m.participant.id).length)
+      .filter((member) => activeTasks(member.participant.id).length)
       .sort(
         (a, b) =>
-          Number(activeTasks(b.participant.id).some((t) => t.state === 'working' && !t.pausedAt)) -
-          Number(activeTasks(a.participant.id).some((t) => t.state === 'working' && !t.pausedAt))
+          Number(activeTasks(b.participant.id).some((task) => task.state === 'working' && !task.pausedAt)) -
+          Number(activeTasks(a.participant.id).some((task) => task.state === 'working' && !task.pausedAt))
       )
   );
-  let free = $derived(agents.filter((m) => !activeTasks(m.participant.id).length));
+  let free = $derived(agents.filter((member) => !activeTasks(member.participant.id).length));
   let working = $derived(
-    busy.filter((m) =>
-      activeTasks(m.participant.id).some((t) => t.state === 'working' && !t.pausedAt)
+    busy.filter((member) =>
+      activeTasks(member.participant.id).some((task) => task.state === 'working' && !task.pausedAt)
     ).length
   );
   let waiting = $derived(
-    busy.filter((m) =>
-      activeTasks(m.participant.id).some((t) => t.state === 'waiting' && !t.pausedAt)
+    busy.filter((member) =>
+      activeTasks(member.participant.id).some((task) => task.state === 'waiting' && !task.pausedAt)
     ).length
   );
   const act = (taskId: string, verb: string) =>

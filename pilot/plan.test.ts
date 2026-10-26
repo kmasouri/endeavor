@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  activeFailure,
+  findActiveFailure,
   ENDPOINTS,
   parseBrokenLines,
   scoreRun,
   SEEDED_FAILURES,
   WINDOW_COUNT,
-  windowAt
+  getWindowAt
 } from './plan.ts';
 
 test('every seeded failure is on a real endpoint, inside the pilot, and they never overlap', () => {
@@ -26,20 +26,20 @@ test('every seeded failure is on a real endpoint, inside the pilot, and they nev
   assert.ok(WINDOW_COUNT - used.size >= 8);
 });
 
-test('activeFailure matches the path without its query string, only in its windows', () => {
-  assert.equal(activeFailure('/api/products', 2)?.id, 'F1');
-  assert.equal(activeFailure('/api/products', 4), null);
-  assert.equal(activeFailure('/api/products/1', 2), null);
-  assert.equal(activeFailure('/api/users/me?x=1', 9)?.id, 'F3');
-  assert.equal(activeFailure('/api/users/me', -1), null);
+test('findActiveFailure matches the path without its query string, only in its windows', () => {
+  assert.equal(findActiveFailure('/api/products', 2)?.id, 'F1');
+  assert.equal(findActiveFailure('/api/products', 4), null);
+  assert.equal(findActiveFailure('/api/products/1', 2), null);
+  assert.equal(findActiveFailure('/api/users/me?x=1', 9)?.id, 'F3');
+  assert.equal(findActiveFailure('/api/users/me', -1), null);
 });
 
-test('windowAt counts whole intervals from the start', () => {
+test('getWindowAt counts whole intervals from the start', () => {
   const start = new Date('2026-10-23T10:00:00Z');
-  assert.equal(windowAt(new Date('2026-10-23T09:59:00Z'), start, 10), -1);
-  assert.equal(windowAt(new Date('2026-10-23T10:00:00Z'), start, 10), 0);
-  assert.equal(windowAt(new Date('2026-10-23T10:19:59Z'), start, 10), 1);
-  assert.equal(windowAt(new Date('2026-10-23T10:20:00Z'), start, 10), 2);
+  assert.equal(getWindowAt(new Date('2026-10-23T09:59:00Z'), start, 10), -1);
+  assert.equal(getWindowAt(new Date('2026-10-23T10:00:00Z'), start, 10), 0);
+  assert.equal(getWindowAt(new Date('2026-10-23T10:19:59Z'), start, 10), 1);
+  assert.equal(getWindowAt(new Date('2026-10-23T10:20:00Z'), start, 10), 2);
 });
 
 test('parseBrokenLines reads the report format and ignores other mentions', () => {

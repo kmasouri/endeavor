@@ -11,14 +11,14 @@
   } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import StateBadge from '../StateBadge.svelte';
-  import { when } from '../components';
+  import { formatDateTime } from '../components';
   import { createAction, createLoad } from '../state.svelte';
   import SavedNotes from './SavedNotes.svelte';
   import Spending from './Spending.svelte';
   import Profile from './Profile.svelte';
   import NewVersion from './NewVersion.svelte';
   import AgentStatus from './AgentStatus.svelte';
-  import { loadAll, versionChanges } from './agent-data';
+  import { loadAll, listVersionChanges } from './agent-data';
   import './agents.css';
   let { agentId }: { agentId: string } = $props();
   const agent = createLoad(
@@ -55,20 +55,20 @@
     void action
       .run(() => api.post(`/agents/${agentId}/${agent.data?.disabledAt ? 'enable' : 'disable'}`))
       .then((ok) => ok && agent.reload());
-  let a = $derived(agent.data);
-  let current = $derived(a?.currentVersion);
+  let loadedAgent = $derived(agent.data);
+  let current = $derived(loadedAgent?.currentVersion);
   let open = $derived(
-    (tasks.data ?? []).filter((t) => !['completed', 'cancelled'].includes(t.state))
+    (tasks.data ?? []).filter((task) => !['completed', 'cancelled'].includes(task.state))
   );
   let ordered = $derived([...(versions.data ?? [])].sort((a, b) => b.version - a.version));
-  const onVersion = (id: string) => open.filter((t) => t.agentVersionId === id);
+  const onVersion = (id: string) => open.filter((task) => task.agentVersionId === id);
   const move = (id: string) =>
     void action.run(async () => {
       // Move each task deliberately; successful moves remain visible if a later task fails.
       try {
         for (const task of onVersion(id))
           await api.post(`/tasks/${task.id}/version`, {
-            versionId: a!.currentVersionId,
+            versionId: loadedAgent!.currentVersionId,
             reason: 'Moved from agent version history'
           });
       } finally {
@@ -82,28 +82,28 @@
 <div class="agents-page creation-page">
   <a class="creation-back" href="#/agents">← Agents</a>
   <ErrorNote error={agent.error} />
-  {#if !a && !agent.error}<p>Loading agent…</p>{:else if a}
+  {#if !loadedAgent && !agent.error}<p>Loading agent…</p>{:else if loadedAgent}
     <header class="agent-detail-header">
       <div class="agent-heading">
-        <Avatar name={a.name} id={a.id} agent />
+        <Avatar name={loadedAgent.name} id={loadedAgent.id} agent />
         <div>
           <div class="row wrap">
-            <h1>{a.name}</h1>
-            <span class="agent-label">agent</span><AgentStatus agent={a} />
+            <h1>{loadedAgent.name}</h1>
+            <span class="agent-label">agent</span><AgentStatus agent={loadedAgent} />
           </div>
-          <p>{a.purpose}</p>
+          <p>{loadedAgent.purpose}</p>
         </div>
       </div>
       <button class="secondary agent-enable" disabled={action.busy} onclick={toggle}
-        >{a.disabledAt ? 'Enable agent' : 'Disable agent'}</button
+        >{loadedAgent.disabledAt ? 'Enable agent' : 'Disable agent'}</button
       >
     </header>
-    {#if deleting}<DeleteAgent agent={a} onClose={() => (deleting = false)} />{/if}
-    {#if a.disabledAt}<p class="hint">
+    {#if deleting}<DeleteAgent agent={loadedAgent} onClose={() => (deleting = false)} />{/if}
+    {#if loadedAgent.disabledAt}<p class="hint">
         This agent takes no new work. Its open tasks keep going until someone pauses or cancels them
         in their endeavor.
       </p>{/if}
-    {#if !a.providerReady}<p class="error">
+    {#if !loadedAgent.providerReady}<p class="error">
         This agent needs provider setup before its tasks can run. <a href="#/setup">Open Setup</a>.
       </p>{/if}
     <nav class="agent-tabs" aria-label="Agent sections">
@@ -137,8 +137,8 @@
                   {names(
                     current.skillIds ??
                       (skills.data ?? [])
-                        .filter((s) => current.skillVersionIds.includes(s.currentVersionId ?? ''))
-                        .map((s) => s.id),
+                        .filter((skill) => current.skillVersionIds.includes(skill.currentVersionId ?? ''))
+                        .map((skill) => skill.id),
                     skills.data
                   )}
                 </dd>
@@ -173,7 +173,7 @@
                       state={task.state}
                       paused={Boolean(task.pausedAt)}
                     /><span class="caption muted"
-                      >Version {ordered.find((v) => v.id === task.agentVersionId)?.version ??
+                      >Version {ordered.find((version) => version.id === task.agentVersionId)?.version ??
                         '—'}</span
                     >
                   </div>
@@ -181,7 +181,7 @@
             </ul>
             {#if !open.length && tasks.data}<p class="muted">
                 No open work.
-              </p>{/if}{#if open.some((t) => t.agentVersionId !== a.currentVersionId)}<button
+              </p>{/if}{#if open.some((task) => task.agentVersionId !== loadedAgent.currentVersionId)}<button
                 class="text-button"
                 onclick={() => (tab = 'Versions')}>Move older tasks to the current version</button
               >{/if}
@@ -189,7 +189,7 @@
         </div>
         <div>
           {#if editingProfile}<Profile
-              agent={a}
+              agent={loadedAgent}
               onSaved={() => {
                 editingProfile = false;
                 agent.reload();
@@ -201,16 +201,16 @@
               </div>
               <dl class="agent-kv">
                 <dt>Name</dt>
-                <dd>{a.name}</dd>
+                <dd>{loadedAgent.name}</dd>
                 <dt>Purpose</dt>
-                <dd>{a.purpose}</dd>
+                <dd>{loadedAgent.purpose}</dd>
               </dl>
               <p class="caption muted">Not versioned. A change shows everywhere at once.</p>
             </section>{/if}
           <section class="panel">
-            <Spending kind="agent" id={a.id} onBudgetSaved={agent.reload} />
+            <Spending kind="agent" id={loadedAgent.id} onBudgetSaved={agent.reload} />
           </section>
-          <section class="panel"><SavedNotes agentId={a.id} /></section>
+          <section class="panel"><SavedNotes agentId={loadedAgent.id} /></section>
         </div>
       </div>
       <section class="agent-delete-section" aria-labelledby="delete-agent-heading">
@@ -221,8 +221,8 @@
         <button class="secondary agent-delete" disabled={action.busy} onclick={() => (deleting = true)}>Delete agent</button>
       </section>
     {:else if tab === 'Configuration'}
-      {#key a.currentVersionId}<NewVersion
-          agent={a}
+      {#key loadedAgent.currentVersionId}<NewVersion
+          agent={loadedAgent}
           onDiscard={() => (tab = 'Overview')}
           onSaved={reloadAll}
         />{/key}
@@ -237,13 +237,13 @@
             <strong>v{version.version}</strong>
             <div>
               <div class="row wrap">
-                <h2>{versionChanges(version, ordered[i + 1]).join(' · ')}</h2>
-                {#if version.id === a.currentVersionId}<span class="agent-status enabled"
+                <h2>{listVersionChanges(version, ordered[i + 1]).join(' · ')}</h2>
+                {#if version.id === loadedAgent.currentVersionId}<span class="agent-status enabled"
                     >Current</span
                   >{/if}
               </div>
               <p class="caption muted">
-                {when(version.createdAt)} · {version.provider} · {version.model} · {onVersion(
+                {formatDateTime(version.createdAt)} · {version.provider} · {version.model} · {onVersion(
                   version.id
                 ).length} open tasks
               </p>
@@ -256,7 +256,7 @@
                 <pre class="agent-instructions">{version.instructions}</pre>
               </details>
             </div>
-            {#if version.id !== a.currentVersionId && onVersion(version.id).length}<button
+            {#if version.id !== loadedAgent.currentVersionId && onVersion(version.id).length}<button
                 class="secondary"
                 disabled={action.busy}
                 onclick={() => move(version.id)}

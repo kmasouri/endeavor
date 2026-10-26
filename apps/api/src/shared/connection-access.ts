@@ -38,7 +38,7 @@ export function connectionCallDenied(
 
 // Prefixes match whole path segments: "/invoices" allows "/invoices" and "/invoices/42", but
 // not "/invoices-admin". A prefix ending in "/" allows only what is below it.
-export function pathWithin(path: string, prefix: string): boolean {
+function pathWithin(path: string, prefix: string): boolean {
   if (prefix === '/' || path === prefix) {
     return true;
   }

@@ -18,12 +18,12 @@ import {
 import {
   ConnectionHttpClient,
   McpHttpClient,
-  anthropicProvider,
+  createAnthropicProvider,
   ModelAiSdkClient,
   ModelClient,
   ModelScript,
   ModelScriptedClient,
-  openAiProvider,
+  createOpenAiProvider,
   WorkspaceFsClient
 } from '../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../observability';
@@ -38,7 +38,7 @@ declare module 'fastify' {
 
 // What a 'scripted' agent does when no test gives it a script: it answers every request at once
 // by echoing it. This lets you try the whole loop locally with no API key.
-export const echoScript: ModelScript = (request) => {
+const echoScript: ModelScript = (request) => {
   const answered = request.transcript.some((entry) => entry.role === 'assistant');
   if (answered) {
     return { text: '' };
@@ -59,17 +59,18 @@ export const echoScript: ModelScript = (request) => {
   };
 };
 
-export function buildModelClients(
-  settings: typeof config
-): Partial<Record<ModelProvider, ModelClient>> {
+function buildModelClients(settings: typeof config): Partial<Record<ModelProvider, ModelClient>> {
   return {
     ...(settings.ANTHROPIC_API_KEY && {
-      anthropic: new ModelAiSdkClient('anthropic', anthropicProvider(settings.ANTHROPIC_API_KEY))
+      anthropic: new ModelAiSdkClient(
+        'anthropic',
+        createAnthropicProvider(settings.ANTHROPIC_API_KEY)
+      )
     }),
     ...(settings.OPENAI_API_KEY && {
       openai: new ModelAiSdkClient(
         'openai',
-        openAiProvider(settings.OPENAI_API_KEY, settings.OPENAI_BASE_URL)
+        createOpenAiProvider(settings.OPENAI_API_KEY, settings.OPENAI_BASE_URL)
       )
     }),
     scripted: new ModelScriptedClient(echoScript)

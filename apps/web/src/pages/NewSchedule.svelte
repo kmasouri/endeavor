@@ -2,8 +2,8 @@
   import { type Agent, api, type Conversation } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import { createAction, createLoad } from '../state.svelte';
-  import { deviceTimezone, timeDisplay } from '../time-display.svelte';
-  import { policyLabels, recurrenceSummary, timezoneLabel, weekdays } from '../schedules';
+  import { getDeviceTimezone, timeDisplay } from '../time-display.svelte';
+  import { policyLabels, summarizeRecurrence, formatTimezoneLabel, weekdays } from '../schedules';
 
   let { onCreated, onDiscard }: { onCreated: () => void; onDiscard: () => void } = $props();
   const agents = createLoad(() => api.list<Agent>('/agents?limit=100'), () => []);
@@ -17,7 +17,7 @@
   let frequency = $state<'daily' | 'weekdays' | 'weekly' | 'interval'>('daily');
   let days = $state([1, 3, 5]);
   let time = $state('09:00');
-  const timeZone = deviceTimezone();
+  const timeZone = getDeviceTimezone();
   let policy = $state<'ask' | 'run_once' | 'skip'>('ask');
   let invalid = $derived(frequency === 'weekly' ? !days.length : frequency === 'interval'
     ? !Number.isInteger(minutes) || minutes! < 5 || minutes! > 525600 : !time);
@@ -50,10 +50,10 @@
   <label>Done when <input bind:value={criteria} placeholder="How the agent knows a run is finished" required /></label>
   <div class="grid2">
     <label>Agent <select bind:value={agentId} required><option value="">Choose an agent…</option>
-      {#each agents.data?.data ?? [] as a (a.id)}<option value={a.id}>{a.name}</option>{/each}
+      {#each agents.data?.data ?? [] as agent (agent.id)}<option value={agent.id}>{agent.name}</option>{/each}
     </select></label>
     <label>Post results in <select bind:value={conversationId}><option value="">Nowhere; see run history</option>
-      {#each conversations.data?.data ?? [] as c (c.id)}<option value={c.id}>{c.title}</option>{/each}
+      {#each conversations.data?.data ?? [] as conversation (conversation.id)}<option value={conversation.id}>{conversation.title}</option>{/each}
     </select><span class="muted small">The agent must already be in that conversation.</span></label>
   </div>
   <ErrorNote error={agents.error ?? conversations.error} />
@@ -64,7 +64,7 @@
     {#if frequency === 'weekly'}
       <div class="schedule-days" role="group" aria-label="Days of the week">
         {#each weekdays as day, index (day)}<button type="button" class:selected={days.includes(index + 1)} aria-pressed={days.includes(index + 1)} aria-label={day}
-          onclick={() => (days = days.includes(index + 1) ? days.filter((d) => d !== index + 1) : [...days, index + 1])}>{day.slice(0, 1)}</button>{/each}
+          onclick={() => (days = days.includes(index + 1) ? days.filter((day) => day !== index + 1) : [...days, index + 1])}>{day.slice(0, 1)}</button>{/each}
       </div>
       {#if !days.length}<p class="schedule-validation" role="alert">Choose at least one weekday.</p>{/if}
     {/if}
@@ -73,10 +73,10 @@
       {#if invalid}<p class="schedule-validation" role="alert">Use a whole number from 5 to 525600 minutes.</p>{/if}
     {:else}
       <label class="schedule-control">Time <input type="time" bind:value={time} required /></label>
-      <p class="muted small">Times are in {timezoneLabel(timeZone)} ({timeZone}), from this computer.</p>
+      <p class="muted small">Times are in {formatTimezoneLabel(timeZone)} ({timeZone}), from this computer.</p>
     {/if}
   </fieldset>
-  {#if !invalid}<p class="schedule-summary">{recurrenceSummary({ intervalMinutes: minutes ?? null, recurrence }, timeDisplay.format === '12h')}.</p>{/if}
+  {#if !invalid}<p class="schedule-summary">{summarizeRecurrence({ intervalMinutes: minutes ?? null, recurrence }, timeDisplay.format === '12h')}.</p>{/if}
   <label>If runs are missed <select bind:value={policy}>
     {#each Object.entries(policyLabels) as [value, label] (value)}<option {value}>{label}</option>{/each}
   </select></label>

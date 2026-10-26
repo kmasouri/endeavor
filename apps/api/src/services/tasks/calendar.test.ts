@@ -1,5 +1,5 @@
 import { CalendarRecurrence } from '../../shared/types';
-import { nextCalendarRun } from './calendar';
+import { findNextCalendarRun } from './calendar';
 import { planRun } from './schedule';
 
 const daily: CalendarRecurrence = {
@@ -8,7 +8,7 @@ const daily: CalendarRecurrence = {
   timeZone: 'America/New_York'
 };
 const next = (rule: CalendarRecurrence, after: string) =>
-  nextCalendarRun(rule, new Date(after)).toISOString();
+  findNextCalendarRun(rule, new Date(after)).toISOString();
 
 describe('source calendar slots', () => {
   it('keeps 9 AM Eastern across the spring and fall changes', () => {
