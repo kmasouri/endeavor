@@ -380,3 +380,12 @@ containing the tool, arguments, and endpoint. They are separate from HTTP method
 The runner checks access again after approval and refuses a changed endpoint. Unattended
 calls record their start and result so restart recovery never silently repeats an action.
 See [MCP connections](catalogs.md#remote-mcp-tools-ca-64) for setup, limits, and compatibility.
+
+### Remote connection OAuth
+
+Catalogs starts and completes browser OAuth through the MCP SDK integration. The catalog
+service and runner each receive the encrypted OAuth session repository and OAuth client
+from their plugins. They do not call another service. Session transitions hold a database
+transaction lock so workers cannot rotate the same refresh token concurrently or restore
+credentials after a completed disconnect. Existing catalog grants, tool allowlists, approvals,
+and task history still govern all agent calls. See [OAuth setup](catalogs.md#oauth-sign-in-ca-65).

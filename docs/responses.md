@@ -166,3 +166,18 @@ Connection-call approval requests retain their existing HTTP shape. MCP requests
 `kind: "mcp"`, `connectionId`, `connectionName`, `tool`, `arguments`, `baseUrl`, and `authHeader`.
 Their results use `status: null`, with `body`, `truncated`, `error`, and an optional `isError`
 flag from the MCP server. See [catalogs](catalogs.md#remote-mcp-tools-ca-64).
+
+## MCP OAuth endpoints
+
+- `GET /connections/:connectionId/oauth` returns `success({ status, expiresAt })`. Status is
+  `header`, `pending`, `connected`, `disconnected`, or `reconnect_required`; expiry is an ISO
+  datetime or null. It never includes tokens or client secrets.
+- `POST /connections/:connectionId/oauth/connect` returns `success({ authorizationUrl })`
+  and sets a browser binding cookie. Follow the URL in that browser to complete consent.
+- `GET /connections/:connectionId/oauth/callback` validates state and its cookie, consumes
+  the callback, and redirects to the fixed connection configuration address. Invalid callbacks return the
+  normal catalog error response. The callback does not require an actor header.
+- `POST /connections/:connectionId/oauth/disconnect` returns `success({ status: 'disconnected' })`.
+
+Status, connect, and disconnect require the acting person's header. OAuth responses use
+`Cache-Control: no-store`. A successful sign-in changes no agent grants or tool permissions.

@@ -10,7 +10,15 @@ import {
   mockMessageRepository,
   mockTaskRepository
 } from '../../data/repositories.test-helper';
-import { ModelClient, ModelClientError, ModelTurnResult } from '../../integrations';
+import { ConnectionOAuthRepository } from '../../data';
+import { ConnectionOAuthSession } from '../../shared/connection-oauth';
+import {
+  ConnectionOAuthClient,
+  McpAuthenticationError,
+  ModelClient,
+  ModelClientError,
+  ModelTurnResult
+} from '../../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../../observability';
 import { AppError } from '../../shared/errors';
 import {
@@ -141,7 +149,13 @@ function turn(result: Partial<ModelTurnResult>): ModelTurnResult {
   };
 }
 
-function setup(options: { client?: ModelClient | null } = {}) {
+function setup(
+  options: {
+    client?: ModelClient | null;
+    oauthRepository?: ConnectionOAuthRepository;
+    oauthClient?: ConnectionOAuthClient;
+  } = {}
+) {
   const tasks = mockTaskRepository();
   const messages = mockMessageRepository();
   const conversations = mockConversationRepository();
@@ -243,7 +257,9 @@ function setup(options: { client?: ModelClient | null } = {}) {
       onTickFailed: jest.fn()
     } as unknown as TaskRunnerLogger,
     { ...DEFAULT_RUNNER_OPTIONS, workerId: 'test' },
-    mcpClient
+    mcpClient,
+    options.oauthRepository,
+    options.oauthClient
   );
   return {
     runner,
@@ -2034,8 +2050,8 @@ describe('MCP connections', () => {
     grantedAt: new Date(),
     revokedAt: null
   };
-  function mcpSetup() {
-    const ctx = setup();
+  function mcpSetup(options: Parameters<typeof setup>[0] = {}) {
+    const ctx = setup(options);
     ctx.agentRepo.getVersion.mockResolvedValue({ ...version, connectionIds: [id] });
     ctx.catalogs.getConnection.mockResolvedValue(connection);
     ctx.catalogs.getConnections.mockResolvedValue([connection]);
@@ -2074,6 +2090,85 @@ describe('MCP connections', () => {
       createdAt: new Date()
     };
   }
+
+  function oauthSetup() {
+    let session: ConnectionOAuthSession | null = {
+      resource: connection.baseUrl,
+      callbackUrl: 'http://localhost/callback',
+      actorId: HUMAN,
+      status: 'connected',
+      data: { tokens: { access_token: 'oauth-secret' } }
+    };
+    const repository: ConnectionOAuthRepository = {
+      get: async () => session,
+      async withLock(_id, work) {
+        const next = await work(session);
+        session = next.session;
+        return next.result;
+      }
+    };
+    const oauth: jest.Mocked<ConnectionOAuthClient> = {
+      begin: jest.fn(),
+      finish: jest.fn(),
+      headers: jest
+        .fn<
+          ReturnType<ConnectionOAuthClient['headers']>,
+          Parameters<ConnectionOAuthClient['headers']>
+        >()
+        .mockResolvedValue({ Authorization: 'Bearer oauth-secret' })
+    };
+    return {
+      ...mcpSetup({ oauthRepository: repository, oauthClient: oauth }),
+      oauth,
+      get session() {
+        return session;
+      }
+    };
+  }
+
+  it('uses OAuth for discovery and execution without exposing tokens to model turns', async () => {
+    const ctx = oauthSetup();
+    ctx.tasks.listEvents.mockResolvedValue([
+      event(1, 'model.turn', { raw: {}, toolCalls: [call()] })
+    ]);
+    await ctx.runner.runTask(makeTask());
+    expect(ctx.mcpClient.listTools).toHaveBeenCalledWith({
+      url: connection.baseUrl,
+      headers: { Authorization: 'Bearer oauth-secret' }
+    });
+    expect(ctx.mcpClient.callTool).toHaveBeenCalledWith(
+      { url: connection.baseUrl, headers: { Authorization: 'Bearer oauth-secret' } },
+      'lookup',
+      call().input
+    );
+    expect(JSON.stringify(ctx.client.complete.mock.calls)).not.toContain('oauth-secret');
+    expect(JSON.stringify(ctx.tasks.addEvent.mock.calls)).not.toContain('oauth-secret');
+    expect(ctx.catalogs.getConnectionCredential).not.toHaveBeenCalled();
+  });
+
+  it('failed OAuth refresh stops transport, preserves history and records human action', async () => {
+    const ctx = oauthSetup();
+    ctx.oauth.headers.mockRejectedValue(new Error('secret-refresh-token'));
+    await ctx.runner.runTask(makeTask());
+    expect(ctx.mcpClient.listTools).not.toHaveBeenCalled();
+    expect(ctx.mcpClient.callTool).not.toHaveBeenCalled();
+    expect(ctx.session?.status).toBe('reconnect_required');
+    expect(ctx.session?.data).toEqual({});
+    expect(JSON.stringify(ctx.tasks.addEvent.mock.calls)).toContain('Check sign-in in Catalogs');
+    expect(JSON.stringify(ctx.tasks.addEvent.mock.calls)).not.toContain('secret-refresh-token');
+  });
+
+  it('a revoked OAuth token is cleared after a 401 without repeating the tool', async () => {
+    const ctx = oauthSetup();
+    ctx.tasks.listEvents.mockResolvedValue([
+      event(1, 'model.turn', { raw: {}, toolCalls: [call()] })
+    ]);
+    ctx.mcpClient.callTool.mockRejectedValue(new McpAuthenticationError());
+    await ctx.runner.runTask(makeTask());
+    expect(ctx.mcpClient.callTool).toHaveBeenCalledTimes(1);
+    expect(ctx.session?.status).toBe('reconnect_required');
+    expect(ctx.session?.data).toEqual({});
+  });
 
   it('exposes only allowed named tools with schemas and no generic HTTP access', async () => {
     const ctx = mcpSetup();

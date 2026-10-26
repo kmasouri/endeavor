@@ -112,6 +112,14 @@ export function setupApp(): FastifyInstance {
   const app = fastify({
     logger: {
       level: config.LOGGER_LEVEL,
+      serializers: {
+        req: (request) => ({
+          method: request.method,
+          url: request.url?.includes('/oauth/callback') ? request.url.split('?')[0] : request.url,
+          hostname: request.hostname,
+          remoteAddress: request.ip
+        })
+      },
       // Readable, colored logs when running locally. Everywhere else, logs stay JSON so log
       // tools can search their fields. pino-pretty is a dev dependency, so it is not in the image.
       ...(config.ENVIRONMENT === 'local' && { transport: { target: 'pino-pretty' } })

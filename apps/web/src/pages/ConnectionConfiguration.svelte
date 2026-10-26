@@ -3,6 +3,7 @@
   import ErrorNote from '../ErrorNote.svelte';
   import { createAction } from '../state.svelte';
   import EnableButton from './EnableButton.svelte';
+  import ConnectionOAuth from './ConnectionOAuth.svelte';
 
   let props: { connection: Connection; onChanged: () => void } = $props();
   let connection = $derived(props.connection);
@@ -85,6 +86,7 @@
     <p class="muted small">Access is granted separately on each agent. Credentials are encrypted and never shown again.</p>
   </fieldset>
   {#if connection.kind === 'mcp'}
+    <ConnectionOAuth {connection} />
     <details>
       <summary>Discover and manage tools</summary>
       <button type="button" class="secondary" disabled={action.busy} onclick={discover}>

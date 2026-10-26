@@ -5,9 +5,10 @@ import {
   AgentPostgresRepository,
   CatalogPostgresRepository,
   CredentialCipher,
+  ConnectionOAuthPostgresRepository,
   HumanPostgresRepository
 } from '../data';
-import { McpHttpClient } from '../integrations';
+import { ConnectionOAuthHttpClient, McpHttpClient } from '../integrations';
 import { CatalogLogger } from '../observability';
 import { CatalogService } from '../services';
 
@@ -25,7 +26,10 @@ const catalogPlugin: FastifyPluginAsync = async (fastify) => {
     new HumanPostgresRepository(fastify.pg),
     cipher.ready,
     new CatalogLogger(fastify.log),
-    new McpHttpClient()
+    new McpHttpClient(),
+    new ConnectionOAuthPostgresRepository(fastify.pg, cipher),
+    new ConnectionOAuthHttpClient(),
+    config.APP_PUBLIC_URL
   );
 
   fastify.decorate('catalogService', catalogService);

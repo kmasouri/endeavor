@@ -4,6 +4,13 @@ import { getCurrentLogger } from '../request-logger';
 export class CatalogLogger {
   constructor(private readonly logger: FastifyBaseLogger) {}
 
+  onConnectionAuthentication(connectionId: string, status: string): void {
+    getCurrentLogger(this.logger).info(
+      { event: 'catalog.connection.authentication', connectionId, status },
+      'connection authentication changed'
+    );
+  }
+
   onSkillSaved(skillId: string, version: number): void {
     getCurrentLogger(this.logger).info(
       { event: 'catalog.skill.saved', skillId, version },

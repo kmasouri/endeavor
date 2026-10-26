@@ -60,7 +60,7 @@ Each tool is walled off in a way that matches what it can do.
 
 - **Files** (`list_files`, `read_file`, `write_file`): each task gets its own folder, its workspace. Paths can't leave it: `..`, absolute paths, and links that point outside are refused. Files are at most 1 MB to write, and reads are cut off at 100,000 characters. In Docker, the folder is inside the app's container, so agents can't reach the rest of your computer at all. Workspaces aren't deleted yet when a task finishes.
 - **Outside APIs** (`http_request`): only through connections a person set up and granted to the agent. Each call is checked against the connection's allowed methods and paths, and some methods wait for a person's approval. See `docs/catalogs.md`.
-- **Remote MCP tools**: use the same connection grants, with named tool allowlists and per-tool approvals. The backend connects to the configured remote HTTP endpoint and supplies its stored header credential. Local MCP processes and interactive OAuth setup are not supported yet. See [MCP setup](catalogs.md#remote-mcp-tools-ca-64).
+- **Remote MCP tools**: use the same connection grants, with named tool allowlists and per-tool approvals. The backend connects to the configured remote HTTP endpoint and supplies its stored header credential. OAuth sign-in is available after setting `APP_PUBLIC_URL` to the browser origin. Local MCP processes are not supported. See [MCP setup](catalogs.md#remote-mcp-tools-ca-64).
 - **Running code and using a browser**: not available yet. These need stronger walls, such as a separate container per task, before agents can use them.
 
 The app runs as a normal user (`node`) in its container, not as root.
