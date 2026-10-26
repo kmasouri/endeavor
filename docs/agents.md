@@ -126,3 +126,10 @@ finish before deletion completes; no later call can begin for the deleted agent.
 lock uses one pool connection; the default runner runs at most four tasks concurrently. Database
 triggers lock the agent row when tasks or schedules change, preventing concurrent starts or resumes
 from escaping deletion. Apply migration 035 before running this version of the app.
+
+## Coding and review examples (CA-78)
+
+New agent links to editable Coding agent and Code reviewer examples. They use the existing
+configuration, grants, budgets, and peer collaboration model. They do not assign roles, select
+connections, or start work. See [GitHub coding and review](coding.md) for the required
+connections, isolated execution, verification evidence, and human publication approvals.

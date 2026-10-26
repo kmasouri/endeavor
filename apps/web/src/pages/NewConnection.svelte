@@ -9,15 +9,18 @@
 
   const methodOptions = HTTP_METHODS.map((method) => ({ value: method, label: method }));
 
-  let kind = $state<'http' | 'mcp'>('http');
+  const example = new URLSearchParams(window.location.hash.split('?')[1]).get('example');
+  const github = example === 'github';
+  const executor = example === 'executor';
+  let kind = $state<'http' | 'mcp'>(github || executor ? 'mcp' : 'http');
   let tools = $state('');
   let freeTools = $state('');
   const names = (text: string) =>
     text.split(/[\n,]/).map((name) => name.trim()).filter(Boolean);
-  let name = $state('');
-  let description = $state('');
+  let name = $state(github ? 'GitHub' : executor ? 'Isolated execution' : '');
+  let description = $state(github ? 'Read repositories and collaborate on pull requests.' : executor ? 'Edit task checkouts and run builds and tests in isolated containers.' : '');
   let discoverable = $state(false);
-  let baseUrl = $state('');
+  let baseUrl = $state(github ? 'https://api.githubcopilot.com/mcp/' : executor ? 'http://executor:3200/mcp' : '');
   let authHeader = $state('Authorization');
   let credential = $state('');
   let allowedMethods = $state<HttpMethod[]>(['GET']);
@@ -66,6 +69,7 @@
   <form onsubmit={create} class="creation-form">
     <fieldset class="stack">
       <legend>Profile</legend>
+      <p class="caption">Examples: <a href="#/catalogs/connections/new?example=github">GitHub MCP</a> · <a href="#/catalogs/connections/new?example=executor">Isolated execution</a></p>
       <label>
         Connection type
         <select bind:value={kind}>
@@ -114,7 +118,11 @@
       </div>
 
       <Hint>The credential is encrypted when saved, and never shown again, not even to you.</Hint>
-      {#if kind === 'mcp'}
+      {#if github}
+        <Hint>Use a GitHub personal access token as Bearer …, with access to the selected repositories. GitHub sign-in requires a registered GitHub app; generic OAuth sign-in does not support it yet. Discover and allow tools after saving. Writes require approval by default.</Hint>
+      {:else if executor}
+        <Hint>Use the execution service credential as Bearer …. The execution service must be running. After saving, discover tools and select this connection in the agent configuration.</Hint>
+      {:else if kind === 'mcp'}
         <Hint>For browser sign-in, leave the credential empty. After creating the connection, open Sign in with OAuth in the catalog.</Hint>
       {/if}
     </fieldset>

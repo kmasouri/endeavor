@@ -13,3 +13,6 @@ pilot
 
 **/playwright-report
 **/test-results
+
+# Repository-local worktrees have their own build context.
+.worktrees

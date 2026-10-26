@@ -260,3 +260,16 @@ Existing HTTP and header-auth MCP connections continue to work without OAuth.
 Verification uses a real local OAuth server and mocked repositories, plus production browser
 coverage. No external account or database is needed for the tests. A real Notion sign-in
 still requires the person to complete consent in their browser.
+
+## GitHub and isolated execution (CA-78)
+
+The connection creation form includes GitHub MCP and Isolated execution examples. Both save
+ordinary MCP connections with no allowed tools by default. Discover tools, choose permissions
+and approvals, then explicitly select each connection in the agent configuration. GitHub
+authentication currently uses a bearer token, since its remote server does not support dynamic
+client registration. See [GitHub coding and review](coding.md) for setup and execution limits.
+
+MCP discovery and calls made by the task runner include `X-Endeavor-Task-Id`, derived from the
+authorized task rather than model input. The execution service uses it to isolate checkouts
+and execution evidence. Catalog discovery has no task identity and grants no workspace access.
+Approval execution retains the original task identity. Other MCP services may ignore the header.

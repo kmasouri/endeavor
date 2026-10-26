@@ -168,3 +168,53 @@ test('HTTP connection preserves access settings after failure and returns to Con
   await page.getByRole('link', { name: '← Connections', exact: true }).click();
   await expect(page).toHaveURL(/connections$/);
 });
+
+for (const width of [390, 1440]) {
+  test(`GitHub and execution setup preserve explicit access at ${width}px`, async ({
+    page
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const api = await mockApi(page);
+    for (const example of ['github', 'executor']) {
+      await page.goto(`/app/#/catalogs/connections/new?example=${example}`);
+      await expect(page.getByLabel('Connection type')).toHaveValue('mcp');
+      await expect(page.getByLabel('MCP endpoint URL')).toHaveValue(
+        example === 'github' ? 'https://api.githubcopilot.com/mcp/' : 'http://executor:3200/mcp'
+      );
+      await expect(page.getByLabel(/^Allowed tools/)).toHaveValue('');
+      await page.getByLabel('Credential', { exact: true }).fill('Bearer test-secret');
+      expect(await page.getByLabel('Credential', { exact: true }).getAttribute('type')).toBe(
+        'password'
+      );
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true
+      );
+      await page.screenshot({
+        path: testInfo.outputPath(`${example}-${width}.png`),
+        fullPage: true
+      });
+      await page.getByRole('button', { name: 'Create connection', exact: true }).click();
+      await expect(page).toHaveURL(/connections$/);
+      const saved = api.writes.at(-1)!.body;
+      expect(saved.kind).toBe('mcp');
+      expect(saved.allowedTools).toEqual([]);
+      expect(saved.approvalTools).toEqual([]);
+      expect(saved.credential).toBe('Bearer test-secret');
+    }
+    for (const [example, name] of [
+      ['coder', 'Coding agent'],
+      ['reviewer', 'Code reviewer']
+    ]) {
+      await page.goto(`/app/#/agents/new?example=${example}`);
+      await expect(page.getByLabel('Name', { exact: true })).toHaveValue(name);
+      expect(await page.getByLabel(/^Instructions/).inputValue()).toContain('get_execution');
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true
+      );
+      await page.screenshot({
+        path: testInfo.outputPath(`${example}-${width}.png`),
+        fullPage: true
+      });
+    }
+  });
+}

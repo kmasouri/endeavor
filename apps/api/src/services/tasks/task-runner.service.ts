@@ -1018,7 +1018,10 @@ export class TaskRunnerService {
         if (!this.mcpClient) throw new Error('The MCP client is unavailable.');
         const headers = await this.loadConnectionHeaders(connection);
         authorization = headers.Authorization;
-        const discovered = await this.mcpClient.listTools({ url: connection.baseUrl, headers });
+        const discovered = await this.mcpClient.listTools({
+          url: connection.baseUrl,
+          headers: { ...headers, 'X-Endeavor-Task-Id': task.id }
+        });
         for (const tool of discovered) {
           if (!(connection.allowedTools ?? []).includes(tool.name)) continue;
           tools.push({
@@ -1240,7 +1243,7 @@ export class TaskRunnerService {
     let result;
     try {
       result = await this.mcpClient.callTool(
-        { url: connection.baseUrl, headers },
+        { url: connection.baseUrl, headers: { ...headers, 'X-Endeavor-Task-Id': task.id } },
         request.tool,
         request.arguments
       );

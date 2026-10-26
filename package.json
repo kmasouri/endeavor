@@ -5,7 +5,8 @@
   "description": "Endeavor: the API (apps/api) and the web interface (apps/web).",
   "workspaces": [
     "apps/api",
-    "apps/web"
+    "apps/web",
+    "apps/executor"
   ],
   "scripts": {
     "dev": "npm run dev -w apps/api",

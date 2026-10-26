@@ -1,0 +1,28 @@
+# Adds the trusted execution broker. Use with docker-compose.yml and --profile coding.
+# The API and untrusted child containers never receive the Docker socket.
+services:
+  executor:
+    profiles: ['coding']
+    build:
+      context: .
+      dockerfile: apps/executor/Dockerfile
+    restart: unless-stopped
+    environment:
+      EXECUTOR_TOKEN: ${EXECUTOR_TOKEN:?Set EXECUTOR_TOKEN to at least 32 random characters}
+      EXECUTOR_REPOSITORIES: ${EXECUTOR_REPOSITORIES:-}
+      EXECUTOR_GITHUB_TOKEN: ${EXECUTOR_GITHUB_TOKEN-}
+      EXECUTOR_IMAGE: ${EXECUTOR_IMAGE:-endeavor-sandbox:local}
+      EXECUTOR_DATA_DIR: /data
+    # No host port. Reach this from the app as http://executor:3200/mcp.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - execution-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m
+    mem_limit: 768m
+    pids_limit: 128
+    cap_drop: ['ALL']
+    security_opt: ['no-new-privileges:true']
+volumes:
+  execution-data:
