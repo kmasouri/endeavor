@@ -29,4 +29,12 @@ export interface ConversationRepository {
     conversationId: string,
     participant: ParticipantRef
   ): Promise<ConversationMember | null>;
+
+  // Records that the person has seen the conversation up to this message. Never moves back to
+  // an older message. The message must belong to the conversation.
+  markRead(input: { conversationId: string; humanId: string; messageId: string }): Promise<void>;
+  // Unread messages per conversation for a person: messages after the last one they saw,
+  // written by someone else, that they are allowed to see. Only conversations they belong to
+  // are counted; the rest are left out of the result.
+  countUnread(input: { humanId: string; conversationIds: string[] }): Promise<Map<string, number>>;
 }
