@@ -10,6 +10,7 @@ describe('McpHttpClient', () => {
   let failTool: boolean;
   let sse: boolean;
   let redirect: boolean;
+  let vendorOutput: boolean;
   const tools = [
     {
       name: 'lookup',
@@ -38,6 +39,7 @@ describe('McpHttpClient', () => {
     failTool = false;
     sse = false;
     redirect = false;
+    vendorOutput = false;
     server = createServer(async (req, res) => {
       if (redirect) {
         res.writeHead(307, { location: `${url}/other` });
@@ -72,13 +74,21 @@ describe('McpHttpClient', () => {
         };
       if (message.method === 'tools/list')
         result = {
-          tools: message.params?.cursor ? [tools[1]] : [tools[0]],
+          tools: (message.params?.cursor ? [tools[1]] : [tools[0]]).map((tool) =>
+            vendorOutput
+              ? { ...tool, outputSchema: { type: 'object', not: { required: ['forbidden'] } } }
+              : tool
+          ),
           ...(!message.params?.cursor && { nextCursor: 'page2' })
         };
       if (message.method === 'tools/call')
         result = {
           content: [{ type: 'text', text: JSON.stringify(message.params) }],
-          isError: failTool
+          isError: failTool,
+          ...(vendorOutput && {
+            _meta: { serverInfo: { icons: ['x'.repeat(25_000)] } },
+            structuredContent: { content: [{ type: 'text', text: JSON.stringify(message.params) }] }
+          })
         };
       const response = {
         jsonrpc: '2.0',
@@ -131,6 +141,23 @@ describe('McpHttpClient', () => {
     failTool = true;
     const result = await new McpHttpClient().callTool(endpoint(), 'lookup', { id: '42' });
     expect(result.isError).toBe(true);
+  });
+
+  it('keeps vendor output opaque without weakening input checks or filling results with metadata', async () => {
+    vendorOutput = true;
+    const client = new McpHttpClient();
+    const result = await client.callTool(endpoint(), 'lookup', { id: '42' });
+    expect(result.isError).toBe(false);
+    expect(result.truncated).toBe(false);
+    expect(result.body).not.toContain('icons');
+    expect(JSON.parse(result.body)).toEqual({
+      content: [
+        { type: 'text', text: JSON.stringify({ name: 'lookup', arguments: { id: '42' } }) }
+      ],
+      isError: false
+    });
+    await expect(client.callTool(endpoint(), 'lookup', { id: 1 })).rejects.toThrow();
+    expect(requests.filter((request) => request.method === 'tools/call')).toHaveLength(1);
   });
 
   it('does not follow redirects or invoke a tool with invalid credentials', async () => {

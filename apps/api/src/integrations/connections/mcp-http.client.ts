@@ -10,10 +10,17 @@ const TIMEOUT_MS = 30_000;
 const MAX_RESPONSE_BYTES = 2_000_000;
 const MAX_RESULT_CHARS = 20_000;
 
-// Use the same validator as the rest of the platform, including SDK output schemas.
+// Inputs are checked separately before transport. Server output is untrusted display data:
+// validate representable schemas, and keep vendor-specific output opaque when Zod cannot
+// represent it. This callback is used only for SDK output validation, never tool arguments.
 const validator = {
   getValidator<T>(schema: JsonSchemaType) {
-    const parsed = z.fromJSONSchema(schema as Parameters<typeof z.fromJSONSchema>[0]);
+    let parsed: z.ZodType;
+    try {
+      parsed = z.fromJSONSchema(schema as Parameters<typeof z.fromJSONSchema>[0]);
+    } catch {
+      parsed = z.unknown();
+    }
     return (input: unknown) => {
       const result = parsed.safeParse(input);
       return result.success
@@ -42,7 +49,20 @@ export class McpHttpClient implements McpClient {
       if ('resultType' in result && result.resultType !== 'complete') {
         throw new Error('This MCP tool requires an unsupported interactive or deferred result.');
       }
-      const body = JSON.stringify(result);
+      const structured = 'structuredContent' in result ? result.structuredContent : undefined;
+      const duplicatesContent =
+        structured &&
+        typeof structured === 'object' &&
+        Object.keys(structured).length === 1 &&
+        'content' in structured &&
+        JSON.stringify(structured.content) === JSON.stringify(result.content);
+      // Transport metadata is not model content. GitHub includes large server icons there,
+      // and can repeat the same content inside structuredContent as well.
+      const body = JSON.stringify({
+        content: result.content,
+        ...(result.isError !== undefined && { isError: result.isError }),
+        ...(structured !== undefined && !duplicatesContent && { structuredContent: structured })
+      });
       return {
         body: body.slice(0, MAX_RESULT_CHARS),
         truncated: body.length > MAX_RESULT_CHARS,
