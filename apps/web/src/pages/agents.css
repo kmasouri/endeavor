@@ -22,19 +22,6 @@
 .agent-toolbar input {
   max-width: 300px;
 }
-.agent-filters {
-  display: flex;
-  gap: 4px;
-}
-.agent-filters button {
-  background: transparent;
-  color: var(--text-300);
-  padding: 7px 14px;
-}
-.agent-filters button[aria-pressed='true'] {
-  color: var(--text-100);
-  background: var(--bg-selected);
-}
 .agent-list {
   padding: 0;
   margin: 8px 0 12px;
