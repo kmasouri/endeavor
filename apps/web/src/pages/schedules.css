@@ -153,15 +153,6 @@
   background: var(--bg-300);
   color: var(--text-200);
 }
-.schedule-cancelled {
-  margin-top: 18px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border-100);
-}
-.schedule-cancelled summary {
-  color: var(--text-200);
-  margin-bottom: 12px;
-}
 .schedule-catchup {
   padding: 16px;
   border-radius: var(--radius-xl);

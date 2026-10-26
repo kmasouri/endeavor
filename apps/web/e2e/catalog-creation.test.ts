@@ -83,9 +83,9 @@ for (const viewport of [
         if (viewport.width < 700) expect(cancel!.height).toBeGreaterThanOrEqual(44);
         await page.screenshot({ path: testInfo.outputPath(`${kind}.png`), fullPage: true });
         await page.getByRole('link', { name: 'Cancel', exact: true }).click();
-        await expect(page).toHaveURL(new RegExp(`catalogs\\?tab=${kind}$`));
+        await expect(page).toHaveURL(new RegExp(`${kind}$`));
         await expect(
-          page.getByRole('button', {
+          page.getByRole('link', {
             name: kind === 'skills' ? 'Skills' : 'Connections',
             exact: true
           })
@@ -102,8 +102,8 @@ test('skill creation keeps values after failure and returns to Skills after retr
 }) => {
   const api = await mockApi(page);
   await page.goto('/app/#/catalogs');
-  await page.getByRole('button', { name: 'New skill', exact: true }).click();
-  await expect(page).toHaveURL(/catalogs\/skills\/new$/);
+  await page.getByRole('button', { name: '+ Create skill', exact: true }).click();
+  await expect(page).toHaveURL(/skills\/new$/);
   await page.getByLabel('Name', { exact: true }).fill('Citations');
   await page.getByLabel('Description', { exact: true }).fill('Cite each source');
   await page.getByLabel('Instructions', { exact: true }).fill('Include a source for each claim.');
@@ -115,7 +115,7 @@ test('skill creation keeps values after failure and returns to Skills after retr
   );
   api.fail(false);
   await page.getByRole('button', { name: 'Create skill', exact: true }).click();
-  await expect(page).toHaveURL(/catalogs\?tab=skills$/);
+  await expect(page).toHaveURL(/skills$/);
   await expect(page.getByText('Citations', { exact: true })).toBeVisible();
   expect(api.writes[1]).toEqual({
     path: '/skills',
@@ -132,9 +132,9 @@ test('HTTP connection preserves access settings after failure and returns to Con
 }) => {
   const api = await mockApi(page);
   await page.goto('/app/#/catalogs');
-  await page.getByRole('button', { name: 'Connections', exact: true }).click();
-  await page.getByRole('button', { name: 'New connection', exact: true }).click();
-  await expect(page).toHaveURL(/catalogs\/connections\/new$/);
+  await page.getByRole('link', { name: 'Connections', exact: true }).click();
+  await page.getByRole('button', { name: '+ Create connection', exact: true }).click();
+  await expect(page).toHaveURL(/connections\/new$/);
   await page.getByLabel('Name', { exact: true }).fill('Records');
   await page.getByLabel('Description', { exact: true }).fill('Read and write records');
   await page.getByLabel('Base URL', { exact: true }).fill('https://records.test');
@@ -150,7 +150,7 @@ test('HTTP connection preserves access settings after failure and returns to Con
   await expect(page.getByLabel('Credential', { exact: true })).toHaveValue('Bearer secret');
   api.fail(false);
   await page.getByRole('button', { name: 'Create connection', exact: true }).click();
-  await expect(page).toHaveURL(/catalogs\?tab=connections$/);
+  await expect(page).toHaveURL(/connections$/);
   await expect(page.getByText('Records', { exact: true })).toBeVisible();
   expect(api.writes[1].body).toEqual({
     name: 'Records',
@@ -164,5 +164,5 @@ test('HTTP connection preserves access settings after failure and returns to Con
   });
   await page.goBack();
   await page.getByRole('link', { name: '← Connections', exact: true }).click();
-  await expect(page).toHaveURL(/catalogs\?tab=connections$/);
+  await expect(page).toHaveURL(/connections$/);
 });

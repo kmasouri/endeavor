@@ -17,6 +17,7 @@
   import TasksPage from './pages/TasksPage.svelte';
   import AgentsPage from './pages/AgentsPage.svelte';
   import NewAgentPage from './pages/NewAgentPage.svelte';
+  import CatalogEntryPage from './pages/CatalogEntryPage.svelte';
   import CatalogsPage from './pages/CatalogsPage.svelte';
   import NewSkill from './pages/NewSkill.svelte';
   import NewConnection from './pages/NewConnection.svelte';
@@ -154,6 +155,9 @@
     timeDisplay.format = me?.preferences.timeFormat ?? '12h';
   });
   let [section, id] = $derived(route);
+  const legacyCatalog = $derived(new URLSearchParams(hash.split('?')[1]).get('tab') === 'connections' ? 'connections' : 'skills');
+  const catalogKind = $derived(section === 'catalogs' ? (id === 'connections' || id === 'skills' ? id : legacyCatalog) : section);
+  const navigationSection = $derived(section === 'catalogs' ? catalogKind : section);
   let recent = $derived([...new Map([...additions, ...(conversations.data ?? [])].map((conversation) => [conversation.id, conversation])).values()]);
   $effect(() => {
     if (!actorId || !conversations.data || (section && section !== 'conversations') || id) return;
@@ -240,15 +244,15 @@
     </header>
     <aside class="sidebar" id="main-sidebar" aria-label="Sidebar">
       <nav aria-label="Main">
-        {#each [['', 'Endeavors', 'conversations'], ['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['catalogs', 'Skills and connections', 'catalogs'], ['setup', 'Setup', 'setup'], ['tasks', 'Work', 'work']] as [path, label, icon] (path)}
+        {#each [['', 'Endeavors', 'conversations'], ['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['skills', 'Skills', 'file'], ['connections', 'Connections', 'connections'], ['setup', 'Setup', 'setup'], ['tasks', 'Work', 'work']] as [path, label, icon] (path)}
           <a
             class:active={path === ''
               ? !section || section === 'conversations'
-              : section === path}
+              : navigationSection === path}
             href={`#/${path}`}
             aria-label={label}
             title={label}
-            aria-current={(path === '' ? !section || section === 'conversations' : section === path) ? 'page' : undefined}
+            aria-current={(path === '' ? !section || section === 'conversations' : navigationSection === path) ? 'page' : undefined}
             onclick={() => {
               if (window.innerWidth < 700) collapsed = true;
             }}
@@ -362,12 +366,12 @@
           <AgentPage agentId={id} />
         {:else if section === 'agents'}
           <AgentsPage />
-        {:else if section === 'catalogs' && route[2] === 'new' && id === 'skills'}
-          <NewSkill />
-        {:else if section === 'catalogs' && route[2] === 'new' && id === 'connections'}
-          <NewConnection />
-        {:else if section === 'catalogs'}
-          <CatalogsPage />
+        {:else if (catalogKind === 'skills' || catalogKind === 'connections') && (id === 'new' || (section === 'catalogs' && route[2] === 'new'))}
+          {#if catalogKind === 'skills'}<NewSkill />{:else}<NewConnection />{/if}
+        {:else if (section === 'skills' || section === 'connections') && id}
+          <CatalogEntryPage kind={section} entryId={id} />
+        {:else if catalogKind === 'skills' || catalogKind === 'connections'}
+          <CatalogsPage kind={catalogKind} />
         {:else if section === 'conversations' && id}
           <ConversationPage conversationId={id} {me} onReady={(conversation) => {
             rememberEndeavor(actorId!, conversation.id);

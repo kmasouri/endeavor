@@ -12,16 +12,6 @@
   font-size: 14px;
   margin: 0;
 }
-.agent-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin: 24px 0;
-}
-.agent-toolbar input {
-  max-width: 300px;
-}
 .agent-list {
   padding: 0;
   margin: 8px 0 12px;
@@ -277,13 +267,6 @@
   }
 }
 @container agents (max-width: 600px) {
-  .agent-toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  .agent-toolbar input {
-    max-width: none;
-  }
   .agent-row {
     grid-template-columns: 36px minmax(0, 1fr) auto;
     gap: 8px 12px;

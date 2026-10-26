@@ -142,7 +142,6 @@ for (const theme of ['dark', 'light'] as const) {
       await page.setViewportSize({ width, height: 1000 });
       await mockApi(page, theme);
       await page.goto('/app/#/schedules');
-      await page.getByText('Cancelled schedules · 1').click();
       await expectSingleLineBadges(page);
       await page.getByRole('button', { name: /Cancelled check/ }).click();
       const badge = page.locator('.schedule-badge');
@@ -152,18 +151,18 @@ for (const theme of ['dark', 'light'] as const) {
   }
 }
 
-test('wide layout shares a centered frame and keeps the empty-state action centered', async ({
+test('wide layout shares a centered frame with a persistent header creation action', async ({
   page
 }) => {
   await page.setViewportSize({ width: 2515, height: 1289 });
-  await mockApi(page, 'dark', 'cancelled');
+  await mockApi(page, 'dark', 'empty');
   await page.goto('/app/#/schedules');
-  await expect(page.getByRole('heading', { name: 'No active schedules' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No schedules yet' })).toBeVisible();
   const frame = (await page.locator('.schedules-page').boundingBox())!;
   const header = (await page.locator('.page-header').boundingBox())!;
   const content = (await page.locator('.schedules-view').boundingBox())!;
   const main = (await page.locator('.shell > main').boundingBox())!;
-  const empty = (await page.locator('.schedule-empty').boundingBox())!;
+
   const create = page.getByRole('button', { name: 'Create schedule', exact: true });
   const action = (await create.boundingBox())!;
   expect(frame.width).toBe(1220);
@@ -172,21 +171,20 @@ test('wide layout shares a centered frame and keeps the empty-state action cente
   );
   expect(header.x).toBe(content.x);
   expect(header.width).toBe(content.width);
-  expect(Math.abs(action.x + action.width / 2 - empty.x - empty.width / 2)).toBeLessThan(1);
+  expect(action.x + action.width).toBeLessThanOrEqual(header.x + header.width + 1);
   await expect(page.getByRole('button', { name: 'New schedule', exact: true })).toHaveCount(0);
-  await expect(page.locator('.schedule-cancelled')).not.toHaveAttribute('open');
   await create.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'New schedule', exact: true })).toBeFocused();
   await page.getByRole('button', { name: 'Discard', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'No active schedules' })).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Schedules · 0', exact: true })).toBeFocused();
 });
 
 test('failed schedule loading does not show an empty-state creation prompt', async ({ page }) => {
   await mockApi(page, 'light', 'error');
   await page.goto('/app/#/schedules');
   await expect(page.getByText('Schedules unavailable')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'No active schedules' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'No schedules yet' })).toHaveCount(0);
 });
 
 for (const theme of ['dark', 'light'] as const) {
