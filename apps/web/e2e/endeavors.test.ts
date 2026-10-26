@@ -465,7 +465,9 @@ for (const width of [1440, 390, 320]) {
     await expect(dialog.getByRole('checkbox', { name: 'Add Lee', exact: true })).toHaveCount(0);
     await search.fill('Lee');
     await dialog.getByRole('checkbox', { name: 'Add Lee', exact: true }).check();
-    await dialog.getByLabel('Hide earlier messages from them').check();
+    const history = dialog.getByLabel('Hide earlier messages from them');
+    await history.check();
+    expect((await history.boundingBox())!.width).toBeLessThan(30);
     await dialog.getByRole('button', { name: 'Add (2)', exact: true }).click();
     await expect(dialog.getByText('Please try again.', { exact: true })).toBeVisible();
     await expect(dialog.getByRole('checkbox', { name: 'Add Lee', exact: true })).toBeChecked();

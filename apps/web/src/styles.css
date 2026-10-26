@@ -1547,7 +1547,7 @@ progress::-webkit-progress-value {
 .endeavor-member .row {
   gap: 6px;
 }
-.endeavor-member input {
+.endeavor-form .check input {
   width: auto;
 }
 .dialog-footer {
