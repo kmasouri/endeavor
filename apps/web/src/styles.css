@@ -1285,20 +1285,12 @@ mark.mention-you {
   .conversation-layout.with-details {
     grid-template-columns: minmax(0, 1fr) 290px;
   }
-  .with-details .members-button {
-    display: none;
-  }
-  .with-details .add-members-button span {
-    display: none;
-  }
 }
 @media (max-width: 700px) {
   .conversation-header {
     padding: 14px 12px 14px 56px;
     gap: 8px;
   }
-  .conversation-header .members-button,
-  .add-members-button span,
   .details-button-label {
     display: none;
   }
@@ -1306,6 +1298,8 @@ mark.mention-you {
     gap: 4px;
   }
   .conversation-header .header-actions button {
+    min-width: var(--touch);
+    min-height: var(--touch);
     padding: 6px;
   }
   .conversation-layout.with-details {
