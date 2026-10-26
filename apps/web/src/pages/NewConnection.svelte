@@ -114,6 +114,9 @@
       </div>
 
       <Hint>The credential is encrypted when saved, and never shown again, not even to you.</Hint>
+      {#if kind === 'mcp'}
+        <Hint>For browser sign-in, leave the credential empty. After creating the connection, open Sign in with OAuth in the catalog.</Hint>
+      {/if}
     </fieldset>
     <fieldset class="stack">
       <legend>Access</legend>

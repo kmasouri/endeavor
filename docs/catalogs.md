@@ -124,8 +124,7 @@ An MCP connection's `baseUrl` is its full remote MCP endpoint, such as
 `https://tools.example.com/mcp`. It uses Streamable HTTP through the official MCP client
 SDK, with protocol negotiation and compatibility with 2025 servers. JSON and SSE responses
 are supported. `authHeader` and `credential` work as they do for HTTP connections; for bearer
-authentication, save the full `Bearer …` value. Redirects are refused. Servers needing an
-interactive OAuth login are not supported by this first increment.
+authentication, save the full `Bearer …` value. Redirects are refused. Servers needing browser sign-in can use [OAuth](#oauth-sign-in-ca-65).
 
 Create an MCP connection with:
 
@@ -176,7 +175,7 @@ to 20 pages and 1,000 tools; each connection can allow up to 100 tool names. Cre
 are not included in model definitions, approval requests, or transport failure messages.
 Tool arguments and results are recorded as task evidence and should not contain secrets.
 
-Local stdio servers, interactive OAuth setup, MCP resources/prompts, deferred tasks,
+Local stdio servers, MCP resources/prompts, deferred tasks,
 server-initiated sampling, and interactive elicitation are outside this increment.
 
 ### Local verification
@@ -209,3 +208,55 @@ controls show failed requests without changing the displayed status.
 
 Creation uses `#/skills/new` and `#/connections/new`. Older `#/catalogs` links, including
 `?tab=connections` and the original creation URLs, still open the matching destination.
+
+## OAuth sign-in (CA-65)
+
+Set `APP_PUBLIC_URL` to the browser origin used to open Endeavor, for example
+`http://localhost:3100`. It must be HTTPS, or HTTP on localhost. Do not derive it from
+request headers. Keep `CREDENTIALS_KEY` stable. Apply migration 014 before starting the app.
+
+Create an MCP connection with its endpoint and an empty tool list. Open its connection configuration page, then
+open **Sign in with OAuth**, then **Sign in**. The browser opens the service's consent page
+and returns to that connection. **Refresh status**, **Reconnect**, and **Disconnect** manage the
+login. Notion's hosted endpoint is `https://mcp.notion.com/mcp`.
+
+OAuth uses the installed MCP SDK for protected-resource and authorization-server discovery,
+dynamic client registration, S256 PKCE, resource indicators, and callback issuer validation.
+The service must publish protected-resource metadata and support dynamic client registration.
+Pre-registered client IDs and client metadata documents are not configured in this increment.
+Metadata and token requests refuse redirects, require HTTPS except loopback test servers,
+and have a 30-second deadline and a 2 MB body cap.
+
+The callback is bound to the connection endpoint, initiating person, random single-use state,
+and a separate HttpOnly SameSite cookie. It expires after ten minutes. Callback query strings
+are removed from request logs. Reconnect replaces the pending flow; old callbacks fail.
+The return address is fixed by server configuration. Tokens, refresh tokens, client secrets,
+PKCE verifiers, and discovery state are encrypted together in `connection_oauth`. The API
+returns status and expiry only. Database transaction locks serialize refresh and disconnect
+across workers, including refresh-token rotation.
+
+Discovery and task calls refresh expiring tokens before use. An expired token without a
+refresh token, failed refresh, or server 401 requires human sign-in again. Pending consent
+is preserved if a task tries to run meanwhile. Calls are not retried after authentication
+failure; task history and the existing unknown-outcome rule stay intact.
+
+Signing in never grants an agent access, selects tools, changes approval rules, or migrates
+task configuration versions. After consent, discover tools, allow only those needed, and
+explicitly select the connection in the agent configuration. OAuth uses the consenting
+account's provider permissions. One connection holds one shared provider login: every
+agent granted that connection uses the same account. The initiating Endeavor person's ID
+is an audit record, not a separate provider identity for each agent or requester. For shared
+enterprise work, prefer a dedicated account with the required content permissions when
+the provider supports it. Per-user connections and delegated requester identities are not
+implemented here. A tool allowlist or an agent instruction does not restrict
+which Notion pages that account can read. Verify the provider account's actual page access
+before claiming that a connection is scoped to one knowledge base.
+
+Disconnect removes the local tokens and pending callback. It preserves grants and history,
+and blocks OAuth calls. It does not revoke the provider's consent; revoke that in the
+provider's settings if needed. Disconnect before replacing the header credential or endpoint.
+Existing HTTP and header-auth MCP connections continue to work without OAuth.
+
+Verification uses a real local OAuth server and mocked repositories, plus production browser
+coverage. No external account or database is needed for the tests. A real Notion sign-in
+still requires the person to complete consent in their browser.

@@ -20,3 +20,9 @@ export interface McpClient {
   listTools(endpoint: McpEndpoint): Promise<McpTool[]>;
   callTool(endpoint: McpEndpoint, name: string, input: Record<string, unknown>): Promise<McpResult>;
 }
+
+export class McpAuthenticationError extends Error {
+  constructor() {
+    super('The MCP server requires sign-in.');
+  }
+}

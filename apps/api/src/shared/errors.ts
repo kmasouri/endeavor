@@ -139,6 +139,22 @@ export const ERRORS = {
     message: 'The agent is not allowed to make this call'
   },
 
+  connectionSignInRequired: {
+    code: 70007,
+    statusCode: 409,
+    message: 'Sign in to this connection again in Catalogs before continuing.'
+  },
+  connectionOAuthFailed: {
+    code: 70008,
+    statusCode: 400,
+    message: 'Connection sign-in failed. Try signing in again.'
+  },
+  connectionOAuthCallbackInvalid: {
+    code: 70009,
+    statusCode: 400,
+    message: 'This sign-in callback is invalid or expired. Start sign-in again from Catalogs.'
+  },
+
   // 80xxx: saved notes and documents
   noteNotFound: { code: 80001, statusCode: 404, message: 'Note not found' },
   documentNotFound: { code: 80002, statusCode: 404, message: 'Document not found' },

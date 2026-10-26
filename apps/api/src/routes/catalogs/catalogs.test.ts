@@ -152,3 +152,58 @@ describe('connection types', () => {
     }
   });
 });
+
+describe('OAuth connection routes', () => {
+  it('sets a browser binding cookie and never returns the binding key in JSON', async () => {
+    const app = setupApp();
+    await app.ready();
+    jest
+      .spyOn(app.catalogService, 'startOAuth')
+      .mockResolvedValue({
+        authorizationUrl: 'https://docs.example/authorize?state=test',
+        browserKey: 'private-browser-key',
+        callbackUrl: `http://localhost:3100/connections/${CONNECTION}/oauth/callback`
+      });
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/connections/${CONNECTION}/oauth/connect`,
+        headers: { 'x-actor-id': ACTOR }
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        data: { authorizationUrl: 'https://docs.example/authorize?state=test' }
+      });
+      expect(response.headers['set-cookie']).toContain('HttpOnly; SameSite=Lax');
+      expect(response.headers['cache-control']).toBe('no-store');
+    } finally {
+      await app.close();
+    }
+  });
+
+  it('forwards the callback state, issuer and browser cookie and redirects without code', async () => {
+    const app = setupApp();
+    await app.ready();
+    const finish = jest
+      .spyOn(app.catalogService, 'finishOAuth')
+      .mockResolvedValue('http://localhost:3100/app/#/catalogs?tab=connections&oauth=connected');
+    try {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/connections/${CONNECTION}/oauth/callback?state=nonce&code=secret-code&iss=https%3A%2F%2Fdocs.example`,
+        headers: { cookie: `endeavor_oauth_${CONNECTION}=binding` }
+      });
+      expect(response.statusCode).toBe(302);
+      expect(finish).toHaveBeenCalledWith(
+        CONNECTION,
+        { state: 'nonce', code: 'secret-code', iss: 'https://docs.example' },
+        'binding'
+      );
+      expect(response.headers.location).not.toContain('secret-code');
+      expect(response.headers['referrer-policy']).toBe('no-referrer');
+      expect(response.headers['set-cookie']).toContain('Max-Age=0');
+    } finally {
+      await app.close();
+    }
+  });
+});

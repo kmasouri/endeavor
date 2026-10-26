@@ -2,6 +2,7 @@ import {
   AgentRepository,
   ApprovalRepository,
   CatalogRepository,
+  ConnectionOAuthRepository,
   ConversationRepository,
   DocumentRepository,
   HumanRepository,
@@ -13,6 +14,8 @@ import {
 } from '../../data';
 import {
   ConnectionClient,
+  ConnectionOAuthClient,
+  McpAuthenticationError,
   McpClient,
   ModelClient,
   ModelClientError,
@@ -171,7 +174,9 @@ export class TaskRunnerService {
     taskLogger: TaskLogger,
     private readonly runnerLogger: TaskRunnerLogger,
     private readonly options: TaskRunnerOptions,
-    private readonly mcpClient?: McpClient
+    private readonly mcpClient?: McpClient,
+    private readonly oauthRepository?: ConnectionOAuthRepository,
+    private readonly oauthClient?: ConnectionOAuthClient
   ) {
     this.lifecycle = new TaskLifecycle(taskRepository, taskLogger);
   }
@@ -1008,12 +1013,12 @@ export class TaskRunnerService {
   ): Promise<ModelToolDefinition[]> {
     const tools: ModelToolDefinition[] = [];
     for (const connection of connections.filter((candidate) => candidate.kind === 'mcp')) {
+      let authorization: string | undefined;
       try {
         if (!this.mcpClient) throw new Error('The MCP client is unavailable.');
-        const discovered = await this.mcpClient.listTools({
-          url: connection.baseUrl,
-          headers: await this.loadConnectionHeaders(connection)
-        });
+        const headers = await this.loadConnectionHeaders(connection);
+        authorization = headers.Authorization;
+        const discovered = await this.mcpClient.listTools({ url: connection.baseUrl, headers });
         for (const tool of discovered) {
           if (!(connection.allowedTools ?? []).includes(tool.name)) continue;
           tools.push({
@@ -1022,14 +1027,17 @@ export class TaskRunnerService {
             inputSchema: tool.inputSchema
           });
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof McpAuthenticationError)
+          await this.requireReconnect(connection.id, authorization);
         await this.taskRepository.addEvent(
           task.id,
           TASK_EVENTS.connectionDiscoveryFailed,
           SYSTEM_ACTOR,
           {
             connectionId: connection.id,
-            reason: 'MCP discovery failed. Check the endpoint, credential, and supported schemas.'
+            reason:
+              'MCP discovery failed. Check sign-in in Catalogs, the endpoint, and supported schemas.'
           }
         );
       }
@@ -1236,7 +1244,11 @@ export class TaskRunnerService {
         request.tool,
         request.arguments
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof McpAuthenticationError) {
+        await this.requireReconnect(connection.id, headers.Authorization);
+        throw new AppError('connectionSignInRequired');
+      }
       // Transport errors can contain credentials or full request headers. Keep them private.
       throw new AppError(
         'validationError',
@@ -1341,10 +1353,48 @@ export class TaskRunnerService {
     return response;
   }
 
-  // The connection's stored credential, sent in its auth header. Never logged or recorded.
-  private async loadConnectionHeaders(connection: Connection): Promise<Record<string, string>> {
+  private async oauthConnectionHeaders(connection: Connection): Promise<Record<string, string>> {
+    if (connection.kind === 'mcp' && this.oauthRepository && this.oauthClient) {
+      const result = await this.oauthRepository.withLock<Record<string, string> | null | false>(
+        connection.id,
+        async (session) => {
+          if (!session) return { session, result: null };
+          if (session.status !== 'connected') return { session, result: false as const };
+          try {
+            if (session.resource !== connection.baseUrl) throw new Error('Resource changed');
+            const headers = await this.oauthClient!.headers(session);
+            return { session, result: headers };
+          } catch {
+            session.status = 'reconnect_required';
+            session.data = {};
+            delete session.expiresAt;
+            return { session, result: false as const };
+          }
+        }
+      );
+      if (result === false) throw new AppError('connectionSignInRequired');
+      if (result) return result;
+    }
     const credential = await this.catalogRepository.getConnectionCredential(connection.id);
     return credential ? { [connection.authHeader]: credential } : {};
+  }
+
+  private async requireReconnect(connectionId: string, failedAuthorization?: string) {
+    if (this.oauthRepository)
+      await this.oauthRepository.withLock(connectionId, async (session) => ({
+        session:
+          session &&
+          failedAuthorization ===
+            `Bearer ${(session.data.tokens as { access_token?: string } | undefined)?.access_token}`
+            ? { ...session, status: 'reconnect_required', data: {}, expiresAt: undefined }
+            : session,
+        result: undefined
+      }));
+  }
+
+  // The connection's stored credential, sent in its auth header. Never logged or recorded.
+  private async loadConnectionHeaders(connection: Connection): Promise<Record<string, string>> {
+    return this.oauthConnectionHeaders(connection);
   }
 
   // Makes approved calls, after checking access again (it may have been revoked while the

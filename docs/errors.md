@@ -89,6 +89,9 @@ The list lives in `apps/api/src/shared/errors.ts`. When you add an error there, 
 | 70004 | `catalogEntryUnavailable` | 409  | The skill or connection is disabled, or the skill has no version.                          | Enable it, or choose another.                                                   |
 | 70005 | `credentialsKeyMissing`   | 409  | A credential was sent, but `CREDENTIALS_KEY` isn't set, so it can't be stored safely.      | Set `CREDENTIALS_KEY` to 32 random bytes (base64 or hex) and restart.           |
 | 70006 | `toolAccessDenied`        | 403  | An agent's tool call was refused: no active grant, or a method or path that isn't allowed. | Agents see this as a tool error. Grant access, or widen the connection's rules. |
+| 70007 | `connectionSignInRequired` | 409 | OAuth authentication is unavailable or expired. | Sign in again from Catalogs. |
+| 70008 | `connectionOAuthFailed` | 400 | OAuth sign-in could not complete. | Check server setup and reconnect. |
+| 70009 | `connectionOAuthCallbackInvalid` | 400 | The callback is expired or does not match its browser, connection, or state. | Start sign-in again from Catalogs. |
 
 ## Notes and documents (80xxx)
 

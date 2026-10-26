@@ -100,6 +100,7 @@ The app checks all of these at startup, in `apps/api/src/config.ts`.
 | `COMPLETION_CHECK`   | `false`                     | Check each result against its criteria with a separate model call before a task completes.        |
 | `MODEL_PRICES`       |                             | Model prices as JSON: `{"model":{"inputPerMillion":0.15,"outputPerMillion":0.6}}`, in US dollars. |
 | `TASK_BUDGET_USD`    | `1`                         | The most one task may spend, in US dollars, unless its agent's configuration sets `maxCostUsd`.   |
+| `APP_PUBLIC_URL` | | Browser origin for MCP OAuth callbacks, such as `http://localhost:3100`. Required for OAuth sign-in. |
 | `CREDENTIALS_KEY`    |                             | 32 random bytes (base64 or hex) that encrypt connection credentials. Needed to save a credential. |
 
 ## Commands

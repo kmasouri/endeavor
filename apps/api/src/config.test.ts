@@ -31,3 +31,20 @@ describe('parseEnv', () => {
     expect(() => parseEnv({ WEBHOOK_URL: 'not a url' })).toThrow(/WEBHOOK_URL/);
   });
 });
+
+it('only accepts trusted callback origins with HTTPS or local HTTP', () => {
+  expect(parseEnv({ APP_PUBLIC_URL: 'http://localhost:3100' }).APP_PUBLIC_URL).toBe(
+    'http://localhost:3100'
+  );
+  expect(parseEnv({ APP_PUBLIC_URL: 'https://endeavor.example' }).APP_PUBLIC_URL).toBe(
+    'https://endeavor.example'
+  );
+  for (const value of [
+    'http://remote.example',
+    'https://user:secret@endeavor.example',
+    'https://endeavor.example/app',
+    'https://endeavor.example?redirect=other'
+  ]) {
+    expect(() => parseEnv({ APP_PUBLIC_URL: value })).toThrow(/APP_PUBLIC_URL/);
+  }
+});

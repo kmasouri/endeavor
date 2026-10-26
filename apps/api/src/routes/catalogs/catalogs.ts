@@ -1,6 +1,10 @@
 import { FastifyInstance } from 'fastify';
 import {
   addSkillVersionHandler,
+  oauthStatusHandler,
+  startOAuthHandler,
+  finishOAuthHandler,
+  disconnectOAuthHandler,
   discoverConnectionToolsHandler,
   createConnectionHandler,
   createSkillHandler,
@@ -21,6 +25,7 @@ import {
 } from '../../handlers';
 import {
   actorHeadersSchema,
+  oauthCallbackQuerySchema,
   addSkillVersionBodySchema,
   connectionParamsSchema,
   createConnectionBodySchema,
@@ -39,6 +44,57 @@ const tags = ['catalogs'];
 const headers = actorHeadersSchema;
 
 export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<void> {
+  fastifyInstance.get(
+    '/connections/:connectionId/oauth',
+    {
+      schema: {
+        description: 'Inspect MCP authentication status without exposing tokens. Admins only.',
+        tags,
+        headers,
+        params: connectionParamsSchema
+      }
+    },
+    oauthStatusHandler
+  );
+  fastifyInstance.post(
+    '/connections/:connectionId/oauth/connect',
+    {
+      schema: {
+        description:
+          'Start human OAuth consent for this MCP connection. Grants and tools stay unchanged.',
+        tags,
+        headers,
+        params: connectionParamsSchema
+      }
+    },
+    startOAuthHandler
+  );
+  fastifyInstance.get(
+    '/connections/:connectionId/oauth/callback',
+    {
+      schema: {
+        description: 'Complete sign-in using a single-use state and browser-bound callback.',
+        tags,
+        params: connectionParamsSchema,
+        querystring: oauthCallbackQuerySchema
+      }
+    },
+    finishOAuthHandler
+  );
+  fastifyInstance.post(
+    '/connections/:connectionId/oauth/disconnect',
+    {
+      schema: {
+        description:
+          'Remove locally stored OAuth tokens and stop OAuth calls. Does not revoke the provider consent.',
+        tags,
+        headers,
+        params: connectionParamsSchema
+      }
+    },
+    disconnectOAuthHandler
+  );
+
   fastifyInstance.post(
     '/skills',
     {

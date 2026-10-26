@@ -120,3 +120,11 @@ export type GrantParams = z.infer<typeof grantParamsSchema>;
 export type GrantBody = z.infer<typeof grantBodySchema>;
 export type RevokeParams = z.infer<typeof revokeParamsSchema>;
 export type ListGrantsQuery = z.infer<typeof listGrantsQuerySchema>;
+
+export const oauthCallbackQuerySchema = z.object({
+  state: z.string().min(1).max(500),
+  code: z.string().min(1).max(4000).optional(),
+  error: z.string().max(200).optional(),
+  iss: z.url().max(2000).optional()
+});
+export type OAuthCallbackQuery = z.infer<typeof oauthCallbackQuerySchema>;

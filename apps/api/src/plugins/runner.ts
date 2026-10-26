@@ -9,6 +9,7 @@ import {
   CatalogPostgresRepository,
   ConversationPostgresRepository,
   CredentialCipher,
+  ConnectionOAuthPostgresRepository,
   DocumentPostgresRepository,
   HumanPostgresRepository,
   MessagePostgresRepository,
@@ -18,6 +19,7 @@ import {
 } from '../data';
 import {
   ConnectionHttpClient,
+  ConnectionOAuthHttpClient,
   McpHttpClient,
   createAnthropicProvider,
   ModelAiSdkClient,
@@ -105,7 +107,9 @@ const runnerPlugin: FastifyPluginAsync = async (fastify) => {
       prices: config.MODEL_PRICES,
       taskBudgetUsd: config.TASK_BUDGET_USD
     },
-    new McpHttpClient()
+    new McpHttpClient(),
+    new ConnectionOAuthPostgresRepository(fastify.pg, new CredentialCipher(config.CREDENTIALS_KEY)),
+    new ConnectionOAuthHttpClient()
   );
   fastify.decorate('taskRunnerService', runner);
 

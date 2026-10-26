@@ -11,6 +11,7 @@
   import '../management.css';
   let { kind, entryId }: { kind: 'skills' | 'connections'; entryId: string } = $props();
   const entry = createLoad<SkillDetails | Connection>(() => kind === 'skills' ? api.get<SkillDetails>(`/skills/${entryId}`) : api.get<Connection>(`/connections/${entryId}`), () => [kind, entryId]);
+  const oauthResult = new URLSearchParams(window.location.hash.split('?')[1]).get('oauth');
   const title = $derived(kind === 'skills' ? 'Skills' : 'Connections');
 </script>
 <div class="creation-page">
@@ -21,6 +22,11 @@
     <PageHeader title={entry.data.name} subtitle={entry.data.description}>
       {#snippet actions()}<span class="management-status" class:enabled={!entry.data?.disabledAt}>{entry.data?.disabledAt ? 'Disabled' : 'Enabled'}</span>{/snippet}
     </PageHeader>
+    {#if kind === 'connections' && oauthResult === 'connected'}
+      <p role="status">Signed in. Discover tools and choose the access this connection allows.</p>
+    {:else if kind === 'connections' && oauthResult === 'failed'}
+      <p role="alert">Sign-in was not completed. Open the connection’s OAuth controls to try again.</p>
+    {/if}
     <div class="creation-form">
       {#if 'baseUrl' in entry.data}
         <ConnectionConfiguration connection={entry.data} onChanged={entry.reload} />

@@ -1,6 +1,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import {
   ActorHeaders,
+  OAuthCallbackQuery,
   AddSkillVersionBody,
   ConnectionParams,
   CreateConnectionBody,
@@ -201,6 +202,73 @@ export async function discoverConnectionToolsHandler(
 ): Promise<unknown> {
   return success(
     await request.server.catalogService.discoverConnectionTools(
+      request.headers['x-actor-id'],
+      request.params.connectionId
+    )
+  );
+}
+
+export async function oauthStatusHandler(
+  request: FastifyRequest<{ Params: ConnectionParams } & Actor>,
+  reply: FastifyReply
+): Promise<unknown> {
+  reply.header('Cache-Control', 'no-store');
+  return success(
+    await request.server.catalogService.oauthStatus(
+      request.headers['x-actor-id'],
+      request.params.connectionId
+    )
+  );
+}
+
+export async function startOAuthHandler(
+  request: FastifyRequest<{ Params: ConnectionParams } & Actor>,
+  reply: FastifyReply
+): Promise<unknown> {
+  const { authorizationUrl, browserKey, callbackUrl } =
+    await request.server.catalogService.startOAuth(
+      request.headers['x-actor-id'],
+      request.params.connectionId
+    );
+  const callback = new URL(callbackUrl);
+  reply.header('Cache-Control', 'no-store');
+  reply.header(
+    'Set-Cookie',
+    `endeavor_oauth_${request.params.connectionId}=${browserKey}; HttpOnly; SameSite=Lax; Path=${callback.pathname}; Max-Age=600${callback.protocol === 'https:' ? '; Secure' : ''}`
+  );
+  return success({ authorizationUrl });
+}
+
+export async function finishOAuthHandler(
+  request: FastifyRequest<{ Params: ConnectionParams; Querystring: OAuthCallbackQuery }>,
+  reply: FastifyReply
+): Promise<unknown> {
+  const name = `endeavor_oauth_${request.params.connectionId}=`;
+  const cookie = (request.headers.cookie ?? '')
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(name));
+  const redirect = await request.server.catalogService.finishOAuth(
+    request.params.connectionId,
+    request.query,
+    cookie?.slice(name.length) ?? ''
+  );
+  reply.header('Cache-Control', 'no-store');
+  reply.header('Referrer-Policy', 'no-referrer');
+  reply.header(
+    'Set-Cookie',
+    `${name}; HttpOnly; SameSite=Lax; Path=/connections/${request.params.connectionId}/oauth/callback; Max-Age=0`
+  );
+  return reply.redirect(redirect);
+}
+
+export async function disconnectOAuthHandler(
+  request: FastifyRequest<{ Params: ConnectionParams } & Actor>,
+  reply: FastifyReply
+): Promise<unknown> {
+  reply.header('Cache-Control', 'no-store');
+  return success(
+    await request.server.catalogService.disconnectOAuth(
       request.headers['x-actor-id'],
       request.params.connectionId
     )

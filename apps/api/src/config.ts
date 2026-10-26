@@ -82,6 +82,22 @@ const envSchema = z.object({
     .transform((value) => value === 'true'),
   // Where each task's files go: one folder per task. Relative paths start from where the app runs.
   WORKSPACES_DIR: z.string().min(1).default('workspaces'),
+  // Browser origin used for fixed OAuth callbacks.
+  APP_PUBLIC_URL: z
+    .url()
+    .refine((value) => {
+      const url = new URL(value);
+      return (
+        !url.username &&
+        !url.password &&
+        !url.search &&
+        !url.hash &&
+        url.pathname === '/' &&
+        (url.protocol === 'https:' ||
+          (url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)))
+      );
+    }, 'Use an HTTPS origin, or HTTP localhost for local development')
+    .optional(),
   // 32 random bytes, as base64 or hex. Encrypts connection credentials at rest.
   CREDENTIALS_KEY: z.string().min(1).optional()
 });
@@ -125,6 +141,7 @@ export const config = {
   MODEL_PRICES: env.MODEL_PRICES,
   TASK_BUDGET_USD: env.TASK_BUDGET_USD,
   WORKSPACES_DIR: env.WORKSPACES_DIR,
+  APP_PUBLIC_URL: env.APP_PUBLIC_URL,
   CREDENTIALS_KEY: env.CREDENTIALS_KEY
 };
 

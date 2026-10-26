@@ -4,7 +4,7 @@ import {
   type JsonSchemaType
 } from '@modelcontextprotocol/client';
 import { z } from 'zod';
-import { McpClient, McpEndpoint, McpResult, McpTool } from './mcp.client';
+import { McpAuthenticationError, McpClient, McpEndpoint, McpResult, McpTool } from './mcp.client';
 
 const TIMEOUT_MS = 30_000;
 const MAX_RESPONSE_BYTES = 2_000_000;
@@ -99,6 +99,10 @@ export class McpHttpClient implements McpClient {
           redirect: 'error',
           signal: AbortSignal.any([deadline, ...(init?.signal ? [init.signal] : [])])
         });
+        if (response.status === 401) {
+          await response.body?.cancel();
+          throw new McpAuthenticationError();
+        }
         if (!response.body) return response;
         let size = 0;
         const body = response.body.pipeThrough(
