@@ -46,7 +46,9 @@ docker compose -f docker-compose.yml -f compose.coding.yml --profile coding up -
 ```
 
 The base image has Node and npm. Commands run offline. Limit parallel test workers to fit the fixed memory
-budget; for Endeavor use `npm test --workspace apps/api -- --runInBand`. For a project needing installed packages,
+budget; for Endeavor use `npm test --workspace apps/api -- --runInBand`. Run preinstalled
+Playwright directly with `../../node_modules/.bin/playwright test` from `apps/web`;
+installation scripts can attempt root package installation or network downloads. For a project needing installed packages,
 build an operator-controlled image containing its dependencies in `/opt/node_modules`, retain
 the worker entrypoint, and set `EXECUTOR_IMAGE` to that image. The worker links these read-only
 packages into a fresh writable node_modules directory, so tool caches stay local to the run. Image builds happen outside agent execution. Use the
@@ -114,7 +116,11 @@ does not send a broker cancellation automatically; an existing command ends at i
 at the latest. Revocation prevents subsequent MCP calls but likewise does not undo a command
 already started. Container commands cannot publish externally because they have no network.
 
-Only a complete, validated snapshot is imported. A nonzero test exit is recorded as a finished,
+Each run starts from the recorded source. Create new source files with `write_repository_file`.
+Commands may modify or remove existing source files; new generated files and directories are
+ephemeral and are discarded after the run. Build and test in the same command when tests need
+build output. This keeps caches, reports, and timestamps out of source revisions. Only a complete,
+validated source snapshot is imported. A nonzero test exit is recorded as a finished,
 failing check; container failure, timeout, invalid export, or cancellation preserves the preceding
 checkout. Command logs are capped at 16,000 characters. The existing platform MCP result cap may
 truncate a long result further. Source code and logs are task evidence, so never put secrets in

@@ -85,7 +85,7 @@ const descriptions: Record<ToolName, string> = {
   delete_repository_file:
     'Delete a file from this task checkout. No changes are published to GitHub.',
   run_command:
-    'Run a shell command against this task checkout in a disposable offline container. Returns an execution ID immediately; poll get_execution. Dependencies come from the configured image; network installs are unavailable. The timeout is five minutes. Only a successful complete workspace snapshot is imported.',
+    'Run a shell command against this task checkout in a disposable offline container. Returns an execution ID immediately; poll get_execution. Dependencies come from the configured image; network installs are unavailable. The timeout is five minutes. Only existing source files are imported. New generated files are discarded; use write_repository_file to add source.',
   get_execution:
     'Read execution status, exit code, bounded log, base commit, and snapshot revision. Poll until finished before editing or publishing. A cancelled or interrupted run never imports its files.',
   cancel_execution: 'Stop this task execution and discard its container changes.',

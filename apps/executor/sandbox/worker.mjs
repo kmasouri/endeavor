@@ -55,6 +55,7 @@ try {
     } catch { /* The base image supports dependency-free projects. */ }
     exitCode = await run('/bin/sh', ['-c', input.command]);
   }
+  const sourcePaths = new Set((input.files ?? []).map((file) => file.path));
   const files = [];
   let bytes = 0;
   async function scan(folder, depth = 0) {
@@ -65,6 +66,7 @@ try {
         continue;
       }
       const relative = folder ? `${folder}/${name}` : name;
+      if (!input.archive && !sourcePaths.has(relative) && !Array.from(sourcePaths).some((path) => path.startsWith(relative + '/'))) continue;
       const path = join('/workspace', relative);
       const stat = await lstat(path);
       if (stat.isSymbolicLink() || (!stat.isDirectory() && !stat.isFile())) throw new Error('Links and special files cannot be exported');

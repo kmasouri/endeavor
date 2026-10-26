@@ -320,6 +320,10 @@ export class ExecutionService {
         const result = await active.container.result;
         if (result.code !== 0) throw new OperationError('Container failed');
         exported = executionResult.parse(JSON.parse(result.stdout));
+        if (!snapshot) {
+          const sourcePaths = new Set(record.checkout!.files.map((file) => file.path));
+          exported.files = exported.files.filter((file) => sourcePaths.has(file.path));
+        }
       }
     } catch {
       // Provider errors, Docker output, and filesystem details never enter evidence.

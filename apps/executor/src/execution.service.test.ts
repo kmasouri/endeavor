@@ -245,7 +245,12 @@ test('successful verification requires unchanged files and long source remains r
     const changed = (await ctx.service.call(task, 'run_command', {
       command: 'generate-and-test'
     })) as { id: string };
-    ctx.containers.jobs.at(-1)!.finish([file('index.js', 'changed during tests')]);
+    ctx.containers.jobs
+      .at(-1)!
+      .finish([
+        file('index.js', 'changed during tests'),
+        file('generated/report.json', 'temporary')
+      ]);
     await until(
       async () =>
         (
@@ -259,6 +264,10 @@ test('successful verification requires unchanged files and long source remains r
     })) as { workspaceChanged: boolean; verifiedRevision: number | null };
     assert.equal(invalid.workspaceChanged, true);
     assert.equal(invalid.verifiedRevision, null);
+    await assert.rejects(
+      ctx.service.call(task, 'read_repository_file', { path: 'generated/report.json' }),
+      /does not exist/
+    );
     const verified = (await ctx.service.call(task, 'run_command', { command: 'test' })) as {
       id: string;
     };

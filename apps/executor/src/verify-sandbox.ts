@@ -31,13 +31,16 @@ assert.equal(result.code, 0);
 const parsed = JSON.parse(result.stdout);
 assert.equal(parsed.exitCode, 0);
 assert.match(parsed.log, /offline isolation verified/);
-assert.ok(parsed.files.some((file: { path: string }) => file.path === 'output.txt'));
+assert.equal(
+  parsed.files.some((file: { path: string }) => file.path === 'output.txt'),
+  false
+);
 
 const failed = await docker.run(randomUUID(), image, { files: [], command: 'exit 5' }).result;
 assert.equal(JSON.parse(failed.stdout).exitCode, 5);
 const symlink = await docker.run(randomUUID(), image, {
-  files: [],
-  command: 'ln -s /etc/passwd unsafe'
+  files: [source],
+  command: 'rm input.txt && ln -s /etc/passwd input.txt'
 }).result;
 assert.notEqual(symlink.code, 0);
 assert.ok(JSON.parse(symlink.stdout).error);
@@ -45,7 +48,6 @@ const fresh = await docker.run(randomUUID(), image, { files: [], command: 'test 
   .result;
 assert.equal(JSON.parse(fresh.stdout).exitCode, 0);
 const cancelled = docker.run(randomUUID(), image, { files: [], command: 'sleep 60' });
-await new Promise((resolve) => setTimeout(resolve, 500));
 await cancelled.cancel();
 assert.notEqual((await cancelled.result).code, 0);
 console.log(

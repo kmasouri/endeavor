@@ -17,7 +17,7 @@ export const CONTAINER_LABEL = 'io.endeavor.executor=ca78';
 // No shell on the broker. Repository commands exist only in JSON on stdin to the child.
 export function containerArgs(id: string, image: string): string[] {
   return [
-    'run',
+    'create',
     '--pull',
     'never',
     '--name',
@@ -92,44 +92,57 @@ export class DockerClient implements ContainerClient {
 
   run(id: string, image: string, input: unknown): ContainerRun {
     const name = `endeavor-execution-${id}`;
-    const child = spawn('docker', containerArgs(id, image), { stdio: ['pipe', 'pipe', 'pipe'] });
+    // Create before starting: cancellation waits for the named container to exist, so an
+    // immediate cancellation cannot race a later Docker create and leave work running.
+    const created = docker(containerArgs(id, image));
+    let cancelled = false;
     let stopping: Promise<void> | undefined;
-    const cancel = () =>
-      (stopping ??= docker(['rm', '-f', name])
+    const cancel = () => {
+      cancelled = true;
+      return (stopping ??= created
+        .then(() => docker(['rm', '-f', name]))
         .then(() => undefined)
         .catch(() => undefined));
-    const result = new Promise<ContainerResult>((resolve, reject) => {
-      let stdout = '';
-      let bytes = 0;
-      let exceeded = false;
-      // Includes JSON/base64 for a bounded 20 MB workspace and its log.
-      child.stdout.setEncoding('utf8');
-      child.stdout.on('data', (chunk: string) => {
-        bytes += Buffer.byteLength(chunk);
-        if (bytes > 32_000_000) {
-          exceeded = true;
-          void cancel();
-          return;
-        }
-        stdout += chunk.toString();
+    };
+    const result = (async () => {
+      await created;
+      if (cancelled) return { code: -1, stdout: '' };
+      return new Promise<ContainerResult>((resolve, reject) => {
+        const child = spawn('docker', ['start', '--attach', '--interactive', name], {
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        let stdout = '';
+        let bytes = 0;
+        let exceeded = false;
+        child.stdout.setEncoding('utf8');
+        child.stdout.on('data', (chunk: string) => {
+          bytes += Buffer.byteLength(chunk);
+          if (bytes > 32_000_000) {
+            exceeded = true;
+            void cancel();
+            return;
+          }
+          stdout += chunk;
+        });
+        child.stderr.on('data', () => {
+          /* Docker diagnostics stay private. */
+        });
+        child.stdin.on('error', () => {
+          /* A cancelled container can close its input early. */
+        });
+        child.on('error', () => reject(new Error('Docker could not start the execution')));
+        const timer = setTimeout(() => {
+          void cancel().finally(() => child.kill('SIGKILL'));
+        }, 300_000);
+        child.on('close', (code) => {
+          clearTimeout(timer);
+          if (exceeded) reject(new Error('Execution snapshot exceeded its output limit'));
+          else resolve({ code: code ?? -1, stdout });
+        });
+        child.stdin.end(JSON.stringify(input));
       });
-      child.stderr.on('data', () => {
-        /* Docker diagnostics may contain local details. */
-      });
-      child.stdin.on('error', () => {
-        /* A failed container can close before input finishes. */
-      });
-      child.on('error', () => reject(new Error('Docker could not start the execution')));
-      const timer = setTimeout(() => {
-        void cancel().finally(() => child.kill('SIGKILL'));
-      }, 300_000);
-      child.on('close', async (code) => {
-        clearTimeout(timer);
-        await docker(['rm', '-f', name]).catch(() => undefined);
-        if (exceeded) reject(new Error('Execution snapshot exceeded its output limit'));
-        else resolve({ code: code ?? -1, stdout });
-      });
-      child.stdin.end(JSON.stringify(input));
+    })().finally(async () => {
+      await docker(['rm', '-f', name]).catch(() => undefined);
     });
     return { result, cancel };
   }
