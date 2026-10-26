@@ -4,6 +4,13 @@ Coding and review use ordinary agents, the GitHub MCP connection, and an optiona
 connection. There is no built-in engineering role or agent supervisor. People select each
 agent's connections and add participants to an endeavor.
 
+## Start work in an endeavor
+
+Open an endeavor and add Coding agent and Code reviewer as participants. Explicitly
+@mention the agent you want to start work. Messages, approvals, run steps, and outputs
+then stay with that endeavor. Standalone Work tasks do not appear as runs inside an
+endeavor.
+
 ## Connect GitHub
 
 Open Connections, create a connection, and choose the GitHub MCP example. Its endpoint is
