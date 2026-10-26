@@ -34,10 +34,23 @@ type Options = {
   theme?: 'dark' | 'light';
   fail?: boolean;
   slow?: boolean;
+  unread?: boolean;
 };
 async function mockApi(page: Page, options: Options = {}) {
   const state = {
-    conversations: options.empty ? [] : [...initial],
+    conversations: options.empty
+      ? []
+      : options.unread
+        ? [
+            initial[0],
+            ...[1, 11, 128, 99999].map((unreadCount) => ({
+              id: `unread-${unreadCount}`,
+              title: 'brief-1-team-how-heat-pumps-keep-homes-warm-with-less-energy',
+              createdAt: '2026-10-24T10:00:00Z',
+              unreadCount
+            }))
+          ]
+        : [...initial],
     posts: [] as Record<string, unknown>[],
     fail: options.fail ?? false,
     members: [] as { type: string; id: string; history: string }[],
@@ -494,5 +507,55 @@ for (const width of [1440, 390, 320]) {
     await expect(dialog).toHaveCount(0);
     await expect(opener).toBeFocused();
     expect(errors).toEqual([]);
+  });
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`${theme}: notification counts stay centered beside long endeavor names`, async ({
+    page
+  }, testInfo) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await mockApi(page, { theme, unread: true });
+    await page.goto('/app/#/conversations');
+    const badges = page.locator('.sidebar-conversations .count-badge');
+    await expect(badges).toHaveCount(4);
+    for (const width of [220, 480]) {
+      const handle = page.getByRole('separator', { name: 'Resize sidebar', exact: true });
+      await handle.focus();
+      await handle.press(width === 220 ? 'Home' : 'End');
+      const geometry = await badges.evaluateAll((elements) =>
+        elements.map((badge) => {
+          const box = badge.getBoundingClientRect();
+          const row = badge.parentElement!.getBoundingClientRect();
+          const label = badge.previousElementSibling!.getBoundingClientRect();
+          const range = document.createRange();
+          range.selectNodeContents(badge);
+          const text = range.getBoundingClientRect();
+          return {
+            height: box.height,
+            width: box.width,
+            horizontalOffset: Math.abs((text.left + text.right - box.left - box.right) / 2),
+            verticalOffset: Math.abs((text.top + text.bottom - box.top - box.bottom) / 2),
+            rowOffset: Math.abs((box.top + box.bottom - row.top - row.bottom) / 2),
+            padding: (box.width - text.width) / 2,
+            gap: box.left - label.right,
+            rightInset: row.right - box.right
+          };
+        })
+      );
+      for (const badge of geometry) {
+        expect(badge.height).toBe(20);
+        expect(badge.width).toBeGreaterThanOrEqual(20);
+        expect(badge.horizontalOffset).toBeLessThanOrEqual(0.5);
+        expect(badge.verticalOffset).toBeLessThanOrEqual(1);
+        expect(badge.rowOffset).toBeLessThanOrEqual(0.5);
+        expect(badge.padding).toBeGreaterThanOrEqual(5);
+        expect(badge.gap).toBeGreaterThanOrEqual(10);
+        expect(badge.rightInset).toBeGreaterThanOrEqual(8);
+      }
+    }
+    await page
+      .locator('.sidebar-conversations')
+      .screenshot({ path: testInfo.outputPath('notification-counts.png') });
   });
 }
