@@ -46,7 +46,7 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     {
       schema: {
         description:
-          'Conversations, newest first. Admins see all of them; members see the ones they belong to. Each has unreadCount: messages from others you have not seen yet (0 where you are not a member).',
+          'Conversations, newest first. In v1 every person sees all of them. Each has unreadCount: messages from others you have not seen yet (always 0 where you are not a member).',
         tags: ['conversations'],
         headers: actorHeadersSchema,
         querystring: listConversationsQuerySchema

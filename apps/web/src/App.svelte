@@ -274,6 +274,9 @@
             <a
               class:active={section === 'conversations' && id === conversation.id}
               class:unread={unreadIn(conversation) > 0}
+              aria-label={unreadIn(conversation)
+                ? `${conversationChannelName(conversation.title)}, ${unreadIn(conversation)} unread`
+                : undefined}
               href={`#/conversations/${conversation.id}`}
               title={conversation.title}
               aria-current={section === 'conversations' && id === conversation.id ? 'page' : undefined}
@@ -281,7 +284,7 @@
                 if (window.innerWidth < 700) collapsed = true;
               }}
               ><span class="ellipsis grow">{conversationChannelName(conversation.title)}</span
-              >{#if unreadIn(conversation)}<span class="count-badge" aria-label={`${unreadIn(conversation)} unread`}
+              >{#if unreadIn(conversation)}<span class="count-badge" aria-hidden="true"
                   >{unreadIn(conversation)}</span
                 >{/if}</a
             >
