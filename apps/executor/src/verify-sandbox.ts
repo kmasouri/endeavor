@@ -14,6 +14,7 @@ const source = {
 const script = `const assert = require('node:assert/strict');
 const fs = require('node:fs');
 assert.equal(process.getuid(), 1000);
+assert.equal(require('node:os').availableParallelism(), 1);
 assert.equal(fs.existsSync('/var/run/docker.sock'), false);
 assert.equal(fs.existsSync('/app/.env'), false);
 assert.equal(process.env.OPENAI_API_KEY, undefined);

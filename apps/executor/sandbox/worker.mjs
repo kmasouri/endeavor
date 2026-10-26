@@ -17,7 +17,7 @@ let log = '';
 function run(command, args, stdin) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd: '/workspace', stdio: ['pipe', 'pipe', 'pipe'],
-      env: { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: '/tmp', CI: 'true', ...(process.env.PLAYWRIGHT_BROWSERS_PATH ? { PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH } : {}) } });
+      env: { PATH: '/usr/local/bin:/usr/bin:/bin', HOME: '/tmp', ...(process.env.PLAYWRIGHT_BROWSERS_PATH ? { PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH } : {}) } });
     child.stdout.setEncoding('utf8');
     child.stderr.setEncoding('utf8');
     const append = (chunk) => { log = (log + chunk.toString()).slice(0, 16_000); };
@@ -53,7 +53,9 @@ try {
         await symlink(join('/opt/node_modules', name), join('/workspace/node_modules', name));
       }
     } catch { /* The base image supports dependency-free projects. */ }
-    exitCode = await run('/bin/sh', ['-c', input.command]);
+    const cpu = (await readFile('/proc/self/status', 'utf8')).match(/^Cpus_allowed_list:\s*(\d+)/m)?.[1];
+    if (!cpu) throw new Error('CPU affinity is unavailable');
+    exitCode = await run('taskset', ['-c', cpu, '/bin/sh', '-c', input.command]);
   }
   const sourcePaths = new Set((input.files ?? []).map((file) => file.path));
   const files = [];

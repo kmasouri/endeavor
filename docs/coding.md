@@ -45,19 +45,20 @@ docker build -f apps/executor/sandbox/Dockerfile -t endeavor-sandbox:local .
 docker compose -f docker-compose.yml -f compose.coding.yml --profile coding up -d --build executor
 ```
 
-The base image has Node and npm. Commands run offline. Limit parallel test workers to fit the fixed memory
-budget; for Endeavor use `npm test --workspace apps/api -- --runInBand`. Run preinstalled
-Playwright directly with `../../node_modules/.bin/playwright test` from `apps/web`;
-installation scripts can attempt root package installation or network downloads. For a project needing installed packages,
+The base image has Node and npm. Commands run offline and inherit one CPU of affinity, so test runners size
+their worker pools to the execution budget. Large projects may still need serial workers
+(for Endeavor, `npm test --workspace apps/api -- --runInBand`). Browser binaries and system
+libraries must be installed in the image; runtime installation cannot use root or the network. For a project needing installed packages,
 build an operator-controlled image containing its dependencies in `/opt/node_modules`, retain
-the worker entrypoint, and set `EXECUTOR_IMAGE` to that image. The worker links these read-only
+the worker entrypoint and the taskset utility, and set `EXECUTOR_IMAGE` to that image. The worker links these read-only
 packages into a fresh writable node_modules directory, so tool caches stay local to the run. Image builds happen outside agent execution. Use the
 repository's lockfile, avoid embedding credentials or private registry configuration, and rebuild
 the image when dependencies change. The broker never pulls images during a task. A missing image
 fails the execution. Projects needing another toolchain can provide it in the configured image.
 
 The included `apps/executor/sandbox/Dockerfile.endeavor` builds Endeavor's Node dependencies and
-browser test runtime. It is an example of a project image, not an automatic dependency installer.
+browser test runtime. With PLAYWRIGHT_BROWSERS_PATH set by the image, the test wrapper uses
+the installed browsers without attempting downloads or root package installation. It is an example of a project image, not an automatic dependency installer.
 
 Create a connection using the Isolated execution example: `http://executor:3200/mcp`, with
 `Bearer <EXECUTOR_TOKEN>`. Discover its tools and choose approvals deliberately. Reading and
