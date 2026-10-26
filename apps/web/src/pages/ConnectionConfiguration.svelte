@@ -124,7 +124,7 @@
   <details>
     <summary>Replace or remove the credential</summary>
     <form
-      class="row"
+      class="row wrap credential-form"
       onsubmit={(event) => {
         event.preventDefault();
         setSecret(credential);
@@ -148,3 +148,10 @@
     <ErrorNote error={action.error} />
   </details>
 </div>
+
+<style>
+  .credential-form input {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
+</style>

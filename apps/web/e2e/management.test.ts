@@ -68,6 +68,10 @@ async function mockApi(page: Page, theme: string) {
     if (req.method() !== 'GET') {
       writes.push({ path: url.pathname, body: req.postData() ? req.postDataJSON() : null });
       if (failSave) return reply({ error: { message: 'Save unavailable' } }, 503);
+      if (url.pathname === '/connections/c1')
+        connections[0].hasCredential = Boolean(
+          (req.postDataJSON() as { credential: string | null }).credential
+        );
       if (url.pathname === '/skills/s1/disable') skills[0].disabledAt = '2026-10-26';
       if (url.pathname === '/skills/s1/enable') skills[0].disabledAt = null;
       if (url.pathname === '/skills/s1/versions') skills[0].currentVersionId = 'v3';
@@ -190,4 +194,29 @@ test('legacy catalogs select the right separate sidebar destination', async ({ p
     ).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.management-row')).toHaveCount(2);
   }
+});
+
+test('connection credential controls fit mobile and retain failed input', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const api = await mockApi(page, 'dark');
+  await page.goto('/app/#/connections/c1');
+  await page.getByText('Replace or remove the credential', { exact: true }).click();
+  await page.getByLabel('New credential', { exact: true }).fill('Bearer replacement');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  api.failSave(true);
+  await page.getByRole('button', { name: 'Replace', exact: true }).click();
+  await expect(page.getByText('Save unavailable')).toBeVisible();
+  await expect(page.getByLabel('New credential', { exact: true })).toHaveValue(
+    'Bearer replacement'
+  );
+  api.failSave(false);
+  await page.getByRole('button', { name: 'Replace', exact: true }).click();
+  await expect(page.getByLabel('New credential', { exact: true })).toHaveValue('');
+  expect(api.writes.at(-1)).toEqual({
+    path: '/connections/c1',
+    body: { credential: 'Bearer replacement' }
+  });
+  await page.getByRole('button', { name: 'Remove', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Remove', exact: true })).toHaveCount(0);
+  expect(api.writes.at(-1)).toEqual({ path: '/connections/c1', body: { credential: null } });
 });
