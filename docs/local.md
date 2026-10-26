@@ -91,7 +91,7 @@ earlier string of changes. A database built from the older files has those older
 you here. Rebuild it once, keeping every row:
 
 ```bash
-mkdir -p ~/endeavor-backups && umask 077
+umask 077 && mkdir -p ~/endeavor-backups
 docker compose stop app
 # 1. A full backup. Keep it until you have checked the app.
 docker compose exec -T postgres pg_dump -U endeavor -d endeavor -Fc > ~/endeavor-backups/full.dump
