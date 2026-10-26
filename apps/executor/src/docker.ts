@@ -133,7 +133,7 @@ export class DockerClient implements ContainerClient {
         child.on('error', () => reject(new Error('Docker could not start the execution')));
         const timer = setTimeout(() => {
           void cancel().finally(() => child.kill('SIGKILL'));
-        }, 300_000);
+        }, 600_000);
         child.on('close', (code) => {
           clearTimeout(timer);
           if (exceeded) reject(new Error('Execution snapshot exceeded its output limit'));

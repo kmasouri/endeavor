@@ -62,7 +62,10 @@ export const toolSchemas = {
   write_repository_file: z.strictObject({ path: pathSchema, content: z.string().max(1_000_000) }),
   delete_repository_file: z.strictObject({ path: pathSchema }),
   run_command: z.strictObject({ command: z.string().trim().min(1).max(4000) }),
-  get_execution: z.strictObject({ execution_id: z.uuid() }),
+  get_execution: z.strictObject({
+    execution_id: z.uuid(),
+    wait_seconds: z.number().int().min(0).max(20).default(20)
+  }),
   cancel_execution: z.strictObject({ execution_id: z.uuid() }),
   repository_changes: z.strictObject({
     offset: z.number().int().min(0).default(0),
@@ -85,9 +88,9 @@ const descriptions: Record<ToolName, string> = {
   delete_repository_file:
     'Delete a file from this task checkout. No changes are published to GitHub.',
   run_command:
-    'Run a shell command against this task checkout in a disposable offline container. Returns an execution ID immediately; poll get_execution. Dependencies come from the configured image; network installs are unavailable. The timeout is five minutes. Only existing source files are imported. New generated files are discarded; use write_repository_file to add source.',
+    'Run a shell command against this task checkout in a disposable offline container. Returns an execution ID immediately; poll get_execution. Dependencies come from the configured image; network installs are unavailable. The timeout is ten minutes. Only existing source files are imported. New generated files are discarded; use write_repository_file to add source.',
   get_execution:
-    'Read execution status, exit code, bounded log, base commit, and snapshot revision. Poll until finished before editing or publishing. A cancelled or interrupted run never imports its files.',
+    'Wait up to 20 seconds for completion, then read status, exit code, bounded log, base commit, and snapshot revision. Set wait_seconds to 0 for an immediate read. Poll until finished before editing or publishing. A cancelled or interrupted run never imports its files.',
   cancel_execution: 'Stop this task execution and discard its container changes.',
   repository_changes:
     'List changed and deleted paths relative to the checked-out commit, with content hashes. Read the changed files and publish them through the GitHub connection after reviewing the diff. Tests apply only to the reported revision.',

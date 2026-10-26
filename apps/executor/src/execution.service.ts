@@ -124,11 +124,25 @@ export class ExecutionService {
     // Task identity is supplied by the trusted runner, never by model arguments.
     task = z.uuid().parse(task).toLowerCase();
     const input = toolSchemas[name].parse(raw);
+    if (name === 'get_execution') {
+      const { execution_id, wait_seconds } = toolSchemas.get_execution.parse(input);
+      const job = this.records.get(task)?.executions.find((job) => job.id === execution_id);
+      const deadline = Date.now() + wait_seconds * 1000;
+      // Wait outside the task mutex, so cancellation and completion can proceed.
+      while (job?.status === 'running' && Date.now() < deadline)
+        await new Promise((resolve) => setTimeout(resolve, 50));
+    }
     while (this.busy.has(task)) await new Promise((resolve) => setTimeout(resolve, 5));
     this.busy.add(task);
     try {
       let record = this.records.get(task);
       if (!record) {
+        if (name === 'list_executions') return [];
+        if (name === 'discard_repository') return { discarded: true };
+        if (name === 'get_execution' || name === 'cancel_execution')
+          throw new OperationError('Execution does not belong to this task');
+        if (name !== 'checkout_repository')
+          throw new OperationError('Check out a repository first');
         await this.cleanup();
         if (this.records.size >= 4)
           throw new OperationError(

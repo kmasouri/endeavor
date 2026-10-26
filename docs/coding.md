@@ -75,7 +75,8 @@ to the endeavor. No example starts work or spends model budget.
 1. Give the coding agent a repository, base ref, scoped change, and completion criteria.
 2. It checks out an immutable commit, reads and edits its task checkout, and starts commands.
    Commands return execution IDs immediately; `get_execution` reports status and bounded logs.
-   `list_executions` recovers IDs if a response is lost.
+   `list_executions` recovers IDs if a response is lost. Status reads wait up to 20 seconds
+   outside the task lock, reducing model polling without delaying cancellation.
 3. It compares `repository_changes` with the intended change. These are changed paths and
    hashes, not an automatic publication. Read file content before using GitHub write tools.
 4. A completed command has an exit code. Only exit zero with `verifiedRevision` equal to
@@ -109,7 +110,7 @@ These controls are defense in depth around the shared host kernel, not a virtual
 See [Docker security](https://docs.docker.com/engine/security/) and
 [resource limits](https://docs.docker.com/engine/containers/resource_constraints/).
 
-Commands have a five-minute outer deadline and an independent worker deadline. The broker runs
+Commands have a ten-minute outer deadline and an independent worker deadline. The broker runs
 at most two executions and keeps at most four task checkouts. Each task is serialized: edits,
 checkout replacement, and discard wait until the current execution ends or is cancelled.
 `cancel_execution` stops the container and discards its changes. A platform task cancellation
@@ -130,8 +131,8 @@ them. Platform and provider secrets are not injected into the command environmen
 State is saved atomically in the `execution-data` volume. A broker restart removes labelled
 leftover containers, marks running jobs interrupted with unknown outcome, and never replays
 commands. Poll the recovered execution and verify again. The broker keeps 20 execution summaries
-per task. Inactive checkouts are removed after 24 hours; discard can remove them earlier. Saved
-platform outputs and history remain. Broker shutdown cancels active work. Preserve the volume
+per task. Inactive checkouts are removed after 24 hours; discard can remove them earlier. The agent examples release finished checkouts after saving evidence. Read-only probes do not
+reserve a workspace. Saved platform outputs and history remain. Broker shutdown cancels active work. Preserve the volume
 and the Compose project when refreshing the app.
 
 ## Verification

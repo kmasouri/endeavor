@@ -330,3 +330,49 @@ test('recovery cleans labelled containers and marks in-flight outcomes unknown w
     await ctx.cleanup();
   }
 });
+
+test('read probes do not reserve workspaces and discard releases a slot', async () => {
+  const ctx = await fixture();
+  const tasks: string[] = [];
+  try {
+    for (let i = 0; i < 8; i++)
+      assert.deepEqual(await ctx.service.call(randomUUID(), 'list_executions', {}), []);
+    for (let i = 0; i < 4; i++) {
+      const task = randomUUID();
+      tasks.push(task);
+      await checkedOut(ctx, task);
+    }
+    await assert.rejects(
+      ctx.service.call(randomUUID(), 'checkout_repository', {
+        repository: 'owner/repo',
+        ref: 'main'
+      }),
+      /workspace limit/
+    );
+    await ctx.service.call(tasks[0], 'discard_repository', {});
+    await checkedOut(ctx, randomUUID());
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test('a waiting status read never holds the cancellation lock', async () => {
+  const ctx = await fixture();
+  const task = randomUUID();
+  try {
+    await checkedOut(ctx, task);
+    const job = (await ctx.service.call(task, 'run_command', { command: 'sleep 60' })) as {
+      id: string;
+    };
+    const started = Date.now();
+    const waiting = ctx.service.call(task, 'get_execution', {
+      execution_id: job.id,
+      wait_seconds: 20
+    });
+    await ctx.service.call(task, 'cancel_execution', { execution_id: job.id });
+    assert.equal(((await waiting) as { status: string }).status, 'cancelled');
+    assert.ok(Date.now() - started < 5000);
+  } finally {
+    await ctx.cleanup();
+  }
+});
