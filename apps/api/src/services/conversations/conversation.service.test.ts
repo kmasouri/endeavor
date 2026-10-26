@@ -299,4 +299,56 @@ describe('ConversationService', () => {
     });
     expect(notes.delete).not.toHaveBeenCalled();
   });
+
+  it('returns an unread count for each listed conversation, 0 when there is none', async () => {
+    const { service, conversations } = setup();
+    const other = { ...conversation, id: 'c2' };
+    conversations.list.mockResolvedValue([conversation, other]);
+    conversations.count.mockResolvedValue(2);
+    conversations.countUnread.mockResolvedValue(new Map([[CONV, 3]]));
+
+    const result = await service.listConversations(KIM, { limit: 50, offset: 0 });
+
+    expect(conversations.countUnread).toHaveBeenCalledWith({
+      humanId: KIM,
+      conversationIds: [CONV, 'c2']
+    });
+    expect(result.conversations.map((item) => item.unreadCount)).toEqual([3, 0]);
+    expect(result.total).toBe(2);
+  });
+
+  it('marks a conversation read up to a message and returns what is left unread', async () => {
+    const { service, conversations, messages } = setup();
+    messages.getById.mockResolvedValue({ id: 'm1', conversationId: CONV } as Message);
+    conversations.countUnread.mockResolvedValue(new Map());
+
+    const result = await service.markRead(KIM, CONV, { messageId: 'm1' });
+
+    expect(conversations.markRead).toHaveBeenCalledWith({
+      conversationId: CONV,
+      humanId: KIM,
+      messageId: 'm1'
+    });
+    expect(result).toEqual({ conversationId: CONV, unreadCount: 0 });
+  });
+
+  it("won't mark read with a message from another conversation", async () => {
+    const { service, conversations, messages } = setup();
+    messages.getById.mockResolvedValue({ id: 'm1', conversationId: 'elsewhere' } as Message);
+
+    await expect(service.markRead(KIM, CONV, { messageId: 'm1' })).rejects.toMatchObject({
+      name: 'messageNotFound'
+    });
+    expect(conversations.markRead).not.toHaveBeenCalled();
+  });
+
+  it("won't mark read with a message that doesn't exist", async () => {
+    const { service, conversations, messages } = setup();
+    messages.getById.mockResolvedValue(null);
+
+    await expect(service.markRead(KIM, CONV, { messageId: 'm1' })).rejects.toMatchObject({
+      name: 'messageNotFound'
+    });
+    expect(conversations.markRead).not.toHaveBeenCalled();
+  });
 });

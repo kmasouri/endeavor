@@ -27,10 +27,12 @@
   import ApprovalCard from './ApprovalCard.svelte';
   import TaskStatus from './TaskStatus.svelte';
   import ArtifactCard from './ArtifactCard.svelte';
-  let { conversationId, me, onReady }: {
+  let { conversationId, me, onReady, onRead }: {
     conversationId: string;
     me: Human;
     onReady?: (conversation: ConversationDetails) => boolean;
+    // Called after the conversation is marked read, so the sidebar can refresh its counts.
+    onRead?: () => void;
   } = $props();
   let draft = $state('');
   let showDetails = $state(false);
@@ -77,6 +79,22 @@
     if (details.data && onReady?.(details.data)) {
       void tick().then(() => document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus());
     }
+  });
+  // Seeing the conversation marks it read up to the newest message shown, again whenever a
+  // new one arrives while it is open.
+  let markedRead: string | null = null;
+  $effect(() => {
+    const newest = messages.data?.data.at(-1);
+    if (!newest) return;
+    const key = `${conversationId}:${newest.id}`;
+    if (key === markedRead) return;
+    markedRead = key;
+    api.put(`/conversations/${conversationId}/read`, { messageId: newest.id }).then(
+      () => onRead?.(),
+      () => {
+        if (markedRead === key) markedRead = null;
+      }
+    );
   });
   let conversation = $derived(details.data!);
   let taskList = $derived(tasks.data?.data ?? []);

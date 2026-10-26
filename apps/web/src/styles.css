@@ -603,6 +603,10 @@ pre {
   color: var(--text-100);
   font-weight: 500;
 }
+.sidebar-conversations > a.unread {
+  color: var(--text-100);
+  font-weight: 700;
+}
 .sidebar-conversations {
   display: flex;
   flex-direction: column;

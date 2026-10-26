@@ -165,6 +165,9 @@
     const selected = recent.find((conversation) => conversation.id === saved) ?? recent[0];
     if (selected) window.location.hash = `/conversations/${selected.id}`;
   });
+  // The open conversation is being read, so it shows no count even before the list refreshes.
+  const unreadIn = (conversation: Conversation) =>
+    section === 'conversations' && id === conversation.id ? 0 : (conversation.unreadCount ?? 0);
   const openConversation = (id: string) => {
     searching = false;
     window.location.hash = `/conversations/${id}`;
@@ -274,13 +277,20 @@
           {#each recent as conversation (conversation.id)}
             <a
               class:active={section === 'conversations' && id === conversation.id}
+              class:unread={unreadIn(conversation) > 0}
+              aria-label={unreadIn(conversation)
+                ? `${conversationChannelName(conversation.title)}, ${unreadIn(conversation)} unread`
+                : undefined}
               href={`#/conversations/${conversation.id}`}
               title={conversation.title}
               aria-current={section === 'conversations' && id === conversation.id ? 'page' : undefined}
               onclick={() => {
                 if (window.innerWidth < 700) collapsed = true;
               }}
-              ><span class="ellipsis">{conversationChannelName(conversation.title)}</span></a
+              ><span class="ellipsis grow">{conversationChannelName(conversation.title)}</span
+              >{#if unreadIn(conversation)}<span class="count-badge" aria-hidden="true"
+                  >{unreadIn(conversation)}</span
+                >{/if}</a
             >
           {/each}
         </div>
@@ -378,7 +388,7 @@
             const focus = focusConversation === conversation.id;
             if (focus) focusConversation = null;
             return focus;
-          }} />
+          }} onRead={conversations.reload} />
         {:else}
           <section class="endeavor-empty">
             <Icon name="conversations" size={36} />

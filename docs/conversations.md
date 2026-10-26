@@ -61,6 +61,24 @@ The pilot setup reuses its canonical schedule conversation name to avoid creatin
 
 Only people add members. Adding a member with `history: "from_now"` hides older messages from them. An agent can't add anyone.
 
+### Unread counts
+
+Each person has a read marker per conversation: the last message they have seen. Opening an
+endeavor in the web interface calls `PUT /conversations/:conversationId/read` with
+`{ "messageId": "<newest message shown>" }`, and calls it again when a new message arrives while
+the endeavor is open. The marker only moves forward (by `createdAt`, then `id`, the message
+order), so a late or repeated call can't make newer messages unread. The response is
+`{ conversationId, unreadCount }`.
+
+`GET /conversations` adds `unreadCount` to each conversation: messages after your marker that
+someone else wrote and that you are allowed to see. Messages you wrote never count. Conversations
+you aren't a member of always show `0`, even though everyone can open them in v1. With no
+marker yet, every visible message from others counts. When the read table was added, current
+members started at the newest message, so old conversations didn't all light up.
+
+The sidebar shows the count in a red badge and the name in bold. The endeavor you have open
+shows no count.
+
 `GET /directory` lists the enabled agents a person can discover: name, purpose, and capabilities (provider, model, and how many skills and connections). It never shows instructions, saved notes, credentials, or conversations. Agents also see directory agents that aren't in the conversation, by name and purpose only. If one could help, the agent calls `suggest_participant`. That posts a suggestion to the people in the conversation; it doesn't add the agent or contact it. Seeing an agent in the directory doesn't let anyone message it outside a conversation.
 
 ## What agents can do
