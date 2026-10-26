@@ -2153,10 +2153,13 @@ describe('MCP connections', () => {
     await ctx.runner.runTask(makeTask());
     expect(ctx.mcpClient.listTools).toHaveBeenCalledWith({
       url: connection.baseUrl,
-      headers: { Authorization: 'Bearer oauth-secret' }
+      headers: { Authorization: 'Bearer oauth-secret', 'X-Endeavor-Task-Id': TASK }
     });
     expect(ctx.mcpClient.callTool).toHaveBeenCalledWith(
-      { url: connection.baseUrl, headers: { Authorization: 'Bearer oauth-secret' } },
+      {
+        url: connection.baseUrl,
+        headers: { Authorization: 'Bearer oauth-secret', 'X-Endeavor-Task-Id': TASK }
+      },
       'lookup',
       call().input
     );
@@ -2213,7 +2216,10 @@ describe('MCP connections', () => {
     ]);
     await ctx.runner.runTask(makeTask());
     expect(ctx.mcpClient.callTool).toHaveBeenCalledWith(
-      { url: connection.baseUrl, headers: { Authorization: 'Bearer secret' } },
+      {
+        url: connection.baseUrl,
+        headers: { Authorization: 'Bearer secret', 'X-Endeavor-Task-Id': TASK }
+      },
       'lookup',
       call().input
     );

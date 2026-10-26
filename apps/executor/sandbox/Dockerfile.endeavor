@@ -1,0 +1,14 @@
+FROM node:26-bookworm
+WORKDIR /opt
+COPY package.json package-lock.json ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY apps/executor/package.json ./apps/executor/
+RUN npm ci --ignore-scripts && npx playwright install --with-deps chromium && npm cache clean --force
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/browsers
+# Browser files must be readable by the unprivileged worker.
+RUN mv /root/.cache/ms-playwright /opt/browsers && chmod -R a+rX /opt/browsers
+COPY apps/executor/sandbox/worker.mjs /sandbox/worker.mjs
+USER node
+WORKDIR /workspace
+ENTRYPOINT ["node", "/sandbox/worker.mjs"]

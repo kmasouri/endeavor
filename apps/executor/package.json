@@ -1,0 +1,24 @@
+{
+  "name": "@endeavor/executor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "node --test src/*.test.ts",
+    "start": "node src/index.ts",
+    "verify:sandbox": "node src/verify-sandbox.ts"
+  },
+  "dependencies": {
+    "fastify": "^5.12.5",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "@eslint/js": "^10.0.1",
+    "typescript-eslint": "^8.71.0",
+    "@modelcontextprotocol/client": "^2.4.0"
+  }
+}

@@ -6,10 +6,12 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
+COPY apps/executor/package.json ./apps/executor/
 RUN npm ci
 
 COPY apps/api ./apps/api
 COPY apps/web ./apps/web
+COPY apps/executor ./apps/executor
 RUN npm run build
 
 FROM node:26-alpine AS runtime
@@ -21,6 +23,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/
 COPY apps/web/package.json ./apps/web/
+COPY apps/executor/package.json ./apps/executor/
 RUN npm ci --omit=dev --workspace apps/api && npm cache clean --force
 
 # Same folder layout as the repo, so the API finds apps/web/dist and apps/api/db.

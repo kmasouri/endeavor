@@ -82,6 +82,14 @@ const envSchema = z.object({
     .transform((value) => value === 'true'),
   // Where each task's files go: one folder per task. Relative paths start from where the app runs.
   WORKSPACES_DIR: z.string().min(1).default('workspaces'),
+  // Optional isolated execution service. These settings are consumed by apps/executor.
+  EXECUTOR_HOST: z.string().default('0.0.0.0'),
+  EXECUTOR_PORT: z.coerce.number().int().min(1).max(65535).default(3200),
+  EXECUTOR_TOKEN: z.string().min(32).optional(),
+  EXECUTOR_IMAGE: z.string().min(1).default('endeavor-sandbox:local'),
+  EXECUTOR_DATA_DIR: z.string().min(1).default('/data'),
+  EXECUTOR_REPOSITORIES: z.string().default(''),
+  EXECUTOR_GITHUB_TOKEN: z.string().optional(),
   // Browser origin used for fixed OAuth callbacks.
   APP_PUBLIC_URL: z
     .url()
@@ -141,6 +149,13 @@ export const config = {
   MODEL_PRICES: env.MODEL_PRICES,
   TASK_BUDGET_USD: env.TASK_BUDGET_USD,
   WORKSPACES_DIR: env.WORKSPACES_DIR,
+  EXECUTOR_HOST: env.EXECUTOR_HOST,
+  EXECUTOR_PORT: env.EXECUTOR_PORT,
+  EXECUTOR_TOKEN: env.EXECUTOR_TOKEN,
+  EXECUTOR_IMAGE: env.EXECUTOR_IMAGE,
+  EXECUTOR_DATA_DIR: env.EXECUTOR_DATA_DIR,
+  EXECUTOR_REPOSITORIES: env.EXECUTOR_REPOSITORIES,
+  EXECUTOR_GITHUB_TOKEN: env.EXECUTOR_GITHUB_TOKEN,
   APP_PUBLIC_URL: env.APP_PUBLIC_URL,
   CREDENTIALS_KEY: env.CREDENTIALS_KEY
 };

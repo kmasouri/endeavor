@@ -1,0 +1,367 @@
+import { OperationError } from './errors.ts';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { z } from 'zod';
+import type { ContainerClient, ContainerRun } from './docker.ts';
+import type { RepositorySource } from './github.ts';
+import {
+  filesSchema,
+  toolSchemas,
+  type Settings,
+  type ToolName,
+  type WorkspaceFile
+} from './schemas.ts';
+
+const executionResult = z.strictObject({
+  exitCode: z.number().int(),
+  log: z.string().max(16_000),
+  files: filesSchema
+});
+type Execution = {
+  id: string;
+  status: 'running' | 'finished' | 'cancelled' | 'interrupted' | 'failed';
+  command: string;
+  startedAt: string;
+  finishedAt?: string;
+  exitCode?: number;
+  log?: string;
+  error?: string;
+  revision: number;
+  inputRevision: number;
+  verifiedRevision?: number | null;
+  workspaceChanged?: boolean;
+  sha: string | null;
+  repository: string | null;
+};
+type Checkout = {
+  repository: string;
+  sha: string;
+  files: WorkspaceFile[];
+  baseline: WorkspaceFile[];
+};
+type RecordData = {
+  revision: number;
+  checkout: Checkout | null;
+  executions: Execution[];
+  touchedAt: number;
+};
+type Active = { cancelled: boolean; container?: ContainerRun; done?: Promise<void> };
+const fresh = (): RecordData => ({
+  revision: 0,
+  checkout: null,
+  executions: [],
+  touchedAt: Date.now()
+});
+export const fileHash = (file: WorkspaceFile) =>
+  createHash('sha256')
+    .update(file.base64)
+    .update(file.executable ? 'x' : '-')
+    .digest('hex');
+
+export class ExecutionService {
+  private readonly settings: Settings;
+  private readonly containers: ContainerClient;
+  private readonly source: RepositorySource;
+  private readonly records = new Map<string, RecordData>();
+  private readonly busy = new Set<string>();
+  private readonly active = new Map<string, Active>();
+  constructor(settings: Settings, containers: ContainerClient, source: RepositorySource) {
+    this.settings = settings;
+    this.containers = containers;
+    this.source = source;
+  }
+
+  async initialize(): Promise<void> {
+    await mkdir(this.settings.EXECUTOR_DATA_DIR, { recursive: true, mode: 0o700 });
+    await this.containers.recover();
+    for (const name of await readdir(this.settings.EXECUTOR_DATA_DIR)) {
+      if (!/^[a-f0-9-]{36}\.json$/.test(name)) continue;
+      const taskId = name.slice(0, -5);
+      const record = JSON.parse(
+        await readFile(join(this.settings.EXECUTOR_DATA_DIR, name), 'utf8')
+      ) as RecordData;
+      for (const job of record.executions.filter((job) => job.status === 'running')) {
+        job.status = 'interrupted';
+        job.error =
+          'Executor restarted. Outcome is unknown; changes were not imported. Run verification again.';
+        job.finishedAt = new Date().toISOString();
+      }
+      this.records.set(taskId, record);
+      await this.persist(taskId, record);
+    }
+    await this.cleanup();
+  }
+
+  async cleanup(): Promise<void> {
+    for (const [task, record] of this.records) {
+      if (
+        !this.busy.has(task) &&
+        !this.active.has(task) &&
+        Date.now() - record.touchedAt > 86_400_000
+      ) {
+        await rm(this.file(task), { force: true });
+        this.records.delete(task);
+      }
+    }
+  }
+  async close(): Promise<void> {
+    for (const active of this.active.values()) {
+      active.cancelled = true;
+      await active.container?.cancel();
+    }
+    await Promise.all([...this.active.values()].map((active) => active.done));
+  }
+  private file(task: string): string {
+    return join(this.settings.EXECUTOR_DATA_DIR, `${task}.json`);
+  }
+  private async persist(task: string, record: RecordData): Promise<void> {
+    await writeFile(`${this.file(task)}.tmp`, JSON.stringify(record), { mode: 0o600 });
+    await rename(`${this.file(task)}.tmp`, this.file(task));
+  }
+
+  async call(task: string, name: ToolName, raw: unknown): Promise<unknown> {
+    // Task identity is supplied by the trusted runner, never by model arguments.
+    task = z.uuid().parse(task).toLowerCase();
+    const input = toolSchemas[name].parse(raw);
+    while (this.busy.has(task)) await new Promise((resolve) => setTimeout(resolve, 5));
+    this.busy.add(task);
+    try {
+      let record = this.records.get(task);
+      if (!record) {
+        await this.cleanup();
+        if (this.records.size >= 4)
+          throw new OperationError(
+            'Executor workspace limit reached; discard finished task checkouts'
+          );
+        record = fresh();
+        this.records.set(task, record);
+      }
+      record.touchedAt = Date.now();
+      const active = this.active.get(task);
+      if (name === 'get_execution' || name === 'cancel_execution') {
+        const { execution_id } = toolSchemas.get_execution.parse(input);
+        const job = record.executions.find((job) => job.id === execution_id);
+        if (!job) throw new OperationError('Execution does not belong to this task');
+        if (name === 'cancel_execution' && job.status === 'running' && active) {
+          active.cancelled = true;
+          await active.container?.cancel();
+          job.status = 'cancelled';
+          job.finishedAt = new Date().toISOString();
+        }
+        await this.persist(task, record);
+        return {
+          ...job,
+          currentRevision: record.revision,
+          currentRepository: record.checkout?.repository ?? null
+        };
+      }
+      if (name === 'list_executions')
+        return record.executions.map((job) => ({
+          id: job.id,
+          status: job.status,
+          command: job.command,
+          revision: job.revision,
+          sha: job.sha
+        }));
+      if (active)
+        throw new OperationError(
+          'Wait for or cancel the current execution before editing the checkout'
+        );
+      if (name === 'discard_repository') {
+        await rm(this.file(task), { force: true });
+        this.records.delete(task);
+        return { discarded: true };
+      }
+      if (name === 'checkout_repository' || name === 'run_command') {
+        if (this.active.size >= 2)
+          throw new OperationError('Two executions are already running; try again later');
+        if (name === 'run_command' && !record.checkout)
+          throw new OperationError('Check out a repository first');
+        const job: Execution = {
+          id: randomUUID(),
+          status: 'running',
+          command:
+            name === 'run_command' ? toolSchemas.run_command.parse(input).command : 'checkout',
+          startedAt: new Date().toISOString(),
+          revision: record.revision,
+          inputRevision: record.revision,
+          sha: name === 'checkout_repository' ? null : (record.checkout?.sha ?? null),
+          repository:
+            name === 'checkout_repository'
+              ? toolSchemas.checkout_repository.parse(input).repository
+              : (record.checkout?.repository ?? null)
+        };
+        record.executions = [...record.executions.slice(-19), job];
+        const operation: Active = { cancelled: false };
+        this.active.set(task, operation);
+        try {
+          await this.persist(task, record);
+        } catch (error) {
+          this.active.delete(task);
+          throw error;
+        }
+        // Starts after the initial state is durable. MCP returns promptly; polling is separate.
+        operation.done = this.execute(
+          task,
+          record,
+          job,
+          operation,
+          name === 'checkout_repository' ? toolSchemas.checkout_repository.parse(input) : null
+        ).catch(() => {
+          job.status = 'failed';
+          job.verifiedRevision = null;
+          job.error = 'Execution state could not be saved. Verify storage before trying again.';
+        });
+        return { ...job };
+      }
+      const checkout = record.checkout;
+      if (!checkout) throw new OperationError('Check out a repository first');
+      if (name === 'list_repository_files') {
+        const { offset, limit } = toolSchemas.list_repository_files.parse(input);
+        return {
+          repository: checkout.repository,
+          sha: checkout.sha,
+          revision: record.revision,
+          total: checkout.files.length,
+          paths: checkout.files.slice(offset, offset + limit).map((file) => file.path)
+        };
+      }
+      if (name === 'repository_changes') {
+        const before = new Map(checkout.baseline.map((file) => [file.path, fileHash(file)]));
+        const after = new Set(checkout.files.map((file) => file.path));
+        const { offset, limit } = toolSchemas.repository_changes.parse(input);
+        const changed = checkout.files
+          .filter((file) => before.get(file.path) !== fileHash(file))
+          .map((file) => ({
+            path: file.path,
+            hash: fileHash(file),
+            bytes: Buffer.byteLength(file.base64, 'base64'),
+            executable: file.executable
+          }));
+        const deleted = [...before.keys()].filter((path) => !after.has(path));
+        return {
+          repository: checkout.repository,
+          sha: checkout.sha,
+          revision: record.revision,
+          changed: changed.slice(offset, offset + limit),
+          deleted: deleted.slice(offset, offset + limit),
+          changedTotal: changed.length,
+          deletedTotal: deleted.length,
+          nextOffset:
+            Math.max(changed.length, deleted.length) > offset + limit ? offset + limit : null
+        };
+      }
+      const { path } = toolSchemas.read_repository_file.parse({
+        path: (input as { path: string }).path
+      });
+      const existing = checkout.files.find((file) => file.path === path);
+      if (name === 'read_repository_file') {
+        if (!existing) throw new OperationError('File does not exist');
+        const bytes = Buffer.from(existing.base64, 'base64');
+        const content = bytes.toString('utf8');
+        if (!Buffer.from(content).equals(bytes))
+          throw new OperationError('This file is binary; text editing is unavailable');
+        const { offset, limit } = toolSchemas.read_repository_file.parse(input);
+        return {
+          path,
+          content: content.slice(offset, offset + limit),
+          truncated: content.length > offset + limit,
+          nextOffset: content.length > offset + limit ? offset + limit : null,
+          totalCharacters: content.length,
+          hash: fileHash(existing),
+          revision: record.revision
+        };
+      }
+      if (name === 'delete_repository_file' && !existing)
+        throw new OperationError('File does not exist');
+      const next = checkout.files.filter((file) => file.path !== path);
+      if (name === 'write_repository_file')
+        next.push({
+          path,
+          base64: Buffer.from(toolSchemas.write_repository_file.parse(input).content).toString(
+            'base64'
+          ),
+          executable: existing?.executable ?? false
+        });
+      checkout.files = filesSchema.parse(next);
+      record.revision++;
+      await this.persist(task, record);
+      return { path, revision: record.revision };
+    } finally {
+      this.busy.delete(task);
+    }
+  }
+
+  private async execute(
+    task: string,
+    record: RecordData,
+    job: Execution,
+    active: Active,
+    checkout: { repository: string; ref: string } | null
+  ): Promise<void> {
+    let exported: z.infer<typeof executionResult> | undefined;
+    let snapshot: { sha: string; archive: string } | null = null;
+    const before =
+      record.checkout?.files
+        .map((file) => `${file.path}:${fileHash(file)}`)
+        .sort()
+        .join('\n') ?? '';
+    try {
+      snapshot = checkout ? await this.source.snapshot(checkout.repository, checkout.ref) : null;
+      if (!active.cancelled) {
+        active.container = this.containers.run(
+          job.id,
+          this.settings.EXECUTOR_IMAGE,
+          snapshot
+            ? { archive: snapshot.archive }
+            : { files: record.checkout!.files, command: job.command }
+        );
+        const result = await active.container.result;
+        if (result.code !== 0) throw new OperationError('Container failed');
+        exported = executionResult.parse(JSON.parse(result.stdout));
+      }
+    } catch {
+      // Provider errors, Docker output, and filesystem details never enter evidence.
+    }
+    while (this.busy.has(task)) await new Promise((resolve) => setTimeout(resolve, 5));
+    this.busy.add(task);
+    try {
+      if (active.cancelled) job.status = 'cancelled';
+      else if (!exported) {
+        job.status = 'failed';
+        job.error =
+          'Checkout, execution, or export failed. Check repository access, image availability, resource limits, and supported files. Changes were not imported.';
+      } else {
+        if (snapshot && checkout)
+          record.checkout = {
+            repository: checkout.repository,
+            sha: snapshot.sha,
+            files: exported.files,
+            baseline: exported.files
+          };
+        else record.checkout!.files = exported.files;
+        record.revision++;
+        job.revision = record.revision;
+        job.sha = record.checkout!.sha;
+        job.status = 'finished';
+        job.exitCode = exported.exitCode;
+        job.log = exported.log;
+        job.workspaceChanged =
+          before !==
+          exported.files
+            .map((file) => `${file.path}:${fileHash(file)}`)
+            .sort()
+            .join('\n');
+        job.verifiedRevision =
+          !checkout && !job.workspaceChanged && exported.exitCode === 0 ? record.revision : null;
+      }
+      job.finishedAt = new Date().toISOString();
+      record.touchedAt = Date.now();
+      await this.persist(task, record);
+    } finally {
+      this.busy.delete(task);
+      this.active.delete(task);
+    }
+  }
+}

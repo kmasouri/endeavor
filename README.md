@@ -77,31 +77,38 @@ The service listens on `http://localhost:3000` by default. Swagger UI is at `htt
 
 The app checks all of these at startup, in `apps/api/src/config.ts`.
 
-| Name                 | Default                     | Description                                                                                       |
-| -------------------- | --------------------------- | ------------------------------------------------------------------------------------------------- |
-| `ENVIRONMENT`        | `production`                | Where the app runs. `local` reads `.env`. Tests use `test`.                                       |
-| `HOST`               | `0.0.0.0`                   | Address the server listens on.                                                                    |
-| `PORT`               | `3000`                      | Port the server listens on.                                                                       |
-| `DATABASE_URL`       |                             | Full Postgres connection URL. If set, the other `DATABASE_*` are ignored.                         |
-| `DATABASE_HOST`      | `localhost`                 | Postgres host, if `DATABASE_URL` isn't set.                                                       |
-| `DATABASE_PORT`      | `5432`                      | Postgres port, if `DATABASE_URL` isn't set.                                                       |
-| `DATABASE_NAME`      | `endeavor`            | Database name, if `DATABASE_URL` isn't set.                                                       |
-| `DATABASE_USER`      | `endeavor`            | Username, if `DATABASE_URL` isn't set.                                                            |
-| `DATABASE_PASSWORD`  | `endeavor`            | Password, if `DATABASE_URL` isn't set.                                                            |
-| `LOGGER_LEVEL`       | `info`                      | How much to log. Tests use `silent`.                                                              |
-| `REQUEST_ID_HEADER`  | `x-request-id`              | Header that carries the request ID, in and out.                                                   |
-| `WEBHOOK_URL`        |                             | Where to send events like `item.created`. If not set, webhooks are off.                           |
-| `ANTHROPIC_API_KEY`  |                             | Turns on the `anthropic` provider for agents.                                                     |
-| `OPENAI_API_KEY`     |                             | Turns on the `openai` provider for agents.                                                        |
-| `OPENAI_BASE_URL`    | `https://api.openai.com/v1` | OpenAI-compatible API address. It must support the Responses API.                                 |
-| `RUNNER_ENABLED`     | `true`                      | Run the runner, which delivers messages and runs agents' work. Always off in tests.               |
-| `RUNNER_INTERVAL_MS` | `2000`                      | How often the runner checks for work, in milliseconds.                                            |
-| `WORKSPACES_DIR`     | `workspaces`                | Folder for agents' files, one subfolder per task.                                                 |
-| `COMPLETION_CHECK`   | `false`                     | Check each result against its criteria with a separate model call before a task completes.        |
-| `MODEL_PRICES`       |                             | Model prices as JSON: `{"model":{"inputPerMillion":0.15,"outputPerMillion":0.6}}`, in US dollars. |
-| `TASK_BUDGET_USD`    | `1`                         | The most one task may spend, in US dollars, unless its agent's configuration sets `maxCostUsd`.   |
-| `APP_PUBLIC_URL` | | Browser origin for MCP OAuth callbacks, such as `http://localhost:3100`. Required for OAuth sign-in. |
-| `CREDENTIALS_KEY`    |                             | 32 random bytes (base64 or hex) that encrypt connection credentials. Needed to save a credential. |
+| Name                    | Default                     | Description                                                                                          |
+| ----------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `ENVIRONMENT`           | `production`                | Where the app runs. `local` reads `.env`. Tests use `test`.                                          |
+| `HOST`                  | `0.0.0.0`                   | Address the server listens on.                                                                       |
+| `PORT`                  | `3000`                      | Port the server listens on.                                                                          |
+| `DATABASE_URL`          |                             | Full Postgres connection URL. If set, the other `DATABASE_*` are ignored.                            |
+| `DATABASE_HOST`         | `localhost`                 | Postgres host, if `DATABASE_URL` isn't set.                                                          |
+| `DATABASE_PORT`         | `5432`                      | Postgres port, if `DATABASE_URL` isn't set.                                                          |
+| `DATABASE_NAME`         | `endeavor`                  | Database name, if `DATABASE_URL` isn't set.                                                          |
+| `DATABASE_USER`         | `endeavor`                  | Username, if `DATABASE_URL` isn't set.                                                               |
+| `DATABASE_PASSWORD`     | `endeavor`                  | Password, if `DATABASE_URL` isn't set.                                                               |
+| `LOGGER_LEVEL`          | `info`                      | How much to log. Tests use `silent`.                                                                 |
+| `REQUEST_ID_HEADER`     | `x-request-id`              | Header that carries the request ID, in and out.                                                      |
+| `WEBHOOK_URL`           |                             | Where to send events like `item.created`. If not set, webhooks are off.                              |
+| `ANTHROPIC_API_KEY`     |                             | Turns on the `anthropic` provider for agents.                                                        |
+| `OPENAI_API_KEY`        |                             | Turns on the `openai` provider for agents.                                                           |
+| `OPENAI_BASE_URL`       | `https://api.openai.com/v1` | OpenAI-compatible API address. It must support the Responses API.                                    |
+| `RUNNER_ENABLED`        | `true`                      | Run the runner, which delivers messages and runs agents' work. Always off in tests.                  |
+| `RUNNER_INTERVAL_MS`    | `2000`                      | How often the runner checks for work, in milliseconds.                                               |
+| `WORKSPACES_DIR`        | `workspaces`                | Folder for agents' files, one subfolder per task.                                                    |
+| `EXECUTOR_HOST`         | `0.0.0.0`                   | Execution service listen address; no host port in Compose.                                           |
+| `EXECUTOR_PORT`         | `3200`                      | Execution service port.                                                                              |
+| `EXECUTOR_TOKEN`        | unset                       | At least 32 random characters; authenticates the execution connection.                               |
+| `EXECUTOR_IMAGE`        | `endeavor-sandbox:local`    | Operator-built offline execution image. Agents cannot choose it.                                     |
+| `EXECUTOR_DATA_DIR`     | `/data`                     | Broker snapshot and execution state directory.                                                       |
+| `EXECUTOR_REPOSITORIES` | empty                       | Comma-separated GitHub repositories the broker may fetch.                                            |
+| `EXECUTOR_GITHUB_TOKEN` | unset                       | Optional token for private snapshots; never passed to child containers.                              |
+| `COMPLETION_CHECK`      | `false`                     | Check each result against its criteria with a separate model call before a task completes.           |
+| `MODEL_PRICES`          |                             | Model prices as JSON: `{"model":{"inputPerMillion":0.15,"outputPerMillion":0.6}}`, in US dollars.    |
+| `TASK_BUDGET_USD`       | `1`                         | The most one task may spend, in US dollars, unless its agent's configuration sets `maxCostUsd`.      |
+| `APP_PUBLIC_URL`        |                             | Browser origin for MCP OAuth callbacks, such as `http://localhost:3100`. Required for OAuth sign-in. |
+| `CREDENTIALS_KEY`       |                             | 32 random bytes (base64 or hex) that encrypt connection credentials. Needed to save a credential.    |
 
 ## Commands
 
@@ -188,10 +195,10 @@ Publishing starts the `release` workflow. It builds the Docker image, tags it wi
 
 Set these in the GitHub `sandbox` environment:
 
-| Name                 | Kind     | Description                                                    |
-| -------------------- | -------- | -------------------------------------------------------------- |
-| `AWS_ROLE_TO_ASSUME` | secret   | The AWS role GitHub Actions logs in as.                        |
-| `AWS_REGION`         | variable | The AWS region the app runs in.                                |
+| Name                 | Kind     | Description                                              |
+| -------------------- | -------- | -------------------------------------------------------- |
+| `AWS_ROLE_TO_ASSUME` | secret   | The AWS role GitHub Actions logs in as.                  |
+| `AWS_REGION`         | variable | The AWS region the app runs in.                          |
 | `ECR_REPOSITORY`     | variable | ECR repository name, such as `endeavor-sandbox-service`. |
 | `ECS_CLUSTER`        | variable | ECS cluster name, such as `endeavor-sandbox-cluster`.    |
 | `ECS_SERVICE`        | variable | ECS service name, such as `endeavor-sandbox-service`.    |

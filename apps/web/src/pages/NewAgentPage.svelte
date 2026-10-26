@@ -7,8 +7,10 @@
   import AgentConfigFields from './AgentConfigFields.svelte';
   import { initialConfig, type ConfigValues } from './AgentConfig';
   import './agents.css';
+  import { codingExamples } from './coding-examples';
   const example = new URLSearchParams(window.location.hash.split('?')[1]).get('example');
   const examples = {
+    ...codingExamples,
     researcher: {
       name: 'Researcher',
       purpose: 'Finds and summarizes sources on a question, citing each claim.',
@@ -22,7 +24,7 @@
         'Test the staging site. Report failures with steps to reproduce, expected behavior, and evidence. Ask for the site and access details before starting.'
     }
   };
-  const preset = example === 'researcher' || example === 'qa' ? examples[example] : undefined;
+  const preset = example && Object.hasOwn(examples, example) ? examples[example as keyof typeof examples] : undefined;
   let name = $state(preset?.name ?? '');
   let purpose = $state(preset?.purpose ?? '');
   let config = $state<ConfigValues>({
@@ -48,7 +50,9 @@
   />
   <form class="creation-form" onsubmit={create}>
     <fieldset class="stack">
-      <legend>Profile</legend><label>Name<input bind:value={name} required /></label><label
+      <legend>Profile</legend>
+      <p class="caption">Examples: <a href="#/agents/new?example=coder">Coding agent</a> · <a href="#/agents/new?example=reviewer">Code reviewer</a></p>
+      <label>Name<input bind:value={name} required /></label><label
         >Purpose<input bind:value={purpose} required /></label
       >
     </fieldset>
