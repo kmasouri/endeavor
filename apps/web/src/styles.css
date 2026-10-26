@@ -420,7 +420,8 @@ pre {
   color: var(--text-200);
 }
 .shell {
-  --sidebar-width: 264px;
+  --sidebar-open-width: var(--sidebar-chosen-width, 264px);
+  --sidebar-width: var(--sidebar-open-width);
   --sidebar-opacity: 1;
   --sidebar-visibility: visible;
   display: grid;
@@ -435,13 +436,13 @@ pre {
   --sidebar-visibility: hidden;
 }
 .shell.sidebar-collapsed:has(.sidebar :focus-visible) {
-  --sidebar-width: 264px;
+  --sidebar-width: var(--sidebar-open-width);
   --sidebar-opacity: 1;
   --sidebar-visibility: visible;
 }
 @media (hover: hover) and (pointer: fine) {
   .shell.sidebar-collapsed:has(.sidebar:hover) {
-    --sidebar-width: 264px;
+    --sidebar-width: var(--sidebar-open-width);
     --sidebar-opacity: 1;
     --sidebar-visibility: visible;
   }
@@ -473,7 +474,7 @@ pre {
 .sidebar nav,
 .sidebar-conversations,
 .sidebar-footer {
-  width: 239px;
+  width: calc(var(--sidebar-open-width) - 25px);
   flex-shrink: 0;
 }
 .sidebar nav a > svg,
@@ -498,6 +499,48 @@ pre {
   width: calc(var(--sidebar-width) - 25px);
   overflow: hidden;
   transition: width 220ms ease, background-color 160ms ease;
+}
+.sidebar-resizer {
+  position: fixed;
+  top: 66px;
+  bottom: 0;
+  left: calc(var(--sidebar-width) - 4px);
+  z-index: 11;
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.sidebar-resizer::after {
+  content: '';
+  position: absolute;
+  inset: 0 3px;
+  background: transparent;
+  transition: background-color 160ms ease;
+}
+.sidebar-resizer:hover::after,
+.sidebar-resizer:focus-visible::after,
+.shell.sidebar-resizing .sidebar-resizer::after {
+  background: var(--accent);
+}
+.sidebar-resizer:focus-visible {
+  outline: none;
+}
+.shell.sidebar-resizing {
+  cursor: col-resize;
+  user-select: none;
+}
+.shell.sidebar-resizing,
+.shell.sidebar-resizing .sidebar,
+.shell.sidebar-resizing .sidebar nav a {
+  transition: none;
+}
+@media (max-width: 700px) {
+  .shell {
+    --sidebar-open-width: 264px;
+  }
+  .sidebar-resizer {
+    display: none;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .shell,

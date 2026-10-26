@@ -204,6 +204,42 @@ for (const theme of ['dark', 'light'] as const) {
   });
 }
 
+test('sidebar width drags between its limits, remembers the choice, and works from the keyboard', async ({ page }) => {
+  await mockApi(page);
+  await page.goto('/app/');
+  const sidebar = page.getByRole('complementary', { name: 'Sidebar', exact: true });
+  const width = () => sidebar.evaluate((element) => element.getBoundingClientRect().width);
+  const handle = page.getByRole('separator', { name: 'Resize sidebar', exact: true });
+  await expect.poll(width).toBe(264);
+  const drag = async (x: number) => {
+    const box = (await handle.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + 100);
+    await page.mouse.down();
+    await page.mouse.move(x, box.y + 100, { steps: 4 });
+    await page.mouse.up();
+  };
+  await drag(360);
+  await expect.poll(width).toBe(360);
+  await expect(handle).toHaveAttribute('aria-valuenow', '360');
+  await drag(900);
+  await expect.poll(width).toBe(480);
+  await drag(40);
+  await expect.poll(width).toBe(220);
+  await page.reload();
+  await expect.poll(width).toBe(220);
+  await handle.focus();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(width).toBe(236);
+  await page.keyboard.press('End');
+  await expect.poll(width).toBe(480);
+  await page.keyboard.press('Home');
+  await expect.poll(width).toBe(220);
+  await handle.dblclick();
+  await expect.poll(width).toBe(264);
+  await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+  await expect(handle).toHaveCount(0);
+});
+
 test.describe('touch sidebar', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
   test('compact icons navigate and the toggle opens the full menu', async ({ page }) => {
