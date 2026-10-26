@@ -3,6 +3,7 @@
   import ErrorNote from '../ErrorNote.svelte';
   import { api, type SkillDetails, type Connection } from '../api';
   import { createLoad } from '../state.svelte';
+  import DiscoverableToggle from './DiscoverableToggle.svelte';
   import EnableButton from './EnableButton.svelte';
   import SkillVersionForm from './SkillVersionForm.svelte';
   import ConnectionConfiguration from './ConnectionConfiguration.svelte';
@@ -25,6 +26,7 @@
         <ConnectionConfiguration connection={entry.data} onChanged={entry.reload} />
       {:else}
         <div class="row"><h2 class="grow">Instructions</h2><EnableButton path={`/skills/${entryId}`} disabled={!!entry.data?.disabledAt} onChanged={entry.reload} /></div>
+        <DiscoverableToggle path={`/skills/${entryId}`} discoverable={entry.data.discoverable} onChanged={entry.reload} />
         {#key entry.data.currentVersionId}<SkillVersionForm skill={entry.data} onSaved={entry.reload} />{/key}
       {/if}
     </div>

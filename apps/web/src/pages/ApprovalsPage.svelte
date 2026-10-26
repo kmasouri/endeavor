@@ -43,7 +43,8 @@
   {#if filter === 'Pending'}
     <p class="hint">
       Agents work on their own within their access. Some actions, set per connection, wait for a
-      person first. The agent's task waits until you decide, and it's told your reason.
+      person first. Agents can also ask for access to a skill or connection people made
+      discoverable. The agent's task waits until you decide, and it's told your reason.
     </p>
 
     <ErrorNote error={pending.error} />
@@ -57,12 +58,19 @@
     {#each pending.data ?? [] as approval (approval.id)}
       <div class="panel">
         <p class="muted small">
+          <span class="badge">
+            {approval.request.kind === 'access' ? 'Access request' : 'Action'}
+          </span>
           {name({ type: 'agent', id: approval.agentId })} asked {formatDateTime(approval.createdAt)} for
 
           <a href={`#/tasks/${approval.taskId}`}> this task </a>
         </p>
 
-        <ApprovalCard {approval} onDone={() => (pending.reload(), decided.reload())} />
+        <ApprovalCard
+          {approval}
+          agentName={name({ type: 'agent', id: approval.agentId })}
+          onDone={() => (pending.reload(), decided.reload())}
+        />
       </div>
     {/each}
   {:else}
@@ -75,15 +83,28 @@
     <ul class="list">
       {#each decided.data ?? [] as approval (approval.id)}
         <li>
-          <strong>
-            {#if approval.request.kind === 'mcp'}{approval.request.tool}{:else}{approval.request.method} {approval.request.path}{/if}
-          </strong>
+          {#if approval.request.kind === 'access'}
+            <strong>{approval.request.targetType} access to {approval.request.name}</strong>
+            <span class="badge">
+              {approval.status === 'approved'
+                ? approval.duration === 'ongoing'
+                  ? 'allowed ongoing'
+                  : 'allowed for the task'
+                : approval.status === 'rejected'
+                  ? "didn't allow"
+                  : approval.status}
+            </span>
+          {:else}
+            <strong>
+              {#if approval.request.kind === 'mcp'}{approval.request.tool}{:else}{approval.request.method} {approval.request.path}{/if}
+            </strong>
 
-          on {approval.request.connectionName}
+            on {approval.request.connectionName}
 
-          <span class="badge">
-            {approval.status}
-          </span>
+            <span class="badge">
+              {approval.status}
+            </span>
+          {/if}
 
           <div class="muted small">
             {name({ type: 'agent', id: approval.agentId })}
@@ -97,7 +118,7 @@
             {/if}
 
             {#if approval.result?.error}
-              {` · not made: ${approval.result.error}`}
+              {` · ${approval.request.kind === 'access' ? 'not added' : 'not made'}: ${approval.result.error}`}
             {/if}
 
             {#if approval.result?.status}

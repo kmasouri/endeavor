@@ -57,6 +57,13 @@ export class TaskLogger {
     );
   }
 
+  onTaskAccessRevoked(taskId: string, capabilityId: string): void {
+    getCurrentLogger(this.logger).info(
+      { event: 'task.access.revoked', taskId, capabilityId },
+      'access added to a task was revoked'
+    );
+  }
+
   onTaskCompletionRejected(taskId: string, reason: string): void {
     getCurrentLogger(this.logger).info(
       { event: 'task.completion.rejected', taskId, reason },

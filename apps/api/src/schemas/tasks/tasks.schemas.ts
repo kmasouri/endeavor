@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TASK_STATES } from '../../shared/types';
+import { ACCESS_DURATIONS, TASK_STATES } from '../../shared/types';
 
 export const taskParamsSchema = z.object({
   taskId: z.uuid()
@@ -58,6 +58,19 @@ export const listConversationOutputsQuerySchema = z.strictObject({
 
 export const approvalParamsSchema = z.object({ approvalId: z.uuid() });
 
+// duration is for access requests only: "task" (the default) or "ongoing".
+export const approveBodySchema = z
+  .strictObject({
+    reason: z.string().trim().min(1).optional(),
+    duration: z.enum(ACCESS_DURATIONS).optional()
+  })
+  .nullish();
+
+export const taskCapabilityParamsSchema = z.object({
+  taskId: z.uuid(),
+  capabilityId: z.uuid()
+});
+
 export const listApprovalsQuerySchema = z.strictObject({
   status: z.enum(['pending', 'approved', 'rejected']).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
@@ -69,6 +82,8 @@ export type ConversationOutputsParams = z.infer<typeof conversationOutputsParams
 export type ListConversationOutputsQuery = z.infer<typeof listConversationOutputsQuerySchema>;
 export type ApprovalParams = z.infer<typeof approvalParamsSchema>;
 export type ListApprovalsQuery = z.infer<typeof listApprovalsQuerySchema>;
+export type ApproveBody = z.infer<typeof approveBodySchema>;
+export type TaskCapabilityParams = z.infer<typeof taskCapabilityParamsSchema>;
 export type TaskParams = z.infer<typeof taskParamsSchema>;
 export type CreateTaskBody = z.infer<typeof createTaskBodySchema>;
 export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>;

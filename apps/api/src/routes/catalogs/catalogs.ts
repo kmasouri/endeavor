@@ -16,6 +16,7 @@ import {
   listSkillsHandler,
   listSkillVersionsHandler,
   revokeHandler,
+  updateSkillHandler,
   updateConnectionHandler
 } from '../../handlers';
 import {
@@ -30,7 +31,8 @@ import {
   listGrantsQuerySchema,
   revokeParamsSchema,
   skillParamsSchema,
-  updateConnectionBodySchema
+  updateConnectionBodySchema,
+  updateSkillBodySchema
 } from '../../schemas';
 
 const tags = ['catalogs'];
@@ -73,6 +75,21 @@ export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<
       }
     },
     getSkillHandler
+  );
+
+  fastifyInstance.patch(
+    '/skills/:skillId',
+    {
+      schema: {
+        description:
+          'Change whether agents can discover the skill and ask for access. Discovery grants nothing. Admins only.',
+        tags,
+        headers,
+        params: skillParamsSchema,
+        body: updateSkillBodySchema
+      }
+    },
+    updateSkillHandler
   );
 
   fastifyInstance.get(
@@ -186,7 +203,7 @@ export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<
     {
       schema: {
         description:
-          'Change a connection. Applies on the next tool call. Send credential: null to remove it. Admins only.',
+          'Change a connection. Applies on the next tool call. Send credential: null to remove it. discoverable lets agents find it and ask for access; it grants nothing. Admins only.',
         tags,
         headers,
         params: connectionParamsSchema,

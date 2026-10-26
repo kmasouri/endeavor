@@ -2,6 +2,8 @@ import { TaskRepository } from '../../data';
 import {
   mockAgentRepository,
   mockApprovalRepository,
+  mockCatalogRepository,
+  mockTaskCapabilityRepository,
   mockConversationRepository,
   mockHumanRepository,
   mockTaskRepository
@@ -102,13 +104,35 @@ function setup() {
     onTaskVersionMigrated: jest.fn(),
     onApprovalApproved: jest.fn(),
     onApprovalRejected: jest.fn(),
+    onTaskAccessRevoked: jest.fn(),
     onTaskCompletionRejected: jest.fn()
   } as unknown as jest.Mocked<TaskLogger>;
 
   const conversations = mockConversationRepository();
   const approvals = mockApprovalRepository();
-  const service = new TaskService(tasks, agents, humans, conversations, approvals, logger);
-  return { service, tasks, agents, humans, conversations, approvals, logger };
+  const capabilities = mockTaskCapabilityRepository();
+  const catalogs = mockCatalogRepository();
+  const service = new TaskService(
+    tasks,
+    agents,
+    humans,
+    conversations,
+    approvals,
+    capabilities,
+    catalogs,
+    logger
+  );
+  return {
+    service,
+    tasks,
+    agents,
+    humans,
+    conversations,
+    approvals,
+    capabilities,
+    catalogs,
+    logger
+  };
 }
 
 function eventTypes(tasks: jest.Mocked<TaskRepository>): string[] {
@@ -235,6 +259,7 @@ describe('TaskService', () => {
       taskId: TASK_ID,
       agentId: AGENT_ID,
       kind: 'connection_call' as const,
+      duration: null,
       request: {
         connectionId: 'c1',
         connectionName: 'Billing',
@@ -257,13 +282,14 @@ describe('TaskService', () => {
       approvals.getById.mockResolvedValue(pending);
       approvals.decide.mockResolvedValue({ ...pending, status: 'approved' });
 
-      await service.approve(HUMAN_ID, 'ap1', 'Fine');
+      await service.approve(HUMAN_ID, 'ap1', { reason: 'Fine' });
 
       expect(approvals.decide).toHaveBeenCalledWith({
         approvalId: 'ap1',
         status: 'approved',
         humanId: HUMAN_ID,
-        reason: 'Fine'
+        reason: 'Fine',
+        duration: null
       });
       expect(tasks.resolveWait).not.toHaveBeenCalled();
     });
@@ -871,6 +897,162 @@ describe('TaskService', () => {
         budgetUsd: 20
       });
       expect(tasks.sumCost).toHaveBeenCalledWith({ agentId: agent.id, since: expect.any(Date) });
+    });
+  });
+
+  describe('access requests', () => {
+    const accessRequest = {
+      id: 'ap-access',
+      taskId: TASK_ID,
+      agentId: AGENT_ID,
+      kind: 'capability_access' as const,
+      duration: null,
+      request: {
+        kind: 'access' as const,
+        targetType: 'connection' as const,
+        targetId: 'conn-wiki',
+        name: 'Wikipedia',
+        description: 'Read pages',
+        skillVersionId: null,
+        skillVersion: null,
+        scope: { kind: 'http' as const, methods: ['GET' as const], pathPrefixes: ['/wiki'] },
+        reason: 'Check claims',
+        recommendedDuration: 'ongoing' as const,
+        durationReason: 'Weekly briefs need it'
+      },
+      status: 'pending' as const,
+      decidedByHumanId: null,
+      decidedAt: null,
+      reason: null,
+      executedAt: null,
+      result: null,
+      createdAt: new Date()
+    };
+    const enabledConnection = { id: 'conn-wiki', disabledAt: null } as never;
+
+    it('allows for this task by default, even when the agent recommends ongoing', async () => {
+      const { service, tasks, approvals, catalogs } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      approvals.getById.mockResolvedValue(accessRequest);
+      catalogs.getConnection.mockResolvedValue(enabledConnection);
+      approvals.decide.mockResolvedValue({
+        ...accessRequest,
+        status: 'approved',
+        duration: 'task'
+      });
+
+      await service.approve(HUMAN_ID, 'ap-access');
+
+      expect(approvals.decide).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'approved', duration: 'task' })
+      );
+      expect(tasks.addEvent).toHaveBeenCalledWith(
+        TASK_ID,
+        'approval.approved',
+        { type: 'human', id: HUMAN_ID },
+        expect.objectContaining({ duration: 'task' })
+      );
+    });
+
+    it('records an ongoing decision for the runner to apply', async () => {
+      const { service, tasks, approvals, catalogs } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      approvals.getById.mockResolvedValue(accessRequest);
+      catalogs.getConnection.mockResolvedValue(enabledConnection);
+      approvals.decide.mockResolvedValue({
+        ...accessRequest,
+        status: 'approved',
+        duration: 'ongoing'
+      });
+
+      await service.approve(HUMAN_ID, 'ap-access', { duration: 'ongoing' });
+
+      expect(approvals.decide).toHaveBeenCalledWith(
+        expect.objectContaining({ duration: 'ongoing' })
+      );
+    });
+
+    it('refuses to allow a capability that was disabled meanwhile', async () => {
+      const { service, tasks, approvals, catalogs } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      approvals.getById.mockResolvedValue(accessRequest);
+      catalogs.getConnection.mockResolvedValue({
+        id: 'conn-wiki',
+        disabledAt: new Date()
+      } as never);
+
+      await expect(service.approve(HUMAN_ID, 'ap-access')).rejects.toMatchObject({
+        name: 'catalogEntryUnavailable'
+      });
+      expect(approvals.decide).not.toHaveBeenCalled();
+    });
+
+    it('refuses to allow access for a finished task', async () => {
+      const { service, tasks, approvals } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed' }));
+      approvals.getById.mockResolvedValue(accessRequest);
+
+      await expect(service.approve(HUMAN_ID, 'ap-access')).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+      expect(approvals.decide).not.toHaveBeenCalled();
+    });
+
+    it('rejects a duration on an approval for one action', async () => {
+      const { service, tasks, approvals } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      approvals.getById.mockResolvedValue({
+        ...accessRequest,
+        kind: 'connection_call',
+        request: {
+          connectionId: 'c',
+          connectionName: 'Billing',
+          method: 'POST',
+          path: '/x',
+          body: null
+        }
+      });
+
+      await expect(
+        service.approve(HUMAN_ID, 'ap-access', { duration: 'ongoing' })
+      ).rejects.toMatchObject({ name: 'validationError' });
+    });
+
+    it('lets a person revoke access added to a task and records it', async () => {
+      const { service, tasks, capabilities } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      const added = {
+        id: 'cap-1',
+        taskId: TASK_ID,
+        approvalId: 'ap-access',
+        targetType: 'connection' as const,
+        targetId: 'conn-wiki',
+        skillVersionId: null,
+        scope: null,
+        duration: 'task' as const,
+        grantedByHumanId: HUMAN_ID,
+        grantedAt: new Date(),
+        revokedByHumanId: null,
+        revokedAt: null
+      };
+      capabilities.getById.mockResolvedValue(added);
+      capabilities.revoke.mockResolvedValue({ ...added, revokedAt: new Date() });
+
+      await service.revokeTaskCapability(HUMAN_ID, TASK_ID, 'cap-1');
+
+      expect(capabilities.revoke).toHaveBeenCalledWith('cap-1', HUMAN_ID);
+      expect(eventTypes(tasks)).toContain('access.revoked');
+    });
+
+    it("doesn't revoke access that belongs to another task", async () => {
+      const { service, tasks, capabilities } = setup();
+      tasks.getById.mockResolvedValue(makeTask());
+      capabilities.getById.mockResolvedValue({ id: 'cap-1', taskId: 'other' } as never);
+
+      await expect(service.revokeTaskCapability(HUMAN_ID, TASK_ID, 'cap-1')).rejects.toMatchObject({
+        name: 'taskCapabilityNotFound'
+      });
+      expect(capabilities.revoke).not.toHaveBeenCalled();
     });
   });
 });

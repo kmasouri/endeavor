@@ -95,6 +95,8 @@ Agents act only through these tools. The runner carries out each call:
 | `list_files`     | List the files in the task's own workspace folder.                                             |
 | `read_file`      | Read a text file from the workspace.                                                           |
 | `write_file`     | Write a text file in the workspace. Paths can't leave it. See `docs/local.md`.                 |
+| `find_capabilities` | List skills and connections people made discoverable. Grants nothing.                       |
+| `request_access` | Ask a person for a discoverable skill or connection, for this task or ongoing. The task waits. |
 
 ## Outputs, evidence, and finishing
 

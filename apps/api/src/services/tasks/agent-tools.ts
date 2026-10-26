@@ -13,7 +13,9 @@ export const AGENT_TOOLS = {
   saveNote: 'save_note',
   listFiles: 'list_files',
   readFile: 'read_file',
-  writeFile: 'write_file'
+  writeFile: 'write_file',
+  findCapabilities: 'find_capabilities',
+  requestAccess: 'request_access'
 } as const;
 
 export type AgentToolName = (typeof AGENT_TOOLS)[keyof typeof AGENT_TOOLS];
@@ -154,6 +156,43 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
         content: { type: 'string', description: 'The whole file content.' }
       },
       required: ['path', 'content'],
+      additionalProperties: false
+    }
+  },
+  {
+    name: AGENT_TOOLS.findCapabilities,
+    description:
+      'List skills and connections that people made discoverable, with what each allows and whether you can use it now. Finding one gives you no access: use request_access to ask a person.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Words to look for in names and descriptions.' }
+      },
+      additionalProperties: false
+    }
+  },
+  {
+    name: AGENT_TOOLS.requestAccess,
+    description:
+      'Ask a person for access to a skill or connection you found with find_capabilities. Say plainly why this task needs it. Your work pauses until they decide. They choose whether access lasts for this task only (the usual choice) or is ongoing. If they decline, continue without it or explain the limitation; do not ask again for the same thing.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: { type: 'string', enum: ['skill', 'connection'] },
+        name: { type: 'string', description: 'The name from find_capabilities.' },
+        reason: { type: 'string', description: 'Why this task needs it, in a sentence or two.' },
+        recommended_duration: {
+          type: 'string',
+          enum: ['task', 'ongoing'],
+          description:
+            'Optional. "task" for this task only, or "ongoing" if your future work will need it too.'
+        },
+        duration_reason: {
+          type: 'string',
+          description: 'Optional. Why you recommend that duration.'
+        }
+      },
+      required: ['type', 'name', 'reason'],
       additionalProperties: false
     }
   },

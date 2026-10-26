@@ -11,6 +11,7 @@ import {
   ListGrantsQuery,
   RevokeParams,
   SkillParams,
+  UpdateSkillBody,
   UpdateConnectionBody
 } from '../../schemas';
 import { paged, success } from '../../shared/response';
@@ -58,6 +59,18 @@ export async function addSkillVersionHandler(
     request.body
   );
   return reply.code(201).send(success(skill));
+}
+
+export async function updateSkillHandler(
+  request: FastifyRequest<{ Params: SkillParams; Body: UpdateSkillBody } & Actor>
+): Promise<unknown> {
+  return success(
+    await request.server.catalogService.updateSkill(
+      request.headers['x-actor-id'],
+      request.params.skillId,
+      request.body
+    )
+  );
 }
 
 export async function disableSkillHandler(

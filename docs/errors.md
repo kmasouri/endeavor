@@ -56,6 +56,7 @@ The list lives in `apps/api/src/shared/errors.ts`. When you add an error there, 
 | 40008 | `responsibilityCancelled` | 409  | The responsibility is cancelled; it can't run or resume.                                       | Create a new responsibility.                                         |
 | 40010 | `catchUpNotPending`       | 409  | No open "run now or wait?" question. It was answered, or it lapsed when the next run came due. | Check the schedule; nothing more is needed.                          |
 | 40009 | `responsibilityRunOpen`   | 409  | The last run is still working, waiting, or blocked. Only one runs at a time.                   | Wait for it to finish, or cancel that task first.                    |
+| 40011 | `taskCapabilityNotFound`  | 404  | No access with this ID was added to this task.                                                 | Check `GET /tasks/:taskId/capabilities`.                             |
 
 ## Agents (50xxx)
 

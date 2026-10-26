@@ -31,5 +31,11 @@ export const TASK_EVENTS = {
   mcpCallResult: 'connection.mcp.result',
   approvalApproved: 'approval.approved',
   approvalRejected: 'approval.rejected',
-  approvalExecuted: 'approval.executed'
+  approvalExecuted: 'approval.executed',
+
+  // Access requests
+  accessRequested: 'access.requested',
+  accessGranted: 'access.granted',
+  accessOngoingAdded: 'access.ongoing.added',
+  accessRevoked: 'access.revoked'
 } as const;

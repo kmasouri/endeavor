@@ -1257,6 +1257,9 @@ mark.mention-you {
   background: var(--waiting-bg);
   border-color: var(--waiting-border);
 }
+.waiting-ok {
+  color: var(--waiting);
+}
 .conversation-approval h2 {
   color: var(--waiting);
   margin: 12px 0;

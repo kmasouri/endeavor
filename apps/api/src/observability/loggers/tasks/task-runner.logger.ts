@@ -57,6 +57,31 @@ export class TaskRunnerLogger {
     );
   }
 
+  onAccessRequested(
+    taskId: string,
+    approvalId: string,
+    targetType: string,
+    targetId: string
+  ): void {
+    getCurrentLogger(this.logger).info(
+      { event: 'runner.access.requested', taskId, approvalId, targetType, targetId },
+      'agent asked a person for access'
+    );
+  }
+
+  onAccessGranted(
+    taskId: string,
+    approvalId: string,
+    duration: string,
+    applied: boolean,
+    reason: string | null
+  ): void {
+    getCurrentLogger(this.logger).info(
+      { event: 'runner.access.granted', taskId, approvalId, duration, applied, reason },
+      applied ? 'approved access added to the task' : 'approved access was not added'
+    );
+  }
+
   onScheduledRun(responsibilityId: string, taskId: string | null, skippedSlots: number): void {
     getCurrentLogger(this.logger).info(
       { event: 'runner.schedule.run', responsibilityId, taskId, skippedSlots },
