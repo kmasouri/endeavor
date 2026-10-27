@@ -1361,7 +1361,8 @@ export class TaskRunnerService {
       const result = await this.oauthRepository.withLock<Record<string, string> | null | false>(
         connection.id,
         async (session) => {
-          if (!session) return { session, result: null };
+          if (!session)
+            return { session, result: connection.authMethod === 'oauth' ? (false as const) : null };
           if (session.status !== 'connected') return { session, result: false as const };
           try {
             if (session.resource !== connection.baseUrl) throw new Error('Resource changed');
@@ -1378,7 +1379,14 @@ export class TaskRunnerService {
       if (result === false) throw new AppError('connectionSignInRequired');
       if (result) return result;
     }
+    if (connection.authMethod === 'oauth') throw new AppError('connectionSignInRequired');
     const credential = await this.catalogRepository.getConnectionCredential(connection.id);
+    if (connection.authMethod === 'header' && !credential) {
+      throw new AppError(
+        'validationError',
+        'Add an API key or token in this connection’s configuration before continuing.'
+      );
+    }
     return credential ? { [connection.authHeader]: credential } : {};
   }
 

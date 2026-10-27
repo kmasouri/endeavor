@@ -159,6 +159,7 @@ test('HTTP connection preserves access settings after failure and returns to Con
     baseUrl: 'https://records.test',
     discoverable: false,
     authHeader: 'Authorization',
+    authMethod: 'header',
     credential: 'Bearer secret',
     allowedMethods: ['GET', 'POST'],
     allowedPathPrefixes: ['/v1/records'],

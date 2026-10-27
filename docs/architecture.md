@@ -425,3 +425,10 @@ The broker has its own Zod tool schemas, HTTP adapter, execution service, and Gi
 integrations. This is a third npm workspace; `npm run check` covers all three. Coding and review
 examples are editable agent instructions, not privileged platform roles. See [coding](coding.md)
 for trust boundaries, offline dependency images, cancellation limits, and recovery.
+
+Connection authentication method is stored independently from enabled state. The catalog
+service derives a credential-free authentication summary for list/detail responses from the
+stored method and encrypted OAuth session. The web interface shows two authentication states,
+keeps Enabled/Disabled separate, and sends OAuth creation directly to consent through the
+saved connection page. Failed consent retries reuse that connection. See [authentication
+status](catalogs.md#authentication-choice-and-status).

@@ -46,6 +46,7 @@ export const createConnectionBodySchema = z.union([
   z.strictObject({
     ...connectionFields,
     kind: z.literal('http').default('http'),
+    authMethod: z.enum(['none', 'header']).optional(),
     allowedTools: z.never().optional(),
     approvalTools: z.never().optional(),
     authHeader: connectionFields.authHeader.optional(),
@@ -58,6 +59,7 @@ export const createConnectionBodySchema = z.union([
     description: connectionFields.description,
     baseUrl: connectionFields.baseUrl,
     kind: z.literal('mcp'),
+    authMethod: z.enum(['none', 'header', 'oauth']).optional(),
     authHeader: connectionFields.authHeader.optional(),
     credential: connectionFields.credential.optional(),
     allowedTools: toolNames,
@@ -68,6 +70,7 @@ export const createConnectionBodySchema = z.union([
 
 export const updateConnectionBodySchema = z
   .strictObject({
+    authMethod: z.enum(['none', 'header', 'oauth']).optional(),
     allowedTools: toolNames.optional(),
     approvalTools: toolNames.optional(),
     name: connectionFields.name.optional(),

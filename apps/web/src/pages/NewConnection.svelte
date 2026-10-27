@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { api, HTTP_METHODS, type HttpMethod } from '../api';
+  import { onMount } from 'svelte';
+  import { api, HTTP_METHODS, type Connection, type HttpMethod } from '../api';
   import CheckGroup from '../CheckGroup.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
@@ -10,34 +11,39 @@
   const methodOptions = HTTP_METHODS.map((method) => ({ value: method, label: method }));
 
   const example = new URLSearchParams(window.location.hash.split('?')[1]).get('example');
+  const notion = example === 'notion';
   const github = example === 'github';
   const executor = example === 'executor';
-  let kind = $state<'http' | 'mcp'>(github || executor ? 'mcp' : 'http');
+  let kind = $state<'http' | 'mcp'>(notion || github || executor ? 'mcp' : 'http');
+  let authMethod = $state<'none' | 'header' | 'oauth'>(notion ? 'oauth' : 'header');
   let tools = $state('');
   let freeTools = $state('');
   const names = (text: string) =>
     text.split(/[\n,]/).map((name) => name.trim()).filter(Boolean);
-  let name = $state(github ? 'GitHub' : executor ? 'Isolated execution' : '');
-  let description = $state(github ? 'Read repositories and collaborate on pull requests.' : executor ? 'Edit task checkouts and run builds and tests in isolated containers.' : '');
+  let name = $state(notion ? 'Notion' : github ? 'GitHub' : executor ? 'Isolated execution' : '');
+  let description = $state(notion ? 'Search and read Notion documentation.' : github ? 'Read repositories and collaborate on pull requests.' : executor ? 'Edit task checkouts and run builds and tests in isolated containers.' : '');
   let discoverable = $state(false);
-  let baseUrl = $state(github ? 'https://api.githubcopilot.com/mcp/' : executor ? 'http://executor:3200/mcp' : '');
+  let baseUrl = $state(notion ? 'https://mcp.notion.com/mcp' : github ? 'https://api.githubcopilot.com/mcp/' : executor ? 'http://executor:3200/mcp' : '');
   let authHeader = $state('Authorization');
   let credential = $state('');
   let allowedMethods = $state<HttpMethod[]>(['GET']);
   let prefixes = $state('/');
   let approvalMethods = $state<HttpMethod[]>(['POST', 'PUT', 'PATCH', 'DELETE']);
   const action = createAction();
+  let active = true;
+  onMount(() => () => { active = false; });
   const create = (event: SubmitEvent) => {
     event.preventDefault();
     void action
-      .run(() =>
-        api.post('/connections', {
+      .run(async () => {
+        const useOAuth = kind === 'mcp' && authMethod === 'oauth';
+        const connection = await api.post<Connection>('/connections', {
           name,
           description,
           baseUrl,
           discoverable,
-          authHeader,
-          ...(credential && { credential }),
+          authMethod: kind === 'http' && authMethod === 'oauth' ? 'none' : authMethod,
+          ...(authMethod === 'header' && { authHeader, ...(credential && { credential }) }),
           ...(kind === 'mcp'
             ? {
                 kind,
@@ -49,12 +55,10 @@
                 allowedPathPrefixes: names(prefixes),
                 approvalMethods: approvalMethods.filter((method) => allowedMethods.includes(method))
               })
-        })
-      )
-      .then((ok) => {
-        if (ok) {
-          go('/connections');
-        }
+        });
+        if (!active) return;
+        if (useOAuth) go(`/connections/${connection.id}?signIn=1`);
+        else go('/connections');
       });
   };
 </script>
@@ -69,10 +73,10 @@
   <form onsubmit={create} class="creation-form">
     <fieldset class="stack">
       <legend>Profile</legend>
-      <p class="caption">Examples: <a href="#/catalogs/connections/new?example=github">GitHub MCP</a> · <a href="#/catalogs/connections/new?example=executor">Isolated execution</a></p>
+      <p class="caption">Examples: <a href="#/connections/new?example=notion">Notion</a> · <a href="#/catalogs/connections/new?example=github">GitHub MCP</a> · <a href="#/catalogs/connections/new?example=executor">Isolated execution</a></p>
       <label>
         Connection type
-        <select bind:value={kind}>
+        <select bind:value={kind} onchange={(event) => { if (event.currentTarget.value === 'http' && authMethod === 'oauth') authMethod = 'none'; }}>
           <option value="http">HTTP API</option>
           <option value="mcp">MCP server</option>
         </select>
@@ -103,6 +107,17 @@
     </fieldset>
     <fieldset class="stack">
       <legend>Authentication</legend>
+      <label>
+        Authentication method
+        <select bind:value={authMethod}>
+          <option value="none">No authentication</option>
+          <option value="header">API key / token</option>
+          {#if kind === 'mcp'}<option value="oauth">OAuth sign-in</option>{/if}
+        </select>
+      </label>
+      {#if authMethod === 'oauth'}
+        <Hint>You’ll sign in through the service after creating this connection. No API key is needed.</Hint>
+      {:else if authMethod === 'header'}
       <div class="grid2">
         <label>
           Credential header
@@ -122,8 +137,7 @@
         <Hint>Use a GitHub personal access token as Bearer …, with access to the selected repositories. GitHub sign-in requires a registered GitHub app; generic OAuth sign-in does not support it yet. Discover and allow tools after saving. Writes require approval by default.</Hint>
       {:else if executor}
         <Hint>Use the execution service credential as Bearer …. The execution service must be running. After saving, discover tools and select this connection in the agent configuration.</Hint>
-      {:else if kind === 'mcp'}
-        <Hint>For browser sign-in, leave the credential empty. After creating the connection, open Sign in with OAuth in the catalog.</Hint>
+      {/if}
       {/if}
     </fieldset>
     <fieldset class="stack">
@@ -171,7 +185,7 @@
     <ErrorNote error={action.error} />
     <div class="savebar">
       <a href="#/connections">Cancel</a>
-      <button disabled={action.busy || !name.trim() || !description.trim() || !baseUrl.trim()}>Create connection</button>
+      <button disabled={action.busy || !name.trim() || !description.trim() || !baseUrl.trim()}>{kind === 'mcp' && authMethod === 'oauth' ? 'Create and sign in' : 'Create connection'}</button>
     </div>
   </form>
 </div>

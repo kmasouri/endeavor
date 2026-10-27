@@ -21,6 +21,7 @@ export interface CreateSkillVersionInput {
 }
 
 export interface ConnectionInput {
+  authMethod?: 'none' | 'header' | 'oauth';
   kind?: 'http' | 'mcp';
   allowedTools?: string[];
   approvalTools?: string[];
