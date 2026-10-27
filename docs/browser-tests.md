@@ -13,7 +13,8 @@ npm ci
 npm run test:e2e
 npm run check
 # Build and run a focused case:
-npm run test:e2e -- --grep 'failed reply'
+npm run build --workspace=apps/web
+npm run test:e2e --workspace=apps/web -- --grep 'failed reply'
 # Inspect the last report or a failed test's trace:
 npx playwright show-report apps/web/playwright-report
 npx playwright show-trace apps/web/test-results/<case>/trace.zip
