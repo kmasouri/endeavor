@@ -22,6 +22,7 @@
     tasks,
     replyTo = $bindable(null),
     body = $bindable(''),
+    revision = $bindable(null),
     onPosted,
     onAdd,
     onAttach
@@ -33,10 +34,12 @@
     tasks: Task[];
     replyTo: Message | null;
     body: string;
+    revision: Task | null;
     onPosted: () => void;
     onAdd: (id: string) => Promise<unknown>;
     onAttach: () => void;
   } = $props();
+  let revisionSent = $state('');
   let mentions = $state<ParticipantRef[]>([]);
   let input = $state<HTMLTextAreaElement>();
   let caret = $state(0);
@@ -46,13 +49,15 @@
   let query = $derived(/(?:^|\s)@([^@\n]*)$/.exec(body.slice(0, caret))?.[1]);
   let candidates = $derived(
     [
-      ...members.filter((member) => !member.deleted).map((member) => ({
-        id: member.participant.id,
-        name: member.name,
-        type: member.participant.type,
-        inside: true,
-        purpose: member.purpose
-      })),
+      ...members
+        .filter((member) => !member.deleted)
+        .map((member) => ({
+          id: member.participant.id,
+          name: member.name,
+          type: member.participant.type,
+          inside: true,
+          purpose: member.purpose
+        })),
       ...directory
         .filter((agent) => !members.some((member) => member.participant.id === agent.id))
         .map((agent) => ({
@@ -63,7 +68,9 @@
           purpose: agent.purpose
         }))
     ]
-      .filter((member) => query !== undefined && member.name.toLowerCase().includes(query.toLowerCase()))
+      .filter(
+        (member) => query !== undefined && member.name.toLowerCase().includes(query.toLowerCase())
+      )
       .slice(0, 8)
   );
   let picker = $derived(query !== undefined && !dismissed);
@@ -88,9 +95,13 @@
     const selectedMembers = directory
       .filter(
         (agent) =>
-          mentions.some((mention) => mention.id === agent.id) && !members.some((member) => member.participant.id === agent.id)
+          mentions.some((mention) => mention.id === agent.id) &&
+          !members.some((member) => member.participant.id === agent.id)
       )
-      .map((agent) => ({ name: agent.name, participant: { type: 'agent' as const, id: agent.id } }));
+      .map((agent) => ({
+        name: agent.name,
+        participant: { type: 'agent' as const, id: agent.id }
+      }));
     const refs = [...members.filter((member) => !member.deleted), ...selectedMembers]
       .filter((member) =>
         new RegExp(
@@ -101,15 +112,21 @@
       .map((member) => member.participant);
     void action
       .run(() =>
-        api.post(`/conversations/${conversationId}/messages`, {
-          body,
-          mentions: refs,
-          ...(replyTo && { inReplyToMessageId: replyTo.id }),
-          clientKey: crypto.randomUUID()
-        })
+        revision
+          ? api.post<Task>(`/tasks/${revision.id}/restart`, { reason: body })
+          : api.post(`/conversations/${conversationId}/messages`, {
+              body,
+              mentions: refs,
+              ...(replyTo && { inReplyToMessageId: replyTo.id }),
+              clientKey: crypto.randomUUID()
+            })
       )
       .then((ok) => {
         if (ok) {
+          revisionSent = revision
+            ? `Changes sent to ${members.find((member) => member.participant.id === revision?.ownerAgentId)?.name ?? 'the agent'} as a linked new run.`
+            : '';
+          revision = null;
           body = '';
           mentions = [];
           replyTo = null;
@@ -120,7 +137,15 @@
 </script>
 
 <div class="composer-area">
-  {#if replyTo}<div class="reply-bar row">
+  {#if revision}
+    <div class="reply-bar row">
+      <Icon name="reply" />
+      <span class="grow">Changes to <strong>{revision.title}</strong> · {members.find((member) => member.participant.id === revision?.ownerAgentId)?.name ?? 'Deleted agent'} · creates a linked new run</span>
+      <button class="quiet icon-button" aria-label="Cancel revision" onclick={() => { revision = null; replyTo = null; }}><Icon name="close" /></button>
+    </div>
+  {/if}
+  {#if revisionSent}<p class="caption muted" role="status">{revisionSent}</p>{/if}
+  {#if replyTo && !revision}<div class="reply-bar row">
       <Icon name="reply" /><span class="grow ellipsis"
         >Replying to <strong
           >{members.find((member) => member.participant.id === replyTo?.authorId)?.name ?? 'Platform'}</strong
@@ -215,7 +240,7 @@
           else send();
         }
       }}></textarea>
-    <button class="icon-button" aria-label="Send message" disabled={action.busy || !body.trim()}
+    <button class="icon-button" aria-label={revision ? "Send changes" : "Send message"} disabled={action.busy || !body.trim()}
       ><Icon name="send" /></button
     >
   </form>

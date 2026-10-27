@@ -8,22 +8,33 @@
   let {
     members,
     tasks,
-    conversationId,
-    onChanged
-  }: { members: Member[]; tasks: Task[]; conversationId: string; onChanged: () => void } = $props();
+    onChanged,
+    onHistory
+  }: {
+    members: Member[];
+    tasks: Task[];
+    onChanged: () => void;
+    onHistory: (agentId: string) => void;
+  } = $props();
   let selected = $state('');
   let showFree = $state(false);
   const action = createAction();
   const activeTasks = (id: string) =>
-    tasks.filter((task) => task.ownerAgentId === id && !['completed', 'cancelled'].includes(task.state));
-  let agents = $derived(members.filter((member) => member.participant.type === 'agent' && !member.deleted));
+    tasks.filter(
+      (task) => task.ownerAgentId === id && !['completed', 'cancelled'].includes(task.state)
+    );
+  let agents = $derived(members.filter((member) => member.participant.type === 'agent'));
   let busy = $derived(
     agents
       .filter((member) => activeTasks(member.participant.id).length)
       .sort(
         (a, b) =>
-          Number(activeTasks(b.participant.id).some((task) => task.state === 'working' && !task.pausedAt)) -
-          Number(activeTasks(a.participant.id).some((task) => task.state === 'working' && !task.pausedAt))
+          Number(
+            activeTasks(b.participant.id).some((task) => task.state === 'working' && !task.pausedAt)
+          ) -
+          Number(
+            activeTasks(a.participant.id).some((task) => task.state === 'working' && !task.pausedAt)
+          )
       )
   );
   let free = $derived(agents.filter((member) => !activeTasks(member.participant.id).length));
@@ -77,13 +88,14 @@
                 class="secondary"
                 disabled={action.busy}
                 onclick={() => act(task.id, 'cancel')}>Stop</button
-              ><a href={`#/tasks/${task.id}`}>History</a>
+              >
             </div>
           {/each}
-          {#if !current.length}<p class="caption muted">No active work in this conversation.</p>
-            <a href={`#/tasks?conversationId=${conversationId}&agentId=${member.participant.id}`}
-              >History</a
-            >{/if}
+          {#if !current.length}
+            {@const last = tasks.find((task) => task.ownerAgentId === member.participant.id)}
+            <p class="caption muted">{last ? `Last run: ${last.title}` : 'No active work in this conversation.'}</p>
+          {/if}
+          <button class="secondary" onclick={() => onHistory(member.participant.id)}>History</button>
         </div>
       {/if}
     </div>

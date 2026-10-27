@@ -31,6 +31,9 @@
     onReply: (message: Message) => void;
     onRevise: (output: TaskOutput & { taskId: string }) => void;
     onChanged: () => void;
+    onInspect: (message: Message) => void;
+    onInspectRun: (id: string) => void;
+    selectedRunId?: string;
   } = $props();
   let end = $state<HTMLDivElement | null>(null);
   let copied = $state('');
@@ -42,17 +45,31 @@
       end?.scrollIntoView({ block: 'end' });
     });
   });
-  let artifacts = $derived(collectConversationArtifacts(props.outputs, props.messages, props.tasks));
+  let artifacts = $derived(
+    collectConversationArtifacts(props.outputs, props.messages, props.tasks)
+  );
   let byId = $derived.by(() => new Map(props.messages.map((message) => [message.id, message])));
   let lastForTask = $derived.by(
-    () => new Map(props.messages.filter((message) => message.taskId).map((message) => [message.taskId, message.id]))
+    () =>
+      new Map(
+        props.messages
+          .filter((message) => message.taskId)
+          .map((message) => [message.taskId, message.id])
+      )
   );
   let lastForAgent = $derived.by(
     () =>
-      new Map(props.messages.filter((message) => message.authorType === 'agent').map((message) => [message.authorId, message.id]))
+      new Map(
+        props.messages
+          .filter((message) => message.authorType === 'agent')
+          .map((message) => [message.authorId, message.id])
+      )
   );
   let names = $derived(
-    props.members.map((member) => ({ name: member.name, you: member.participant.id === props.meId }))
+    props.members.map((member) => ({
+      name: member.name,
+      you: member.participant.id === props.meId
+    }))
   );
   const copy = async (message: Message) => {
     try {
@@ -95,6 +112,7 @@
     <li
       id={`m-${message.id}`}
       class="message"
+      class:selected-run={Boolean(message.taskId && message.taskId === props.selectedRunId)}
       class:grouped
       class:mentioned-you={you}
       class:has-reply={Boolean(replyTo)}
@@ -154,11 +172,13 @@
         {#if message.taskId && lastForTask.get(message.taskId) === message.id}
           {#if !props.outputs.some((output) => output.taskId === message.taskId) || artifacts.some((output) => output.taskId === message.taskId)}<RunSteps
               taskId={message.taskId}
+              onInspect={props.onInspectRun}
             />{/if}
           {#each artifacts.filter((output) => output.taskId === message.taskId) as output (output.id)}<ArtifactCard
               {output}
               task={props.tasks.find((task) => task.id === message.taskId)}
               cost={props.costs?.tasks.find((taskCost) => taskCost.taskId === message.taskId)?.costUsd}
+              onInspect={props.onInspectRun}
               onReply={() => props.onRevise(output)}
               onChanged={props.onChanged}
             />{/each}
@@ -180,10 +200,11 @@
           aria-label={copied === message.id ? 'Copied' : 'Copy'}
           onclick={() => void copy(message)}
           ><Icon name={copied === message.id ? 'check' : 'copy'} /></button
-        >{#if message.authorType === 'agent' && message.taskId}<a
+        >{#if message.authorType === 'agent'}<button
             class="quiet icon-button"
             aria-label="See what this agent did"
-            href={`#/tasks/${message.taskId}`}><Icon name="history" /></a
+            title={message.taskId ? "Inspect this run" : "No run was recorded for this message"}
+            onclick={() => props.onInspect(message)}><Icon name="history" /></button
           >{/if}
       </div>
     </li>

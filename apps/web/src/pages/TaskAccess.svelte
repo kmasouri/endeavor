@@ -6,7 +6,11 @@
 
   // Access a person added to this task after the agent asked for it. Revoking applies from the
   // agent's next call. Ongoing access also lives in the agent's configuration.
-  let { taskId, open }: { taskId: string; open: boolean } = $props();
+  let {
+    taskId,
+    open,
+    readOnly = false
+  }: { taskId: string; open: boolean; readOnly?: boolean } = $props();
   const access = createLoad(
     () => api.get<(TaskCapability & { name: string })[]>(`/tasks/${taskId}/capabilities`),
     () => [taskId],
@@ -44,7 +48,7 @@
                 : `Since ${formatDateTime(entry.grantedAt)}`}
           </div>
 
-          {#if open && !entry.revokedAt}
+          {#if open && !readOnly && !entry.revokedAt}
             <button class="secondary small" disabled={action.busy} onclick={() => revoke(entry.id)}>
               Revoke
             </button>

@@ -109,10 +109,22 @@ inspection; the conversation shows the answer once, without a duplicate card or 
 Named outputs, files, links, distinct content, and pending reviews keep their artifact cards. Artifact cards use task
 review when review is pending; requests for changes return to the conversation composer.
 
-The interface shows only data returned by the API. Unread counts, live steps and typing, pause
-attribution, spending by agent, and draft/final labels remain follow-up work. Work links and existing
-task routes stay available until conversation-scoped history replaces them in CA-40. The temporary
-History links filter Work by conversation and owner; message inspection links open the recorded task.
+Run inspection lives in the conversation's Details panel. Agent History requests both conversationId
+and ownerAgentId from the task API, newest first, with explicit pagination. Message actions use the
+recorded taskId; legacy messages without a run association show an unavailable state. The inspector
+keeps chat visible and shows the request, criteria, state, outputs, readable steps, and expandable
+technical events. Event loading follows afterId through every page. Pending decisions, result review,
+pause, stop, resume, restart, version migration, and task access remain available in context.
+
+Ask for changes focuses the conversation composer. For completed or cancelled work it sends the
+composer text to the existing restart API, preserving its linked-new-run and retry semantics rather
+than creating an unrelated message-triggered task. The composer identifies the selected run and agent;
+a failed send retains the draft. Open work receives ordinary directed chat messages.
+
+Work is no longer in navigation. Existing task links open their exact run in its conversation;
+standalone runs keep a read-only inspector at the existing task URL. No task records or API access
+rules changed. Live steps and typing, pause attribution, spending by agent, and draft/final labels
+remain follow-up work.
 
 Code is grouped by layer first, then by feature. For example, all handlers are in `handlers/`, and the item handlers are in `handlers/items/`. We chose this over one folder per feature because:
 

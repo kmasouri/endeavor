@@ -10,13 +10,15 @@
     task,
     cost,
     onReply,
-    onChanged
+    onChanged,
+    onInspect
   }: {
     output: TaskOutput;
     task?: Task;
     cost?: number;
     onReply: () => void;
     onChanged: () => void;
+    onInspect?: (id: string) => void;
   } = $props();
   let pendingReview = $derived(
     task?.reviewRequired && task.state === 'waiting' && task.criteriaCheck && !task.review
@@ -49,7 +51,7 @@
         rel="noreferrer">Open source</a
       >{/if}
     <button class="secondary" onclick={onReply}>Ask for changes</button>
-    {#if task}<a href={`#/tasks/${task.id}`}>Inspect work</a>{/if}
+    {#if task}{#if onInspect}<button class="text-button" onclick={() => onInspect?.(task.id)}>Inspect work</button>{:else}<a href={`#/tasks/${task.id}`}>Inspect work</a>{/if}{/if}
   </div>
   {#if task}<ReviewPanel {task} onDone={onChanged} />{/if}
 </article>

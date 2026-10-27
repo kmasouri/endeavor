@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { untrack, tick } from 'svelte';
   import {
     api,
     type Approval,
@@ -27,14 +27,76 @@
   import ApprovalCard from './ApprovalCard.svelte';
   import TaskStatus from './TaskStatus.svelte';
   import ArtifactCard from './ArtifactCard.svelte';
-  let { conversationId, me, onReady, onRead }: {
+  import AgentHistory from './AgentHistory.svelte';
+  import RunInspector from './RunInspector.svelte';
+  let {
+    conversationId,
+    initialRunId = null,
+    me,
+    onReady,
+    onRead
+  }: {
     conversationId: string;
+    initialRunId?: string | null;
     me: Human;
     onReady?: (conversation: ConversationDetails) => boolean;
     // Called after the conversation is marked read, so the sidebar can refresh its counts.
     onRead?: () => void;
   } = $props();
   let draft = $state('');
+  let historyAgentId = $state<string | null>(null);
+  let selectedRunId = $state<string | null>(null);
+  let unavailableRun = $state(false);
+  let revision = $state<Task | null>(null);
+  const focusDetails = () => {
+    void tick().then(() =>
+      document.querySelector<HTMLButtonElement>('.conversation-details button')?.focus()
+    );
+  };
+  const closeDetails = () => {
+    showDetails = false;
+    void tick().then(() =>
+      document.querySelector<HTMLButtonElement>('[aria-label="Show details"]')?.focus()
+    );
+  };
+  const openHistory = (agentId: string) => {
+    historyAgentId = agentId;
+    selectedRunId = null;
+    unavailableRun = false;
+    showDetails = true;
+    focusDetails();
+  };
+  const inspectMessage = (message: Message) => {
+    historyAgentId = message.authorId;
+    selectedRunId = message.taskId;
+    unavailableRun = !message.taskId;
+    showDetails = true;
+    focusDetails();
+  };
+  const inspectRun = (id: string) => {
+    selectedRunId = id;
+    unavailableRun = false;
+    showDetails = true;
+    focusDetails();
+  };
+  $effect(() => {
+    if (initialRunId)
+      untrack(() => {
+        selectedRunId = initialRunId;
+        showDetails = true;
+      });
+  });
+  const askForChanges = async (task: Task) => {
+    revision = ['completed', 'cancelled'].includes(task.state) ? task : null;
+    replyTo =
+      messages.data?.data.findLast(
+        (message) => message.taskId === task.id && message.authorType === 'agent'
+      ) ?? null;
+    draft = `@${nameOf({ type: 'agent', id: task.ownerAgentId })} Please revise "${task.title}": `;
+    if (window.innerWidth <= 700) showDetails = false;
+    await tick();
+    document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus();
+  };
   let showDetails = $state(false);
   let showMembers = $state(false);
   let attaching = $state(false);
@@ -77,7 +139,9 @@
   );
   $effect(() => {
     if (details.data && onReady?.(details.data)) {
-      void tick().then(() => document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus());
+      void tick().then(() =>
+        document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus()
+      );
     }
   });
   // Seeing the conversation marks it read up to the newest message shown, again whenever a
@@ -99,20 +163,29 @@
   let conversation = $derived(details.data!);
   let taskList = $derived(tasks.data?.data ?? []);
   let taskIds = $derived(new Set(taskList.map((task) => task.id)));
-  let conversationApprovals = $derived((approvals.data?.data ?? []).filter((approval) => taskIds.has(approval.taskId)));
+  let conversationApprovals = $derived(
+    (approvals.data?.data ?? []).filter((approval) => taskIds.has(approval.taskId))
+  );
   let busy = $derived(taskList.filter((task) => !['completed', 'cancelled'].includes(task.state)));
   let artifacts = $derived(
     collectConversationArtifacts(outputs.data?.data ?? [], messages.data?.data ?? [], taskList)
   );
   let unattached = $derived(
-    artifacts.filter((output) => !(messages.data?.data ?? []).some((message) => message.taskId === output.taskId))
+    artifacts.filter(
+      (output) => !(messages.data?.data ?? []).some((message) => message.taskId === output.taskId)
+    )
   );
   const nameOf = (ref: { type: string; id: string | null }) =>
-    conversation.members.find((member) => member.participant.type === ref.type && member.participant.id === ref.id)
-      ?.name ??
+    conversation.members.find(
+      (member) => member.participant.type === ref.type && member.participant.id === ref.id
+    )?.name ??
     (ref.type === 'system'
       ? 'Platform'
-      : (directory.data?.find((agent) => agent.id === ref.id)?.name ?? (ref.type === 'agent' ? 'Deleted agent' : 'Someone')));
+      : (directory.data?.find((agent) => agent.id === ref.id)?.name ??
+        (ref.type === 'agent' ? 'Deleted agent' : 'Someone')));
+  const historyName = $derived(
+    historyAgentId ? nameOf({ type: 'agent', id: historyAgentId }) : 'Agent'
+  );
   const waitingApproval = (task: Task) =>
     task.state === 'waiting' && !task.pausedAt
       ? conversationApprovals.find((approval) => approval.taskId === task.id)
@@ -141,18 +214,23 @@
     costs.reload();
   };
   const reply = (message: Message) => {
+    revision = null;
     replyTo = message;
     document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus();
   };
-  const revise = (output: TaskOutput & { taskId: string }) => {
-    const task = taskList.find((candidate) => candidate.id === output.taskId);
-    replyTo =
-      messages.data?.data.findLast((message) => message.taskId === output.taskId && message.authorType === 'agent') ??
-      null;
-    draft = `${task ? '@' + nameOf({ type: 'agent', id: task.ownerAgentId }) + ' ' : ''}Please revise "${output.title}": `;
-    document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus();
+  const revise = async (output: TaskOutput & { taskId: string }) => {
+    try {
+      const task =
+        taskList.find((candidate) => candidate.id === output.taskId) ??
+        (await api.get<Task>(`/tasks/${output.taskId}`));
+      await askForChanges(task);
+    } catch {
+      inspectRun(output.taskId);
+    }
   };
 </script>
+
+<svelte:window onkeydown={(event) => { if (event.key === "Escape" && showDetails) closeDetails(); }} />
 
 {#if details.error}<ErrorNote error={details.error} />{:else if !details.data}<p>Loading…</p>{:else}
   {#if showMembers}<Members
@@ -224,12 +302,16 @@
           onReply={reply}
           onRevise={revise}
           onChanged={reload}
+          onInspect={inspectMessage}
+          onInspectRun={inspectRun}
+          selectedRunId={showDetails ? selectedRunId ?? undefined : undefined}
         />
         {#each unattached as output (output.id)}<div class="orphan-artifact">
             <ArtifactCard
               {output}
               task={taskList.find((task) => task.id === output.taskId)}
               cost={costs.data?.tasks.find((taskCost) => taskCost.taskId === output.taskId)?.costUsd}
+              onInspect={inspectRun}
               onReply={() => revise(output)}
               onChanged={reload}
             />
@@ -287,6 +369,7 @@
           tasks={taskList}
           bind:replyTo
           bind:body={draft}
+          bind:revision
           onPosted={reload}
           {onAdd}
           onAttach={() => (attaching = !attaching)}
@@ -294,6 +377,25 @@
       </div>
     </section>
     {#if showDetails}<aside class="conversation-details" aria-label="Conversation details">
+        {#if selectedRunId || historyAgentId || unavailableRun}
+          <div class="row">
+            <div class="grow"><button class="text-button" onclick={() => {
+              if (selectedRunId || unavailableRun) { selectedRunId = null; unavailableRun = false; }
+              else historyAgentId = null;
+            }}>← {selectedRunId || unavailableRun ? `${historyName}'s history` : 'Details'}</button>
+            <h2>{selectedRunId || unavailableRun ? 'Run details' : `${historyName}'s history`}</h2></div>
+            <button class="quiet icon-button" aria-label="Close details" onclick={closeDetails}><Icon name="close" /></button>
+          </div>
+          {#if unavailableRun}<p class="muted">No run was recorded for this message. Its execution history is unavailable.</p>
+          {:else if selectedRunId}
+            {#key selectedRunId}<RunInspector taskId={selectedRunId} {conversationId}
+              cost={costs.data?.tasks.find((entry) => entry.taskId === selectedRunId)?.costUsd}
+              onLoaded={(task) => { historyAgentId = task.ownerAgentId; }}
+              onRevise={askForChanges} onSelect={inspectRun} onChanged={reload} />{/key}
+          {:else if historyAgentId}
+            {#key historyAgentId}<AgentHistory {conversationId} conversationTitle={conversation.title} agentId={historyAgentId} agentName={historyName} costs={costs.data?.tasks ?? []} onSelect={inspectRun} />{/key}
+          {/if}
+        {:else}
         <div class="row">
           <div class="grow">
             <h2>Details</h2>
@@ -302,7 +404,7 @@
           <button
             class="quiet icon-button"
             aria-label="Close details"
-            onclick={() => (showDetails = false)}><Icon name="close" /></button
+            onclick={closeDetails}><Icon name="close" /></button
           >
         </div>
         <section>
@@ -318,24 +420,25 @@
         <ConversationAgents
           members={conversation.members}
           tasks={taskList}
-          {conversationId}
           onChanged={reload}
+          onHistory={openHistory}
         />
         <section>
           <h2 class="label">Artifacts</h2>
-          {#each artifacts as output (output.id)}<a
-              class="artifact-line row"
-              href={`#/tasks/${output.taskId}`}
+          {#each artifacts as output (output.id)}<button
+              class="quiet artifact-line row"
+              onclick={() => inspectRun(output.taskId)}
               ><Icon name="file" /><span class="grow ellipsis">{output.title}</span><time
                 class="caption muted"
                 title={formatDateTime(output.createdAt)}>{formatShortTime(output.createdAt)}</time
-              ></a
+              ></button
             >{/each}{#if !artifacts.length}<p class="caption muted">None yet.</p>{/if}
         </section>
         <section>
           <Spending kind="conversation" id={conversationId} onBudgetSaved={costs.reload} />
         </section>
         <details><summary>Knowledge sources</summary><KnowledgeSources {conversationId} /></details>
+        {/if}
       </aside>{/if}
   </div>
 {/if}
