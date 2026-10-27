@@ -160,7 +160,7 @@ async function mockApi(page: Page, theme = 'dark', empty = false, legacy = false
       );
     return reply(paged([]));
   });
-  return { writes, errors };
+  return { writes, errors, versions };
 }
 
 for (const theme of ['dark', 'light']) {
@@ -474,3 +474,96 @@ for (const legacy of [false, true]) {
     expect(errors).toEqual([]);
   });
 }
+
+test('configuration validates required fields and preserves every edit after a failed save', async ({
+  page
+}) => {
+  const { writes, errors, versions } = await mockApi(page);
+  let fail = true;
+  let release: () => void = () => {};
+  const attempts: Record<string, unknown>[] = [];
+  await page.route('**/agents/a1/config', async (route) => {
+    attempts.push(route.request().postDataJSON());
+    if (!fail) return route.fallback();
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    return route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message: 'Configuration not saved. Try again.' } })
+    });
+  });
+  await page.goto('/app/#/agents/a1');
+  await page.getByRole('button', { name: 'Configuration', exact: true }).click();
+  const form = page.locator('form.creation-form');
+  const instructions = form.getByRole('textbox', { name: /^Instructions/ });
+  const model = form.getByRole('textbox', { name: 'Model', exact: true });
+  const save = form.getByRole('button', { name: 'Save new version' });
+  await instructions.fill('   ');
+  await expect(save).toBeDisabled();
+  await instructions.fill('Check every claim against its source.');
+  await model.fill('');
+  await expect(save).toBeDisabled();
+  expect(attempts).toEqual([]);
+  await model.fill('test-reviewed');
+  await form.getByRole('combobox', { name: 'Provider', exact: true }).selectOption('scripted');
+  await form.getByRole('button', { name: 'Remove Web search', exact: true }).click();
+  await form.getByRole('button', { name: 'Remove Cite sources', exact: true }).click();
+  await form.getByText('Limits per task', { exact: false }).click();
+  const limits = ['Model turns', 'Tokens', 'Cost, $', 'Working minutes'];
+  for (const [i, label] of limits.entries()) {
+    await form
+      .getByRole('textbox', { name: label, exact: true })
+      .fill(['12', '2000', '0.75', '15'][i]);
+  }
+  await save.focus();
+  await page.keyboard.press('Enter');
+  await expect.poll(() => attempts.length).toBe(1);
+  await expect(save).toBeDisabled();
+  await expect(form.getByRole('button', { name: 'Discard changes' })).toBeDisabled();
+  await page.keyboard.press('Enter');
+  expect(attempts).toHaveLength(1);
+  release();
+  await expect(
+    form.getByText('Configuration not saved. Try again.', { exact: true })
+  ).toBeVisible();
+  await expect(instructions).toHaveValue('Check every claim against its source.');
+  await expect(model).toHaveValue('test-reviewed');
+  await expect(form.getByRole('combobox', { name: 'Provider', exact: true })).toHaveValue(
+    'scripted'
+  );
+  await expect(form.getByRole('button', { name: 'Undo removal of Web search' })).toBeVisible();
+  await expect(form.getByRole('button', { name: 'Undo removal of Cite sources' })).toBeVisible();
+  for (const [i, label] of limits.entries()) {
+    await expect(form.getByRole('textbox', { name: label, exact: true })).toHaveValue(
+      ['12', '2000', '0.75', '15'][i]
+    );
+  }
+  expect(versions).toHaveLength(2);
+  expect(writes).toEqual([]);
+  fail = false;
+  await save.click();
+  await expect(page.getByRole('button', { name: 'Versions · 3' })).toBeVisible();
+  expect(attempts).toHaveLength(2);
+  expect(attempts[1]).toEqual(attempts[0]);
+  expect(writes).toEqual([
+    {
+      path: '/agents/a1/config',
+      body: {
+        instructions: 'Check every claim against its source.',
+        provider: 'scripted',
+        model: 'test-reviewed',
+        skillIds: [],
+        connectionIds: ['c2'],
+        limits: { maxModelTurns: 12, maxTokens: 2000, maxWorkingMinutes: 15, maxCostUsd: 0.75 }
+      }
+    }
+  ]);
+  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  await page.getByRole('button', { name: 'Configuration', exact: true }).click();
+  await expect(instructions).toHaveValue('Check every claim against its source.');
+  await expect(model).toHaveValue('test-reviewed');
+  expect(versions).toHaveLength(3);
+  expect(errors).toEqual([]);
+});

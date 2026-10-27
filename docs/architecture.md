@@ -46,9 +46,11 @@ The API and the web interface are separate npm workspaces, so each has its own d
 
 The web interface uses one Svelte component per page or form. Shared request and action state lives in `apps/web/src/state.svelte.ts`; hash navigation stays in `App.svelte`. Requests ignore answers from closed pages or older reloads, and polling stops when its component is removed. The typed HTTP client stays in `api.ts`. `svelte-check` checks components and TypeScript together. Web unit tests use Node's test runner with Svelte's compiler and browser runtime; they need no browser or database.
 The committed Playwright suite in `apps/web/e2e/` exercises the production web build with a mocked
-HTTP API. `npm run check` runs it locally and in CI, including browser setup. It checks schedule
-badge geometry, themes, responsive layout, empty states, and keyboard navigation without starting
-agents or requiring a database. Browser traces and screenshots are retained on failure.
+HTTP API. `npm run check` runs it locally and in CI, including browser setup. It checks core chat,
+configuration, approvals and navigation flows, alongside schedule badge geometry, themes,
+responsive layout, empty/error states, and keyboard navigation without starting agents or
+requiring a database. Browser traces and screenshots are retained on failure. The
+[browser coverage matrix](browser-tests.md) records covered behavior, design references and gaps.
 
 Endeavors is the product-facing conversation destination. Its header search and native creation
 modal live in the shared shell; the selected chat keeps its existing features and compatible hash
