@@ -589,9 +589,10 @@ describe('TaskRunnerService', () => {
         { name: 'write_file', input: { path: 'notes.md', content: 'private content' } }
       ]);
       ctx.workspaceClient.write.mockImplementation(async () => {
-        const started = ctx.tasks.addEvent.mock.calls.findLast(
-          ([, type]) => type === 'tool.started'
-        );
+        const started = ctx.tasks.addEvent.mock.calls
+          .slice()
+          .reverse()
+          .find(([, type]) => type === 'tool.started');
         expect(started?.[3]).toEqual({ name: 'write_file', input: { path: 'notes.md' } });
         return { bytes: 15 };
       });

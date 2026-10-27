@@ -174,7 +174,9 @@ async function fixture(page: Page, theme = 'dark') {
             : tasks;
         return list(rows.slice(offset, offset + 20), rows.length);
       }
-      return list(tasks);
+      const offset = Number(url.searchParams.get('offset') ?? 0);
+      const limit = Number(url.searchParams.get('limit') ?? 100);
+      return list(tasks.slice(offset, offset + limit), tasks.length);
     }
     const match = /^\/tasks\/([^/]+)(?:\/(outputs|events|capabilities))?$/.exec(url.pathname);
     if (match) {
@@ -519,3 +521,19 @@ for (const width of [1280, 390, 320]) {
     expect(errors).toEqual([]);
   });
 }
+
+test('an older active run still shows after more than 100 newer completed runs', async ({
+  page
+}) => {
+  const { state } = await fixture(page);
+  state.tasks = Array.from({ length: 101 }, (_, i) => makeTask(`run-${i}`));
+  state.tasks[100].state = 'working';
+  state.tasks[100].activity = {
+    kind: 'writing',
+    detail: 'writing brief.md',
+    since: new Date().toISOString()
+  };
+  await page.goto('/app/#/conversations/heat');
+  await expect(page.locator('.live-status')).toContainText('writing brief.md');
+  expect(state.queries.some((query) => query.includes('offset=100'))).toBe(true);
+});
