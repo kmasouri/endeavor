@@ -217,10 +217,10 @@ runner also installs Chromium's system libraries; the existing CI workflow runs 
 `npm run check`. No deployment workflow changes are needed. On a new Linux workstation, install
 missing system libraries with `npx playwright install-deps chromium` from `apps/web/` if needed.
 
-The initial suite covers enabled/paused/cancelled badges on one line without clipping or overlaps,
-production CSS, both themes, desktop/phone widths, the shared centered frame, empty-state action
-alignment, keyboard navigation, and API failure handling. Future UI regressions should add cases
-here. These checks cover selected browser behavior; the other feature pages still need broader
-coverage. Failed runs retain a screenshot and trace under `apps/web/test-results/`, with an HTML
-report in `apps/web/playwright-report/`. Both directories are ignored by git. To inspect a local
-report, run `npx playwright show-report` from `apps/web/`.
+The suite covers conversation creation and chat, agent configuration/history, approvals, catalogs,
+authentication setup, navigation, and Schedules. It checks failed saves and retry, keyboard/focus,
+and representative geometry in both themes at desktop/phone widths. See the
+[browser coverage matrix and review guide](docs/browser-tests.md) for cases and remaining gaps.
+Failed runs retain screenshots and traces under `apps/web/test-results/`, with an HTML report in
+`apps/web/playwright-report/`. Both directories are ignored by git. To inspect a local report,
+run `npx playwright show-report` from `apps/web/`.

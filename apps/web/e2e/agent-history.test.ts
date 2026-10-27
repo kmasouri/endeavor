@@ -56,6 +56,7 @@ const message = (id: string, taskId: string | null, authorId = 'researcher') => 
 async function fixture(page: Page, theme = 'dark') {
   const state = {
     failHistory: false,
+    failOutputs: false,
     emptyHistory: false,
     slowHistory: false,
     failRevision: false,
@@ -178,6 +179,8 @@ async function fixture(page: Page, theme = 'dark') {
     if (match) {
       const task = state.tasks.find((t) => t.id === match[1]);
       if (!task) return reply({ error: { message: 'Run unavailable' } }, 404);
+      if (match[2] === 'outputs' && state.failOutputs)
+        return reply({ error: { message: 'Evidence unavailable' } }, 503);
       if (match[2] === 'outputs')
         return reply({
           data: [
@@ -470,4 +473,32 @@ test('history and run selection work from the keyboard and Escape restores Detai
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Show details' })).toBeFocused();
+});
+
+test('output inspection failure retries the same run without losing the chat draft', async ({
+  page
+}) => {
+  const { state, errors } = await fixture(page);
+  state.failOutputs = true;
+  await page.goto('/app/#/conversations/heat');
+  const draft = page.getByRole('textbox', { name: 'Message', exact: true });
+  await draft.fill('Keep this question while I inspect the evidence.');
+  await page.locator('#m-old-message').hover();
+  await page
+    .locator('#m-old-message')
+    .getByRole('button', { name: 'See what this agent did' })
+    .click();
+  const panel = page.getByRole('complementary', { name: 'Conversation details' });
+  await expect(panel).toContainText('Brief for old');
+  await expect(panel.getByText('Evidence unavailable', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Result of new', { exact: true })).toHaveCount(0);
+  state.failOutputs = false;
+  await panel.getByRole('button', { name: 'Retry outputs', exact: true }).click();
+  await expect(panel.getByText('Result of old', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Evidence unavailable', { exact: true })).toHaveCount(0);
+  await expect(draft).toHaveValue('Keep this question while I inspect the evidence.');
+  await panel.getByRole('button', { name: 'Close details' }).click();
+  await expect(page.getByRole('button', { name: 'Show details' })).toBeFocused();
+  expect(state.writes.filter((write) => !write.path.endsWith('/read'))).toEqual([]);
+  expect(errors).toEqual([]);
 });

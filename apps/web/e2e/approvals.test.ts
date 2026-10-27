@@ -4,6 +4,11 @@ async function mockApi(page: Page, theme = 'dark') {
   let empty = false;
   let failHistory = false;
   let pending = true;
+  let decision = 'approved';
+  let reason = '';
+  const errors: string[] = [];
+  const writes: { path: string; body: Record<string, unknown> }[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
   const requests: string[] = [];
   await page.addInitScript(() => localStorage.setItem('endeavor.actorId', 'p1'));
   await page.route('**/*', async (route) => {
@@ -16,7 +21,11 @@ async function mockApi(page: Page, theme = 'dark') {
     if (url.pathname === '/humans')
       return reply({ data: [{ id: 'p1', name: 'Kayvan', preferences: { theme } }] });
     if (request.method() === 'POST') {
-      expect(url.pathname).toBe('/approvals/pending/approve');
+      expect(['/approvals/pending/approve', '/approvals/pending/reject']).toContain(url.pathname);
+      const body = request.postDataJSON();
+      writes.push({ path: url.pathname, body });
+      decision = url.pathname.endsWith('/reject') ? 'rejected' : 'approved';
+      reason = body.reason ?? '';
       pending = false;
       return reply({ data: {} });
     }
@@ -43,13 +52,19 @@ async function mockApi(page: Page, theme = 'dark') {
           data = [approval('approved', '/allowed', status, '2026-10-25T13:00:00Z')];
         if (status === 'rejected')
           data = [approval('rejected', '/denied', status, '2026-10-25T14:00:00Z')];
-        if (status === 'approved' && !pending)
-          data.push(approval('pending', '/waiting', status, '2026-10-25T15:00:00Z'));
+        if (status === decision && !pending)
+          data.push({ ...approval('pending', '/waiting', status, '2026-10-25T15:00:00Z'), reason });
       }
     }
     return reply({ data, page: { limit: 100, offset: 0, total: data.length } });
   });
-  return { requests, empty: () => (empty = true), failHistory: () => (failHistory = true) };
+  return {
+    requests,
+    writes,
+    errors,
+    empty: () => (empty = true),
+    failHistory: () => (failHistory = true)
+  };
 }
 
 for (const width of [1440, 390]) {
@@ -115,4 +130,101 @@ test('empty and failed history states stay separate from Pending', async ({ page
   await page.getByRole('button', { name: 'Pending', exact: true }).click();
   await expect(page.getByText('History unavailable')).toHaveCount(0);
   await expect(page.getByText('Nothing waiting for you.')).toBeVisible();
+});
+
+for (const verb of ['approve', 'reject']) {
+  test(`${verb} failure keeps the reason; keyboard decision and retry move it to History`, async ({
+    page
+  }) => {
+    const api = await mockApi(page);
+    let fail = true;
+    let release: () => void = () => {};
+    const attempts: Record<string, unknown>[] = [];
+    await page.route(`**/approvals/pending/${verb}`, async (route) => {
+      attempts.push(route.request().postDataJSON());
+      if (!fail) return route.fallback();
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'Decision not saved. Try again.' } })
+      });
+    });
+    await page.goto('/app/#/approvals');
+    const reason = page.getByPlaceholder('Reason (optional)');
+    await reason.fill('Only the reviewed request is in scope.');
+    const allow = page.getByRole('button', { name: 'Allow once' });
+    const reject = page.getByRole('button', { name: "Don't allow", exact: true });
+    await reason.press('Tab');
+    await expect(allow).toBeFocused();
+    if (verb === 'reject') {
+      await page.keyboard.press('Tab');
+      await expect(reject).toBeFocused();
+    }
+    await page.keyboard.press('Enter');
+    await expect.poll(() => attempts.length).toBe(1);
+    await expect(allow).toBeDisabled();
+    await expect(reject).toBeDisabled();
+    await page.keyboard.press('Enter');
+    expect(attempts).toHaveLength(1);
+    release();
+    await expect(page.getByText('Decision not saved. Try again.', { exact: true })).toBeVisible();
+    await expect(reason).toHaveValue('Only the reviewed request is in scope.');
+    await expect(page.getByText('POST /waiting', { exact: true })).toBeVisible();
+    expect(api.writes).toEqual([]);
+    fail = false;
+    await (verb === 'approve' ? allow : reject).click();
+    await expect(page.getByText('Nothing waiting for you.')).toBeVisible();
+    expect(attempts).toEqual([
+      { reason: 'Only the reviewed request is in scope.' },
+      { reason: 'Only the reviewed request is in scope.' }
+    ]);
+    expect(api.writes).toEqual([
+      {
+        path: `/approvals/pending/${verb}`,
+        body: { reason: 'Only the reviewed request is in scope.' }
+      }
+    ]);
+    await page.getByRole('button', { name: 'History', exact: true }).click();
+    const row = page.locator('.list li').filter({ hasText: 'POST /waiting' });
+    await expect(row).toContainText(verb === 'approve' ? 'approved' : 'rejected');
+    await expect(row).toContainText('Only the reviewed request is in scope.');
+    await expect(row.getByRole('button')).toHaveCount(0);
+    expect(api.errors).toEqual([]);
+  });
+}
+
+test('pending loading and failure do not masquerade as an empty inbox; polling retries', async ({
+  page
+}) => {
+  const api = await mockApi(page);
+  await page.clock.install();
+  let fail = true;
+  let release: () => void = () => {};
+  const pendingResponse = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/approvals?**', async (route) => {
+    if (new URL(route.request().url()).searchParams.get('status') !== 'pending' || !fail)
+      return route.fallback();
+    await pendingResponse;
+    return route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message: 'Requests unavailable' } })
+    });
+  });
+  await page.goto('/app/#/approvals');
+  await expect(page.getByText('Loading requests…', { exact: true })).toBeVisible();
+  await expect(page.getByText('Nothing waiting for you.')).toHaveCount(0);
+  release();
+  await expect(page.getByText('Requests unavailable', { exact: true })).toBeVisible();
+  await expect(page.getByText('Nothing waiting for you.')).toHaveCount(0);
+  fail = false;
+  await page.clock.fastForward(4001);
+  await expect(page.getByText('POST /waiting', { exact: true })).toBeVisible();
+  await expect(page.getByText('Requests unavailable', { exact: true })).toHaveCount(0);
+  expect(api.errors).toEqual([]);
 });
