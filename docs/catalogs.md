@@ -288,17 +288,19 @@ one connection, then opens its configuration page and starts browser consent. If
 consent fails, retry Sign in on that saved connection; it is not created again. Token fields
 are hidden for OAuth and any previously typed token is omitted from the create request.
 
-The catalog list and detail header show authentication independently of Enabled/Disabled:
-**Authenticated** or **Authentication required**. Public connections configured with No
-authentication need no authentication badge. OAuth controls appear expanded near the top
-of an OAuth connection. An empty tool list still allows no tools after authentication.
+The catalog list and detail header show one connection status: **Disabled** when switched
+off, **Authentication required** when enabled but authentication is missing, or **Enabled**
+otherwise. Disabled takes precedence even if credentials are saved or missing. Public
+connections need no authentication to show Enabled. The enable/disable control and OAuth
+controls stay in configuration. OAuth controls appear expanded near the top of an OAuth
+connection. An empty tool list still allows no tools after authentication.
 
 Migration 015 records the authentication method. Existing OAuth sessions become OAuth
 connections; existing saved header credentials remain header authentication; other existing
 connections retain anonymous access. Requests omitting authMethod remain compatible.
 Choosing OAuth does not fall back to an old header credential when a session is absent.
 The list and detail read stored authentication state without contacting the provider.
-For header authentication, Authenticated means a credential is saved; it is not a live
+For header authentication, satisfied authentication means a credential is saved; it is not a live
 validation of the provider or a guarantee that every tool call will succeed. OAuth expiry
 without a refresh token requires authentication again; a renewable login remains authenticated
 until renewal or a provider response establishes that sign-in is required.

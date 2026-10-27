@@ -41,6 +41,8 @@ async function mockOAuth(page: Page, theme = 'dark') {
         connection = { ...connection, ...body };
         return reply({ data: { ...connection, authenticated } }, 201);
       }
+      if (url.pathname.endsWith('/disable')) connection.disabledAt = '2026-10-27T04:00:00Z';
+      if (url.pathname.endsWith('/enable')) connection.disabledAt = null;
       if (url.pathname.endsWith('/oauth/connect')) {
         if (failSignIn)
           return reply({ error: { message: 'Sign-in setup failed. Try again.' } }, 503);
@@ -76,7 +78,7 @@ for (const width of [320, 390, 900, 1280]) {
       const api = await mockOAuth(page, theme);
       await page.goto('/app/#/connections');
       const row = page.getByRole('link').filter({ hasText: 'Juniper Parcel — Notion' });
-      await expect(row.getByText('Enabled', { exact: true })).toBeVisible();
+      await expect(row.locator('.management-status')).toHaveCount(1);
       await expect(row.getByText('Authentication required', { exact: true })).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true
@@ -84,6 +86,7 @@ for (const width of [320, 390, 900, 1280]) {
       await row.click();
       const header = page.locator('.page-header');
       await expect(header.getByText('Authentication required', { exact: true })).toBeVisible();
+      await expect(header.locator('.management-status')).toHaveCount(1);
       await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
       const checkLayout = async () => {
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -105,9 +108,22 @@ for (const width of [320, 390, 900, 1280]) {
         }
       };
       await checkLayout();
+      const checkDisabled = async () => {
+        await page.getByRole('button', { name: 'Disable', exact: true }).click();
+        await expect(header.locator('.management-status')).toHaveText('Disabled');
+        await page.getByRole('link', { name: '← Connections', exact: true }).click();
+        await expect(row.locator('.management-status')).toHaveCount(1);
+        await expect(row.locator('.management-status')).toHaveText('Disabled');
+        await row.click();
+        await page.getByRole('button', { name: 'Enable', exact: true }).click();
+      };
+      await checkDisabled();
+      await expect(header.locator('.management-status')).toHaveText('Authentication required');
       await page.getByRole('button', { name: 'Sign in', exact: true }).click();
       await page.getByRole('link', { name: 'Allow Notion access' }).click();
-      await expect(header.getByText('Authenticated', { exact: true })).toBeVisible();
+      await expect(header.locator('.management-status')).toHaveText('Enabled');
+      await checkDisabled();
+      await expect(header.locator('.management-status')).toHaveText('Enabled');
       await expect(page.getByText('No credential', { exact: true })).toHaveCount(0);
       await checkLayout();
       await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
@@ -118,7 +134,11 @@ for (const width of [320, 390, 900, 1280]) {
         })
       ).toHaveCount(0);
       expect(api.writes.map((write) => write.path)).toEqual([
+        '/connections/c1/disable',
+        '/connections/c1/enable',
         '/connections/c1/oauth/connect',
+        '/connections/c1/disable',
+        '/connections/c1/enable',
         '/connections/c1/oauth/disconnect'
       ]);
     });
@@ -135,7 +155,7 @@ test('Notion can be created and signed in from the new connection screen', async
   await page.getByRole('button', { name: 'Create and sign in', exact: true }).click();
   await page.getByRole('link', { name: 'Allow Notion access' }).click();
   await expect(
-    page.locator('.page-header').getByText('Authenticated', { exact: true })
+    page.locator('.page-header').getByText('Enabled', { exact: true })
   ).toBeVisible();
   expect(api.writes.map((write) => write.path)).toEqual([
     '/connections',
@@ -171,7 +191,7 @@ test('failed OAuth setup retains the saved connection and retry never creates a 
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByRole('link', { name: 'Allow Notion access' }).click();
   await expect(
-    page.locator('.page-header').getByText('Authenticated', { exact: true })
+    page.locator('.page-header').getByText('Enabled', { exact: true })
   ).toBeVisible();
   expect(api.writes.filter((write) => write.path === '/connections')).toHaveLength(1);
 });

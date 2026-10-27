@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ConnectionAuthStatus from '../ConnectionAuthStatus.svelte';
+  import ConnectionStatus from '../ConnectionStatus.svelte';
   import { authenticationLabel } from '../connection-auth';
   import PageHeader from '../PageHeader.svelte';
   import Icon from '../Icon.svelte';
@@ -42,8 +42,7 @@
           </div>
           {#if 'baseUrl' in entry}
             <div class="management-statuses">
-              <span class="management-status" class:enabled={!entry.disabledAt}>{entry.disabledAt ? 'Disabled' : 'Enabled'}</span>
-              <ConnectionAuthStatus connection={entry} />
+              <ConnectionStatus connection={entry} />
             </div>
           {:else}
             <span class="management-status" class:enabled={!entry.disabledAt}>{entry.disabledAt ? 'Disabled' : 'Enabled'}</span>

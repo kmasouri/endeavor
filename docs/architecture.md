@@ -440,7 +440,8 @@ for trust boundaries, offline dependency images, cancellation limits, and recove
 
 Connection authentication method is stored independently from enabled state. The catalog
 service derives a credential-free authentication summary for list/detail responses from the
-stored method and encrypted OAuth session. The web interface shows two authentication states,
-keeps Enabled/Disabled separate, and sends OAuth creation directly to consent through the
+stored method and encrypted OAuth session. The web interface combines enabled and authentication
+state into one badge: Disabled, Authentication required, or Enabled, in that order of precedence.
+It sends OAuth creation directly to consent through the
 saved connection page. Failed consent retries reuse that connection. See [authentication
 status](catalogs.md#authentication-choice-and-status).

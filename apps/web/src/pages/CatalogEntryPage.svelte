@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ConnectionAuthStatus from '../ConnectionAuthStatus.svelte';
+  import ConnectionStatus from '../ConnectionStatus.svelte';
   import PageHeader from '../PageHeader.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import { api, type SkillDetails, type Connection } from '../api';
@@ -23,8 +23,11 @@
     <PageHeader title={entry.data.name} subtitle={entry.data.description}>
       {#snippet actions()}
         <div class="row wrap">
-          <span class="management-status" class:enabled={!entry.data?.disabledAt}>{entry.data?.disabledAt ? 'Disabled' : 'Enabled'}</span>
-          {#if entry.data && 'baseUrl' in entry.data}<ConnectionAuthStatus connection={entry.data} />{/if}
+          {#if entry.data && 'baseUrl' in entry.data}
+            <ConnectionStatus connection={entry.data} />
+          {:else if entry.data}
+            <span class="management-status" class:enabled={!entry.data.disabledAt}>{entry.data.disabledAt ? 'Disabled' : 'Enabled'}</span>
+          {/if}
         </div>
       {/snippet}
     </PageHeader>
