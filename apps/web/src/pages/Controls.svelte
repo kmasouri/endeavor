@@ -2,43 +2,37 @@
   import { api, type TaskDetails } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
-  import { go, createAction } from '../state.svelte';
+  import { createAction } from '../state.svelte';
   import PendingApprovals from './PendingApprovals.svelte';
 
   let props: {
     task: TaskDetails;
     latestVersionId?: string;
+    onRevise: () => void;
+    onRestarted: (taskId: string) => void;
     onDone: () => void;
   } = $props();
   let task = $derived(props.task);
-  let reason = $state('');
   const action = createAction();
   let finished = $derived(task.state === 'completed' || task.state === 'cancelled');
   const act = (path: string) =>
     void action
       .run(async () => {
-        const result = await api.post<{
-          id: string;
-        }>(`/tasks/${task.id}/${path}`, reason ? { reason } : {});
+        const result = await api.post<{ id: string }>(`/tasks/${task.id}/${path}`);
         if (path === 'restart') {
-          go(`/tasks/${result.id}`);
+          props.onRestarted(result.id);
         }
       })
-      .then((ok) => ok && ((reason = ''), props.onDone()));
+      .then((ok) => ok && props.onDone());
 </script>
 
 <div class="panel stack">
-  <h2>Direct this work</h2>
+  <h2>Run controls</h2>
 
   <Hint>
     To add information or redirect it, write to the agent in the conversation. These buttons stop or
     start the work itself.
   </Hint>
-
-  <input
-    bind:value={reason}
-    placeholder={finished ? 'What should change? (for Ask for changes)' : 'Reason (optional)'}
-  />
 
   <div class="row wrap">
     {#if !finished && !task.pausedAt}
@@ -56,13 +50,7 @@
     {/if}
 
     {#if finished}
-      <button
-        disabled={action.busy || !reason.trim()}
-        title="Write what to change in the box above"
-        onclick={() => act('restart')}
-      >
-        Ask for changes
-      </button>
+      <button disabled={action.busy} onclick={props.onRevise}>Ask for changes</button>
     {/if}
 
     {#if finished}

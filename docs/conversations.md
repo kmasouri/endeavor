@@ -81,22 +81,43 @@ shows no count.
 
 `GET /directory` lists the enabled agents a person can discover: name, purpose, and capabilities (provider, model, and how many skills and connections). It never shows instructions, saved notes, credentials, or conversations. Agents also see directory agents that aren't in the conversation, by name and purpose only. If one could help, the agent calls `suggest_participant`. That posts a suggestion to the people in the conversation; it doesn't add the agent or contact it. Seeing an agent in the directory doesn't let anyone message it outside a conversation.
 
+## Inspecting an agent's work
+
+Open Details, expand an agent, then choose History. The list contains only that agent's runs in
+this Endeavor, newest first. Older runs are available through pagination. Selecting a run replaces
+Details with its request, completion criteria, state, outputs and evidence, and readable execution
+steps. Technical events are expandable. Back returns to the same agent's history; chat stays open.
+
+The message action **See what this agent did** uses that message's stored task ID. It never guesses
+the agent's latest run. A legacy message without a recorded task shows an unavailable explanation.
+Existing task URLs and schedule run links continue to work: conversation runs open in their
+Endeavor, while standalone runs remain inspectable through a read-only task page. There is no global
+Work destination or replacement activity feed.
+
+**Ask for changes** targets the owning agent in the conversation composer. For finished runs,
+the composer explicitly identifies the run being revised and uses `POST /tasks/:taskId/restart`
+with the draft as its reason. This preserves the previous result and criteria in a linked new run,
+and repeat submissions return the same restart. The request is retained in the run's brief and
+restart event. It does not also deliver a second agent message. For open work, revisions use ordinary
+chat replies and mentions. Failed sends keep the draft. Pause, stop, resume, approval, result review,
+restart, and configuration migration remain available in the inspector.
+
 ## What agents can do
 
 Agents act only through these tools. The runner carries out each call:
 
-| Tool             | What it does                                                                                   |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| `send_message`   | Post a message. Addressed participants are notified.                                           |
-| `ask`            | Ask one participant something, and wait for their reply.                                       |
-| `save_output`    | Attach an output or piece of evidence to the task.                                             |
-| `complete_task`  | Finish with a result. It is saved as an output, checked against the criteria, and posted back. |
-| `report_blocked` | Stop, and say what a person needs to do.                                                       |
-| `list_files`     | List the files in the task's own workspace folder.                                             |
-| `read_file`      | Read a text file from the workspace.                                                           |
-| `write_file`     | Write a text file in the workspace. Paths can't leave it. See `docs/local.md`.                 |
-| `find_capabilities` | List skills and connections people made discoverable. Grants nothing.                       |
-| `request_access` | Ask a person for a discoverable skill or connection, for this task or ongoing. The task waits. |
+| Tool                | What it does                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------------------------- |
+| `send_message`      | Post a message. Addressed participants are notified.                                           |
+| `ask`               | Ask one participant something, and wait for their reply.                                       |
+| `save_output`       | Attach an output or piece of evidence to the task.                                             |
+| `complete_task`     | Finish with a result. It is saved as an output, checked against the criteria, and posted back. |
+| `report_blocked`    | Stop, and say what a person needs to do.                                                       |
+| `list_files`        | List the files in the task's own workspace folder.                                             |
+| `read_file`         | Read a text file from the workspace.                                                           |
+| `write_file`        | Write a text file in the workspace. Paths can't leave it. See `docs/local.md`.                 |
+| `find_capabilities` | List skills and connections people made discoverable. Grants nothing.                          |
+| `request_access`    | Ask a person for a discoverable skill or connection, for this task or ongoing. The task waits. |
 
 ## Outputs, evidence, and finishing
 

@@ -3,7 +3,7 @@
   import { createLoad } from '../state.svelte';
   import { buildAgentSteps } from '../agent-steps';
   import ErrorNote from '../ErrorNote.svelte';
-  let { taskId }: { taskId: string } = $props();
+  let { taskId, onInspect }: { taskId: string; onInspect?: (id: string) => void } = $props();
   const runId = $derived(taskId);
   let open = $state(false);
   let requested = $state(false);
@@ -73,7 +73,7 @@
         {:else}<p class="caption muted">No work steps recorded yet.</p>{/if}
       {/if}
       <div class="step-footer">
-        <a href={`#/tasks/${runId}`}>Open full run</a>{#if events.data}<button
+        {#if onInspect}<button class="text-button" onclick={() => onInspect?.(runId)}>Open full run</button>{:else}<a href={`#/tasks/${runId}`}>Open full run</a>{/if}{#if events.data}<button
             class="text-button"
             disabled={loading}
             onclick={events.reload}>{loading ? 'Refreshing…' : 'Refresh'}</button
