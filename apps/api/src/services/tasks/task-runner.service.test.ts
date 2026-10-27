@@ -584,6 +584,22 @@ describe('TaskRunnerService', () => {
       ]);
     });
 
+    it('records each running tool before it starts without copying file content', async () => {
+      const ctx = runCalls([
+        { name: 'write_file', input: { path: 'notes.md', content: 'private content' } }
+      ]);
+      ctx.workspaceClient.write.mockImplementation(async () => {
+        const started = ctx.tasks.addEvent.mock.calls
+          .slice()
+          .reverse()
+          .find(([, type]) => type === 'tool.started');
+        expect(started?.[3]).toEqual({ name: 'write_file', input: { path: 'notes.md' } });
+        return { bytes: 15 };
+      });
+      await ctx.runner.runTask(makeTask());
+      expect(ctx.workspaceClient.write).toHaveBeenCalledTimes(1);
+    });
+
     it('says when the workspace is empty and when a read was cut off', async () => {
       const ctx = runCalls([
         { name: 'list_files', input: {} },
@@ -953,6 +969,16 @@ describe('TaskRunnerService', () => {
       expect(current().state).toBe('working');
     });
 
+    it('records model activity before waiting for the provider', async () => {
+      const { runner, client, tasks } = setup();
+      client.complete.mockImplementation(async () => {
+        expect(eventTypes(tasks).at(-1)).toBe('model.started');
+        return turn({ stopReason: 'refusal' });
+      });
+      await runner.runTask(makeTask());
+      expect(client.complete).toHaveBeenCalledTimes(1);
+    });
+
     it('waits and tries again later when the provider is busy', async () => {
       const { runner, client, tasks } = setup();
       client.complete.mockRejectedValue(new ModelClientError('rate limited', 'scripted', true));
@@ -960,7 +986,7 @@ describe('TaskRunnerService', () => {
       const delay = await runner.runTask(makeTask());
 
       expect(delay).toBe(5_000);
-      expect(eventTypes(tasks)).toEqual(['model.failed']);
+      expect(eventTypes(tasks)).toEqual(['model.started', 'model.failed']);
     });
 
     it('blocks after repeated provider failures', async () => {

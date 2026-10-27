@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import type { TaskActivity } from '../src/api';
 
 const createdAt = '2026-10-24T12:00:00Z';
 const agent = (id: string, name: string) => ({
@@ -23,6 +24,7 @@ const makeTask = (
   ownerAgentId,
   conversationId,
   title: `Request ${id}`,
+  activity: null as TaskActivity | null,
   brief: `Brief for ${id}`,
   completionCriteria: `Criteria for ${id}`,
   state: 'completed',
@@ -172,7 +174,9 @@ async function fixture(page: Page, theme = 'dark') {
             : tasks;
         return list(rows.slice(offset, offset + 20), rows.length);
       }
-      return list(tasks);
+      const offset = Number(url.searchParams.get('offset') ?? 0);
+      const limit = Number(url.searchParams.get('limit') ?? 100);
+      return list(tasks.slice(offset, offset + limit), tasks.length);
     }
     const match = /^\/tasks\/([^/]+)(?:\/(outputs|events|capabilities))?$/.exec(url.pathname);
     if (match) {
@@ -470,4 +474,66 @@ test('history and run selection work from the keyboard and Escape restores Detai
   await page.keyboard.press('Escape');
   await expect(panel).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Show details' })).toBeFocused();
+});
+
+for (const width of [1280, 390, 320]) {
+  test(`live status shows independent steps, elapsed time and plain stopped states at ${width}px`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const { state, errors } = await fixture(page);
+    const since = new Date(Date.now() - 18_000).toISOString();
+    const first = state.tasks[0];
+    first.state = 'working';
+    first.activity = { kind: 'reading', detail: 'reading sources/air-source-heat-pump.md', since };
+    const second = state.tasks[2];
+    second.state = 'working';
+    second.activity = { kind: 'connection', detail: 'calling a connection', since };
+    await page.goto('/app/#/conversations/heat');
+    const live = page.locator('.live-status');
+    await expect(live).toContainText('Researcher is skimming');
+    await expect(live).toContainText('reading sources/air-source-heat-pump.md');
+    await expect(live).toContainText('Reviewer is poking the API');
+    await expect(live.locator(':scope > span')).toHaveCount(2);
+    await page.screenshot({ path: test.info().outputPath('live-agent-status.png') });
+    const elapsed = live.locator('.muted[aria-hidden="true"]').first();
+    const before = await elapsed.innerText();
+    await expect(elapsed).not.toHaveText(before);
+    const geometry = await live.evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, scroll: el.scrollWidth, width: el.clientWidth };
+    });
+    expect(geometry.left).toBeGreaterThanOrEqual(0);
+    expect(geometry.right).toBeLessThanOrEqual(width);
+    expect(geometry.scroll).toBeLessThanOrEqual(geometry.width + 1);
+    first.pausedAt = since;
+    second.state = 'blocked';
+    await expect(live).toContainText('Researcher is paused', { timeout: 6500 });
+    await expect(live).toContainText('Reviewer is stuck');
+    await expect(live).not.toContainText('skimming');
+    first.pausedAt = null;
+    first.state = 'waiting';
+    await expect(live).toContainText('Researcher is waiting', { timeout: 6500 });
+    first.state = 'completed';
+    second.state = 'completed';
+    await expect(live).toHaveCount(0, { timeout: 6500 });
+    expect(errors).toEqual([]);
+  });
+}
+
+test('an older active run still shows after more than 100 newer completed runs', async ({
+  page
+}) => {
+  const { state } = await fixture(page);
+  state.tasks = Array.from({ length: 101 }, (_, i) => makeTask(`run-${i}`));
+  state.tasks[100].state = 'working';
+  state.tasks[100].activity = {
+    kind: 'writing',
+    detail: 'writing brief.md',
+    since: new Date().toISOString()
+  };
+  await page.goto('/app/#/conversations/heat');
+  await expect(page.locator('.live-status')).toContainText('writing brief.md');
+  expect(state.queries.some((query) => query.includes('offset=100'))).toBe(true);
 });

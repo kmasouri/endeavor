@@ -116,6 +116,9 @@ export interface TaskRepository {
   ): Promise<TaskEvent>;
   listEvents(taskId: string, options: { afterId: number; limit: number }): Promise<TaskEvent[]>;
 
+  // The newest matching event per task, fetched together for a status poll.
+  listLatestEvents(taskIds: string[], types: string[]): Promise<TaskEvent[]>;
+
   addOutput(taskId: string, input: CreateTaskOutputInput): Promise<TaskOutput>;
   listOutputs(taskId: string): Promise<TaskOutput[]>;
   countOutputs(taskId: string): Promise<number>;

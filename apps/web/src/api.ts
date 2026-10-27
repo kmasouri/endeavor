@@ -219,7 +219,14 @@ export interface TaskWait {
   resolvedAt: string | null;
 }
 
+export interface TaskActivity {
+  kind: 'searching' | 'reading' | 'writing' | 'checking' | 'connection' | 'thinking';
+  detail: string;
+  since: string;
+}
+
 export interface Task {
+  activity?: TaskActivity | null;
   id: string;
   conversationId: string | null;
   ownerAgentId: string;
