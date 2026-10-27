@@ -219,6 +219,7 @@ describe('catalog OAuth lifecycle', () => {
   it('requires disconnect before an endpoint or header-credential change', async () => {
     const ctx = setup();
     await pending(ctx);
+    ctx.catalogs.updateConnection.mockClear();
     await expect(
       ctx.service.updateConnection('h1', 'c1', { baseUrl: 'https://other.example/mcp' })
     ).rejects.toThrow('Disconnect OAuth');
@@ -227,8 +228,97 @@ describe('catalog OAuth lifecycle', () => {
     await ctx.service.updateConnection('h1', 'c1', { credential: 'Bearer replacement' });
     expect(ctx.session).toBeNull();
     expect(ctx.catalogs.updateConnection).toHaveBeenCalledWith('c1', {
-      credential: 'Bearer replacement'
+      credential: 'Bearer replacement',
+      authMethod: 'header'
     });
+  });
+
+  it('reports OAuth authentication separately from whether a connection is enabled', async () => {
+    const ctx = setup();
+    Object.assign(ctx.connection, { authMethod: 'oauth' });
+    expect(await ctx.service.getConnection('c1')).toMatchObject({
+      authMethod: 'oauth',
+      authenticated: false,
+      disabledAt: null
+    });
+    const flow = await pending(ctx);
+    await ctx.service.finishOAuth('c1', { state: flow.state, code: 'code' }, flow.browserKey);
+    expect(await ctx.service.getConnection('c1')).toMatchObject({ authenticated: true });
+    ctx.session!.expiresAt = Date.now() - 1;
+    expect(await ctx.service.getConnection('c1')).toMatchObject({ authenticated: false });
+    ctx.session!.data.tokens = { access_token: 'secret', refresh_token: 'refresh' };
+    expect(await ctx.service.getConnection('c1')).toMatchObject({ authenticated: true });
+    await ctx.service.disconnectOAuth('h1', 'c1');
+    expect(await ctx.service.getConnection('c1')).toMatchObject({ authenticated: false });
+  });
+
+  it('does not contact a header-auth server when its required token is missing', async () => {
+    const ctx = setup();
+    Object.assign(ctx.connection, { authMethod: 'header' });
+    ctx.catalogs.getConnectionCredential.mockResolvedValue(null);
+    await expect(ctx.service.discoverConnectionTools('h1', 'c1')).rejects.toThrow(
+      'Add an API key or token'
+    );
+    expect(ctx.mcp.listTools).not.toHaveBeenCalled();
+    expect(await ctx.service.getConnection('c1')).toMatchObject({ authenticated: false });
+  });
+
+  it('never falls back to headers for an OAuth connection with no session', async () => {
+    const ctx = setup();
+    Object.assign(ctx.connection, { authMethod: 'oauth' });
+    ctx.catalogs.getConnectionCredential.mockResolvedValue('Bearer old-token');
+    await expect(ctx.service.discoverConnectionTools('h1', 'c1')).rejects.toMatchObject({
+      name: 'connectionSignInRequired'
+    });
+    expect(ctx.mcp.listTools).not.toHaveBeenCalled();
+    expect(ctx.catalogs.getConnectionCredential).not.toHaveBeenCalled();
+  });
+
+  it('keeps OAuth selected after setup fails before consent', async () => {
+    const ctx = setup();
+    ctx.oauth.begin.mockRejectedValue(new Error('unavailable'));
+    await expect(ctx.service.startOAuth('h1', 'c1')).rejects.toMatchObject({
+      name: 'connectionOAuthFailed'
+    });
+    expect(ctx.catalogs.updateConnection).toHaveBeenCalledWith('c1', { authMethod: 'oauth' });
+  });
+
+  it('rejects OAuth on HTTP connections and hidden credentials for non-header methods', async () => {
+    const ctx = setup();
+    for (const authMethod of ['none', 'oauth'] as const) {
+      await expect(
+        ctx.service.createConnection('h1', {
+          name: 'Docs',
+          description: 'Docs',
+          baseUrl: 'https://docs.example',
+          kind: 'mcp',
+          authMethod,
+          credential: 'secret'
+        })
+      ).rejects.toMatchObject({ name: 'validationError' });
+    }
+    await expect(
+      ctx.service.createConnection('h1', {
+        name: 'Docs',
+        description: 'Docs',
+        baseUrl: 'https://docs.example',
+        kind: 'http',
+        authMethod: 'oauth'
+      })
+    ).rejects.toMatchObject({ name: 'validationError' });
+    expect(ctx.catalogs.createConnection).not.toHaveBeenCalled();
+  });
+
+  it('includes authentication status in catalog lists without exposing tokens', async () => {
+    const ctx = setup();
+    Object.assign(ctx.connection, { authMethod: 'oauth' });
+    ctx.catalogs.listConnections.mockResolvedValue([ctx.connection as never]);
+    ctx.catalogs.countConnections.mockResolvedValue(1);
+    const flow = await pending(ctx);
+    await ctx.service.finishOAuth('c1', { state: flow.state, code: 'code' }, flow.browserKey);
+    const result = await ctx.service.listConnections({ limit: 100, offset: 0 });
+    expect(result.connections[0]).toMatchObject({ authMethod: 'oauth', authenticated: true });
+    expect(JSON.stringify(result)).not.toContain('secret');
   });
 
   it('preserves existing header authentication when OAuth has not been selected', async () => {

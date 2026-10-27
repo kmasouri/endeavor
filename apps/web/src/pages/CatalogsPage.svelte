@@ -1,4 +1,6 @@
 <script lang="ts">
+  import ConnectionAuthStatus from '../ConnectionAuthStatus.svelte';
+  import { authenticationLabel } from '../connection-auth';
   import PageHeader from '../PageHeader.svelte';
   import Icon from '../Icon.svelte';
   import ManagementToolbar from '../ManagementToolbar.svelte';
@@ -29,16 +31,23 @@
     <div class="label muted">{title} · {shown.length}</div>
     <ul class="management-list" aria-label={title}>
       {#each shown as entry (entry.id)}
-        <li><a class="management-row" href={`#/${kind}/${entry.id}`}>
+        <li><a class="management-row" class:connection-row={'baseUrl' in entry} href={`#/${kind}/${entry.id}`}>
           <span class="management-icon"><Icon name={kind === 'skills' ? 'file' : 'connections'} /></span>
           <div><h3>{entry.name}</h3><p>{entry.description}</p></div>
           <div class="management-meta">
             {#if 'baseUrl' in entry}
               {entry.kind === 'mcp' ? 'MCP server' : 'HTTP API'}
-              <small>{entry.hasCredential ? 'Credential saved' : 'No credential'}</small>
+              <small>{authenticationLabel(entry)}</small>
             {:else}Versioned instructions{/if}
           </div>
-          <span class="management-status" class:enabled={!entry.disabledAt}>{entry.disabledAt ? 'Disabled' : 'Enabled'}</span>
+          {#if 'baseUrl' in entry}
+            <div class="management-statuses">
+              <span class="management-status" class:enabled={!entry.disabledAt}>{entry.disabledAt ? 'Disabled' : 'Enabled'}</span>
+              <ConnectionAuthStatus connection={entry} />
+            </div>
+          {:else}
+            <span class="management-status" class:enabled={!entry.disabledAt}>{entry.disabledAt ? 'Disabled' : 'Enabled'}</span>
+          {/if}
           <span class="chevron" aria-hidden="true">›</span>
         </a></li>
       {/each}

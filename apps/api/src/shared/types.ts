@@ -275,6 +275,9 @@ export type HttpMethod = (typeof HTTP_METHODS)[number];
 
 // A connection as the API shows it. The credential itself is never included.
 export interface Connection {
+  authMethod?: 'none' | 'header' | 'oauth';
+  // Credential availability, not a live provider health check.
+  authenticated?: boolean;
   // Missing kind in older in-memory records means HTTP.
   kind?: 'http' | 'mcp';
   allowedTools?: string[];

@@ -31,6 +31,7 @@ export interface SkillDetails extends Skill {
 }
 
 export interface ConnectionChanges {
+  authMethod?: 'none' | 'header' | 'oauth';
   allowedTools?: string[];
   approvalTools?: string[];
   name?: string;
@@ -67,7 +68,9 @@ export class CatalogService {
     const session = await this.oauthRepository?.get(connectionId);
     return {
       status: !session
-        ? 'header'
+        ? connection.authMethod === 'oauth'
+          ? 'disconnected'
+          : 'header'
         : session.resource !== connection.baseUrl ||
             (session.status === 'pending' && (session.pendingExpiresAt ?? 0) < Date.now())
           ? 'reconnect_required'
@@ -93,6 +96,7 @@ export class CatalogService {
     const callbackUrl = new URL(`/connections/${connection.id}/oauth/callback`, this.publicUrl)
       .href;
     const result = await this.oauthRepository.withLock(connection.id, async () => {
+      await this.catalogRepository.updateConnection(connection.id, { authMethod: 'oauth' });
       const session: ConnectionOAuthSession = {
         resource: connection.baseUrl,
         callbackUrl,
@@ -209,7 +213,8 @@ export class CatalogService {
       const result = await this.oauthRepository.withLock<Record<string, string> | null | false>(
         connection.id,
         async (session) => {
-          if (!session) return { session, result: null };
+          if (!session)
+            return { session, result: connection.authMethod === 'oauth' ? (false as const) : null };
           if (session.status !== 'connected') return { session, result: false as const };
           try {
             if (session.resource !== connection.baseUrl) throw new Error('Resource changed');
@@ -226,8 +231,43 @@ export class CatalogService {
       if (result === false) throw new AppError('connectionSignInRequired');
       if (result) return result;
     }
+    if (connection.authMethod === 'oauth') throw new AppError('connectionSignInRequired');
     const credential = await this.catalogRepository.getConnectionCredential(connection.id);
+    if (connection.authMethod === 'header' && !credential) {
+      throw new AppError(
+        'validationError',
+        'Add an API key or token in this connection’s configuration before continuing.'
+      );
+    }
     return credential ? { [connection.authHeader]: credential } : {};
+  }
+
+  private validateAuthentication(kind: string, method?: string, credential?: string | null) {
+    if (method === 'oauth' && kind !== 'mcp')
+      throw new AppError('validationError', 'OAuth sign-in requires an MCP connection.');
+    if ((method === 'none' || method === 'oauth') && credential)
+      throw new AppError(
+        'validationError',
+        'Only API key / token authentication accepts a credential.'
+      );
+  }
+
+  private async withAuthentication(connection: Connection): Promise<Connection> {
+    const authMethod = connection.authMethod ?? (connection.hasCredential ? 'header' : 'none');
+    let authenticated =
+      authMethod === 'none' || (authMethod === 'header' && Boolean(connection.hasCredential));
+    if (authMethod === 'oauth') {
+      const session = await this.oauthRepository?.get(connection.id);
+      const tokens = session?.data.tokens as
+        { access_token?: string; refresh_token?: string } | undefined;
+      authenticated = Boolean(
+        session?.status === 'connected' &&
+        session.resource === connection.baseUrl &&
+        tokens?.access_token &&
+        (session.expiresAt === undefined || session.expiresAt > Date.now() || tokens.refresh_token)
+      );
+    }
+    return { ...connection, authMethod, authenticated };
   }
 
   // Skills
@@ -342,6 +382,7 @@ export class CatalogService {
     actorId: string,
     input: {
       kind?: 'http' | 'mcp';
+      authMethod?: 'none' | 'header' | 'oauth';
       allowedTools?: string[];
       approvalTools?: string[];
       name: string;
@@ -356,9 +397,11 @@ export class CatalogService {
     }
   ): Promise<Connection> {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
+    this.validateAuthentication(input.kind ?? 'http', input.authMethod, input.credential);
     this.requireCredentialsKey(input.credential);
     const connection = await this.catalogRepository
       .createConnection({
+        authMethod: input.authMethod ?? (input.credential ? 'header' : 'none'),
         kind: input.kind ?? 'http',
         allowedTools: input.allowedTools ?? [],
         approvalTools: input.approvalTools ?? input.allowedTools ?? [],
@@ -378,7 +421,7 @@ export class CatalogService {
       })
       .catch(toNameTaken);
     this.catalogLogger.onConnectionSaved(connection.id);
-    return connection;
+    return this.withAuthentication(connection);
   }
 
   async discoverConnectionTools(actorId: string, connectionId: string): Promise<McpTool[]> {
@@ -411,11 +454,16 @@ export class CatalogService {
       this.catalogRepository.listConnections(input),
       this.catalogRepository.countConnections()
     ]);
-    return { connections, total };
+    return {
+      connections: await Promise.all(
+        connections.map((connection) => this.withAuthentication(connection))
+      ),
+      total
+    };
   }
 
   async getConnection(connectionId: string): Promise<Connection> {
-    return this.requireConnection(connectionId);
+    return this.withAuthentication(await this.requireConnection(connectionId));
   }
 
   // Changes take effect on the next tool call, for every agent that uses the connection.
@@ -447,10 +495,16 @@ export class CatalogService {
         ]
       };
     }
+    this.validateAuthentication(current.kind ?? 'http', changes.authMethod, changes.credential);
+    if (changes.credential && changes.authMethod === undefined)
+      changes = { ...changes, authMethod: 'header' };
+    if (changes.authMethod === 'none' || changes.authMethod === 'oauth')
+      changes = { ...changes, credential: null };
     this.requireCredentialsKey(changes.credential);
     const save = () =>
       this.catalogRepository.updateConnection(connectionId, changes).catch(toNameTaken);
     const authenticationChanged =
+      changes.authMethod !== undefined ||
       changes.baseUrl !== undefined ||
       changes.authHeader !== undefined ||
       changes.credential !== undefined;
@@ -467,7 +521,7 @@ export class CatalogService {
           })
         : await save();
     this.catalogLogger.onConnectionSaved(connectionId);
-    return updated ?? this.requireConnection(connectionId);
+    return this.withAuthentication(updated ?? (await this.requireConnection(connectionId)));
   }
 
   async setConnectionDisabled(
@@ -478,7 +532,7 @@ export class CatalogService {
     requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     await this.requireConnection(connectionId);
     const updated = await this.catalogRepository.setConnectionDisabled(connectionId, disabled);
-    return updated ?? this.requireConnection(connectionId);
+    return this.withAuthentication(updated ?? (await this.requireConnection(connectionId)));
   }
 
   // Grants

@@ -197,3 +197,18 @@ was added. Skills and connections return `discoverable`.
 including revoked ones: `id`, `approvalId`, `targetType`, `targetId`, `name`, `skillVersionId`,
 `scope`, `duration`, `grantedByHumanId`, `grantedAt`, `revokedByHumanId`, and `revokedAt`.
 `DELETE /tasks/:taskId/capabilities/:capabilityId` returns the entry after revoking it.
+
+### Connection authentication summary
+
+Connection list, detail, and mutation responses include `authMethod` (`none`, `header`, or
+`oauth`) and `authenticated` (boolean). These fields contain no secrets. Authenticated is
+independent of `disabledAt`, agent grants, and allowed tools; it describes stored credential
+availability, not a live server health check. A connection configured for no authentication
+returns true because no credential is required.
+
+Create and update accept optional `authMethod`. OAuth is only accepted for MCP connections.
+Explicit none/OAuth authentication rejects a supplied header credential. Legacy creates
+without authMethod infer header when a credential is supplied, otherwise none. Removing a
+header credential preserves the selected method and makes authentication required. Replacing
+a header credential selects header authentication. Existing OAuth must be disconnected
+before switching methods, as for endpoint or credential changes.

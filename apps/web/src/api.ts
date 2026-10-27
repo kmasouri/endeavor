@@ -176,6 +176,9 @@ export interface SkillDetails extends Skill {
 }
 
 export interface Connection {
+  authMethod?: 'none' | 'header' | 'oauth';
+  // Credential availability, not a live provider health check.
+  authenticated?: boolean;
   kind?: 'http' | 'mcp';
   allowedTools?: string[];
   approvalTools?: string[];

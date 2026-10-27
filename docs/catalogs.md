@@ -279,3 +279,26 @@ optional structured output schema is checked with Zod when representable; vendor
 that Zod cannot convert remain opaque data. Tool input schemas and arguments still must
 convert and validate before transport. Server metadata is excluded from model results, and
 identical content repeated in structuredContent is emitted only once.
+
+### Authentication choice and status
+
+Connection creation offers No authentication, API key / token, and (for MCP) OAuth sign-in.
+The Notion example fills its endpoint and selects OAuth. **Create and sign in** first saves
+one connection, then opens its configuration page and starts browser consent. If setup or
+consent fails, retry Sign in on that saved connection; it is not created again. Token fields
+are hidden for OAuth and any previously typed token is omitted from the create request.
+
+The catalog list and detail header show authentication independently of Enabled/Disabled:
+**Authenticated** or **Authentication required**. Public connections configured with No
+authentication need no authentication badge. OAuth controls appear expanded near the top
+of an OAuth connection. An empty tool list still allows no tools after authentication.
+
+Migration 015 records the authentication method. Existing OAuth sessions become OAuth
+connections; existing saved header credentials remain header authentication; other existing
+connections retain anonymous access. Requests omitting authMethod remain compatible.
+Choosing OAuth does not fall back to an old header credential when a session is absent.
+The list and detail read stored authentication state without contacting the provider.
+For header authentication, Authenticated means a credential is saved; it is not a live
+validation of the provider or a guarantee that every tool call will succeed. OAuth expiry
+without a refresh token requires authentication again; a renewable login remains authenticated
+until renewal or a provider response establishes that sign-in is required.

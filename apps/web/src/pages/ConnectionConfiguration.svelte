@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { authenticationLabel } from '../connection-auth';
   import { api, type Connection } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import { createAction } from '../state.svelte';
@@ -6,7 +7,7 @@
   import EnableButton from './EnableButton.svelte';
   import ConnectionOAuth from './ConnectionOAuth.svelte';
 
-  let props: { connection: Connection; onChanged: () => void } = $props();
+  let props: { connection: Connection; onChanged: () => void; startSignIn?: boolean } = $props();
   let connection = $derived(props.connection);
   let credential = $state('');
   let discovered = $state<{ name: string; description: string }[] | null>(null);
@@ -67,7 +68,7 @@
   <div class="row">
     <div class="grow">
       <h2>Configuration</h2>
-      <p class="muted small">{connection.kind === 'mcp' ? 'MCP server' : 'HTTP API'} · {connection.hasCredential ? 'Credential saved' : 'No credential'}</p>
+      <p class="muted small">{connection.kind === 'mcp' ? 'MCP server' : 'HTTP API'} · {authenticationLabel(connection)}</p>
     </div>
     <EnableButton
       path={`/connections/${connection.id}`}
@@ -81,6 +82,9 @@
     onChanged={props.onChanged}
   />
 
+  {#if connection.kind === 'mcp'}
+    <ConnectionOAuth {connection} onChanged={props.onChanged} startSignIn={props.startSignIn} />
+  {/if}
   <fieldset class="stack">
     <legend>Access</legend>
     <div><span class="muted small">Endpoint</span><p>{connection.baseUrl}</p></div>
@@ -92,7 +96,6 @@
     <p class="muted small">Access is granted separately on each agent. Credentials are encrypted and never shown again.</p>
   </fieldset>
   {#if connection.kind === 'mcp'}
-    <ConnectionOAuth {connection} />
     <details>
       <summary>Discover and manage tools</summary>
       <button type="button" class="secondary" disabled={action.busy} onclick={discover}>
