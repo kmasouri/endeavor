@@ -1623,3 +1623,85 @@ progress::-webkit-progress-value {
   display: grid;
   gap: 4px;
 }
+
+/* Run inspection stays beside the conversation and uses its existing detail surface. */
+.message.selected-run {
+  background: var(--bg-selected);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.agent-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.agent-history li + li {
+  margin-top: 10px;
+}
+.history-run {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 14px;
+  white-space: normal;
+  border: 1px solid var(--border-100);
+  border-radius: var(--radius-lg);
+  background: var(--bg-200);
+}
+.history-run strong,
+.run-title {
+  overflow-wrap: anywhere;
+}
+.history-pagination {
+  margin-top: auto;
+}
+.run-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+.run-inspector .panel {
+  padding: 12px 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  min-width: 0;
+}
+.run-inspector .panel h2,
+.run-history h2 {
+  font-size: 12px;
+  text-transform: uppercase;
+  color: var(--text-300);
+}
+.run-inspector p,
+.run-inspector li,
+.run-inspector a,
+.run-inspector pre {
+  overflow-wrap: anywhere;
+}
+.run-inspector pre {
+  white-space: pre-wrap;
+}
+.run-inspector .events {
+  padding-left: 20px;
+}
+.run-inspector .technical-events {
+  margin-top: 16px;
+}
+.standalone-run {
+  max-width: 760px;
+  margin: auto;
+}
+
+.run-heading .run-title {
+  margin: 0 0 6px;
+}
+@media (max-width: 700px) {
+  .conversation-details {
+    inset-block-start: 66px;
+    z-index: 12;
+  }
+}

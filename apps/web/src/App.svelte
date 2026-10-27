@@ -14,7 +14,6 @@
   import ApprovalsPage from './pages/ApprovalsPage.svelte';
   import SchedulesPage from './pages/SchedulesPage.svelte';
   import TaskPage from './pages/TaskPage.svelte';
-  import TasksPage from './pages/TasksPage.svelte';
   import AgentsPage from './pages/AgentsPage.svelte';
   import NewAgentPage from './pages/NewAgentPage.svelte';
   import CatalogEntryPage from './pages/CatalogEntryPage.svelte';
@@ -247,7 +246,7 @@
     </header>
     <aside class="sidebar" id="main-sidebar" aria-label="Sidebar">
       <nav aria-label="Main">
-        {#each [['', 'Endeavors', 'conversations'], ['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['skills', 'Skills', 'file'], ['connections', 'Connections', 'connections'], ['setup', 'Setup', 'setup'], ['tasks', 'Work', 'work']] as [path, label, icon] (path)}
+        {#each [['', 'Endeavors', 'conversations'], ['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['skills', 'Skills', 'file'], ['connections', 'Connections', 'connections'], ['setup', 'Setup', 'setup']] as [path, label, icon] (path)}
           <a
             class:active={path === ''
               ? !section || section === 'conversations'
@@ -365,7 +364,7 @@
         {:else if section === 'tasks' && id}
           <TaskPage taskId={id} />
         {:else if section === 'tasks'}
-          <TasksPage />
+          <p>Open an Endeavor, then Details → an agent → History to inspect its work.</p>
         {:else if section === 'approvals'}
           <ApprovalsPage />
         {:else if section === 'schedules'}
@@ -383,7 +382,7 @@
         {:else if catalogKind === 'skills' || catalogKind === 'connections'}
           <CatalogsPage kind={catalogKind} />
         {:else if section === 'conversations' && id}
-          <ConversationPage conversationId={id} {me} onReady={(conversation) => {
+          <ConversationPage conversationId={id} initialRunId={new URLSearchParams(hash.split('?')[1]).get('run')} {me} onReady={(conversation) => {
             rememberEndeavor(actorId!, conversation.id);
             const focus = focusConversation === conversation.id;
             if (focus) focusConversation = null;

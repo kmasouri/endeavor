@@ -242,6 +242,19 @@ describe('TaskService', () => {
       await expect(service.getTask(HUMAN_ID, TASK_ID)).resolves.toMatchObject({ id: TASK_ID });
     });
 
+    it('keeps both conversation and owner filters when loading a page of agent history', async () => {
+      const { service, tasks } = setup();
+      tasks.list.mockResolvedValue([]);
+      tasks.count.mockResolvedValue(42);
+      const filters = { conversationId: 'conversation-1', ownerAgentId: AGENT_ID };
+      const result = await service.listTasks(HUMAN_ID, { ...filters, limit: 20, offset: 20 });
+      expect(tasks.list).toHaveBeenCalledWith(
+        expect.objectContaining({ ...filters, limit: 20, offset: 20 })
+      );
+      expect(tasks.count).toHaveBeenCalledWith(expect.objectContaining(filters));
+      expect(result.total).toBe(42);
+    });
+
     it('shows every person all tasks, since v1 has one role', async () => {
       const { service, tasks } = setup();
       tasks.list.mockResolvedValue([]);
