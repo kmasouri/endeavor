@@ -26,6 +26,8 @@
   import ConversationAgents from './ConversationAgents.svelte';
   import ApprovalCard from './ApprovalCard.svelte';
   import TaskStatus from './TaskStatus.svelte';
+  import LiveActivity from './LiveActivity.svelte';
+  import { loadAll } from './agent-data';
   import ArtifactCard from './ArtifactCard.svelte';
   import AgentHistory from './AgentHistory.svelte';
   import RunInspector from './RunInspector.svelte';
@@ -115,7 +117,7 @@
     () => []
   );
   const tasks = createLoad(
-    () => api.list<Task>(`/tasks?conversationId=${conversationId}&limit=100`),
+    () => loadAll<Task>(`/tasks?conversationId=${conversationId}`),
     () => [conversationId],
     4000
   );
@@ -161,7 +163,7 @@
     );
   });
   let conversation = $derived(details.data!);
-  let taskList = $derived(tasks.data?.data ?? []);
+  let taskList = $derived(tasks.data ?? []);
   let taskIds = $derived(new Set(taskList.map((task) => task.id)));
   let conversationApprovals = $derived(
     (approvals.data?.data ?? []).filter((approval) => taskIds.has(approval.taskId))
@@ -355,10 +357,10 @@
       <div class="conversation-bottom">
         {#if busy.length}<div class="live-status caption" aria-live="polite">
             {#each busy as task (task.id)}<span
-                ><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
+                ><span aria-hidden="true"><Avatar name={nameOf({ type: 'agent', id: task.ownerAgentId })} id={task.ownerAgentId} agent size="sm" /></span><span><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
                 {#if waitingApproval(task)}is <span class="waiting-ok">waiting for your OK</span>
                   <span class="muted">· {describeApproval(waitingApproval(task))}</span
-                  >{:else}{liveStatus(task)}{/if}</span
+                  >{:else if task.state === 'working' && !task.pausedAt && task.activity}<LiveActivity activity={task.activity} />{:else}{liveStatus(task)}{/if}</span></span
               >{/each}
           </div>{/if}
         <Composer

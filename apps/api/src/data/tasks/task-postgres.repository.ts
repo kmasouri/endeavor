@@ -327,6 +327,20 @@ export class TaskPostgresRepository implements TaskRepository {
     return result.rows.map(toTaskEvent);
   }
 
+  async listLatestEvents(taskIds: string[], types: string[]): Promise<TaskEvent[]> {
+    if (taskIds.length === 0) return [];
+    const result = await this.db.query<TaskEventRow>(
+      `SELECT event.* FROM unnest($1::uuid[]) AS requested(task_id)
+       CROSS JOIN LATERAL (
+         SELECT * FROM endeavor.task_events
+         WHERE task_id = requested.task_id AND type = ANY($2::text[])
+         ORDER BY id DESC LIMIT 1
+       ) AS event`,
+      [taskIds, types]
+    );
+    return result.rows.map(toTaskEvent);
+  }
+
   async addOutput(taskId: string, input: CreateTaskOutputInput): Promise<TaskOutput> {
     const result = await this.db.query<TaskOutputRow>(
       `INSERT INTO endeavor.task_outputs (id, task_id, kind, title, content, uri, metadata)

@@ -125,8 +125,8 @@ a failed send retains the draft. Open work receives ordinary directed chat messa
 
 Work is no longer in navigation. Existing task links open their exact run in its conversation;
 standalone runs keep a read-only inspector at the existing task URL. No task records or API access
-rules changed. Live steps and typing, pause attribution, spending by agent, and draft/final labels
-remain follow-up work.
+rules changed. Live steps derive from task events in the task service and appear above the composer. Human
+typing, pause attribution, spending by agent, and draft/final labels remain follow-up work.
 
 Code is grouped by layer first, then by feature. For example, all handlers are in `handlers/`, and the item handlers are in `handlers/items/`. We chose this over one folder per feature because:
 

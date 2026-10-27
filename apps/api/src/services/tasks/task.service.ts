@@ -39,6 +39,7 @@ import {
 } from './task-lifecycle';
 import { isFinished } from './task-state';
 import { TASK_EVENTS } from './task-events';
+import { ACTIVITY_EVENTS, ActiveTask, deriveTaskActivity } from './task-activity';
 
 export interface CreateTaskRequest {
   ownerAgentId: string;
@@ -112,14 +113,15 @@ export class TaskService {
   async getTask(actorId: string, taskId: string): Promise<TaskDetails> {
     const task = await this.requireVisibleTask(actorId, taskId);
     const waits = await this.taskRepository.listWaits(task.id, { openOnly: false });
-    return { ...task, waits };
+    const [active] = await this.withActivity([task]);
+    return { ...active, waits };
   }
 
   // Admins see every task. Members see tasks in their conversations and tasks they asked for.
   async listTasks(
     actorId: string,
     input: Omit<ListTasksInput, 'visibleToHumanId'>
-  ): Promise<{ tasks: Task[]; total: number }> {
+  ): Promise<{ tasks: ActiveTask[]; total: number }> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const filters = {
       state: input.state,
@@ -131,7 +133,21 @@ export class TaskService {
       this.taskRepository.list({ ...filters, limit: input.limit, offset: input.offset }),
       this.taskRepository.count(filters)
     ]);
-    return { tasks, total };
+    return { tasks: await this.withActivity(tasks), total };
+  }
+
+  private async withActivity(tasks: Task[]): Promise<ActiveTask[]> {
+    const ids = tasks
+      .filter((task) => task.state === 'working' && !task.pausedAt)
+      .map((task) => task.id);
+    const events = ids.length
+      ? await this.taskRepository.listLatestEvents(ids, ACTIVITY_EVENTS)
+      : [];
+    const latest = new Map(events.map((event) => [event.taskId, event]));
+    return tasks.map((task) => ({
+      ...task,
+      activity: deriveTaskActivity(task, latest.get(task.id))
+    }));
   }
 
   async listEvents(

@@ -212,3 +212,15 @@ without authMethod infer header when a credential is supplied, otherwise none. R
 header credential preserves the selected method and makes authentication required. Replacing
 a header credential selects header authentication. Existing OAuth must be disconnected
 before switching methods, as for endpoint or credential changes.
+
+### Current task activity
+
+`GET /tasks` items and `GET /tasks/:taskId` include `activity`. It is null when paused,
+waiting, blocked, completed, or cancelled. Working tasks return:
+
+```json
+{"kind":"reading","detail":"reading notes/source.md","since":"2026-10-27T12:00:00.000Z"}
+```
+
+Kinds are `searching`, `reading`, `writing`, `checking`, `connection`, and `thinking`.
+`since` marks the recorded step start, not the polling time. This adds no model calls.

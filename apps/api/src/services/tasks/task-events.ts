@@ -13,6 +13,8 @@ export const TASK_EVENTS = {
   waitResolved: 'task.wait.resolved',
 
   // Runner
+  modelStarted: 'model.started',
+  toolStarted: 'tool.started',
   modelTurn: 'model.turn',
   modelFailed: 'model.failed',
   toolResults: 'tool.results',
