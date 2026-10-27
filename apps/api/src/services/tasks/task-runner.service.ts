@@ -580,6 +580,7 @@ export class TaskRunnerService {
         .catch(() => (leaseHeld = false));
     }, this.options.leaseMs / 3);
     try {
+      await this.taskRepository.addEvent(task.id, TASK_EVENTS.modelStarted, agentActor, {});
       const result = await client.complete({
         model: version.model,
         system,
@@ -660,6 +661,25 @@ export class TaskRunnerService {
         if (!release) return true;
         let outcome;
         try {
+          // Store only the fields used by the status line; never duplicate tool secrets here.
+          const input =
+            call.input && typeof call.input === 'object'
+              ? (call.input as Record<string, unknown>)
+              : {};
+          const detailInput = ['read_file', 'write_file'].includes(call.name)
+            ? { path: input.path }
+            : call.name === 'save_output'
+              ? { title: input.title }
+              : {};
+          await this.taskRepository.addEvent(
+            task.id,
+            TASK_EVENTS.toolStarted,
+            toAgentActor(agent),
+            {
+              name: call.name,
+              input: detailInput
+            }
+          );
           outcome = await this.runToolCall(task, agent, call);
         } finally {
           await release();

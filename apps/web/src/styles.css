@@ -1396,11 +1396,6 @@ progress::-webkit-progress-value {
   background: var(--success-bg);
   border-color: transparent;
 }
-.live-status > span + span::before {
-  content: ' · ';
-  white-space: pre;
-  color: var(--text-300);
-}
 .columns > *,
 .panel {
   min-width: 0;
@@ -1419,9 +1414,19 @@ progress::-webkit-progress-value {
   min-width: 0;
 }
 .live-status {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+.live-status > span {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+.live-status > span > span:last-child {
+  min-width: 0;
 }
 .task-status.waiting {
   display: inline-block;

@@ -255,6 +255,32 @@ describe('TaskService', () => {
       expect(result.total).toBe(42);
     });
 
+    it('loads current steps in one query only for visible working tasks', async () => {
+      const { service, tasks } = setup();
+      const current = makeTask();
+      const paused = makeTask({ id: 'paused', pausedAt: new Date() });
+      tasks.list.mockResolvedValue([current, paused]);
+      tasks.count.mockResolvedValue(2);
+      tasks.listLatestEvents.mockResolvedValue([
+        {
+          id: 1,
+          taskId: current.id,
+          type: 'tool.started',
+          actor: agentActor,
+          data: { name: 'read_file', input: { path: 'notes.md' } },
+          createdAt: current.createdAt
+        }
+      ]);
+      const result = await service.listTasks(HUMAN_ID, { limit: 20, offset: 0 });
+      expect(tasks.listLatestEvents).toHaveBeenCalledTimes(1);
+      expect(tasks.listLatestEvents.mock.calls[0][0]).toEqual([current.id]);
+      expect(result.tasks[0].activity).toMatchObject({
+        kind: 'reading',
+        detail: 'reading notes.md'
+      });
+      expect(result.tasks[1].activity).toBeNull();
+    });
+
     it('shows every person all tasks, since v1 has one role', async () => {
       const { service, tasks } = setup();
       tasks.list.mockResolvedValue([]);

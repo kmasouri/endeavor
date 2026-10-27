@@ -150,3 +150,20 @@ Limits:
 - A task is blocked after 40 model turns, or at its agent version's own limits (`docs/agents.md`).
 - A failed model call that can be retried waits 5 s, then 10 s. After 3 failures, the task is blocked.
 - A model that keeps ending its turn without finishing gets two nudges, then the task is blocked.
+
+## Live agent activity
+
+Task list and detail responses include `activity`: a kind, plain detail, and `since` timestamp.
+Only working, unpaused tasks have activity; other states return null. The task service derives
+this from the newest relevant event, with one query for the tasks on a list page. The runner
+records `model.started` before a model request and `tool.started` before each tool executes.
+Messages and unrelated audit events do not reset the step's start time. Tool results and resumed
+work return to thinking; old tasks without start events use a generic thinking detail.
+
+The conversation polls tasks every four seconds. Above the composer it shows one line per busy
+agent, pairing the design's playful label with the recorded plain detail and a ticking elapsed
+time. Workspace file actions, capability discovery, output writing, completion checks, and
+connection calls have known labels. Arbitrary MCP tools are described as connection calls;
+the platform does not guess their purpose from tool names or use another model. Status events
+contain only a tool name and a short file path or output title, never request bodies or headers.
+Waiting, paused, approval, and stuck states keep plain words. Human typing is deferred in v1.
