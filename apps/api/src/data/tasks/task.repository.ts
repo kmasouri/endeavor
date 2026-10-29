@@ -114,6 +114,13 @@ export interface TaskRepository {
     actor: Actor,
     data: Record<string, unknown>
   ): Promise<TaskEvent>;
+  // Saves batch results only while this worker owns the task, or after a human control
+  // action released its lease and left it stopped. Never finalizes another worker's batch.
+  recordToolResults(
+    taskId: string,
+    workerId: string,
+    data: Record<string, unknown>
+  ): Promise<boolean>;
   listEvents(taskId: string, options: { afterId: number; limit: number }): Promise<TaskEvent[]>;
 
   // The newest matching event per task, fetched together for a status poll.

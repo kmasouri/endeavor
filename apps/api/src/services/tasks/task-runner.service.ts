@@ -642,16 +642,37 @@ export class TaskRunnerService {
     }
   }
 
-  // Runs the agent's tool calls and records all results together. Returns true when one of
-  // them ended the run (the task waits, completes, or is blocked).
+  // Rechecks human controls and the lease before each tool. An already issued action can
+  // finish, but the rest of its batch must not start after control changes.
   private async runToolCalls(task: Task, agent: Agent, calls: ModelToolCall[]): Promise<boolean> {
+    let leaseHeld = true;
+    const heartbeat = setInterval(() => {
+      this.taskRepository
+        .renewLease(task.id, this.options.workerId, this.options.leaseMs)
+        .then((held) => (leaseHeld = leaseHeld && held))
+        .catch(() => (leaseHeld = false));
+    }, this.options.leaseMs / 3);
+    try {
+      return await this.runToolBatch(task, agent, calls, () => leaseHeld);
+    } finally {
+      clearInterval(heartbeat);
+    }
+  }
+
+  private async runToolBatch(
+    task: Task,
+    agent: Agent,
+    calls: ModelToolCall[],
+    holdsLease: () => boolean
+  ): Promise<boolean> {
     const results: ModelToolResult[] = [];
     let stopped = false;
+    let skippedReason = 'an earlier tool call in this turn already ended your turn.';
     for (const call of calls) {
       if (stopped) {
         results.push({
           callId: call.id,
-          content: 'Skipped: an earlier tool call in this turn already ended your turn.',
+          content: `Skipped: ${skippedReason}`,
           isError: true
         });
         continue;
@@ -680,6 +701,28 @@ export class TaskRunnerService {
               input: detailInput
             }
           );
+          const renewed =
+            holdsLease() &&
+            (await this.taskRepository.renewLease(
+              task.id,
+              this.options.workerId,
+              this.options.leaseMs
+            ));
+          // Pause and cancellation release ownership, so inspect controls even if renewal
+          // failed. This lets us save skipped results for stopped work.
+          const current = await this.taskRepository.getById(task.id);
+          if (
+            !current ||
+            current.state !== 'working' ||
+            current.pausedAt ||
+            current.agentVersionId !== task.agentVersionId
+          ) {
+            stopped = true;
+            skippedReason = 'the task stopped working, was paused, or changed configuration.';
+            results.push({ callId: call.id, content: `Skipped: ${skippedReason}`, isError: true });
+            continue;
+          }
+          if (!renewed || !holdsLease()) return true;
           outcome = await this.runToolCall(task, agent, call);
         } finally {
           await release();
@@ -691,8 +734,13 @@ export class TaskRunnerService {
         results.push({ callId: call.id, content: (error as Error).message, isError: true });
       }
     }
-    await this.taskRepository.addEvent(task.id, TASK_EVENTS.toolResults, SYSTEM_ACTOR, { results });
-    return stopped;
+    // Pause/cancel and stopping tools release the lease. The repository checks ownership
+    // atomically, allowing results for stopped work but never another worker's batch.
+    if (!holdsLease() && !stopped) return true;
+    const recorded = await this.taskRepository.recordToolResults(task.id, this.options.workerId, {
+      results
+    });
+    return stopped || !recorded;
   }
 
   private async runToolCall(task: Task, agent: Agent, call: ModelToolCall): Promise<ToolOutcome> {

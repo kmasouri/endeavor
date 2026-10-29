@@ -145,6 +145,13 @@ The runner is not an agent and makes no decisions about the work. It runs in the
 
 Everything it does is written to the task's events: model turns, tool results, failed model calls, and messages received. The model transcript is rebuilt from those events, so after a restart the task picks up where it stopped. A tool call that was asked for but never run is run first. Message tool calls use the tool call ID as the message's `client_key`, so running a call again doesn't post twice.
 
+Before each queued tool, the runner rechecks the task's working state, pause flag, pinned
+configuration, and lease. Pausing, cancelling, or migrating the task stops the rest of the
+batch and records those calls as skipped. Resuming rebuilds from those results rather than
+automatically executing the skipped calls. The lease stays renewed during tools, including
+completion checks. A worker that loses its lease stops without finalizing another worker's
+pending calls. An action already issued to an outside system may still finish.
+
 Limits:
 
 - A task is blocked after 40 model turns, or at its agent version's own limits (`docs/agents.md`).
