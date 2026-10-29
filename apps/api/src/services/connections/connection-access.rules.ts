@@ -1,4 +1,4 @@
-import { Connection, HttpMethod } from './types';
+import { Connection, HttpMethod } from '../../shared/types';
 
 // The rules for one call through a connection. Returns why it is denied, or null if allowed.
 // The runner also checks that the agent's grant is active; this only covers the connection.

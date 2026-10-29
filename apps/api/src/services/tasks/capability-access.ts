@@ -1,5 +1,5 @@
 import { AgentConfigConflictError, AgentRepository, CatalogRepository } from '../../data';
-import { pathWithin } from '../../shared/connection-access';
+import { pathWithin } from '../connections/connection-access.rules';
 import { AppError } from '../../shared/errors';
 import { Connection, ConnectionScope, GrantTargetType } from '../../shared/types';
 

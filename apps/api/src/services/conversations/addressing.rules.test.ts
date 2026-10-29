@@ -1,4 +1,4 @@
-import { addressedAgentIds } from './addressing';
+import { addressedAgentIds } from './addressing.rules';
 
 const members = new Set(['a1', 'a2']);
 

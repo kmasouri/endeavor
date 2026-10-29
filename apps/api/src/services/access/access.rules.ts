@@ -1,5 +1,5 @@
-import { AppError } from './errors';
-import { Human, HumanRole } from './types';
+import { AppError } from '../../shared/errors';
+import { Human, HumanRole } from '../../shared/types';
 
 // Role checks shared by every service. Services load the acting person with their own
 // repository and pass the result here, so the rules stay in one place.

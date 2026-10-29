@@ -14,7 +14,7 @@ import {
   TaskRepository
 } from '../../data';
 import { TaskLogger } from '../../observability';
-import { ADMIN_ONLY, requireHuman, hasFullAccess } from '../../shared/access';
+import { ADMIN_ONLY, requireHuman, hasFullAccess } from '../access/access.rules';
 import { AppError } from '../../shared/errors';
 import {
   AccessDuration,

@@ -163,7 +163,7 @@ Imports only go one way, down the list:
 ```text
 routes       -> schemas, handlers
 handlers     -> schemas (types only), services through request.server
-services     -> data, integrations, observability (never other services)
+services     -> data, integrations, observability, feature rule helpers (never service classes)
 data         -> (nothing but shared)
 integrations -> (nothing but shared)
 schemas      -> (nothing but shared)
@@ -175,7 +175,7 @@ everything   -> shared
 These rules keep each layer easy to change without breaking the ones above it. Lint enforces the important ones:
 
 - Routes and handlers can't import from `data/` or `integrations/`. Only services use them.
-- Services can't import other services.
+- Service classes can't import other service classes. Services may import feature-owned `.rules.ts` helpers.
 - Repositories and integrations can only import from `shared/`.
 - Handlers can't import from `routes/`.
 - Schemas can't import from any other layer.
@@ -260,7 +260,7 @@ Service tests mock the interface with `jest.fn()`, the same way as a repository.
 
 ## Services never use each other
 
-A service never imports another service. If two services need the same thing, put it in a repository or integration, and give it to both. This keeps services free of import loops, and keeps each service's tests small.
+A service class never imports another service class. Share data access through repositories and outside calls through integrations, and give those dependencies to each service. Share business rules through feature-owned `.rules.ts` helpers that work on plain values and import only shared contracts or packages. This keeps services free of import loops and keeps their tests small.
 
 ## Plugins
 
@@ -341,7 +341,9 @@ A task is one run of work by one agent. `TaskService` owns every change to a tas
 
 ### Sharing lifecycle rules between services
 
-Two services change tasks: `TaskService`, for the API and human actions, and `TaskRunnerService`, the runner acting for agents. Services never use each other, so both use `TaskLifecycle` (`apps/api/src/services/tasks/task-lifecycle.ts`). It is a helper inside the tasks feature, not a service, and it holds the rules for state changes, waits, outputs, and completion. Put shared business rules that only one feature needs in a helper like this. Put rules several features need, like `addressedAgentIds()`, in `apps/api/src/shared/`.
+Two services change tasks: `TaskService`, for the API and human actions, and `TaskRunnerService`, the runner acting for agents. Services never use each other, so both use `TaskLifecycle` (`apps/api/src/services/tasks/task-lifecycle.ts`). It is a helper inside the tasks feature, not a service, and it holds the rules for state changes, waits, outputs, and completion. Keep business rules in the service layer even when several features use them. Put reusable rules in feature-owned `<name>.rules.ts` files: `services/access/access.rules.ts` for human authorization, `services/conversations/addressing.rules.ts` for message recipients, and `services/connections/connection-access.rules.ts` for connection calls. Services import these helpers directly, including across feature folders; do not export them through the service barrel. Rule helpers work on plain values and import only shared contracts or packages, which lint enforces. They never load records, call providers, log, or import service classes.
+
+`shared/` holds cross-layer contracts and infrastructure: types, response helpers, and the error catalog. Conversation-name normalization stays there because both input schemas and services use it. The OAuth session type stays there because repositories, integrations, and services use that contract. Usage by several services alone is not a reason to put business rules in `shared/`.
 
 How messages become work is in `docs/conversations.md`.
 

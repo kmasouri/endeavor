@@ -68,8 +68,8 @@ module.exports = tseslint.config(
     }
   },
   {
-    // Services never use each other. If two services need the same thing, give both the
-    // repository or integration it lives in. This keeps services free of import loops.
+    // Service classes never use each other. Pure feature rules may be shared across
+    // service features through explicit .rules imports.
     files: ['src/services/**/*.ts'],
     ignores: ['src/services/index.ts'],
     rules: {
@@ -82,9 +82,27 @@ module.exports = tseslint.config(
               message: 'Services never import other services. Use a repository or integration.'
             },
             {
-              // A sibling feature folder, like '../orders' from inside services/items/.
-              regex: '^\\.\\./[^./]',
+              // Sibling features may expose pure rules, but never service classes or barrels.
+              regex: '^\\.\\./(?![^/]+/[^/]+\\.rules$)[^./]',
               message: 'Services never import other services. Use a repository or integration.'
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    // Rules work on plain values. They do not load records, call providers, or log.
+    files: ['src/services/**/*.rules.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            onlyShared('Service rules only import from src/shared and packages.'),
+            {
+              regex: '^(?!\\.\\./\\.\\./shared(?:/|$))\\.',
+              message: 'Service rules only import from src/shared and packages.'
             }
           ]
         }
