@@ -2,6 +2,10 @@
 
 People keep two shared catalogs. Being in a catalog gives no agent access. Choosing an entry in an agent configuration grants access; removing it and saving revokes access. The runner enforces these choices through per-agent grants.
 
+Skill management belongs to `SkillService`; connection management, OAuth, and MCP
+discovery belong to `ConnectionService`. `GrantService` manages the existing access
+endpoints. These services run in the same API process.
+
 ## Creating catalog entries
 
 The **Create skill** and **Create connection** buttons open dedicated pages at
