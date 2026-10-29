@@ -318,7 +318,9 @@ otherwise. Disabled takes precedence even if credentials are saved or missing. P
 connections need no authentication to show Enabled. The enable/disable control and OAuth
 controls stay in configuration. OAuth controls appear expanded near the top of an OAuth
 connection. Refresh status reloads the stored state, shows progress, and confirms completion
-even if the state has not changed. It does not test the provider. Disconnect is disabled
+even if the state has not changed. Button labels and the feedback area keep a stable size
+so repeated refreshes do not move the page. Busy actions keep keyboard focus and prevent
+duplicate requests without flashing all controls dim. Refresh does not test the provider. Disconnect is disabled
 while signed out. A successful disconnect updates the badge and confirms completion; failed
 actions show an error and allow retry. An empty tool list still allows no tools after authentication.
 
