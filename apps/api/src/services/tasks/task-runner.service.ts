@@ -1055,6 +1055,41 @@ export class TaskRunnerService {
     }
     const body = typeof input.body === 'string' ? input.body : null;
     const connection = await this.checkHttpCall(task, agent, { name, method, path, callId });
+    const clientKey = `tool:${task.id}:${callId}`;
+    const existing = await this.approvalRepository.getByClientKey(clientKey);
+    // A saved human decision belongs to this exact call, regardless of later policy edits.
+    if (existing) {
+      const request = existing.request;
+      if (
+        isAccessRequest(request) ||
+        request.kind === 'mcp' ||
+        request.connectionId !== connection.id ||
+        request.method !== method ||
+        request.path !== path ||
+        request.body !== body
+      ) {
+        throw new AppError(
+          'toolAccessDenied',
+          'This HTTP call does not match its saved approval. Request a new approval for a different action.'
+        );
+      }
+      if (existing.status === 'rejected') {
+        throw new AppError(
+          'toolAccessDenied',
+          `A person rejected this call: ${existing.reason ?? 'No reason given.'}`
+        );
+      }
+      if (existing.executedAt) {
+        const result = existing.result;
+        if (!result || (result.status === null && !result.error && !result.isError)) {
+          throw new AppError('connectionCallOutcomeUnknown');
+        }
+        if (result.error || result.isError) {
+          throw new AppError('validationError', result.error ?? result.body);
+        }
+        return `HTTP ${result.status}${result.truncated ? ' (cut off at 20,000 characters)' : ''}\n${result.body}`;
+      }
+    }
 
     // A previously sent unattended call must recover its own result, even if the current
     // policy now requires approval. Creating a fresh approval could repeat the same action.
@@ -1065,9 +1100,10 @@ export class TaskRunnerService {
       (await this.loadEvents(task.id)).some(
         (event) => event.type === TASK_EVENTS.connectionCalled && event.data.callId === callId
       );
-    if (needsNewApproval && !legacyCall) {
+    if (existing || (needsNewApproval && !legacyCall)) {
       const approval = await this.requestApproval(task, agent, {
-        clientKey: `tool:${task.id}:${callId}`,
+        clientKey,
+        existing,
         request: {
           connectionId: connection.id,
           connectionName: connection.name,
@@ -1242,10 +1278,21 @@ export class TaskRunnerService {
       ).approval;
     const currentTask = await this.lifecycle.requireTask(task.id);
     const waits = await this.taskRepository.listWaits(task.id, { openOnly: false });
-    if (currentTask.state === 'working' && !waits.some((wait) => wait.targetId === approval.id)) {
-      await this.lifecycle.waitFor(task.id, toAgentActor(agent), [
-        { kind: 'approval', targetId: approval.id, description: input.description }
-      ]);
+    if (currentTask.state === 'working') {
+      const openWait = waits.find(
+        (wait) => wait.kind === 'approval' && wait.targetId === approval.id && !wait.resolvedAt
+      );
+      if (openWait) {
+        // A crash after saving the wait can leave the task working. Reuse that wait and
+        // finish its state transition instead of letting the next claim bypass approval.
+        await this.lifecycle.transition(currentTask, 'waiting', toAgentActor(agent), {
+          reason: openWait.description
+        });
+      } else {
+        await this.lifecycle.waitFor(task.id, toAgentActor(agent), [
+          { kind: 'approval', targetId: approval.id, description: input.description }
+        ]);
+      }
     }
     this.runnerLogger.onApprovalRequested(task.id, approval.id);
     return approval;
