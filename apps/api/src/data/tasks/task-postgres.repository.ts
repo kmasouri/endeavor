@@ -135,7 +135,46 @@ export class TaskPostgresRepository implements TaskRepository {
   }
 
   async create(input: CreateTaskInput): Promise<{ task: Task; created: boolean }> {
-    const result = await this.db.query<TaskRow>(
+    return this.insertTask(input, this.db);
+  }
+
+  async createScheduled(
+    input: CreateTaskInput,
+    expectedNextRunAt: Date
+  ): Promise<{ task: Task; created: boolean } | null> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      // Agent deletion locks the agent before its schedules and tasks. Keep that order.
+      await client.query('SELECT id FROM endeavor.agents WHERE id = $1 FOR SHARE', [
+        input.ownerAgentId
+      ]);
+      const schedule = await client.query(
+        `SELECT id FROM endeavor.responsibilities
+         WHERE id = $1 AND agent_id = $2 AND status = 'enabled' AND next_run_at = $3
+         FOR SHARE`,
+        [input.responsibilityId, input.ownerAgentId, expectedNextRunAt]
+      );
+      if (!schedule.rows.length) {
+        await client.query('COMMIT');
+        return null;
+      }
+      const result = await this.insertTask(input, client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async insertTask(
+    input: CreateTaskInput,
+    db: Pick<FastifyInstance['pg'], 'query'>
+  ): Promise<{ task: Task; created: boolean }> {
+    const result = await db.query<TaskRow>(
       `INSERT INTO endeavor.tasks (
          id, run_key, conversation_id, owner_agent_id, agent_version_id, title, brief,
          completion_criteria, review_required, state, requested_by_type, requested_by_id,
@@ -167,13 +206,26 @@ export class TaskPostgresRepository implements TaskRepository {
       return { task: toTask(result.rows[0]), created: true };
     }
 
+    // Use the same connection: a scheduled insert keeps its schedule lock through conflict
+    // recovery too. Run-key matches take precedence over a competing open run.
+    const byKey = await db.query<TaskRow>('SELECT * FROM endeavor.tasks WHERE run_key = $1', [
+      input.runKey
+    ]);
     const existing =
-      (await this.getByRunKey(input.runKey)) ??
-      (input.responsibilityId ? await this.findOpenRun(input.responsibilityId) : null);
+      byKey.rows[0] ??
+      (input.responsibilityId
+        ? (
+            await db.query<TaskRow>(
+              `SELECT * FROM endeavor.tasks WHERE responsibility_id = $1
+           AND state IN ('working', 'waiting', 'blocked') LIMIT 1`,
+              [input.responsibilityId]
+            )
+          ).rows[0]
+        : undefined);
     if (!existing) {
       throw new Error(`Task with run key ${input.runKey} conflicted but was not found`);
     }
-    return { task: existing, created: false };
+    return { task: toTask(existing), created: false };
   }
 
   async getById(taskId: string): Promise<Task | null> {

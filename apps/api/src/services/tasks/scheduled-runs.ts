@@ -1,4 +1,9 @@
-import { AgentRepository, ConversationRepository, TaskRepository } from '../../data';
+import {
+  AgentRepository,
+  ConversationRepository,
+  CreateTaskInput,
+  TaskRepository
+} from '../../data';
 import { Actor, Responsibility, Task } from '../../shared/types';
 import { TaskLifecycle } from './task-lifecycle';
 
@@ -14,7 +19,7 @@ export async function startResponsibilityRun(
     lifecycle: TaskLifecycle;
   },
   responsibility: Responsibility,
-  input: { runKey: string; startedBy: Actor; note?: string }
+  input: { runKey: string; startedBy: Actor; note?: string; expectedNextRunAt?: Date }
 ): Promise<{ task: Task; created: boolean } | { skippedReason: string; openRunId?: string }> {
   // A repeat of the same run returns it, even while it is still going.
   const existing = await deps.taskRepository.getByRunKey(input.runKey);
@@ -44,7 +49,7 @@ export async function startResponsibilityRun(
     return { skippedReason: 'The agent is no longer a member of the conversation.' };
   }
 
-  const { task, created } = await deps.taskRepository.create({
+  const taskInput: CreateTaskInput = {
     runKey: input.runKey,
     conversationId: responsibility.conversationId,
     ownerAgentId: agent.id,
@@ -59,7 +64,14 @@ export async function startResponsibilityRun(
     parentTaskId: null,
     restartedFromTaskId: null,
     responsibilityId: responsibility.id
-  });
+  };
+  const result = input.expectedNextRunAt
+    ? await deps.taskRepository.createScheduled(taskInput, input.expectedNextRunAt)
+    : await deps.taskRepository.create(taskInput);
+  if (!result) {
+    return { skippedReason: 'The schedule changed before this run could start.' };
+  }
+  const { task, created } = result;
   // A different slot or manual request may have won the database's open-run constraint
   // after the check above. Return a skip instead of attributing that task to this slot.
   if (!created && task.runKey !== input.runKey) {

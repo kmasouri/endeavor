@@ -237,8 +237,8 @@ export class TaskRunnerService {
 
   // Scheduling
 
-  // Starts runs for responsibilities that are due. Only the runner that moves the schedule on
-  // starts the run, and the run's key is its time slot, so a slot never runs twice. Slots
+  // Starts runs for responsibilities that are due. Only one runner advances each slot.
+  // The run's key is its time slot, so a slot never runs twice. Slots
   // missed while the service was down follow each responsibility's missed-run policy.
   async startDueRuns(now: Date = new Date()): Promise<void> {
     for (const responsibility of await this.responsibilityRepository.listDue(now, 20)) {
@@ -272,6 +272,7 @@ export class TaskRunnerService {
         responsibility,
         {
           runKey: `schedule:${responsibility.id}:${plan.slot.toISOString()}`,
+          expectedNextRunAt: responsibility.nextRunAt,
           startedBy: SYSTEM_ACTOR,
           note:
             plan.skipped > 0
