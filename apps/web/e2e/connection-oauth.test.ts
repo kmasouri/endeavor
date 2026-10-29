@@ -254,7 +254,7 @@ test('refresh status shows progress, confirms unchanged state, and recovers from
   const refresh = page.getByRole('button', { name: 'Refresh status', exact: true });
   await refresh.focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: 'Refreshing…', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Refresh status', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeDisabled();
   release();
   await expect(page.getByRole('status')).toHaveText('Status refreshed.');
@@ -303,7 +303,7 @@ test('disconnect shows progress and preserves authentication on failure before r
     });
   });
   await disconnect.click();
-  await expect(page.getByRole('button', { name: 'Disconnecting…', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Disconnect', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: 'Refresh status', exact: true })).toBeDisabled();
   release();
   await expect(page.getByText('Disconnect failed. Try again.', { exact: true })).toBeVisible();
@@ -342,7 +342,7 @@ test('disconnect waits for the updated status and does not report success when r
   });
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
   await expect.poll(() => api.writes.length).toBe(1);
-  await expect(page.getByRole('button', { name: 'Disconnecting…', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Disconnect', exact: true })).toBeDisabled();
   release();
   await expect(page.getByText('Could not load connection.', { exact: true })).toBeVisible();
   await expect(page.getByRole('status')).toBeEmpty();
@@ -352,3 +352,78 @@ test('disconnect waits for the updated status and does not report success when r
   await expect(page.getByRole('button', { name: 'Disconnect', exact: true })).toBeDisabled();
   expect(api.writes).toHaveLength(1);
 });
+
+for (const width of [320, 390, 1280]) {
+  for (const theme of ['dark', 'light']) {
+    test(`repeated status refresh keeps the page still at ${width}px in ${theme}`, async ({
+      page
+    }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await mockOAuth(page, theme);
+      await page.goto('/app/#/connections/c1');
+      const auth = page.getByText('Authentication', { exact: true }).locator('..');
+      const refresh = auth.getByRole('button').nth(1);
+      await expect(refresh).toBeVisible();
+      const measure = async () => ({
+        buttons: await auth.getByRole('button').evaluateAll((buttons) =>
+          buttons.map((button) => {
+            const { x, y, width, height } = button.getBoundingClientRect();
+            return { x, y, width, height, opacity: getComputedStyle(button).opacity };
+          })
+        ),
+        access: (await page.locator('fieldset').first().boundingBox())!
+      });
+      const initial = await measure();
+      const checkStill = async () => {
+        const current = await measure();
+        for (let i = 0; i < initial.buttons.length; i += 1) {
+          expect(current.buttons[i].opacity, `button ${i} opacity`).toBe(
+            initial.buttons[i].opacity
+          );
+          for (const key of ['x', 'y', 'width', 'height'] as const) {
+            expect(current.buttons[i][key], `button ${i} ${key}`).toBeCloseTo(
+              initial.buttons[i][key],
+              1
+            );
+          }
+        }
+        expect(current.access.y, 'Access section stays in place').toBeCloseTo(initial.access.y, 1);
+      };
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        let release!: () => void;
+        const held = new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        let requests = 0;
+        await page.route('**/connections/c1', async (route) => {
+          requests += 1;
+          await held;
+          await route.fallback();
+        });
+        try {
+          await refresh.click();
+          await expect(refresh).toBeDisabled();
+          await expect(refresh).toHaveAttribute('aria-busy', 'true');
+          await expect(page.getByRole('status')).toHaveText('Refreshing status…');
+          await expect.poll(() => requests).toBe(1);
+          await checkStill();
+          await refresh.evaluate((button) => (button as HTMLButtonElement).click());
+          expect(requests).toBe(1);
+        } finally {
+          release();
+        }
+        await expect(page.getByRole('status')).toHaveText('Status refreshed.');
+        expect(requests).toBe(1);
+        await checkStill();
+        await expect(refresh).toBeFocused();
+        await page.unroute('**/connections/c1');
+      }
+      if (theme === 'dark' && width !== 320) {
+        await page.screenshot({
+          path: test.info().outputPath('stable-refresh.png'),
+          fullPage: true
+        });
+      }
+    });
+  }
+}
