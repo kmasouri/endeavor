@@ -430,10 +430,14 @@ every call still passes enabled-state, method/path or tool, and per-call approva
 `apps/executor` is an optional, separate trusted service. The task runner reaches it as an MCP
 connection, through existing grants and approvals, and supplies trusted task identity in a
 transport header. Its GitHub integration resolves immutable snapshots only from an operator
-repository allowlist. Commands run in fresh Docker containers with serialized source input,
+repository allowlist. Commands reuse a task-scoped Docker container, created lazily on the first command, with
 no network, credentials, or mounts, and explicit resource limits. The main app has no Docker
 socket. The broker alone controls Docker and persists validated snapshots and execution
-summaries in a separate volume. It never runs repository code in its own process or filesystem.
+summaries in a separate volume. Explicit file edits are synchronized before the next command;
+generated files and background processes stay in the live container. Containers expire after 30 idle
+minutes; accepted source expires after 24 idle hours. Shutdown and restart remove containers; the
+next command restores accepted source, not caches or processes. It never runs repository code in its
+own process or filesystem.
 
 The broker has its own Zod tool schemas, HTTP adapter, execution service, and GitHub/Docker
 integrations. This is a third npm workspace; `npm run check` covers all three. Coding and review

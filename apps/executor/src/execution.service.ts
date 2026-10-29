@@ -16,7 +16,8 @@ import {
 const executionResult = z.strictObject({
   exitCode: z.number().int(),
   log: z.string().max(16_000),
-  files: filesSchema
+  files: filesSchema,
+  backgroundProcesses: z.boolean().default(false)
 });
 type Execution = {
   id: string;
@@ -33,6 +34,8 @@ type Execution = {
   workspaceChanged?: boolean;
   sha: string | null;
   repository: string | null;
+  workspaceReset?: boolean;
+  backgroundProcesses?: boolean;
 };
 type Checkout = {
   repository: string;
@@ -66,6 +69,7 @@ export class ExecutionService {
   private readonly records = new Map<string, RecordData>();
   private readonly busy = new Set<string>();
   private readonly active = new Map<string, Active>();
+  private readonly dirty = new Map<string, Set<string>>();
   constructor(settings: Settings, containers: ContainerClient, source: RepositorySource) {
     this.settings = settings;
     this.containers = containers;
@@ -98,6 +102,18 @@ export class ExecutionService {
       if (
         !this.busy.has(task) &&
         !this.active.has(task) &&
+        Date.now() - record.touchedAt > 1_800_000
+      ) {
+        this.busy.add(task);
+        try {
+          await this.containers.release(task);
+        } finally {
+          this.busy.delete(task);
+        }
+      }
+      if (
+        !this.busy.has(task) &&
+        !this.active.has(task) &&
         Date.now() - record.touchedAt > 86_400_000
       ) {
         // Expiry and a new tool call must not delete the same checkout concurrently.
@@ -105,6 +121,7 @@ export class ExecutionService {
         try {
           await rm(this.file(task), { force: true });
           this.records.delete(task);
+          this.dirty.delete(task);
         } finally {
           this.busy.delete(task);
         }
@@ -117,6 +134,7 @@ export class ExecutionService {
       await active.container?.cancel();
     }
     await Promise.all([...this.active.values()].map((active) => active.done));
+    for (const task of this.records.keys()) await this.containers.release(task);
   }
   private file(task: string): string {
     return join(this.settings.EXECUTOR_DATA_DIR, `${task}.json`);
@@ -189,8 +207,10 @@ export class ExecutionService {
           'Wait for or cancel the current execution before editing the checkout'
         );
       if (name === 'discard_repository') {
+        await this.containers.release(task);
         await rm(this.file(task), { force: true });
         this.records.delete(task);
+        this.dirty.delete(task);
         return { discarded: true };
       }
       if (name === 'checkout_repository' || name === 'run_command') {
@@ -305,6 +325,9 @@ export class ExecutionService {
           executable: existing?.executable ?? false
         });
       checkout.files = filesSchema.parse(next);
+      const dirty = this.dirty.get(task) ?? new Set<string>();
+      dirty.add(path);
+      this.dirty.set(task, dirty);
       record.revision++;
       await this.persist(task, record);
       return { path, revision: record.revision };
@@ -335,18 +358,37 @@ export class ExecutionService {
           this.settings.EXECUTOR_IMAGE,
           snapshot
             ? { archive: snapshot.archive }
-            : { files: record.checkout!.files, command: job.command }
+            : {
+                files: record.checkout!.files,
+                updates: [...(this.dirty.get(task) ?? [])],
+                deleted: [...(this.dirty.get(task) ?? [])].filter(
+                  (path) => !record.checkout!.files.some((file) => file.path === path)
+                ),
+                command: job.command
+              },
+          snapshot ? undefined : task
         );
         const result = await active.container.result;
+        job.workspaceReset = result.workspaceReset;
         if (result.code !== 0) throw new OperationError('Container failed');
         exported = executionResult.parse(JSON.parse(result.stdout));
         if (!snapshot) {
           const sourcePaths = new Set(record.checkout!.files.map((file) => file.path));
           exported.files = exported.files.filter((file) => sourcePaths.has(file.path));
         }
+        // A replacement checkout only retires the old workspace after a valid export.
+        if (snapshot) await this.containers.release(task);
       }
     } catch {
       // Provider errors, Docker output, and filesystem details never enter evidence.
+      exported = undefined;
+    }
+    if (!checkout && (!exported || active.cancelled)) {
+      try {
+        await this.containers.release(task);
+      } catch {
+        exported = undefined;
+      }
     }
     while (this.busy.has(task)) await new Promise((resolve) => setTimeout(resolve, 5));
     this.busy.add(task);
@@ -366,11 +408,13 @@ export class ExecutionService {
           };
         else record.checkout!.files = exported.files;
         record.revision++;
+        this.dirty.delete(task);
         job.revision = record.revision;
         job.sha = record.checkout!.sha;
         job.status = 'finished';
         job.exitCode = exported.exitCode;
         job.log = exported.log;
+        job.backgroundProcesses = exported.backgroundProcesses;
         job.workspaceChanged =
           before !==
           exported.files
@@ -378,7 +422,12 @@ export class ExecutionService {
             .sort()
             .join('\n');
         job.verifiedRevision =
-          !checkout && !job.workspaceChanged && exported.exitCode === 0 ? record.revision : null;
+          !checkout &&
+          !job.workspaceChanged &&
+          !exported.backgroundProcesses &&
+          exported.exitCode === 0
+            ? record.revision
+            : null;
       }
       job.finishedAt = new Date().toISOString();
       record.touchedAt = Date.now();

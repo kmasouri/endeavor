@@ -16,25 +16,39 @@ const file = (path: string, text: string): WorkspaceFile => ({
 const initial = [file('index.js', 'original')];
 function fakeContainers() {
   const jobs: {
-    finish: (files?: WorkspaceFile[], exitCode?: number, code?: number) => void;
+    finish: (
+      files?: WorkspaceFile[],
+      exitCode?: number,
+      code?: number,
+      backgroundProcesses?: boolean
+    ) => void;
     cancelled: boolean;
     input: unknown;
+    task?: string;
   }[] = [];
   let recovered = 0;
+  const released: string[] = [];
   const client: ContainerClient = {
     async recover() {
       recovered++;
     },
-    run(_id, _image, input) {
+    async release(task) {
+      released.push(task);
+    },
+    run(_id, _image, input, task) {
       let resolve!: (result: ContainerResult) => void;
       const result = new Promise<ContainerResult>((done) => {
         resolve = done;
       });
       const job = {
         input,
+        task,
         cancelled: false,
-        finish(files = initial, exitCode = 0, code = 0) {
-          resolve({ code, stdout: JSON.stringify({ exitCode, log: 'test evidence', files }) });
+        finish(files = initial, exitCode = 0, code = 0, backgroundProcesses = false) {
+          resolve({
+            code,
+            stdout: JSON.stringify({ exitCode, log: 'test evidence', files, backgroundProcesses })
+          });
         }
       };
       jobs.push(job);
@@ -50,6 +64,7 @@ function fakeContainers() {
   return {
     client,
     jobs,
+    released,
     get recovered() {
       return recovered;
     }
@@ -372,6 +387,156 @@ test('a waiting status read never holds the cancellation lock', async () => {
     await ctx.service.call(task, 'cancel_execution', { execution_id: job.id });
     assert.equal(((await waiting) as { status: string }).status, 'cancelled');
     assert.ok(Date.now() - started < 5000);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test('commands share only their task workspace and synchronize explicit file edits', async () => {
+  const ctx = await fixture();
+  const task = randomUUID();
+  const other = randomUUID();
+  async function run(taskId: string) {
+    const start = (await ctx.service.call(taskId, 'run_command', { command: 'test' })) as {
+      id: string;
+    };
+    const job = ctx.containers.jobs.at(-1)!;
+    assert.equal(job.task, taskId);
+    job.finish((job.input as { files: WorkspaceFile[] }).files);
+    await until(
+      async () =>
+        (
+          (await ctx.service.call(taskId, 'get_execution', { execution_id: start.id })) as {
+            status: string;
+          }
+        ).status === 'finished'
+    );
+    return job;
+  }
+  try {
+    await checkedOut(ctx, task);
+    await checkedOut(ctx, other);
+    assert.equal(ctx.containers.jobs[0].task, undefined);
+    assert.deepEqual((await run(task)).input, {
+      files: initial,
+      updates: [],
+      deleted: [],
+      command: 'test'
+    });
+    await ctx.service.call(task, 'write_repository_file', { path: 'new.js', content: 'added' });
+    const edited = await run(task);
+    assert.deepEqual((edited.input as { updates: string[] }).updates, ['new.js']);
+    assert.deepEqual((await run(other)).input, {
+      files: initial,
+      updates: [],
+      deleted: [],
+      command: 'test'
+    });
+    assert.deepEqual((await run(task)).input, {
+      files: [initial[0], file('new.js', 'added')],
+      updates: [],
+      deleted: [],
+      command: 'test'
+    });
+    await ctx.service.call(task, 'delete_repository_file', { path: 'new.js' });
+    assert.deepEqual(((await run(task)).input as { deleted: string[] }).deleted, ['new.js']);
+    const releases = ctx.containers.released.length;
+    await checkedOut(ctx, task);
+    assert.deepEqual(ctx.containers.released.slice(releases), [task]);
+    await ctx.service.call(task, 'discard_repository', {});
+    assert.equal(ctx.containers.released.at(-1), task);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test('idle cleanup releases containers while retaining source until checkout expiry', async () => {
+  const ctx = await fixture();
+  const task = randomUUID();
+  try {
+    await checkedOut(ctx, task);
+    const records = (ctx.service as unknown as { records: Map<string, { touchedAt: number }> })
+      .records;
+    records.get(task)!.touchedAt = Date.now() - 1_800_001;
+    await ctx.service.cleanup();
+    assert.equal(ctx.containers.released.at(-1), task);
+    assert.equal(
+      (
+        (await ctx.service.call(task, 'read_repository_file', { path: 'index.js' })) as {
+          content: string;
+        }
+      ).content,
+      'original'
+    );
+    records.get(task)!.touchedAt = Date.now() - 86_400_001;
+    await ctx.service.cleanup();
+    await assert.rejects(
+      ctx.service.call(task, 'read_repository_file', { path: 'index.js' }),
+      /Check out/
+    );
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test('background work cannot certify a source revision', async () => {
+  const ctx = await fixture();
+  const task = randomUUID();
+  try {
+    await checkedOut(ctx, task);
+    const job = (await ctx.service.call(task, 'run_command', {
+      command: 'start server and test'
+    })) as { id: string };
+    ctx.containers.jobs.at(-1)!.finish(initial, 0, 0, true);
+    await until(
+      async () =>
+        (
+          (await ctx.service.call(task, 'get_execution', { execution_id: job.id })) as {
+            status: string;
+          }
+        ).status === 'finished'
+    );
+    const result = (await ctx.service.call(task, 'get_execution', { execution_id: job.id })) as {
+      verifiedRevision: null;
+      backgroundProcesses: boolean;
+    };
+    assert.equal(result.backgroundProcesses, true);
+    assert.equal(result.verifiedRevision, null);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test('failed workspace cleanup records failure and releases the task lock for retry', async () => {
+  const ctx = await fixture();
+  const task = randomUUID();
+  try {
+    await checkedOut(ctx, task);
+    const release = ctx.containers.client.release;
+    ctx.containers.client.release = async () => {
+      throw new Error('daemon unavailable');
+    };
+    const job = (await ctx.service.call(task, 'run_command', { command: 'invalid export' })) as {
+      id: string;
+    };
+    ctx.containers.jobs.at(-1)!.finish([file('../bad', 'invalid')]);
+    await until(
+      async () =>
+        (
+          (await ctx.service.call(task, 'get_execution', { execution_id: job.id })) as {
+            status: string;
+          }
+        ).status === 'failed'
+    );
+    assert.equal(
+      (
+        (await ctx.service.call(task, 'read_repository_file', { path: 'index.js' })) as {
+          content: string;
+        }
+      ).content,
+      'original'
+    );
+    ctx.containers.client.release = release;
   } finally {
     await ctx.cleanup();
   }
