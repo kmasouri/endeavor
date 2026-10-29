@@ -227,8 +227,19 @@ All pages of each catalog are loaded before filtering, including disabled entrie
 
 Open a row to configure it at `#/skills/:id` or `#/connections/:id`. Skill changes create a
 new instruction version. Connection details keep credential replacement/removal and MCP
-tool discovery and access settings together on a dedicated page. Enable and disable
-controls show failed requests without changing the displayed status.
+tool discovery and access settings together on a dedicated page. **Edit configuration** opens a
+draft for the name, description, endpoint, authentication method and credential header. HTTP
+connections also expose methods, path prefixes and approval requirements. **Save changes**
+sends only changed fields; **Discard** makes no configuration writes. The connection ID and
+agent grants stay the same. Newly selected HTTP methods require approval by default.
+
+Saved credentials remain hidden and unchanged during ordinary edits. Switching to no
+authentication or OAuth removes a saved header credential. Replace or remove credentials
+with the separate controls after saving. OAuth endpoint or authentication edits require an
+explicit disconnect first; disconnecting takes effect immediately, even if edits are discarded.
+Sign in again after saving when keeping OAuth. Name and description edits preserve the session.
+
+Enable and disable controls show failed requests without changing the displayed status.
 
 Creation uses `#/skills/new` and `#/connections/new`. Older `#/catalogs` links, including
 `?tab=connections` and the original creation URLs, still open the matching destination.
