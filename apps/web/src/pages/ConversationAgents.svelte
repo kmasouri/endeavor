@@ -65,7 +65,7 @@
         aria-expanded={selected === member.participant.id}
         onclick={() => (selected = selected === member.participant.id ? '' : member.participant.id)}
         ><Avatar name={member.name} id={member.participant.id} agent /><span class="grow"
-          >{member.name} <span class="agent-label">agent</span></span
+          >{member.name}</span
         ><span class="caption muted"
           >{current[0]?.pausedAt ? 'Paused' : (current[0]?.state ?? 'Free')}</span
         ><span aria-hidden="true">›</span></button
