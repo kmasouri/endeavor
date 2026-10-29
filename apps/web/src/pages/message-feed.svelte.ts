@@ -57,7 +57,8 @@ export function createMessageFeed(conversationId: () => string) {
     }
   }
 
-  async function older() {
+  let olderRequest: Promise<void> | null = null;
+  async function loadOlder() {
     if (!active || !hasOlder || loadingOlder || !items.length) return;
     loadingOlder = true;
     const asked = generation;
@@ -76,6 +77,29 @@ export function createMessageFeed(conversationId: () => string) {
     }
   }
 
+  function older(): Promise<void> {
+    if (olderRequest) return olderRequest;
+    const request = loadOlder();
+    olderRequest = request;
+    void request.finally(() => {
+      if (olderRequest === request) olderRequest = null;
+    });
+    return request;
+  }
+
+  async function reveal(messageId: string) {
+    const asked = generation;
+    while (
+      active &&
+      generation === asked &&
+      !items.some((message) => message.id === messageId) &&
+      hasOlder
+    ) {
+      await older();
+      if (historyError) break;
+    }
+  }
+
   $effect(() => {
     conversationId();
     generation++;
@@ -86,6 +110,7 @@ export function createMessageFeed(conversationId: () => string) {
     ready = false;
     hasOlder = false;
     loadingOlder = false;
+    olderRequest = null;
     polling = false;
     refreshRequested = false;
     untrack(() => void reload());
@@ -117,6 +142,7 @@ export function createMessageFeed(conversationId: () => string) {
       return loadingOlder;
     },
     reload,
-    older
+    older,
+    reveal
   };
 }

@@ -393,6 +393,7 @@
           costs={costs.data}
           {onAdd}
           onReply={reply}
+          onReveal={async (id) => { await messages.reveal(id); await tick(); }}
           onRevise={revise}
           onChanged={reload}
           onInspect={inspectMessage}

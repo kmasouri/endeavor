@@ -150,3 +150,20 @@ test('incremental chat retains messages on poll failure and retries failed visib
   expect(errors).toEqual([]);
   expect(unexpected).toEqual([]);
 });
+
+test('incremental chat loads a replied-to message outside the recent window only when requested', async ({
+  page
+}) => {
+  const { state, errors, unexpected } = await fixture(page);
+  state.messages = history(620);
+  state.messages[614].inReplyToMessageId = 'history-0550';
+  await page.goto('/app/#/conversations/brief');
+  await expect(page.locator('.message')).toHaveCount(50);
+  const link = page.getByRole('link', { name: 'Load replied-to message' });
+  await link.scrollIntoViewIfNeeded();
+  await link.click();
+  await expect(page.locator('#m-history-0550')).toBeInViewport();
+  await expect(page.locator('.message')).toHaveCount(100);
+  expect(errors).toEqual([]);
+  expect(unexpected).toEqual([]);
+});

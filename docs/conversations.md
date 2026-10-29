@@ -205,7 +205,8 @@ Waiting, paused, approval, and stuck states keep plain words. Human typing is de
 The web chat opens with the latest 50 messages. Scrolling near the top loads an older batch,
 keeping the visible message in place. Polls request messages after the newest loaded ID and
 append them in batches of 50. Burst arrivals are drained over bounded polls; history already
-loaded stays available. New arrivals follow only when the viewer is within 80 pixels of the
+loaded stays available. A reply to an unloaded message fetches earlier batches only when its
+reference is clicked. New arrivals follow only when the viewer is within 80 pixels of the
 bottom. Otherwise a new-message button returns to the latest messages. Read markers advance
 only to messages intersecting the visible thread while the document is visible. Failed read
 updates retry, and a conversation change discards late history or poll responses.

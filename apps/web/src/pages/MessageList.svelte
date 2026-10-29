@@ -28,6 +28,7 @@
     costs?: CostReport;
     onAdd: (agentId: string) => Promise<unknown>;
     onReply: (message: Message) => void;
+    onReveal: (messageId: string) => Promise<void>;
     onRevise: (output: TaskOutput & { taskId: string }) => void;
     onChanged: () => void;
     onInspect: (message: Message) => void;
@@ -108,17 +109,18 @@
       class:selected-run={Boolean(message.taskId && message.taskId === props.selectedRunId)}
       class:grouped
       class:mentioned-you={you}
-      class:has-reply={Boolean(replyTo)}
+      class:has-reply={Boolean(message.inReplyToMessageId)}
     >
-      {#if replyTo}
-        {@const replyName = props.nameOf({ type: replyTo.authorType, id: replyTo.authorId })}
+      {#if message.inReplyToMessageId}
+        {@const replyName = replyTo ? props.nameOf({ type: replyTo.authorType, id: replyTo.authorId }) : 'an earlier message'}
         <a
           class="reply-preview"
-          href={`#m-${replyTo.id}`}
-          aria-label={`Reply to ${replyName}: ${buildMessagePreview(replyTo.body)}`}
-          onclick={(event) => {
+          href={`#m-${message.inReplyToMessageId}`}
+          aria-label={replyTo ? `Reply to ${replyName}: ${buildMessagePreview(replyTo.body)}` : 'Load replied-to message'}
+          onclick={async (event) => {
             event.preventDefault();
-            document.getElementById(`m-${replyTo.id}`)?.scrollIntoView({ block: 'center' });
+            await props.onReveal(message.inReplyToMessageId!);
+            document.getElementById(`m-${message.inReplyToMessageId}`)?.scrollIntoView({ block: 'center' });
           }}
         >
           <svg
@@ -131,7 +133,7 @@
             stroke-width="2"
             aria-hidden="true"><path d="M1 12V6a5 5 0 015-5h16" /></svg
           >
-          <Avatar
+          {#if replyTo}<Avatar
             name={replyName}
             id={replyTo.authorId ?? 'platform'}
             agent={replyTo.authorType === 'agent'}
@@ -141,6 +143,7 @@
               class="agent-label">agent</span
             >{/if}
           <span class="reply-excerpt">{buildMessagePreview(replyTo.body)}</span>
+          {:else}<span class="reply-excerpt">Reply to an earlier message · Load message</span>{/if}
         </a>
       {/if}
       <div class="message-avatar">
