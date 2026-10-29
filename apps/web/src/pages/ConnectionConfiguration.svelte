@@ -13,7 +13,9 @@
   let discovered = $state<{ name: string; description: string }[] | null>(null);
   let allowedTools = $state<string[] | null>(null);
   let approvalTools = $state<string[] | null>(null);
-  const action = createAction();
+  const toolAction = createAction();
+  const credentialAction = createAction();
+  const busy = $derived(toolAction.busy || credentialAction.busy);
   const visibleTools = $derived([
     ...(discovered ?? []),
     ...(connection.allowedTools ?? [])
@@ -25,7 +27,7 @@
   ]);
 
   function discover() {
-    void action.run(async () => {
+    void toolAction.run(async () => {
       discovered = await api.post(`/connections/${connection.id}/tools`, {});
     });
   }
@@ -44,7 +46,7 @@
   }
 
   function saveTools() {
-    void action
+    void toolAction
       .run(() => api.patch(`/connections/${connection.id}`, {
         allowedTools: allowedTools ?? connection.allowedTools ?? [],
         approvalTools: approvalTools ?? connection.approvalTools ?? []
@@ -59,7 +61,7 @@
   }
 
   const setSecret = (value: string | null) =>
-    void action
+    void credentialAction
       .run(() => api.patch(`/connections/${connection.id}`, { credential: value }))
       .then((ok) => ok && ((credential = ''), props.onChanged()));
 </script>
@@ -98,7 +100,7 @@
   {#if connection.kind === 'mcp'}
     <details>
       <summary>Discover and manage tools</summary>
-      <button type="button" class="secondary" disabled={action.busy} onclick={discover}>
+      <button type="button" class="secondary" disabled={busy} onclick={discover}>
         Discover tools
       </button>
       {#if discovered}
@@ -126,9 +128,9 @@
             </label>
           </fieldset>
         {/each}
-        <button disabled={action.busy} onclick={saveTools}>Save tool access</button>
+        <button disabled={busy} onclick={saveTools}>Save tool access</button>
       {/if}
-      <ErrorNote error={action.error} />
+      <ErrorNote error={toolAction.error} />
     </details>
   {/if}
 
@@ -149,14 +151,14 @@
         bind:value={credential}
         placeholder={`New value for the ${connection.authHeader} header`}
       />
-      <button disabled={action.busy || !credential}>Replace</button>
+      <button disabled={busy || !credential}>Replace</button>
       {#if connection.hasCredential}
-        <button type="button" class="secondary" disabled={action.busy} onclick={() => setSecret(null)}>
+        <button type="button" class="secondary" disabled={busy} onclick={() => setSecret(null)}>
           Remove
         </button>
       {/if}
     </form>
-    <ErrorNote error={action.error} />
+    <ErrorNote error={credentialAction.error} />
   </details>
 </div>
 
