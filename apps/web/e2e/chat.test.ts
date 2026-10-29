@@ -200,25 +200,15 @@ for (const theme of ['dark', 'light']) {
 
 for (const theme of ['dark', 'light']) {
   for (const width of [1440, 390, 320]) {
-    test(`participant profiles open from names and avatars in ${theme} at ${width}px`, async ({
-      page
-    }, info) => {
+    test(`participant profiles open from names and avatars in ${theme} at ${width}px`, async ({ page }, info) => {
       const api = await fixture(page, theme);
       api.state.messages.push({
-        id: 'answer',
-        authorType: 'agent',
-        authorId: 'researcher',
-        body: 'Here is the evidence.',
-        taskId: null,
-        mentions: [],
-        inReplyToMessageId: null,
-        createdAt
+        id: 'answer', authorType: 'agent', authorId: 'researcher', body: 'Here is the evidence.',
+        taskId: null, mentions: [], inReplyToMessageId: null, createdAt
       });
       await page.setViewportSize({ width, height: 900 });
       await page.goto('/app/#/conversations/brief');
-      const person = page
-        .locator('#m-question .meta')
-        .getByRole('button', { name: "View Kayvan's profile" });
+      const person = page.locator('#m-question .meta').getByRole('button', { name: "View Kayvan's profile" });
       const senderBox = await person.boundingBox();
       const timeBox = await page.locator('#m-question .meta time').boundingBox();
       expect(Math.abs(senderBox!.y - timeBox!.y)).toBeLessThan(8);
@@ -227,10 +217,7 @@ for (const theme of ['dark', 'light']) {
       const humanCard = page.getByRole('dialog', { name: "Kayvan's profile" });
       await expect(humanCard).toBeVisible();
       await expect(humanCard).toContainText('Person · You');
-      await expect(humanCard.getByRole('link', { name: 'Edit profile' })).toHaveAttribute(
-        'href',
-        '#/settings'
-      );
+      await expect(humanCard.getByRole('link', { name: 'Edit profile' })).toHaveAttribute('href', '#/settings');
       await page.keyboard.press('Escape');
       await expect(humanCard).not.toBeVisible();
       await expect(person).toBeFocused();
@@ -239,18 +226,13 @@ for (const theme of ['dark', 'light']) {
       await humanCard.getByRole('button', { name: 'Close profile' }).click();
       await expect(page.locator('#m-question .message-avatar .participant-trigger')).toBeFocused();
 
-      const agent = page
-        .locator('#m-answer .meta')
-        .getByRole('button', { name: "View Researcher's profile" });
+      const agent = page.locator('#m-answer .meta').getByRole('button', { name: "View Researcher's profile" });
       await agent.click();
       const agentCard = page.getByRole('dialog', { name: "Researcher's profile" });
       await expect(agentCard).toContainText('Find evidence');
       await expect(agentCard).toContainText('research-model');
       await expect(agentCard).toContainText('2 skills · 1 connection');
-      await expect(agentCard.getByRole('link', { name: 'View agent' })).toHaveAttribute(
-        'href',
-        '#/agents/researcher'
-      );
+      await expect(agentCard.getByRole('link', { name: 'View agent' })).toHaveAttribute('href', '#/agents/researcher');
       const box = await agentCard.boundingBox();
       expect(box!.x).toBeGreaterThanOrEqual(12);
       expect(box!.x + box!.width).toBeLessThanOrEqual(width - 11);
@@ -266,19 +248,11 @@ for (const theme of ['dark', 'light']) {
   }
 }
 
-test('unavailable authors retain profile attribution without broken agent links', async ({
-  page
-}) => {
+test('unavailable authors retain profile attribution without broken agent links', async ({ page }) => {
   const api = await fixture(page);
   api.state.messages.push({
-    id: 'missing',
-    authorType: 'agent',
-    authorId: 'missing',
-    body: 'Historical evidence.',
-    taskId: null,
-    mentions: [],
-    inReplyToMessageId: null,
-    createdAt
+    id: 'missing', authorType: 'agent', authorId: 'missing', body: 'Historical evidence.',
+    taskId: null, mentions: [], inReplyToMessageId: null, createdAt
   });
   await page.goto('/app/#/conversations/brief');
   await page.locator('#m-missing .meta .participant-trigger').click();
@@ -289,27 +263,11 @@ test('unavailable authors retain profile attribution without broken agent links'
   expect(api.unexpected).toEqual([]);
 });
 
-test('deleted agent profiles and member profiles preserve history and modal access', async ({
-  page
-}) => {
+
+test('deleted agent profiles and member profiles preserve history and modal access', async ({ page }) => {
   const api = await fixture(page);
-  api.state.extraMembers.push({
-    participant: { type: 'agent', id: 'deleted' },
-    name: 'Former researcher',
-    deleted: true,
-    purpose: 'Old research',
-    historyFrom: null
-  });
-  api.state.messages.push({
-    id: 'old',
-    authorType: 'agent',
-    authorId: 'deleted',
-    body: 'An old answer.',
-    taskId: null,
-    mentions: [],
-    inReplyToMessageId: null,
-    createdAt
-  });
+  api.state.extraMembers.push({ participant: { type: 'agent', id: 'deleted' }, name: 'Former researcher', deleted: true, purpose: 'Old research', historyFrom: null });
+  api.state.messages.push({ id: 'old', authorType: 'agent', authorId: 'deleted', body: 'An old answer.', taskId: null, mentions: [], inReplyToMessageId: null, createdAt });
   await page.goto('/app/#/conversations/brief');
   await page.locator('#m-old .meta .participant-trigger').click();
   const deleted = page.getByRole('dialog', { name: "Former researcher's profile" });
@@ -326,9 +284,7 @@ test('deleted agent profiles and member profiles preserve history and modal acce
   await page.keyboard.press('Escape');
   await expect(card).not.toBeVisible();
   await expect(members).toBeVisible();
-  await expect(
-    members.getByRole('button', { name: "View Researcher's profile" }).last()
-  ).toBeFocused();
+  await expect(members.getByRole('button', { name: "View Researcher's profile" }).last()).toBeFocused();
   expect(api.errors).toEqual([]);
   expect(api.unexpected).toEqual([]);
 });
