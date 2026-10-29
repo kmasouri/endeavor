@@ -92,6 +92,14 @@ npm run down           # stop them
 
 Run `npm run check` before you finish any change. Never call work done while it fails.
 
+## Postman collection
+
+Keep the [Endeavor API collection](https://www.postman.com/workspace/314b8d46-978b-4c30-ba0f-1dd4c9479826/collection/3522107-0217142c-9906-432f-b55e-3a1a7b0d60a8) in the Default workspace current whenever the HTTP API changes. Update the existing collection; do not create another one.
+
+- Add, update, or remove requests when endpoints, methods, paths, headers, query parameters, request bodies, or responses change. Keep examples and descriptions accurate.
+- Use environment variables for the base URL, acting human ID, and resource IDs. Maintain the existing `local` environment for local development, and never copy credentials into shared values.
+- Verify the affected saved requests against the updated API before marking the ticket Done. Record the collection changes and verification in the ticket work log. If Postman cannot be updated or verified, keep the ticket open and state what remains.
+
 ## Layers
 
 The repo has two apps, each an npm workspace with its own `package.json`: the API in `apps/api/` and the Svelte 5 web interface in `apps/web/`. They share no code; the web interface only calls the API over HTTP. Run commands from the repo root. The layers below are the API's.
