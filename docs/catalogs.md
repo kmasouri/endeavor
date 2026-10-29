@@ -27,6 +27,20 @@ A connection is an outside service: an HTTP API or a remote MCP server. Both hav
 - The credential is encrypted with AES-256-GCM using `CREDENTIALS_KEY`, and is never returned by the API. `hasCredential` shows whether one is stored. Without `CREDENTIALS_KEY`, saving a credential fails with `credentialsKeyMissing`.
 - Agents call HTTP connections through the `http_request` tool. The platform adds the credential, doesn't follow redirects, keeps the path on the connection's host, and cuts responses off at 20,000 characters.
 
+Each HTTP call has a durable claim in `http_calls`, keyed by task and tool call ID. Only the
+worker that inserts the claim may send it. A hash binds the claim to the connection, endpoint,
+method, path and body without storing credentials or the request body in the claim. The bounded
+response is saved before audit or batch results. Recovery reuses that response after checking
+live access; it never sends that call ID again, even if approval policy changes.
+
+A claim without a response has an unknown outcome, including a crash just before dispatch,
+a timeout after a remote write, or a failure saving the response. Unattended work is blocked
+for a person to check the external service. After checking, resume with instructions to accept
+the observed outcome or explicitly request a new attempt. Resuming does not reset the original
+claim. Calls from older builds with a `connection.called` event but no saved response also need
+reconciliation. A pre-upgrade request that left no durable evidence cannot be identified.
+No provider-specific idempotency header is invented; each provider has its own contract.
+
 ## Grants and revocation
 
 `POST /agents/:id/grants` grants ongoing access to a skill or connection and adds it to configuration as a new version when needed; `DELETE /agents/:id/grants/:type/:targetId` revokes it. Every `http_request` call is checked at the moment it runs. The connection must be:

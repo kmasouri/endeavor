@@ -152,6 +152,10 @@ automatically executing the skipped calls. The lease stays renewed during tools,
 completion checks. A worker that loses its lease stops without finalizing another worker's
 pending calls. An action already issued to an outside system may still finish.
 
+HTTP calls also have durable claims and bounded responses outside the batch event. Recovery
+reuses a saved response; an interrupted claim with no response blocks unattended work for
+human reconciliation. See [HTTP recovery](catalogs.md#connections).
+
 Limits:
 
 - A task is blocked after 40 model turns, or at its agent version's own limits (`docs/agents.md`).
