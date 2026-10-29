@@ -21,6 +21,7 @@ export function mockTaskRepository(): jest.Mocked<TaskRepository> {
     claimHttpCall: jest.fn().mockResolvedValue(true),
     saveHttpCallResponse: jest.fn().mockResolvedValue(true),
     create: jest.fn(),
+    createScheduled: jest.fn(),
     getById: jest.fn(),
     getByRunKey: jest.fn(),
     list: jest.fn(),
