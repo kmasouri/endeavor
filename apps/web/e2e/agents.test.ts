@@ -169,16 +169,16 @@ for (const theme of ['dark', 'light']) {
       await page.setViewportSize({ width, height: 1000 });
       const state = await mockApi(page, theme);
       await page.goto('/app/#/agents');
-      await expect(page.getByRole('heading', { name: 'Researcher agent' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Researcher', exact: true })).toBeVisible();
       await expect(page.getByText('$3.12', { exact: false }).first()).toBeVisible();
       await page.getByRole('button', { name: 'Disabled', exact: true }).click();
-      await expect(page.getByRole('heading', { name: 'QA agent' })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Researcher agent' })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'QA', exact: true })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Researcher', exact: true })).toHaveCount(0);
       await page.getByRole('button', { name: 'All', exact: true }).click();
       await page.getByRole('searchbox', { name: 'Search agents' }).fill('Research');
-      await expect(page.getByRole('heading', { name: 'QA agent' })).toHaveCount(0);
+      await expect(page.getByRole('heading', { name: 'QA', exact: true })).toHaveCount(0);
       await page.screenshot({ path: `/tmp/ca57-list-${theme}-${width}.png`, fullPage: true });
-      await page.getByRole('heading', { name: 'Researcher agent' }).click();
+      await page.getByRole('heading', { name: 'Researcher', exact: true }).click();
       await expect(page.getByRole('heading', { name: 'Current configuration' })).toBeVisible();
       for (const tab of ['Configuration', 'Versions · 2', 'Overview']) {
         await page.getByRole('button', { name: tab, exact: true }).click();

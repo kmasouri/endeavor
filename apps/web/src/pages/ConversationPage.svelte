@@ -324,9 +324,7 @@
                 name={nameOf({ type: 'agent', id: approval.agentId })}
                 id={approval.agentId}
                 agent
-              /><strong>{nameOf({ type: 'agent', id: approval.agentId })}</strong><span
-                class="agent-label">agent</span
-              >
+              /><strong>{nameOf({ type: 'agent', id: approval.agentId })}</strong>
             </div>
             <h2>
               Needs your OK{approval.request.kind === 'access'
@@ -347,9 +345,7 @@
                 name={nameOf({ type: 'agent', id: task.ownerAgentId })}
                 id={task.ownerAgentId}
                 agent
-              /><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong><span
-                class="agent-label">agent</span
-              >
+              /><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
             </div>
             <TaskStatus {task} costs={costs.data} onChanged={reload} />
           </div>{/each}

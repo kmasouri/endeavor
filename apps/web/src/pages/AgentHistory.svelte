@@ -33,7 +33,7 @@
 </script>
 
 <div class="history-scope">
-  <div class="row"><Avatar name={agentName} id={agentId} agent /><strong>{agentName}</strong><span class="agent-label">agent</span></div>
+  <div class="row"><Avatar name={agentName} id={agentId} agent /><strong>{agentName}</strong></div>
   <p class="caption muted">Only {agentName}'s runs in {conversationName(conversationTitle)}, newest first.</p>
 </div>
 {#if history.error}
