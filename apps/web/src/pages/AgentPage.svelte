@@ -89,7 +89,7 @@
         <div>
           <div class="row wrap">
             <h1>{loadedAgent.name}</h1>
-            <span class="agent-label">agent</span><AgentStatus agent={loadedAgent} />
+            <AgentStatus agent={loadedAgent} />
           </div>
           <p>{loadedAgent.purpose}</p>
         </div>

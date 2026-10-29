@@ -24,7 +24,7 @@ Use Node 26 or newer, as required by the root package. Chromium downloads on the
 CI also installs its system libraries. On Linux, `npx playwright install-deps chromium` installs
 missing libraries. The preview owns port 5190 with `strictPort` and refuses to reuse an existing
 server. Wait for another worktree's suite to finish before running; never reuse its build or stop
-its server. The suite uses two workers, no automatic retries, and a three-minute total timeout.
+its server. The suite uses two workers, no automatic retries, and a five-minute total timeout.
 
 Each test gets an isolated browser context and intercepted API calls. API writes update only the
 fixture in that context. Fixtures abort requests to other origins and serve local app assets;

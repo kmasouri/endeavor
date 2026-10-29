@@ -1,14 +1,10 @@
 import { createHash } from 'node:crypto';
 import { ConnectionOAuthRepository } from '../../data';
-import {
-  mockAgentRepository,
-  mockCatalogRepository,
-  mockHumanRepository
-} from '../../data/repositories.test-helper';
+import { mockCatalogRepository, mockHumanRepository } from '../../data/repositories.test-helper';
 import { ConnectionOAuthClient, McpAuthenticationError, McpClient } from '../../integrations';
-import { CatalogLogger } from '../../observability';
+import { ConnectionLogger } from '../../observability';
 import { ConnectionOAuthSession } from '../../shared/connection-oauth';
-import { CatalogService } from './catalog.service';
+import { ConnectionService } from './connection.service';
 
 const hash = (text: string) => createHash('sha256').update(text).digest('hex');
 function setup() {
@@ -22,7 +18,6 @@ function setup() {
     }
   };
   const catalogs = mockCatalogRepository();
-  const agents = mockAgentRepository();
   const humans = mockHumanRepository();
   const connection = {
     id: 'c1',
@@ -37,7 +32,7 @@ function setup() {
   const logger = {
     onConnectionAuthentication: jest.fn(),
     onConnectionSaved: jest.fn()
-  } as unknown as CatalogLogger;
+  } as unknown as ConnectionLogger;
   const oauth: jest.Mocked<ConnectionOAuthClient> = {
     begin: jest.fn(async (value, nonce) => {
       value.data.verifier = 'private-verifier';
@@ -65,9 +60,8 @@ function setup() {
       .mockResolvedValue([]),
     callTool: jest.fn()
   };
-  const service = new CatalogService(
+  const service = new ConnectionService(
     catalogs,
-    agents,
     humans,
     true,
     logger,
@@ -79,7 +73,6 @@ function setup() {
   return {
     service,
     catalogs,
-    agents,
     humans,
     oauth,
     mcp,
@@ -98,7 +91,7 @@ async function pending(ctx: ReturnType<typeof setup>) {
   return { ...result, state };
 }
 
-describe('catalog OAuth lifecycle', () => {
+describe('ConnectionService OAuth lifecycle', () => {
   it('binds consent to actor, browser, connection and callback; exposes only status', async () => {
     const ctx = setup();
     const flow = await pending(ctx);
@@ -115,7 +108,6 @@ describe('catalog OAuth lifecycle', () => {
     expect(status.status).toBe('connected');
     expect(JSON.stringify(status)).not.toContain('secret');
     expect(ctx.catalogs.grant).not.toHaveBeenCalled();
-    expect(ctx.agents.addVersion).not.toHaveBeenCalled();
     await expect(
       ctx.service.finishOAuth('c1', { state: flow.state, code: 'code' }, flow.browserKey)
     ).rejects.toMatchObject({ name: 'connectionOAuthCallbackInvalid' });

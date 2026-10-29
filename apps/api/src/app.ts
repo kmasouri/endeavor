@@ -12,7 +12,9 @@ import fastify, { FastifyInstance, FastifyReply, FastifySchemaValidationError } 
 import { join } from 'node:path';
 import { config } from './config';
 import agentPlugin from './plugins/agent';
-import catalogPlugin from './plugins/catalog';
+import skillPlugin from './plugins/skill';
+import connectionPlugin from './plugins/connection';
+import grantPlugin from './plugins/grant';
 import conversationPlugin from './plugins/conversation';
 import humanPlugin from './plugins/human';
 import itemPlugin from './plugins/item';
@@ -192,7 +194,9 @@ export function setupApp(): FastifyInstance {
   });
 
   app.register(agentPlugin);
-  app.register(catalogPlugin);
+  app.register(skillPlugin);
+  app.register(connectionPlugin);
+  app.register(grantPlugin);
   app.register(conversationPlugin);
   app.register(humanPlugin);
   app.register(itemPlugin);

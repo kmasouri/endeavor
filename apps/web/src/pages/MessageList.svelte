@@ -139,9 +139,7 @@
             agent={replyTo.authorType === 'agent'}
             size="sm"
           />
-          <strong class="reply-name">{replyName}</strong>{#if replyTo.authorType === 'agent'}<span
-              class="agent-label">agent</span
-            >{/if}
+          <strong class="reply-name">{replyName}</strong>
           <span class="reply-excerpt">{buildMessagePreview(replyTo.body)}</span>
           {:else}<span class="reply-excerpt">Reply to an earlier message · Load message</span>{/if}
         </a>
@@ -156,9 +154,7 @@
       </div>
       <div class="message-content">
         {#if !grouped}<div class="meta">
-            <strong>{name}</strong>{#if message.authorType === 'agent'}<span class="agent-label"
-                >agent</span
-              >{/if}<time class="caption muted" title={formatDateTime(message.createdAt)}
+            <strong>{name}</strong><time class="caption muted" title={formatDateTime(message.createdAt)}
               >{formatShortTime(message.createdAt)}</time
             >
           </div>{:else}<time class="group-time caption muted" title={formatDateTime(message.createdAt)}
