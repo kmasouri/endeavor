@@ -82,6 +82,12 @@ A connection's `approvalMethods` (for example `["POST", "DELETE"]`) are methods 
 
 A second decision on the same approval gets `approvalAlreadyDecided`.
 
+HTTP recovery looks up the original task/tool approval before considering the current
+`approvalMethods`. A pending request still waits, a rejected request stays rejected, and an
+executed request reuses its saved response or error. Relaxing the policy never authorizes an
+existing request or repeats an executed one. The connection, method, path and body must match
+the saved request, and live grants and connection limits are still checked before recovery.
+
 ## Discovery and access requests (CA-38)
 
 A person can mark a skill or connection **discoverable** (`discoverable: true` on create,

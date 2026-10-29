@@ -1379,6 +1379,208 @@ describe('TaskRunnerService', () => {
       return ctx;
     }
 
+    describe('HTTP approval recovery', () => {
+      function setupApproval(overrides: Partial<Approval> = {}) {
+        const ctx = setupWithConnection();
+        ctx.catalogs.getConnections.mockResolvedValue([
+          { ...billing, allowedMethods: ['GET', 'POST', 'PATCH'], approvalMethods: [] }
+        ]);
+        const approval: Approval = {
+          id: 'ap-original',
+          taskId: TASK,
+          agentId: RESEARCHER,
+          kind: 'connection_call',
+          duration: null,
+          request: {
+            connectionId: 'conn-1',
+            connectionName: 'Billing API',
+            method: 'POST',
+            path: '/invoices',
+            body: null
+          },
+          status: 'pending',
+          decidedByHumanId: null,
+          decidedAt: null,
+          reason: null,
+          executedAt: null,
+          result: null,
+          createdAt: new Date(),
+          ...overrides
+        };
+        ctx.approvals.getByClientKey.mockResolvedValue(approval);
+        ctx.tasks.listEvents
+          .mockResolvedValueOnce([
+            event(1, 'model.turn', { raw: {}, toolCalls: [callBilling('/invoices', 'POST')] })
+          ])
+          .mockResolvedValue([]);
+        return { ...ctx, approval };
+      }
+
+      it.each(['pending', 'approved'] as const)(
+        'keeps an unexecuted %s approval waiting after policy relaxation',
+        async (status) => {
+          const { runner, approvals, tasks, connectionClient, current } = setupApproval({ status });
+          await runner.runTask(makeTask());
+          expect(approvals.getByClientKey).toHaveBeenCalledWith(`tool:${TASK}:call-http`);
+          expect(approvals.create).not.toHaveBeenCalled();
+          expect(connectionClient.request).not.toHaveBeenCalled();
+          expect(tasks.claimHttpCall).not.toHaveBeenCalled();
+          expect(current().state).toBe('waiting');
+          expect(tasks.addWaits).toHaveBeenCalledWith(TASK, [
+            expect.objectContaining({ targetId: 'ap-original' })
+          ]);
+        }
+      );
+
+      it('preserves a rejection and its reason after policy relaxation', async () => {
+        const { runner, approvals, connectionClient, tasks } = setupApproval({
+          status: 'rejected',
+          reason: 'Do not create this invoice'
+        });
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).not.toHaveBeenCalled();
+        expect(approvals.create).not.toHaveBeenCalled();
+        expect(toolResult(tasks).results[0]).toMatchObject({
+          isError: true,
+          content: expect.stringContaining('Do not create this invoice')
+        });
+      });
+
+      it('returns an executed approval response without creating another HTTP claim', async () => {
+        const { runner, approvals, tasks, connectionClient } = setupApproval({
+          status: 'approved',
+          executedAt: new Date(),
+          result: { status: 201, body: 'Created once', truncated: true, error: null }
+        });
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).not.toHaveBeenCalled();
+        expect(tasks.claimHttpCall).not.toHaveBeenCalled();
+        expect(approvals.create).not.toHaveBeenCalled();
+        expect(toolResult(tasks).results[0]).toMatchObject({
+          isError: false,
+          content: 'HTTP 201 (cut off at 20,000 characters)\nCreated once'
+        });
+      });
+
+      it.each([
+        {
+          status: null,
+          body: '',
+          truncated: false,
+          error: 'The call started, but its result was not recorded.'
+        },
+        { status: 400, body: 'Remote tool error', truncated: false, error: null, isError: true }
+      ])('preserves a saved execution error instead of retrying', async (result) => {
+        const { runner, tasks, connectionClient } = setupApproval({
+          status: 'approved',
+          executedAt: new Date(),
+          result
+        });
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).not.toHaveBeenCalled();
+        expect(toolResult(tasks).results[0]).toMatchObject({
+          isError: true,
+          content: result.error ?? result.body
+        });
+      });
+
+      it('blocks an executed approval whose result is missing', async () => {
+        const { runner, current, connectionClient } = setupApproval({
+          status: 'approved',
+          executedAt: new Date(),
+          result: null
+        });
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).not.toHaveBeenCalled();
+        expect(current().state).toBe('blocked');
+      });
+
+      it.each(['revoked', 'disabled', 'method removed'])(
+        'checks live access before replaying a result (%s)',
+        async (change) => {
+          const { runner, catalogs, tasks, connectionClient } = setupApproval({
+            status: 'approved',
+            executedAt: new Date(),
+            result: { status: 201, body: 'Private saved response', truncated: false, error: null }
+          });
+          if (change === 'revoked') catalogs.listGrants.mockResolvedValue([]);
+          if (change === 'disabled')
+            catalogs.getConnections.mockResolvedValue([{ ...billing, disabledAt: new Date() }]);
+          if (change === 'method removed')
+            catalogs.getConnections.mockResolvedValue([{ ...billing, allowedMethods: ['GET'] }]);
+          await runner.runTask(makeTask());
+          expect(connectionClient.request).not.toHaveBeenCalled();
+          expect(toolResult(tasks).results[0].isError).toBe(true);
+          expect(JSON.stringify(toolResult(tasks))).not.toContain('Private saved response');
+        }
+      );
+
+      it.each(['connection', 'method', 'path', 'body'])(
+        'rejects an approval whose saved %s does not match',
+        async (field) => {
+          const ctx = setupApproval({
+            status: 'approved',
+            executedAt: new Date(),
+            result: { status: 201, body: 'Old result', truncated: false, error: null }
+          });
+          ctx.approval.request = {
+            connectionId: field === 'connection' ? 'other' : 'conn-1',
+            connectionName: 'Billing API',
+            method: field === 'method' ? 'PATCH' : 'POST',
+            path: field === 'path' ? '/other' : '/invoices',
+            body: field === 'body' ? 'different' : null
+          };
+          await ctx.runner.runTask(makeTask());
+          expect(ctx.connectionClient.request).not.toHaveBeenCalled();
+          expect(toolResult(ctx.tasks).results[0]).toMatchObject({
+            isError: true,
+            content: expect.stringContaining('does not match its saved approval')
+          });
+        }
+      );
+
+      it('finishes the waiting transition after a crash saved the open wait', async () => {
+        const { runner, tasks, current, connectionClient } = setupApproval();
+        tasks.listWaits.mockResolvedValue([
+          {
+            id: 'w-original',
+            taskId: TASK,
+            kind: 'approval',
+            targetId: 'ap-original',
+            description: 'Original pending action',
+            createdAt: new Date(),
+            resolvedAt: null,
+            resolution: null
+          }
+        ]);
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).not.toHaveBeenCalled();
+        expect(tasks.addWaits).not.toHaveBeenCalled();
+        expect(current().state).toBe('waiting');
+      });
+
+      it('creates a fresh open wait when only an old resolved wait remains', async () => {
+        const { runner, tasks, current } = setupApproval({ status: 'approved' });
+        tasks.listWaits.mockResolvedValue([
+          {
+            id: 'w-old',
+            taskId: TASK,
+            kind: 'approval',
+            targetId: 'ap-original',
+            description: 'Old resolved wait',
+            createdAt: new Date(),
+            resolvedAt: new Date(),
+            resolution: {}
+          }
+        ]);
+        await runner.runTask(makeTask());
+        expect(tasks.addWaits).toHaveBeenCalledWith(TASK, [
+          expect.objectContaining({ targetId: 'ap-original' })
+        ]);
+        expect(current().state).toBe('waiting');
+      });
+    });
+
     describe('durable HTTP recovery', () => {
       function setupWrite() {
         const ctx = setupWithConnection();
