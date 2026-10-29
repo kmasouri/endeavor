@@ -57,18 +57,24 @@
   <div class="stack">
     <p class="muted small">This is a shared connection. Agents granted it use the account you sign in with. Signing in does not enable tools or grant agent access.</p>
     <div class="row wrap">
-      <button type="button" disabled={action.busy || Boolean(connection.disabledAt)} onclick={connect}>
+      <button type="button" disabled={Boolean(connection.disabledAt)} aria-disabled={action.busy || undefined} onclick={connect}>
         {connecting ? 'Connecting…' : isAuthenticated(connection) && authenticationMethod(connection) === 'oauth' ? 'Sign in again' : 'Sign in'}
       </button>
-      <button type="button" class="secondary" disabled={action.busy} onclick={refresh}>{pending === 'refresh' ? 'Refreshing…' : 'Refresh status'}</button>
+      <button type="button" class="secondary" aria-disabled={action.busy || undefined} aria-busy={pending === 'refresh'} onclick={refresh}>Refresh status</button>
       {#if authenticationMethod(connection) === 'oauth'}
-        <button type="button" class="secondary" disabled={action.busy || !isAuthenticated(connection)} onclick={disconnect}>{pending === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}</button>
+        <button type="button" class="secondary" disabled={!isAuthenticated(connection)} aria-disabled={action.busy || undefined} aria-busy={pending === 'disconnect'} onclick={disconnect}>Disconnect</button>
       {/if}
     </div>
     {#if authenticationMethod(connection) === 'oauth' && !isAuthenticated(connection)}
       <p class="muted small">Not signed in. Sign in to connect.</p>
     {/if}
-    <p class="muted small" role="status">{feedback}</p>
+    <p class="muted small auth-feedback" role="status">{pending === 'refresh' ? 'Refreshing status…' : pending === 'disconnect' ? 'Disconnecting…' : feedback}</p>
     <ErrorNote error={action.error} />
   </div>
 </details>
+
+<style>
+  .auth-feedback {
+    min-block-size: 1lh;
+  }
+</style>
