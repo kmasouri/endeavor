@@ -133,3 +133,45 @@ New agent links to editable Coding agent and Code reviewer examples. They use th
 configuration, grants, budgets, and peer collaboration model. They do not assign roles, select
 connections, or start work. See [GitHub coding and review](coding.md) for the required
 connections, isolated execution, verification evidence, and human publication approvals.
+
+## Team docs specialist (CA-73)
+
+A specialist is an ordinary agent with instructions and explicitly selected connections.
+[pilot/docs-specialist.example.json](../pilot/docs-specialist.example.json) is a complete
+`POST /agents` body for the fictional Juniper Parcel docs pilot. It starts with no connection
+selections and cannot retrieve the docs until access is configured. Its limits cap each task
+at 20 model turns, 60,000 tokens, $0.25, and 10 working minutes. No schedule is created.
+
+Set up its source before running it:
+
+1. Open the existing **Juniper Parcel — Notion** connection and sign in with OAuth. Use a
+   provider identity whose permissions restrict reads to the Juniper Parcel root
+   `4051a83d-088f-81d9-a706-e5461045f50e` and its descendants. The shared connection acts as
+   that identity for every agent granted access. Naming a root in instructions or in the
+   connection description does not restrict the provider's search or page reads.
+2. Discover tools and inspect their exact names, descriptions, and input schemas. Allow
+   only docs search and page reads. Keep write tools excluded. Permit those verified
+   read-only tools to run without individual approvals; leave all other tools unavailable.
+3. Check that the root and a child page are readable and that a known page outside the
+   allowed root cannot be read or found in search. If the signed-in identity cannot enforce
+   that boundary, use a separate restricted identity or provider integration; leave the
+   agent without access until this is resolved. OAuth sign-in alone proves no content scope.
+4. Create the agent from the example with `POST /agents`, using a human `x-actor-id` header.
+   In its Configuration, select only the verified docs connection and save. This creates
+   the live grant as well as a new configuration version. No skill is required. For an
+   existing task, explicitly migrate its version or start a new task.
+5. Add the specialist to an Endeavor and address it with a question. Check task events for
+   successful search and page-read results, then open the cited pages and compare each
+   factual claim. A missing-source response is useful evidence of a limit, but does not
+   count as a successful retrieval test.
+
+The specialist reads source pages when invoked. It does not copy the knowledge base into
+saved notes or build an index. The example rejects instructions embedded in retrieved
+content, reconciles archived references, and distinguishes documented policy from current
+health. These instructions guide behavior; connection policies and provider permissions
+enforce access. See [catalog grants and tools](catalogs.md#remote-mcp-tools-ca-64).
+
+Juniper Parcel is synthetic. Its historical incidents and example log queries cannot prove
+current production health. The separate CloudWatch slice still needs a real read-only
+connection scoped to one log group, enforced time ranges and result caps, query evidence,
+and a real on-call pilot. Docs-only evaluation does not complete CA-73.
