@@ -146,6 +146,9 @@ The runner is not an agent and makes no decisions about the work. It runs in the
 Claimed tasks run in the background, up to the runner's concurrency limit. Polls keep
 processing schedules, messages and approvals while those tasks wait on models; they only
 claim additional tasks when a slot is free. A task's model turns still run in order.
+Model turns record which events they saw. If an update arrives during a request or tool
+batch, remaining actions from the older response are skipped so the next turn reads the
+update. A follow-up during a completion check prevents that older result from completing.
 
 Everything it does is written to the task's events: model turns, tool results, failed model calls, and messages received. The model transcript is rebuilt from those events, so after a restart the task picks up where it stopped. A tool call that was asked for but never run is run first. Message tool calls use the tool call ID as the message's `client_key`, so running a call again doesn't post twice.
 

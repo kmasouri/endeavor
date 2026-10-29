@@ -543,7 +543,12 @@ export class TaskRunnerService {
       if (pendingCalls.length > 0) {
         let stopped;
         try {
-          stopped = await this.runToolCalls(task, agent, pendingCalls);
+          const latestTurn = events.filter((event) => event.type === TASK_EVENTS.modelTurn).at(-1);
+          const contextEventId =
+            typeof latestTurn?.data.contextEventId === 'number'
+              ? latestTurn.data.contextEventId
+              : (latestTurn?.id ?? 0);
+          stopped = await this.runToolCalls(task, agent, pendingCalls, contextEventId);
         } catch (error) {
           if (error instanceof ModelCallStoppedError) return 0;
           throw error;
@@ -651,6 +656,7 @@ export class TaskRunnerService {
       });
       await this.taskRepository.addEvent(task.id, TASK_EVENTS.modelTurn, agentActor, {
         raw: result.raw,
+        contextEventId: events.at(-1)?.id ?? 0,
         provider: version.provider,
         format: client.transcriptFormat,
         text: result.text,
@@ -697,7 +703,8 @@ export class TaskRunnerService {
   private async runToolCalls(
     task: Task,
     agent: Agent,
-    calls: ModelToolCall[]
+    calls: ModelToolCall[],
+    contextEventId: number
   ): Promise<boolean | number> {
     let leaseHeld = true;
     const heartbeat = setInterval(() => {
@@ -707,7 +714,7 @@ export class TaskRunnerService {
         .catch(() => (leaseHeld = false));
     }, this.options.leaseMs / 3);
     try {
-      return await this.runToolBatch(task, agent, calls, () => leaseHeld);
+      return await this.runToolBatch(task, agent, calls, contextEventId, () => leaseHeld);
     } finally {
       clearInterval(heartbeat);
     }
@@ -717,6 +724,7 @@ export class TaskRunnerService {
     task: Task,
     agent: Agent,
     calls: ModelToolCall[],
+    contextEventId: number,
     holdsLease: () => boolean
   ): Promise<boolean | number> {
     const results: ModelToolResult[] = [];
@@ -756,6 +764,12 @@ export class TaskRunnerService {
               input: detailInput
             }
           );
+          if (await this.hasNewTaskMessage(task.id, contextEventId)) {
+            stopped = true;
+            skippedReason = 'a new message arrived; read the update before taking further actions.';
+            results.push({ callId: call.id, content: `Skipped: ${skippedReason}`, isError: true });
+            continue;
+          }
           const renewed =
             holdsLease() &&
             (await this.taskRepository.renewLease(
@@ -2308,6 +2322,17 @@ export class TaskRunnerService {
       tools: [],
       maxTokens: 1000
     });
+    const latestTurn = events.filter((event) => event.type === TASK_EVENTS.modelTurn).at(-1);
+    const contextEventId =
+      typeof latestTurn?.data.contextEventId === 'number'
+        ? latestTurn.data.contextEventId
+        : (latestTurn?.id ?? 0);
+    if (await this.hasNewTaskMessage(task.id, contextEventId)) {
+      throw new AppError(
+        'taskCompletionRejected',
+        'A new message arrived during the check. Read the update and revise the result before completing.'
+      );
+    }
     const text = reply.text.trim();
     // Anything other than a clear "MET:" counts as not met, so a confused check never passes.
     const met = /^MET\b/i.test(text);
@@ -2322,6 +2347,14 @@ export class TaskRunnerService {
     });
     this.runnerLogger.onCompletionChecked(task.id, met);
     return { met, summary, failures: failuresBefore + (met ? 0 : 1) };
+  }
+
+  private async hasNewTaskMessage(taskId: string, contextEventId: number): Promise<boolean> {
+    const events = await this.taskRepository.listLatestEvents(
+      [taskId],
+      [TASK_EVENTS.messageReceived]
+    );
+    return events.some((event) => event.id > contextEventId);
   }
 
   private async handleCompletionFailure(

@@ -408,6 +408,45 @@ describe('TaskRunnerService', () => {
       expect(jest.getTimerCount()).toBe(0);
     });
 
+    it('reads a message delivered during a model request before acting on the old response', async () => {
+      const { runner, tasks, client, messages, workspaceClient } = bounded();
+      Object.assign((runner as unknown as { options: object }).options, { turnsPerClaim: 2 });
+      const history: TaskEvent[] = [];
+      tasks.listEvents.mockImplementation(async () => [...history]);
+      tasks.addEvent.mockImplementation(async (_id, type, _actor, data) => {
+        const saved = event(history.length + 1, type, data);
+        history.push(saved);
+        return saved;
+      });
+      tasks.listLatestEvents.mockImplementation(async () =>
+        history.filter((e) => e.type === 'message.received').slice(-1)
+      );
+      messages.getById.mockImplementation(async (id) =>
+        makeMessage({
+          id,
+          body: id === 'update' ? 'Use the revised instructions' : 'Original request'
+        })
+      );
+      client.complete.mockImplementationOnce(async () => {
+        history.push(event(history.length + 1, 'message.received', { messageId: 'update' }));
+        return turn({
+          toolCalls: [
+            { id: 'stale', name: 'write_file', input: { path: 'old.txt', content: 'Old answer' } }
+          ]
+        });
+      });
+      await runner.runTask(makeTask());
+      expect(workspaceClient.write).not.toHaveBeenCalled();
+      expect(toolResult(tasks).results[0].content).toContain('new message arrived');
+      await runner.runTask(makeTask());
+      const request = client.complete.mock.calls[1][0];
+      expect(
+        request.transcript.some(
+          (entry) => entry.role === 'user' && entry.text.includes('Use the revised instructions')
+        )
+      ).toBe(true);
+    });
+
     it('persists timeout failures, retries twice, then blocks', async () => {
       const { runner, tasks, client, current } = bounded();
       client.complete.mockImplementation(() => new Promise(() => {}));
@@ -577,6 +616,20 @@ describe('TaskRunnerService', () => {
         isError: true,
         content: 'Write failed'
       });
+    });
+
+    it('skips remaining queued actions when an update arrives during the first tool', async () => {
+      const { runner, tasks, workspaceClient, messages } = setupBatch();
+      workspaceClient.write.mockImplementationOnce(async () => {
+        tasks.listLatestEvents.mockResolvedValue([
+          event(2, 'message.received', { messageId: 'update' })
+        ]);
+        return { path: 'first.txt', bytes: 3 };
+      });
+      await runner.runTask(makeTask());
+      expect(workspaceClient.write).toHaveBeenCalledTimes(1);
+      expect(messages.create).not.toHaveBeenCalled();
+      expect(toolResult(tasks).results[1].content).toContain('new message arrived');
     });
 
     it("stops after lease loss without finalizing the new owner's batch", async () => {
@@ -803,6 +856,22 @@ describe('TaskRunnerService', () => {
       expect(eventTypes(tasks)).not.toContain('completion.checked');
       expect(eventTypes(tasks)).not.toContain('completion.failed');
       expect(tasks.addOutput).not.toHaveBeenCalled();
+    });
+
+    it('rejects a completion verdict when a follow-up arrives during the check', async () => {
+      const { runner, tasks, checker, current } = setupChecked([]);
+      Object.assign((runner as unknown as { options: object }).options, { turnsPerClaim: 1 });
+      checker.complete.mockImplementationOnce(async () => {
+        tasks.listLatestEvents.mockResolvedValue([
+          event(100, 'message.received', { messageId: 'follow-up' })
+        ]);
+        return turn({ text: 'MET: original result' });
+      });
+      await runner.runTask(makeTask());
+      expect(current().state).toBe('working');
+      expect(tasks.addOutput).not.toHaveBeenCalled();
+      expect(eventTypes(tasks)).not.toContain('completion.checked');
+      expect(toolResult(tasks).results[0].content).toContain('new message arrived');
     });
 
     it('sends the gaps back to the agent instead of completing', async () => {
