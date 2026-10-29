@@ -92,3 +92,8 @@ production stylesheet made the dark 390px chat case fail with `aligned: false` a
 `ordered: false`. Restoring the stylesheet and rebuilding made it pass. The experiment changed
 no committed app code; it proves the new assertion detects a broken composer even when its text
 and controls remain present.
+
+Participant profile coverage in `chat.test.ts` checks author names and avatars, keyboard
+opening and Escape/focus restoration, outside dismissal, directory details, deleted and
+unavailable authors, and member cards inside the native members dialog. Geometry and review
+screenshots cover dark/light themes at 320px, 390px and 1440px.
