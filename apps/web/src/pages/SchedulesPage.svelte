@@ -68,7 +68,7 @@
       }} />
     {:else if view === 'details' && current}
       <button class="schedule-back" onclick={() => navigate('list')}>← Back to schedules</button>
-      {#key current.id}<ScheduleCard schedule={current} agentName={name({ type: 'agent', id: current.agentId })} onChanged={schedules.reload} />{/key}
+      {#key current.id}<ScheduleCard appearance={name.agent(current.agentId)} schedule={current} agentName={name({ type: 'agent', id: current.agentId })} onChanged={schedules.reload} />{/key}
     {:else}
       {#each active.filter((schedule) => schedule.catchUp) as schedule (schedule.id)}
         <div class="schedule-catchup">
@@ -99,7 +99,7 @@
             <span class="schedule-clock"><Icon name="schedules" /></span>
             <span class="schedule-description">
               <strong>{schedule.title}</strong>
-              <span class="schedule-meta"><Avatar name={name({ type: 'agent', id: schedule.agentId })} id={schedule.agentId} agent size="sm" />
+              <span class="schedule-meta"><Avatar name={name({ type: 'agent', id: schedule.agentId })} id={schedule.agentId} appearance={name.agent(schedule.agentId)} agent size="sm" />
                 {name({ type: 'agent', id: schedule.agentId })}
                 <span>· {summarizeRecurrence(schedule, timeDisplay.format === '12h')}</span>
               </span>

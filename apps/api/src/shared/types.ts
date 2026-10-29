@@ -164,7 +164,25 @@ export interface ConversationDocument {
 export const MODEL_PROVIDERS = ['anthropic', 'openai', 'scripted'] as const;
 export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
 
-export interface Agent {
+export const AGENT_AVATAR_COLORS = ['lime', 'sky', 'teal'] as const;
+export const AGENT_AVATAR_ICONS = [
+  'agents',
+  'search',
+  'check',
+  'file',
+  'work',
+  'connections',
+  'approvals',
+  'catalogs',
+  'setup',
+  'schedules'
+] as const;
+export interface AgentAppearance {
+  avatarColor?: (typeof AGENT_AVATAR_COLORS)[number] | null;
+  avatarIcon?: (typeof AGENT_AVATAR_ICONS)[number] | null;
+}
+
+export interface Agent extends AgentAppearance {
   // Retained only for historical references. Deleted agents cannot be restored.
   deletedAt?: Date | null;
   id: string;
@@ -235,7 +253,7 @@ export interface MessageDelivery {
 
 // What the agent directory shows about an agent. Only what's needed to decide whom to ask:
 // never instructions, saved notes, credentials, or conversations.
-export interface DirectoryEntry {
+export interface DirectoryEntry extends AgentAppearance {
   id: string;
   name: string;
   purpose: string;

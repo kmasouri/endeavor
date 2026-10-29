@@ -17,7 +17,7 @@
   let query = $state('');
   let selected = $state<string[]>([]);
   let choices = $derived([
-    ...people.filter((person) => person.id !== me.id).map((person) => ({ ...person, type: 'human', purpose: 'Person' })),
+    ...people.filter((person) => person.id !== me.id).map((person) => ({ ...person, type: 'human', purpose: 'Person', avatarColor: null, avatarIcon: null })),
     ...(directory.data ?? []).map((agent) => ({ ...agent, type: 'agent' }))
   ]);
   let filtered = $derived(choices.filter((member) =>
@@ -72,7 +72,7 @@
       <div class="endeavor-members">
         {#each filtered as member (`${member.type}:${member.id}`)}
           <label class="check endeavor-member">
-            <Avatar name={member.name} id={member.id} agent={member.type === 'agent'} />
+            <Avatar name={member.name} id={member.id} appearance={member} agent={member.type === 'agent'} />
             <span class="grow"><span class="row"><strong>{member.name}</strong></span><span class="caption muted">{member.purpose}</span></span>
             <input type="checkbox" aria-label={`Add ${member.name}`} checked={selected.includes(`${member.type}:${member.id}`)} onchange={() => toggle(`${member.type}:${member.id}`)} />
           </label>

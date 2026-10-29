@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
-import { Agent, AgentLimits, AgentVersion, ModelProvider } from '../../shared/types';
+import {
+  AgentAppearance,
+  Agent,
+  AgentLimits,
+  AgentVersion,
+  ModelProvider
+} from '../../shared/types';
 import {
   AgentNameConflictError,
   AgentConfigConflictError,
@@ -15,6 +21,8 @@ interface AgentRow {
   id: string;
   name: string;
   purpose: string;
+  avatar_color: Agent['avatarColor'];
+  avatar_icon: Agent['avatarIcon'];
   current_version_id: string | null;
   disabled_at: Date | null;
   deleted_at: Date | null;
@@ -126,7 +134,7 @@ export class AgentPostgresRepository implements AgentRepository {
       const deleted = await client.query(
         `UPDATE endeavor.agents SET deleted_at = now(), disabled_at = coalesce(disabled_at, now()),
            name = 'Deleted agent ' || id::text, purpose = '', current_version_id = NULL,
-           monthly_budget_usd = NULL, updated_at = now()
+           monthly_budget_usd = NULL, avatar_color = NULL, avatar_icon = NULL, updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
         [agentId]
       );
@@ -308,7 +316,7 @@ export class AgentPostgresRepository implements AgentRepository {
 
   async update(
     agentId: string,
-    changes: { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
+    changes: AgentAppearance & { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
   ): Promise<Agent | null> {
     // $4 says whether the budget is being changed, since null (no cap) is a real value.
     const result = await this.db
@@ -317,6 +325,8 @@ export class AgentPostgresRepository implements AgentRepository {
        SET name = coalesce($2, name),
            purpose = coalesce($3, purpose),
            monthly_budget_usd = CASE WHEN $4 THEN $5 ELSE monthly_budget_usd END,
+           avatar_color = CASE WHEN $6 THEN $7 ELSE avatar_color END,
+           avatar_icon = CASE WHEN $8 THEN $9 ELSE avatar_icon END,
            updated_at = now()
        WHERE id = $1 AND deleted_at IS NULL
        RETURNING *`,
@@ -325,7 +335,11 @@ export class AgentPostgresRepository implements AgentRepository {
           changes.name ?? null,
           changes.purpose ?? null,
           changes.monthlyBudgetUsd !== undefined,
-          changes.monthlyBudgetUsd ?? null
+          changes.monthlyBudgetUsd ?? null,
+          changes.avatarColor !== undefined,
+          changes.avatarColor ?? null,
+          changes.avatarIcon !== undefined,
+          changes.avatarIcon ?? null
         ]
       )
       .catch((error) => rethrowNameConflict(error, changes.name ?? ''));
@@ -477,6 +491,8 @@ function toAgent(row: AgentRow): Agent {
     name: row.deleted_at ? 'Deleted agent' : row.name,
     deletedAt: row.deleted_at,
     purpose: row.purpose,
+    avatarColor: row.avatar_color ?? null,
+    avatarIcon: row.avatar_icon ?? null,
     currentVersionId: row.current_version_id,
     disabledAt: row.disabled_at,
     monthlyBudgetUsd: row.monthly_budget_usd === null ? null : Number(row.monthly_budget_usd),

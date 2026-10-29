@@ -1,4 +1,10 @@
-import { Agent, AgentLimits, AgentVersion, ModelProvider } from '../../shared/types';
+import {
+  AgentAppearance,
+  Agent,
+  AgentLimits,
+  AgentVersion,
+  ModelProvider
+} from '../../shared/types';
 
 export interface CreateAgentInput {
   name: string;
@@ -62,7 +68,7 @@ export interface AgentRepository {
   // monthlyBudgetUsd: a number sets the cap, null removes it, undefined leaves it.
   update(
     agentId: string,
-    changes: { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
+    changes: AgentAppearance & { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
   ): Promise<Agent | null>;
   setDisabled(agentId: string, disabled: boolean): Promise<Agent | null>;
 

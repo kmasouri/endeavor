@@ -344,3 +344,44 @@
   border-color: var(--danger-border);
   flex: 0 0 auto;
 }
+
+.appearance-editor {
+  min-width: 0;
+}
+.appearance-preview {
+  margin-block: var(--space-3);
+}
+.appearance-options {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block: var(--space-3);
+}
+.appearance-options label {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: var(--space-2);
+  border: 1px solid var(--border-200);
+  border-radius: var(--radius-md);
+}
+.appearance-options label:has(input:checked) {
+  border-color: var(--text-200);
+  background: var(--bg-100);
+}
+.appearance-options input {
+  width: auto;
+  margin: 0;
+}
+.appearance-swatch {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--swatch);
+  color: var(--mark);
+}

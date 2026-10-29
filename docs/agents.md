@@ -175,3 +175,19 @@ Juniper Parcel is synthetic. Its historical incidents and example log queries ca
 current production health. The separate CloudWatch slice still needs a real read-only
 connection scoped to one log group, enforced time ranges and result caps, query evidence,
 and a real on-call pilot. Docs-only evaluation does not complete CA-73.
+
+## Avatar appearance (CA-92)
+
+Overview → Profile → Edit offers a live avatar preview, three theme-aware colors (lime, sky,
+teal), and ten built-in icons. Save profile applies the choices; Discard changes makes no write.
+Automatic or Reset appearance restores the ID-derived tint and robot icon. Reset takes effect
+only when saved. Agent identity remains in the avatar's accessible label and tooltip, without
+extra visible badges or labels.
+
+`PATCH /agents/:agentId` accepts optional `avatarColor` (`lime`, `sky`, `teal`) and `avatarIcon`
+(`agents`, `search`, `check`, `file`, `work`, `connections`, `approvals`, `catalogs`, `setup`,
+`schedules`). Each field accepts `null` to restore its default; omitted fields stay unchanged.
+The same fields are returned on agents, directory entries, and agent conversation members.
+Appearance belongs to the profile and never creates a configuration version. Existing agents
+start with null overrides. Migration 017 adds the nullable columns and allowed-value constraints.
+Pictures, uploads, arbitrary colors, and object storage are outside this feature.

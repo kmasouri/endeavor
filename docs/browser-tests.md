@@ -91,3 +91,7 @@ production stylesheet made the dark 390px chat case fail with `aligned: false` a
 `ordered: false`. Restoring the stylesheet and rebuilding made it pass. The experiment changed
 no committed app code; it proves the new assertion detects a broken composer even when its text
 and controls remain present.
+
+CA-92 adds agent profile appearance coverage at 320px, 390px, and desktop widths in both themes:
+preview, saved/reloaded colors and icons, failed save retry, discard without writes, and reset
+without a configuration version. Each case captures the editor and checks for page overflow.

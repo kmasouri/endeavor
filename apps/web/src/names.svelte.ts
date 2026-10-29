@@ -3,7 +3,9 @@ import { loadAll } from './pages/agent-data';
 import { createLoad } from './state.svelte';
 
 // Names for agents and people by ID, for pages that only have IDs (tasks, approvals, notes).
-export function createNames(): (actor: { type: string; id: string | null }) => string {
+export function createNames(): ((actor: { type: string; id: string | null }) => string) & {
+  agent: (id: string) => Agent | undefined;
+} {
   const agents = createLoad(
     () => loadAll<Agent>('/agents?includeDisabled=true'),
     () => []
@@ -12,7 +14,7 @@ export function createNames(): (actor: { type: string; id: string | null }) => s
     () => api.get<Human[]>('/humans'),
     () => []
   );
-  return (actor) => {
+  const name = (actor: { type: string; id: string | null }) => {
     if (actor.type === 'system' || actor.type === 'schedule') {
       return actor.type === 'schedule' ? 'Schedule' : 'Platform';
     }
@@ -22,4 +24,7 @@ export function createNames(): (actor: { type: string; id: string | null }) => s
       (actor.type === 'agent' && agents.data ? 'Deleted agent' : '…')
     );
   };
+  return Object.assign(name, {
+    agent: (id: string) => agents.data?.find((agent) => agent.id === id)
+  });
 }

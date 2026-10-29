@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type Responsibility, type Task, type Conversation } from '../api';
+  import { api, type AgentAppearance, type Responsibility, type Task, type Conversation } from '../api';
   import Avatar from '../Avatar.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import StateBadge from '../StateBadge.svelte';
@@ -8,8 +8,8 @@
   import { timeDisplay } from '../time-display.svelte';
   import { createAction, createLoad } from '../state.svelte';
 
-  let { schedule: s, agentName, onChanged }: {
-    schedule: Responsibility; agentName: string; onChanged: () => void;
+  let { schedule: s, agentName, appearance, onChanged }: {
+    schedule: Responsibility; agentName: string; appearance?: AgentAppearance; onChanged: () => void;
   } = $props();
   let offset = $state(0);
   const runs = createLoad(() => api.list<Task>(`/responsibilities/${s.id}/runs?limit=20&offset=${offset}`), () => [s.id, offset], 10000);
@@ -33,7 +33,7 @@
 </script>
 
 <div class="row wrap"><h2 class="grow" tabindex="-1">{s.title}</h2><ScheduleBadge status={s.status} /></div>
-<p class="schedule-meta"><Avatar name={agentName} id={s.agentId} agent size="sm" /> {agentName} · {summarizeRecurrence(s, timeDisplay.format === '12h')}</p>
+<p class="schedule-meta"><Avatar name={agentName} id={s.agentId} {appearance} agent size="sm" /> {agentName} · {summarizeRecurrence(s, timeDisplay.format === '12h')}</p>
 {#if s.status !== 'cancelled'}
   <div class="row wrap schedule-actions">
     <button class="secondary" disabled={action.busy} onclick={() => post(s.status === 'enabled' ? '/pause' : '/resume')}>{s.status === 'enabled' ? 'Pause schedule' : 'Resume schedule'}</button>

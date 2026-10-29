@@ -98,6 +98,7 @@ async function mockApi(page: Page, theme = 'dark', empty = false, legacy = false
         versions.unshift(next);
         return reply({ data: agents[0] });
       }
+      if (req.method() === 'PATCH' && url.pathname === '/agents/a1') Object.assign(agents[0], body);
       if (url.pathname === '/tasks/t1/version') tasks[0].agentVersionId = String(body.versionId);
       if (url.pathname.endsWith('/disable')) agents[0].disabledAt = '2026-10-25';
       if (url.pathname.endsWith('/enable')) agents[0].disabledAt = null;
@@ -567,3 +568,85 @@ test('configuration validates required fields and preserves every edit after a f
   expect(versions).toHaveLength(3);
   expect(errors).toEqual([]);
 });
+
+for (const width of [320, 390, 1280]) {
+  for (const theme of ['light', 'dark']) {
+    test(`agent appearance persists, retries, discards and resets at ${width}px in ${theme}`, async ({
+      page
+    }, testInfo) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const { writes, errors } = await mockApi(page, theme);
+      await page.goto('/app/#/agents/a1');
+      const profile = page
+        .locator('section.panel')
+        .filter({ has: page.getByRole('heading', { name: 'Profile', exact: true }) });
+      await profile.getByRole('button', { name: 'Edit', exact: true }).click();
+      const form = page
+        .locator('form')
+        .filter({ has: page.getByRole('heading', { name: 'Profile', exact: true }) });
+      const preview = form.getByLabel('Avatar preview');
+      const defaultStyle = await preview.locator('.avatar').getAttribute('style');
+      await form.getByRole('radio', { name: 'Teal', exact: true }).check();
+      await form.getByRole('radio', { name: 'Document', exact: true }).check();
+      await expect(preview.locator('.avatar')).toHaveAttribute('style', /agent-3-bg/);
+      const documentPath = await preview.locator('.avatar > svg path').getAttribute('d');
+      // A failed write preserves the draft and allows retry.
+      await page.route(
+        '**/agents/a1',
+        async (route) => {
+          if (route.request().method() !== 'PATCH') return route.fallback();
+          return route.fulfill({
+            status: 503,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: { message: 'Try again later', code: 10001 } })
+          });
+        },
+        { times: 1 }
+      );
+      await form.getByRole('button', { name: 'Save profile' }).click();
+      await expect(form.getByRole('radio', { name: 'Document', exact: true })).toBeChecked();
+      await expect(form.getByRole('button', { name: 'Save profile' })).toBeEnabled();
+      await form.getByRole('button', { name: 'Save profile' }).click();
+      await expect(form).toHaveCount(0);
+      expect(writes.at(-1)).toEqual({
+        path: '/agents/a1',
+        body: {
+          name: 'Researcher',
+          purpose: 'Researches topics and drafts briefs',
+          avatarColor: 'teal',
+          avatarIcon: 'file'
+        }
+      });
+      const headingAvatar = page.locator('.agent-heading .avatar');
+      await expect(headingAvatar).toHaveAttribute('style', /agent-3-bg/);
+      await expect(headingAvatar.locator('path')).toHaveAttribute('d', documentPath!);
+      await page.reload();
+      await expect(headingAvatar).toHaveAttribute('style', /agent-3-bg/);
+      await profile.getByRole('button', { name: 'Edit', exact: true }).click();
+      await form.getByRole('radio', { name: 'Sky', exact: true }).check();
+      await form.getByRole('radio', { name: 'Shield', exact: true }).check();
+      const beforeDiscard = writes.length;
+      await form.getByRole('button', { name: 'Discard changes' }).click();
+      expect(writes).toHaveLength(beforeDiscard);
+      await expect(headingAvatar.locator('path')).toHaveAttribute('d', documentPath!);
+      await profile.getByRole('button', { name: 'Edit', exact: true }).click();
+      await expect(form.getByRole('radio', { name: 'Document', exact: true })).toBeChecked();
+      await form.getByRole('button', { name: 'Reset appearance' }).click();
+      await expect(preview.locator('.avatar')).toHaveAttribute('style', defaultStyle!);
+      const box = await form.boundingBox();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+        width
+      );
+      await expect(form.getByRole('radio', { name: 'Robot', exact: true })).toBeVisible();
+      await page.screenshot({ path: testInfo.outputPath('appearance.png'), fullPage: true });
+      await form.getByRole('button', { name: 'Save profile' }).click();
+      expect(writes.at(-1)?.body).toMatchObject({ avatarColor: null, avatarIcon: null });
+      await expect(headingAvatar).toHaveAttribute('style', defaultStyle!);
+      expect(writes.some((write) => write.path.endsWith('/config'))).toBe(false);
+      expect(errors).toEqual([]);
+    });
+  }
+}
