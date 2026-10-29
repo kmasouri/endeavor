@@ -84,7 +84,7 @@ export interface Conversation {
   unreadCount?: number;
 }
 
-export interface Member {
+export interface Member extends AgentAppearance {
   deleted?: boolean;
   participant: ParticipantRef;
   name: string;
@@ -107,7 +107,7 @@ export interface Message {
   createdAt: string;
 }
 
-export interface DirectoryEntry {
+export interface DirectoryEntry extends AgentAppearance {
   id: string;
   name: string;
   purpose: string;
@@ -145,7 +145,25 @@ export interface AgentVersion {
   createdAt: string;
 }
 
-export interface Agent {
+export const AGENT_AVATAR_COLORS = ['lime', 'sky', 'teal'] as const;
+export const AGENT_AVATAR_ICONS = [
+  'agents',
+  'search',
+  'check',
+  'file',
+  'work',
+  'connections',
+  'approvals',
+  'catalogs',
+  'setup',
+  'schedules'
+] as const;
+export interface AgentAppearance {
+  avatarColor?: (typeof AGENT_AVATAR_COLORS)[number] | null;
+  avatarIcon?: (typeof AGENT_AVATAR_ICONS)[number] | null;
+}
+
+export interface Agent extends AgentAppearance {
   id: string;
   name: string;
   purpose: string;

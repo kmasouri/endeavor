@@ -72,6 +72,9 @@
       you: member.participant.id === props.meId
     }))
   );
+  const appearanceOf = (id: string | null) =>
+    props.members.find((member) => member.participant.type === 'agent' && member.participant.id === id)
+      ?? props.directory.find((agent) => agent.id === id);
   const copy = async (message: Message) => {
     try {
       await navigator.clipboard.writeText(message.body);
@@ -141,7 +144,7 @@
           >
           <Avatar
             name={replyName}
-            id={replyTo.authorId ?? 'platform'}
+            id={replyTo.authorId ?? 'platform'} appearance={appearanceOf(replyTo.authorId)}
             agent={replyTo.authorType === 'agent'}
             size="sm"
           />
@@ -154,11 +157,11 @@
           <ParticipantProfile {name} id={message.authorId} agent={message.authorType === 'agent'} meId={props.meId}
             member={props.members.find((member) => member.participant.id === message.authorId && member.participant.type === message.authorType)}
             directory={message.authorType === 'agent' ? props.directory.find((entry) => entry.id === message.authorId) : undefined} avatar>
-            <Avatar {name} id={message.authorId} agent={message.authorType === 'agent'} size="lg" />
+            <Avatar {name} id={message.authorId} appearance={appearanceOf(message.authorId)} agent={message.authorType === 'agent'} size="lg" />
           </ParticipantProfile>
         {:else if !grouped}<Avatar
             {name}
-            id={message.authorId ?? 'platform'}
+            id={message.authorId ?? 'platform'} appearance={appearanceOf(message.authorId)}
             agent={message.authorType === 'agent'}
             size="lg"
           />{/if}

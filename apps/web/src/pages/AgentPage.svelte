@@ -85,7 +85,7 @@
   {#if !loadedAgent && !agent.error}<p>Loading agent…</p>{:else if loadedAgent}
     <header class="agent-detail-header">
       <div class="agent-heading">
-        <Avatar name={loadedAgent.name} id={loadedAgent.id} agent />
+        <Avatar name={loadedAgent.name} id={loadedAgent.id} appearance={loadedAgent} agent />
         <div>
           <div class="row wrap">
             <h1>{loadedAgent.name}</h1>
@@ -190,6 +190,7 @@
         <div>
           {#if editingProfile}<Profile
               agent={loadedAgent}
+              onDiscard={() => (editingProfile = false)}
               onSaved={() => {
                 editingProfile = false;
                 agent.reload();
@@ -199,6 +200,7 @@
                 <h2>Profile</h2>
                 <button class="text-button" onclick={() => (editingProfile = true)}>Edit</button>
               </div>
+              <div class="row"><Avatar name={loadedAgent.name} id={loadedAgent.id} appearance={loadedAgent} agent size="lg" /><span>Appearance</span></div>
               <dl class="agent-kv">
                 <dt>Name</dt>
                 <dd>{loadedAgent.name}</dd>

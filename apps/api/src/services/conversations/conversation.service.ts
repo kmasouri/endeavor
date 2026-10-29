@@ -11,6 +11,7 @@ import { addressedAgentIds } from './addressing.rules';
 import { canonicalConversationName } from '../../shared/conversation-name';
 import { AppError } from '../../shared/errors';
 import {
+  AgentAppearance,
   Conversation,
   ConversationDocument,
   ConversationMember,
@@ -19,7 +20,7 @@ import {
   ParticipantRef
 } from '../../shared/types';
 
-export interface MemberDetails extends ConversationMember {
+export interface MemberDetails extends ConversationMember, AgentAppearance {
   deleted?: boolean;
   name: string;
   // An agent's purpose, so participants know whom to ask. null for humans.
@@ -345,7 +346,9 @@ export class ConversationService {
             ...member,
             name: agent?.name ?? 'Unknown agent',
             deleted: Boolean(agent?.deletedAt),
-            purpose: agent?.purpose ?? null
+            purpose: agent?.purpose ?? null,
+            avatarColor: agent?.avatarColor ?? null,
+            avatarIcon: agent?.avatarIcon ?? null
           };
         }
         const human = await this.humanRepository.getById(member.participant.id);

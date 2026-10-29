@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type Task } from '../api';
+  import { api, type AgentAppearance, type Task } from '../api';
   import Avatar from '../Avatar.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import StateBadge from '../StateBadge.svelte';
@@ -11,6 +11,7 @@
     conversationTitle,
     agentId,
     agentName,
+    appearance,
     costs,
     onSelect
   }: {
@@ -18,6 +19,7 @@
     conversationTitle: string;
     agentId: string;
     agentName: string;
+    appearance?: AgentAppearance;
     costs: { taskId: string; costUsd: number }[];
     onSelect: (taskId: string) => void;
   } = $props();
@@ -33,7 +35,7 @@
 </script>
 
 <div class="history-scope">
-  <div class="row"><Avatar name={agentName} id={agentId} agent /><strong>{agentName}</strong></div>
+  <div class="row"><Avatar name={agentName} id={agentId} {appearance} agent /><strong>{agentName}</strong></div>
   <p class="caption muted">Only {agentName}'s runs in {conversationName(conversationTitle)}, newest first.</p>
 </div>
 {#if history.error}

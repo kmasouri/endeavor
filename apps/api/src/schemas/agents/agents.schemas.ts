@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MODEL_PROVIDERS } from '../../shared/types';
+import { AGENT_AVATAR_COLORS, AGENT_AVATAR_ICONS, MODEL_PROVIDERS } from '../../shared/types';
 
 export const agentParamsSchema = z.object({
   agentId: z.uuid()
@@ -31,6 +31,8 @@ export const updateAgentProfileBodySchema = z
   .strictObject({
     name: z.string().trim().min(1).max(80).optional(),
     purpose: z.string().trim().min(1).optional(),
+    avatarColor: z.enum(AGENT_AVATAR_COLORS).nullable().optional(),
+    avatarIcon: z.enum(AGENT_AVATAR_ICONS).nullable().optional(),
     // US dollars per calendar month across all this agent's work. null removes the cap.
     monthlyBudgetUsd: z.number().positive().max(100_000).nullable().optional()
   })

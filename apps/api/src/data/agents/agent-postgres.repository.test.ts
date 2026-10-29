@@ -73,3 +73,56 @@ describe('agent deletion transaction', () => {
     expect(client.release).toHaveBeenCalledWith(true);
   });
 });
+
+it('saves and resets appearance independently without changing the configuration version', async () => {
+  const row = {
+    id: 'a',
+    name: 'Researcher',
+    purpose: 'Research',
+    avatar_color: 'teal',
+    avatar_icon: 'file',
+    current_version_id: 'v1',
+    monthly_budget_usd: null,
+    disabled_at: null,
+    deleted_at: null
+  };
+  const db = { query: jest.fn().mockResolvedValue({ rows: [row] }) };
+  const repository = new AgentPostgresRepository(db as unknown as FastifyInstance['pg']);
+  const saved = await repository.update('a', { avatarColor: 'teal', avatarIcon: 'file' });
+  expect(saved).toMatchObject({ avatarColor: 'teal', avatarIcon: 'file', currentVersionId: 'v1' });
+  expect(db.query.mock.calls[0][1]).toEqual([
+    'a',
+    null,
+    null,
+    false,
+    null,
+    true,
+    'teal',
+    true,
+    'file'
+  ]);
+  await repository.update('a', { avatarColor: null });
+  expect(db.query.mock.calls[1][1]).toEqual([
+    'a',
+    null,
+    null,
+    false,
+    null,
+    true,
+    null,
+    false,
+    null
+  ]);
+  await repository.update('a', { name: 'Renamed' });
+  expect(db.query.mock.calls[2][1]).toEqual([
+    'a',
+    'Renamed',
+    null,
+    false,
+    null,
+    false,
+    null,
+    false,
+    null
+  ]);
+});

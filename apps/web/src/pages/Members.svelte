@@ -26,7 +26,7 @@
     ...members.map((member) => key(member.participant.type, member.participant.id)), ...added
   ]));
   let choices = $derived([
-    ...(people.data ?? []).map((person) => ({ ...person, type: 'human', purpose: 'Person' })),
+    ...(people.data ?? []).map((person) => ({ ...person, type: 'human', purpose: 'Person', avatarColor: null, avatarIcon: null })),
     ...(directory.data ?? []).map((agent) => ({ ...agent, type: 'agent' }))
   ].filter((person) => !inside.has(key(person.type, person.id))));
   let filtered = $derived(choices.filter((person) =>
@@ -59,7 +59,7 @@
         {#each members as member (`${member.participant.type}:${member.participant.id}`)}
           <div class="row endeavor-member">
             <ParticipantProfile name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} meId={me.id} {member} directory={directory.data?.find((entry) => entry.id === member.participant.id)} avatar>
-              <Avatar name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} />
+              <Avatar name={member.name} id={member.participant.id} appearance={member} agent={member.participant.type === 'agent'} />
             </ParticipantProfile>
             <span class="grow"><span class="row"><ParticipantProfile name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} meId={me.id} {member} directory={directory.data?.find((entry) => entry.id === member.participant.id)}>
                 <strong>{member.name}</strong>
@@ -80,7 +80,7 @@
       <div class="endeavor-members">
         {#each filtered as person (`${person.type}:${person.id}`)}
           <label class="check endeavor-member">
-            <Avatar name={person.name} id={person.id} agent={person.type === 'agent'} />
+            <Avatar name={person.name} id={person.id} appearance={person} agent={person.type === 'agent'} />
             <span class="grow"><span class="row"><strong>{person.name}</strong></span><span class="caption muted">{person.purpose}</span></span>
             <input type="checkbox" aria-label={`Add ${person.name}`} checked={selected.includes(key(person.type, person.id))} onchange={() => toggle(key(person.type, person.id))} />
           </label>

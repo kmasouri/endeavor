@@ -277,9 +277,11 @@ describe('AgentService', () => {
     expect(listed[0].currentVersion?.id).toBe('v1');
   });
 
-  it('lists the directory with purpose and capabilities only', async () => {
+  it('lists the directory with appearance, purpose and capabilities only', async () => {
     const { service, agents } = setup();
-    agents.listDirectory.mockResolvedValue([agent]);
+    agents.listDirectory.mockResolvedValue([
+      { ...agent, avatarColor: 'sky', avatarIcon: 'search' }
+    ]);
     agents.countDirectory.mockResolvedValue(1);
 
     const { entries, total } = await service.listDirectory(ADMIN_ID, { limit: 10, offset: 0 });
@@ -291,6 +293,8 @@ describe('AgentService', () => {
         id: AGENT_ID,
         name: 'QA',
         purpose: 'Tests the staging site',
+        avatarColor: 'sky',
+        avatarIcon: 'search',
         capabilities: {
           provider: 'anthropic',
           model: 'claude-opus-5-5',
@@ -472,4 +476,16 @@ describe('AgentService', () => {
       ['scripted', true]
     ]);
   });
+});
+
+it('updates appearance as profile data without creating a version or changing grants', async () => {
+  const { service, agents } = setup();
+  agents.update.mockResolvedValue({ ...agent, avatarColor: 'teal', avatarIcon: 'file' });
+  const result = await service.updateProfile(ADMIN_ID, AGENT_ID, {
+    avatarColor: 'teal',
+    avatarIcon: 'file'
+  });
+  expect(result).toMatchObject({ avatarColor: 'teal', avatarIcon: 'file', currentVersionId: 'v1' });
+  expect(agents.update).toHaveBeenCalledWith(AGENT_ID, { avatarColor: 'teal', avatarIcon: 'file' });
+  expect(agents.addVersion).not.toHaveBeenCalled();
 });
