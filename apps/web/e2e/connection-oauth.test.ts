@@ -65,6 +65,9 @@ async function mockOAuth(page: Page, theme = 'dark') {
   });
   return {
     writes,
+    setAuthenticated: (value: boolean) => {
+      authenticated = value;
+    },
     failSignIn: (value: boolean) => {
       failSignIn = value;
     }
@@ -127,6 +130,15 @@ for (const width of [320, 390, 900, 1280]) {
       await expect(page.getByText('No credential', { exact: true })).toHaveCount(0);
       await checkLayout();
       await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+      await expect(page.getByRole('status')).toHaveText('Disconnected.');
+      await expect(page.getByRole('button', { name: 'Disconnect', exact: true })).toBeDisabled();
+      await checkLayout();
+      if (theme === 'dark' && (width === 390 || width === 1280)) {
+        await page.screenshot({
+          path: test.info().outputPath('auth-feedback.png'),
+          fullPage: true
+        });
+      }
       await expect(header.getByText('Authentication required', { exact: true })).toBeVisible();
       await expect(
         page.getByText('Signed in. Discover tools and choose the access this connection allows.', {
@@ -154,9 +166,7 @@ test('Notion can be created and signed in from the new connection screen', async
   await expect(page.getByLabel('Credential', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Create and sign in', exact: true }).click();
   await page.getByRole('link', { name: 'Allow Notion access' }).click();
-  await expect(
-    page.locator('.page-header').getByText('Enabled', { exact: true })
-  ).toBeVisible();
+  await expect(page.locator('.page-header').getByText('Enabled', { exact: true })).toBeVisible();
   expect(api.writes.map((write) => write.path)).toEqual([
     '/connections',
     '/connections/c1/oauth/connect'
@@ -190,9 +200,7 @@ test('failed OAuth setup retains the saved connection and retry never creates a 
   api.failSignIn(false);
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByRole('link', { name: 'Allow Notion access' }).click();
-  await expect(
-    page.locator('.page-header').getByText('Enabled', { exact: true })
-  ).toBeVisible();
+  await expect(page.locator('.page-header').getByText('Enabled', { exact: true })).toBeVisible();
   expect(api.writes.filter((write) => write.path === '/connections')).toHaveLength(1);
 });
 
@@ -225,4 +233,122 @@ test('switching from MCP OAuth to HTTP resets authentication and omits hidden cr
   expect(api.writes).toHaveLength(1);
   expect(api.writes[0].body).toMatchObject({ authMethod: 'none' });
   expect(api.writes[0].body).not.toHaveProperty('credential');
+});
+
+test('refresh status shows progress, confirms unchanged state, and recovers from errors', async ({
+  page
+}) => {
+  const api = await mockOAuth(page);
+  await page.goto('/app/#/connections/c1');
+  const disconnect = page.getByRole('button', { name: 'Disconnect', exact: true });
+  await expect(disconnect).toBeDisabled();
+  await expect(page.getByText('Not signed in. Sign in to connect.')).toBeVisible();
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/connections/c1', async (route) => {
+    await held;
+    await route.fallback();
+  });
+  const refresh = page.getByRole('button', { name: 'Refresh status', exact: true });
+  await refresh.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('button', { name: 'Refreshing…', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeDisabled();
+  release();
+  await expect(page.getByRole('status')).toHaveText('Status refreshed.');
+  await expect(disconnect).toBeDisabled();
+  await page.route('**/connections/c1', (route) =>
+    route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message: 'Status is temporarily unavailable.' } })
+    })
+  );
+  await refresh.click();
+  await expect(page.getByText('Status is temporarily unavailable.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('status')).toBeEmpty();
+  await expect(refresh).toBeEnabled();
+  await page.unroute('**/connections/c1');
+  api.setAuthenticated(true);
+  await refresh.click();
+  await expect(page.getByRole('status')).toHaveText('Status refreshed.');
+  await expect(page.getByText('Status is temporarily unavailable.', { exact: true })).toHaveCount(
+    0
+  );
+  await expect(page.locator('.page-header .management-status')).toHaveText('Enabled');
+  await expect(disconnect).toBeEnabled();
+  expect(api.writes).toEqual([]);
+});
+
+test('disconnect shows progress and preserves authentication on failure before retry', async ({
+  page
+}) => {
+  const api = await mockOAuth(page);
+  api.setAuthenticated(true);
+  await page.goto('/app/#/connections/c1');
+  const disconnect = page.getByRole('button', { name: 'Disconnect', exact: true });
+  await expect(disconnect).toBeEnabled();
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/connections/c1/oauth/disconnect', async (route) => {
+    await held;
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message: 'Disconnect failed. Try again.' } })
+    });
+  });
+  await disconnect.click();
+  await expect(page.getByRole('button', { name: 'Disconnecting…', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Refresh status', exact: true })).toBeDisabled();
+  release();
+  await expect(page.getByText('Disconnect failed. Try again.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('status')).toBeEmpty();
+  await expect(disconnect).toBeEnabled();
+  await expect(page.locator('.page-header .management-status')).toHaveText('Enabled');
+  await page.unroute('**/connections/c1/oauth/disconnect');
+  await disconnect.click();
+  await expect(page.getByRole('status')).toHaveText('Disconnected.');
+  await expect(disconnect).toBeDisabled();
+  await expect(page.locator('.page-header .management-status')).toHaveText(
+    'Authentication required'
+  );
+  await expect(page.getByText('Disconnect failed. Try again.', { exact: true })).toHaveCount(0);
+  expect(api.writes).toEqual([{ path: '/connections/c1/oauth/disconnect', body: {} }]);
+});
+
+test('disconnect waits for the updated status and does not report success when reload fails', async ({
+  page
+}) => {
+  const api = await mockOAuth(page);
+  api.setAuthenticated(true);
+  await page.goto('/app/#/connections/c1');
+  await expect(page.getByRole('button', { name: 'Disconnect', exact: true })).toBeEnabled();
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/connections/c1', async (route) => {
+    await held;
+    await route.fulfill({
+      status: 503,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: { message: 'Could not load connection.' } })
+    });
+  });
+  await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await expect.poll(() => api.writes.length).toBe(1);
+  await expect(page.getByRole('button', { name: 'Disconnecting…', exact: true })).toBeDisabled();
+  release();
+  await expect(page.getByText('Could not load connection.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('status')).toBeEmpty();
+  await page.unroute('**/connections/c1');
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
+  await expect(page.getByRole('status')).toHaveText('Status refreshed.');
+  await expect(page.getByRole('button', { name: 'Disconnect', exact: true })).toBeDisabled();
+  expect(api.writes).toHaveLength(1);
 });

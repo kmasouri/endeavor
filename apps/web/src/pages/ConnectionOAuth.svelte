@@ -6,12 +6,15 @@
   import { createAction } from '../state.svelte';
 
   let { connection, onChanged, startSignIn = false }: {
-    connection: Connection; onChanged: () => void; startSignIn?: boolean;
+    connection: Connection; onChanged: () => Promise<boolean>; startSignIn?: boolean;
   } = $props();
   const action = createAction();
   let active = true;
   let connecting = $state(false);
+  let pending = $state<'refresh' | 'disconnect' | null>(null);
+  let feedback = $state('');
   async function signIn() {
+    feedback = '';
     connecting = true;
     try {
       const result = await api.post<{ authorizationUrl: string }>(`/connections/${connection.id}/oauth/connect`);
@@ -27,10 +30,24 @@
     return () => { active = false; };
   });
   function connect() { void action.run(signIn); }
+  function refresh() {
+    void action.run(async () => {
+      feedback = '';
+      pending = 'refresh';
+      try {
+        const loaded = await onChanged();
+        if (active && loaded) feedback = 'Status refreshed.';
+      } finally { pending = null; }
+    });
+  }
   function disconnect() {
     void action.run(async () => {
-      await api.post(`/connections/${connection.id}/oauth/disconnect`);
-      if (active) onChanged();
+      feedback = '';
+      pending = 'disconnect';
+      try {
+        await api.post(`/connections/${connection.id}/oauth/disconnect`);
+        if (active && await onChanged()) feedback = 'Disconnected.';
+      } finally { pending = null; }
     });
   }
 </script>
@@ -43,11 +60,15 @@
       <button type="button" disabled={action.busy || Boolean(connection.disabledAt)} onclick={connect}>
         {connecting ? 'Connecting…' : isAuthenticated(connection) && authenticationMethod(connection) === 'oauth' ? 'Sign in again' : 'Sign in'}
       </button>
-      <button type="button" class="secondary" disabled={action.busy} onclick={onChanged}>Refresh status</button>
+      <button type="button" class="secondary" disabled={action.busy} onclick={refresh}>{pending === 'refresh' ? 'Refreshing…' : 'Refresh status'}</button>
       {#if authenticationMethod(connection) === 'oauth'}
-        <button type="button" class="secondary" disabled={action.busy} onclick={disconnect}>Disconnect</button>
+        <button type="button" class="secondary" disabled={action.busy || !isAuthenticated(connection)} onclick={disconnect}>{pending === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}</button>
       {/if}
     </div>
+    {#if authenticationMethod(connection) === 'oauth' && !isAuthenticated(connection)}
+      <p class="muted small">Not signed in. Sign in to connect.</p>
+    {/if}
+    <p class="muted small" role="status">{feedback}</p>
     <ErrorNote error={action.error} />
   </div>
 </details>
