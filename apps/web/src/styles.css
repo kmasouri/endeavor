@@ -1426,6 +1426,10 @@ progress::-webkit-progress-value {
   align-items: center;
   flex-wrap: nowrap;
 }
+.app-brand > button,
+.app-bar > button {
+  align-self: center;
+}
 .search-launch {
   width: 100%;
   max-width: 360px;
