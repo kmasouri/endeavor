@@ -143,6 +143,13 @@ The runner is not an agent and makes no decisions about the work. It runs in the
 2. Wakes waiting tasks whose waits are all resolved.
 3. Claims working tasks with a lease, and runs up to 8 model turns on each.
 
+Claimed tasks run in the background, up to the runner's concurrency limit. Polls keep
+processing schedules, messages and approvals while those tasks wait on models; they only
+claim additional tasks when a slot is free. A task's model turns still run in order.
+Model turns record which events they saw. If an update arrives during a request or tool
+batch, remaining actions from the older response are skipped so the next turn reads the
+update. A follow-up during a completion check prevents that older result from completing.
+
 Everything it does is written to the task's events: model turns, tool results, failed model calls, and messages received. The model transcript is rebuilt from those events, so after a restart the task picks up where it stopped. A tool call that was asked for but never run is run first. Message tool calls use the tool call ID as the message's `client_key`, so running a call again doesn't post twice.
 
 Before each queued tool, the runner rechecks the task's working state, pause flag, pinned
@@ -160,7 +167,20 @@ Limits:
 
 - A task is blocked after 40 model turns, or at its agent version's own limits (`docs/agents.md`).
 - A failed model call that can be retried waits 5 s, then 10 s. After 3 failures, the task is blocked.
+- Each model request, including a completion check, has a `MODEL_TIMEOUT_MS` deadline
+  (120 seconds by default). The remaining task working-time budget can shorten it. A model
+  timeout uses the retry rule above; exhausting the task time budget blocks immediately.
+- A completion provider failure is recorded as `completion.failed` and retries the same
+  pending tool after 5 s, then 10 s. After three failures it blocks for a person; it is never
+  recorded as a failed criteria verdict. Successful checks still save `completion.checked`.
 - A model that keeps ending its turn without finishing gets two nudges, then the task is blocked.
+
+During a model request, the runner polls task control and lease ownership about once a second
+(more often for short leases). Pause, cancel, version migration, lease loss and server shutdown
+cancel the request without consuming a provider retry. Provider abort signals stop supported
+clients; a runner-side deadline also bounds clients that ignore cancellation. Late results
+are discarded. Shutdown stops new polls, cancels model requests, and drains active tasks before
+closing repositories.
 
 ## Live agent activity
 

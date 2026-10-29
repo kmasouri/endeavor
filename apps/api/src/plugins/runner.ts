@@ -105,7 +105,8 @@ const runnerPlugin: FastifyPluginAsync = async (fastify) => {
       workerId: `${hostname()}:${process.pid}`,
       completionCheck: config.COMPLETION_CHECK,
       prices: config.MODEL_PRICES,
-      taskBudgetUsd: config.TASK_BUDGET_USD
+      taskBudgetUsd: config.TASK_BUDGET_USD,
+      modelTimeoutMs: config.MODEL_TIMEOUT_MS
     },
     new McpHttpClient(),
     new ConnectionOAuthPostgresRepository(fastify.pg, new CredentialCipher(config.CREDENTIALS_KEY)),
@@ -113,17 +114,23 @@ const runnerPlugin: FastifyPluginAsync = async (fastify) => {
   );
   fastify.decorate('taskRunnerService', runner);
 
-  if (!config.RUNNER_ENABLED) {
-    return;
-  }
-
-  const logger = new TaskRunnerLogger(fastify.log);
   let timer: NodeJS.Timeout | undefined;
   let stopped = false;
+  let activeTick: Promise<void> | undefined;
+  // Abort model requests while repositories are still available, then release their leases.
+  fastify.addHook('preClose', async () => {
+    stopped = true;
+    clearTimeout(timer);
+    runner.stop();
+    await activeTick;
+    await runner.drain();
+  });
+  if (!config.RUNNER_ENABLED) return;
+  const logger = new TaskRunnerLogger(fastify.log);
   // Each tick starts after the last one ends, so ticks never overlap.
-  const loop = async () => {
+  const runTick = async () => {
     try {
-      await runner.tick();
+      await runner.tick({ waitForTasks: false });
     } catch (error) {
       logger.onTickFailed(error);
     }
@@ -131,13 +138,12 @@ const runnerPlugin: FastifyPluginAsync = async (fastify) => {
       timer = setTimeout(loop, config.RUNNER_INTERVAL_MS);
     }
   };
+  const loop = () => {
+    activeTick = runTick();
+  };
 
   fastify.addHook('onReady', async () => {
     timer = setTimeout(loop, 0);
-  });
-  fastify.addHook('onClose', async () => {
-    stopped = true;
-    clearTimeout(timer);
   });
 };
 

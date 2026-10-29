@@ -96,6 +96,7 @@ The app checks all of these at startup, in `apps/api/src/config.ts`.
 | `OPENAI_BASE_URL`       | `https://api.openai.com/v1` | OpenAI-compatible API address. It must support the Responses API.                                    |
 | `RUNNER_ENABLED`        | `true`                      | Run the runner, which delivers messages and runs agents' work. Always off in tests.                  |
 | `RUNNER_INTERVAL_MS`    | `2000`                      | How often the runner checks for work, in milliseconds.                                               |
+| `MODEL_TIMEOUT_MS`      | `120000`                    | Model/completion deadline in ms (1–3600000), capped by the task working-time budget.                 |
 | `WORKSPACES_DIR`        | `workspaces`                | Folder for agents' files, one subfolder per task.                                                    |
 | `EXECUTOR_HOST`         | `0.0.0.0`                   | Execution service listen address; no host port in Compose.                                           |
 | `EXECUTOR_PORT`         | `3200`                      | Execution service port.                                                                              |
