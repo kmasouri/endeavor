@@ -100,7 +100,7 @@
             <span class="schedule-description">
               <strong>{schedule.title}</strong>
               <span class="schedule-meta"><Avatar name={name({ type: 'agent', id: schedule.agentId })} id={schedule.agentId} agent size="sm" />
-                {name({ type: 'agent', id: schedule.agentId })} <span class="agent-label">agent</span>
+                {name({ type: 'agent', id: schedule.agentId })}
                 <span>· {summarizeRecurrence(schedule, timeDisplay.format === '12h')}</span>
               </span>
             </span>

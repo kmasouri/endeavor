@@ -177,7 +177,6 @@
             <Avatar name={member.name} id={member.id} agent={member.type === 'agent'} />
             <span class="grow"
               >{member.name}
-              {#if member.type === 'agent'}<span class="agent-label">agent</span>{/if}
               {#if member.purpose}<span class="picker-purpose caption muted">{member.purpose}</span
                 >{/if}</span
             >
