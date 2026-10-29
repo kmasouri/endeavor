@@ -2,10 +2,8 @@ import { createHash, randomBytes } from 'node:crypto';
 import { ConnectionOAuthSession } from '../../shared/connection-oauth';
 import {
   ConnectionOAuthRepository,
-  AgentRepository,
-  AgentConfigConflictError,
+  ConnectionRepository,
   CatalogNameConflictError,
-  CatalogRepository,
   HumanRepository
 } from '../../data';
 import {
@@ -14,21 +12,10 @@ import {
   McpClient,
   McpTool
 } from '../../integrations';
-import { CatalogLogger } from '../../observability';
+import { ConnectionLogger } from '../../observability';
+import { Connection, HttpMethod } from '../../shared/types';
 import { ADMIN_ONLY, requireHuman } from '../access/access.rules';
 import { AppError } from '../../shared/errors';
-import {
-  AgentGrant,
-  Connection,
-  GrantTargetType,
-  HttpMethod,
-  Skill,
-  SkillVersion
-} from '../../shared/types';
-
-export interface SkillDetails extends Skill {
-  currentVersion: SkillVersion | null;
-}
 
 export interface ConnectionChanges {
   authMethod?: 'none' | 'header' | 'oauth';
@@ -46,16 +33,12 @@ export interface ConnectionChanges {
   discoverable?: boolean;
 }
 
-// The shared catalogs: reusable skills and connections that admins define once. Being in a
-// catalog gives no agent access. Access comes from per-agent grants, which can be revoked at
-// any time and are checked on every tool call.
-export class CatalogService {
+export class ConnectionService {
   constructor(
-    private readonly catalogRepository: CatalogRepository,
-    private readonly agentRepository: AgentRepository,
+    private readonly connectionRepository: ConnectionRepository,
     private readonly humanRepository: HumanRepository,
     private readonly credentialsReady: boolean,
-    private readonly catalogLogger: CatalogLogger,
+    private readonly connectionLogger: ConnectionLogger,
     private readonly mcpClient?: McpClient,
     private readonly oauthRepository?: ConnectionOAuthRepository,
     private readonly oauthClient?: ConnectionOAuthClient,
@@ -96,7 +79,7 @@ export class CatalogService {
     const callbackUrl = new URL(`/connections/${connection.id}/oauth/callback`, this.publicUrl)
       .href;
     const result = await this.oauthRepository.withLock(connection.id, async () => {
-      await this.catalogRepository.updateConnection(connection.id, { authMethod: 'oauth' });
+      await this.connectionRepository.updateConnection(connection.id, { authMethod: 'oauth' });
       const session: ConnectionOAuthSession = {
         resource: connection.baseUrl,
         callbackUrl,
@@ -117,7 +100,7 @@ export class CatalogService {
         );
       }
     });
-    this.catalogLogger.onConnectionAuthentication(connectionId, 'pending');
+    this.connectionLogger.onConnectionAuthentication(connectionId, 'pending');
     return result;
   }
 
@@ -163,7 +146,7 @@ export class CatalogService {
         return { session, result: false };
       }
     });
-    this.catalogLogger.onConnectionAuthentication(
+    this.connectionLogger.onConnectionAuthentication(
       connectionId,
       connected ? 'connected' : 'reconnect_required'
     );
@@ -191,7 +174,7 @@ export class CatalogService {
           : null,
         result: undefined
       }));
-    this.catalogLogger.onConnectionAuthentication(connectionId, 'disconnected');
+    this.connectionLogger.onConnectionAuthentication(connectionId, 'disconnected');
     return { status: 'disconnected' };
   }
 
@@ -232,7 +215,7 @@ export class CatalogService {
       if (result) return result;
     }
     if (connection.authMethod === 'oauth') throw new AppError('connectionSignInRequired');
-    const credential = await this.catalogRepository.getConnectionCredential(connection.id);
+    const credential = await this.connectionRepository.getConnectionCredential(connection.id);
     if (connection.authMethod === 'header' && !credential) {
       throw new AppError(
         'validationError',
@@ -270,114 +253,6 @@ export class CatalogService {
     return { ...connection, authMethod, authenticated };
   }
 
-  // Skills
-
-  async createSkill(
-    actorId: string,
-    input: { name: string; description: string; instructions: string; discoverable?: boolean }
-  ): Promise<SkillDetails> {
-    const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
-    const { skill, version } = await this.catalogRepository
-      .createSkill(
-        { name: input.name, description: input.description, discoverable: input.discoverable },
-        {
-          instructions: input.instructions,
-          createdByHumanId: admin.id
-        }
-      )
-      .catch(toNameTaken);
-    this.catalogLogger.onSkillSaved(skill.id, version.version);
-    return { ...skill, currentVersion: version };
-  }
-
-  async listSkills(input: {
-    limit: number;
-    offset: number;
-  }): Promise<{ skills: SkillDetails[]; total: number }> {
-    const [skills, total] = await Promise.all([
-      this.catalogRepository.listSkills(input),
-      this.catalogRepository.countSkills()
-    ]);
-    const versions = new Map(
-      (
-        await this.catalogRepository.getSkillVersions(
-          skills.flatMap((skill) => skill.currentVersionId ?? [])
-        )
-      ).map((version) => [version.id, version])
-    );
-    return {
-      skills: skills.map((skill) => ({
-        ...skill,
-        currentVersion: versions.get(skill.currentVersionId ?? '') ?? null
-      })),
-      total
-    };
-  }
-
-  async getSkill(skillId: string): Promise<SkillDetails> {
-    const skill = await this.requireSkill(skillId);
-    const [currentVersion] = await this.catalogRepository.getSkillVersions(
-      skill.currentVersionId ? [skill.currentVersionId] : []
-    );
-    return { ...skill, currentVersion: currentVersion ?? null };
-  }
-
-  async listSkillVersions(skillId: string): Promise<SkillVersion[]> {
-    await this.requireSkill(skillId);
-    return this.catalogRepository.listSkillVersions(skillId);
-  }
-
-  // A new version is used by agent configurations saved after it. Configurations already saved
-  // keep the version they pinned.
-  async addSkillVersion(
-    actorId: string,
-    skillId: string,
-    changes: { instructions?: string }
-  ): Promise<SkillDetails> {
-    const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
-    const skill = await this.getSkill(skillId);
-    const instructions = changes.instructions ?? skill.currentVersion?.instructions;
-    if (instructions === undefined) {
-      throw new AppError(
-        'validationError',
-        'This skill has no version yet, so instructions are needed'
-      );
-    }
-
-    const version = await this.catalogRepository.addSkillVersion(skill.id, {
-      instructions,
-      createdByHumanId: admin.id
-    });
-    this.catalogLogger.onSkillSaved(skill.id, version.version);
-    return { ...skill, currentVersionId: version.id, currentVersion: version };
-  }
-
-  async setSkillDisabled(
-    actorId: string,
-    skillId: string,
-    disabled: boolean
-  ): Promise<SkillDetails> {
-    requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
-    await this.requireSkill(skillId);
-    await this.catalogRepository.setSkillDisabled(skillId, disabled);
-    return this.getSkill(skillId);
-  }
-
-  // Discovery lets agents find the skill and ask for access. It grants nothing.
-  async updateSkill(
-    actorId: string,
-    skillId: string,
-    changes: { discoverable: boolean }
-  ): Promise<SkillDetails> {
-    requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
-    await this.requireSkill(skillId);
-    await this.catalogRepository.setSkillDiscoverable(skillId, changes.discoverable);
-    this.catalogLogger.onSkillDiscoveryChanged(skillId, changes.discoverable);
-    return this.getSkill(skillId);
-  }
-
-  // Connections
-
   async createConnection(
     actorId: string,
     input: {
@@ -399,7 +274,7 @@ export class CatalogService {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     this.validateAuthentication(input.kind ?? 'http', input.authMethod, input.credential);
     this.requireCredentialsKey(input.credential);
-    const connection = await this.catalogRepository
+    const connection = await this.connectionRepository
       .createConnection({
         authMethod: input.authMethod ?? (input.credential ? 'header' : 'none'),
         kind: input.kind ?? 'http',
@@ -420,7 +295,7 @@ export class CatalogService {
         createdByHumanId: admin.id
       })
       .catch(toNameTaken);
-    this.catalogLogger.onConnectionSaved(connection.id);
+    this.connectionLogger.onConnectionSaved(connection.id);
     return this.withAuthentication(connection);
   }
 
@@ -451,8 +326,8 @@ export class CatalogService {
     offset: number;
   }): Promise<{ connections: Connection[]; total: number }> {
     const [connections, total] = await Promise.all([
-      this.catalogRepository.listConnections(input),
-      this.catalogRepository.countConnections()
+      this.connectionRepository.listConnections(input),
+      this.connectionRepository.countConnections()
     ]);
     return {
       connections: await Promise.all(
@@ -502,7 +377,7 @@ export class CatalogService {
       changes = { ...changes, credential: null };
     this.requireCredentialsKey(changes.credential);
     const save = () =>
-      this.catalogRepository.updateConnection(connectionId, changes).catch(toNameTaken);
+      this.connectionRepository.updateConnection(connectionId, changes).catch(toNameTaken);
     const authenticationChanged =
       changes.authMethod !== undefined ||
       changes.baseUrl !== undefined ||
@@ -520,7 +395,7 @@ export class CatalogService {
             return { session: null, result: await save() };
           })
         : await save();
-    this.catalogLogger.onConnectionSaved(connectionId);
+    this.connectionLogger.onConnectionSaved(connectionId);
     return this.withAuthentication(updated ?? (await this.requireConnection(connectionId)));
   }
 
@@ -531,111 +406,9 @@ export class CatalogService {
   ): Promise<Connection> {
     requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     await this.requireConnection(connectionId);
-    const updated = await this.catalogRepository.setConnectionDisabled(connectionId, disabled);
+    const updated = await this.connectionRepository.setConnectionDisabled(connectionId, disabled);
     return this.withAuthentication(updated ?? (await this.requireConnection(connectionId)));
   }
-
-  // Grants
-
-  async listGrants(agentId: string, includeRevoked: boolean): Promise<AgentGrant[]> {
-    await this.requireAgent(agentId);
-    return this.catalogRepository.listGrants(agentId, { activeOnly: !includeRevoked });
-  }
-
-  async grant(
-    actorId: string,
-    agentId: string,
-    target: { type: GrantTargetType; id: string }
-  ): Promise<AgentGrant> {
-    const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
-    const agent = await this.agentRepository.getById(agentId);
-    if (!agent || agent.deletedAt)
-      throw new AppError('agentNotFound', `Agent ${agentId} was not found`);
-    const current = agent.currentVersionId
-      ? await this.agentRepository.getVersion(agent.currentVersionId)
-      : null;
-    if (!current)
-      throw new AppError('validationError', 'Configure this agent before granting ongoing access');
-    let skillVersionIds = current.skillVersionIds;
-    let connectionIds = current.connectionIds;
-    if (target.type === 'skill') {
-      const skill = await this.requireSkill(target.id);
-      if (skill.disabledAt || !skill.currentVersionId)
-        throw new AppError('catalogEntryUnavailable');
-      const chosen = await this.catalogRepository.getSkillVersions(skillVersionIds);
-      if (
-        !chosen.some(
-          (version) => skillVersionIds.includes(version.id) && version.skillId === skill.id
-        )
-      ) {
-        skillVersionIds = [...skillVersionIds, skill.currentVersionId];
-      }
-    } else {
-      const connection = await this.requireConnection(target.id);
-      if (connection.disabledAt) throw new AppError('catalogEntryUnavailable');
-      if (!connectionIds.includes(connection.id)) connectionIds = [...connectionIds, connection.id];
-    }
-    // Ongoing access is part of configuration. Existing tasks keep their explicit version pin.
-    const changed =
-      skillVersionIds !== current.skillVersionIds || connectionIds !== current.connectionIds;
-    if (changed) {
-      await this.agentRepository
-        .addVersion(
-          agentId,
-          {
-            instructions: current.instructions,
-            provider: current.provider,
-            model: current.model,
-            limits: current.limits,
-            skillVersionIds,
-            connectionIds,
-            createdByHumanId: admin.id
-          },
-          {
-            actorId: admin.id,
-            expectedVersionId: current.id,
-            grant: [{ type: target.type, id: target.id }],
-            revoke: []
-          }
-        )
-        .catch((error: unknown) => {
-          if (error instanceof AgentConfigConflictError)
-            throw new AppError('validationError', error.message);
-          throw error;
-        });
-    }
-
-    const grant = await this.catalogRepository.grant({
-      agentId,
-      targetType: target.type,
-      targetId: target.id,
-      grantedByHumanId: admin.id,
-      restoreRevoked: !changed
-    });
-    this.catalogLogger.onGranted(agentId, target.type, target.id);
-    return grant;
-  }
-
-  // Applies from the agent's next tool call, even in tasks on older configuration versions.
-  async revoke(
-    actorId: string,
-    agentId: string,
-    target: { type: GrantTargetType; id: string }
-  ): Promise<void> {
-    const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
-    await this.requireAgent(agentId);
-    const revoked = await this.catalogRepository.revoke({
-      agentId,
-      targetType: target.type,
-      targetId: target.id,
-      revokedByHumanId: admin.id
-    });
-    if (revoked) {
-      this.catalogLogger.onRevoked(agentId, target.type, target.id);
-    }
-  }
-
-  // Helpers
 
   private requireCredentialsKey(credential: string | null | undefined): void {
     if (typeof credential === 'string' && !this.credentialsReady) {
@@ -643,27 +416,12 @@ export class CatalogService {
     }
   }
 
-  private async requireSkill(skillId: string): Promise<Skill> {
-    const skill = await this.catalogRepository.getSkill(skillId);
-    if (!skill) {
-      throw new AppError('skillNotFound', `Skill ${skillId} was not found`);
-    }
-    return skill;
-  }
-
   private async requireConnection(connectionId: string): Promise<Connection> {
-    const connection = await this.catalogRepository.getConnection(connectionId);
+    const connection = await this.connectionRepository.getConnection(connectionId);
     if (!connection) {
       throw new AppError('connectionNotFound', `Connection ${connectionId} was not found`);
     }
     return connection;
-  }
-
-  private async requireAgent(agentId: string): Promise<void> {
-    const agent = await this.agentRepository.getById(agentId);
-    if (!agent || agent.deletedAt) {
-      throw new AppError('agentNotFound', `Agent ${agentId} was not found`);
-    }
   }
 }
 
@@ -673,7 +431,6 @@ function toNameTaken(error: unknown): never {
   }
   throw error;
 }
-
 function digest(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }

@@ -386,7 +386,7 @@ new or resumed work for deleted identities. See [permanent deletion](agents.md#p
 ## Remote MCP connections
 
 Connections have an immutable type: HTTP API or remote MCP server. Existing rows default to
-HTTP. The catalog service owns tool discovery for people; the runner discovers and executes
+HTTP. The connection service owns tool discovery for people; the runner discovers and executes
 only tools allowed by the connection and the agent's live access. `McpClient` is an integration
 interface. Plugins build `McpHttpClient` and pass it to both services. Model adapters remain
 provider-neutral and never execute tools themselves.
@@ -399,8 +399,8 @@ See [MCP connections](catalogs.md#remote-mcp-tools-ca-64) for setup, limits, and
 
 ### Remote connection OAuth
 
-Catalogs starts and completes browser OAuth through the MCP SDK integration. The catalog
-service and runner each receive the encrypted OAuth session repository and OAuth client
+The connection service starts and completes browser OAuth through the MCP SDK integration.
+The connection service and runner each receive the encrypted OAuth session repository and OAuth client
 from their plugins. They do not call another service. Session transitions hold a database
 transaction lock so workers cannot rotate the same refresh token concurrently or restore
 credentials after a completed disconnect. Existing catalog grants, tool allowlists, approvals,
@@ -446,10 +446,29 @@ integrations. This is a third npm workspace; `npm run check` covers all three. C
 examples are editable agent instructions, not privileged platform roles. See [coding](coding.md)
 for trust boundaries, offline dependency images, cancellation limits, and recovery.
 
-Connection authentication method is stored independently from enabled state. The catalog
+Connection authentication method is stored independently from enabled state. The connection
 service derives a credential-free authentication summary for list/detail responses from the
 stored method and encrypted OAuth session. The web interface combines enabled and authentication
 state into one badge: Disabled, Authentication required, or Enabled, in that order of precedence.
 It sends OAuth creation directly to consent through the
 saved connection page. Failed consent retries reuse that connection. See [authentication
 status](catalogs.md#authentication-choice-and-status).
+
+## Skill and connection services
+
+Skills and connections are shared product catalogs with separate application services in
+one API process. `SkillService` owns instruction-only skills, immutable versions, discovery
+settings, and enabled state. It receives a `SkillRepository`, human access checks, and a
+`SkillLogger`; it has no connection, credential, MCP, OAuth, or agent dependencies.
+
+`ConnectionService` owns connection management, authentication summaries, OAuth sign-in,
+and MCP tool discovery. Its plugin provides a `ConnectionRepository`, encrypted OAuth
+session storage, and the external clients. `GrantService` owns the existing grant and revoke
+endpoints. It uses skill, connection, grant, and agent repositories directly to preserve
+atomic agent configuration updates without calling either management service.
+
+Each service has its own plugin and logger. Existing log event names and HTTP contracts
+remain unchanged. The focused repository interfaces share `CatalogPostgresRepository` as
+their SQL implementation. `CatalogRepository` combines those interfaces for task execution
+and agent configuration, which need both capability types and live grants. No database
+migration or separate deployment is needed for these service boundaries.

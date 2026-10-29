@@ -10,8 +10,8 @@ describe('instructions-only skill routes', () => {
     async (url) => {
       const app = setupApp();
       await app.ready();
-      const create = jest.spyOn(app.catalogService, 'createSkill');
-      const version = jest.spyOn(app.catalogService, 'addSkillVersion');
+      const create = jest.spyOn(app.skillService, 'createSkill');
+      const version = jest.spyOn(app.skillService, 'addSkillVersion');
       try {
         const response = await app.inject({
           method: 'POST',
@@ -39,10 +39,10 @@ describe('instructions-only skill routes', () => {
     const app = setupApp();
     await app.ready();
     const create = jest
-      .spyOn(app.catalogService, 'createSkill')
+      .spyOn(app.skillService, 'createSkill')
       .mockResolvedValue({ id: SKILL } as never);
     const version = jest
-      .spyOn(app.catalogService, 'addSkillVersion')
+      .spyOn(app.skillService, 'addSkillVersion')
       .mockResolvedValue({ id: SKILL } as never);
     try {
       const input = { name: 'Billing', description: 'Invoices', instructions: 'Read invoices.' };
@@ -73,7 +73,7 @@ describe('connection types', () => {
     const app = setupApp();
     await app.ready();
     const create = jest
-      .spyOn(app.catalogService, 'createConnection')
+      .spyOn(app.connectionService, 'createConnection')
       .mockResolvedValue({ id: CONNECTION } as never);
     try {
       const shared = {
@@ -109,7 +109,7 @@ describe('connection types', () => {
   ])('rejects invalid or mixed transport configuration %#', async (config) => {
     const app = setupApp();
     await app.ready();
-    const create = jest.spyOn(app.catalogService, 'createConnection');
+    const create = jest.spyOn(app.connectionService, 'createConnection');
     try {
       const response = await app.inject({
         method: 'POST',
@@ -129,11 +129,11 @@ describe('connection types', () => {
     }
   });
 
-  it('routes discovery through the catalog service', async () => {
+  it('routes discovery through the connection service', async () => {
     const app = setupApp();
     await app.ready();
     const discover = jest
-      .spyOn(app.catalogService, 'discoverConnectionTools')
+      .spyOn(app.connectionService, 'discoverConnectionTools')
       .mockResolvedValue([
         { name: 'lookup', description: 'Look up records', inputSchema: { type: 'object' } }
       ]);
@@ -157,13 +157,11 @@ describe('OAuth connection routes', () => {
   it('sets a browser binding cookie and never returns the binding key in JSON', async () => {
     const app = setupApp();
     await app.ready();
-    jest
-      .spyOn(app.catalogService, 'startOAuth')
-      .mockResolvedValue({
-        authorizationUrl: 'https://docs.example/authorize?state=test',
-        browserKey: 'private-browser-key',
-        callbackUrl: `http://localhost:3100/connections/${CONNECTION}/oauth/callback`
-      });
+    jest.spyOn(app.connectionService, 'startOAuth').mockResolvedValue({
+      authorizationUrl: 'https://docs.example/authorize?state=test',
+      browserKey: 'private-browser-key',
+      callbackUrl: `http://localhost:3100/connections/${CONNECTION}/oauth/callback`
+    });
     try {
       const response = await app.inject({
         method: 'POST',
@@ -185,7 +183,7 @@ describe('OAuth connection routes', () => {
     const app = setupApp();
     await app.ready();
     const finish = jest
-      .spyOn(app.catalogService, 'finishOAuth')
+      .spyOn(app.connectionService, 'finishOAuth')
       .mockResolvedValue('http://localhost:3100/app/#/catalogs?tab=connections&oauth=connected');
     try {
       const response = await app.inject({
@@ -202,6 +200,55 @@ describe('OAuth connection routes', () => {
       expect(response.headers.location).not.toContain('secret-code');
       expect(response.headers['referrer-policy']).toBe('no-referrer');
       expect(response.headers['set-cookie']).toContain('Max-Age=0');
+    } finally {
+      await app.close();
+    }
+  });
+});
+
+describe('grant routes', () => {
+  const AGENT = '00000000-0000-4000-8000-000000000004';
+
+  it('lists, grants, and revokes access through the grant service', async () => {
+    const app = setupApp();
+    await app.ready();
+    const grant = {
+      agentId: AGENT,
+      targetType: 'skill' as const,
+      targetId: SKILL,
+      grantedByHumanId: ACTOR,
+      grantedAt: new Date(),
+      revokedAt: null
+    };
+    const list = jest.spyOn(app.grantService, 'listGrants').mockResolvedValue([grant]);
+    const create = jest.spyOn(app.grantService, 'grant').mockResolvedValue(grant);
+    const revoke = jest.spyOn(app.grantService, 'revoke').mockResolvedValue();
+    try {
+      const listed = await app.inject({
+        method: 'GET',
+        url: `/agents/${AGENT}/grants?includeRevoked=true`
+      });
+      expect(listed.statusCode).toBe(200);
+      expect(listed.json().data[0].targetId).toBe(SKILL);
+      expect(list).toHaveBeenCalledWith(AGENT, true);
+
+      const created = await app.inject({
+        method: 'POST',
+        url: `/agents/${AGENT}/grants`,
+        headers: { 'x-actor-id': ACTOR },
+        payload: { type: 'skill', id: SKILL }
+      });
+      expect(created.statusCode).toBe(201);
+      expect(created.json().data.targetId).toBe(SKILL);
+      expect(create).toHaveBeenCalledWith(ACTOR, AGENT, { type: 'skill', id: SKILL });
+
+      const revoked = await app.inject({
+        method: 'DELETE',
+        url: `/agents/${AGENT}/grants/skill/${SKILL}`,
+        headers: { 'x-actor-id': ACTOR }
+      });
+      expect(revoked.statusCode).toBe(204);
+      expect(revoke).toHaveBeenCalledWith(ACTOR, AGENT, { type: 'skill', id: SKILL });
     } finally {
       await app.close();
     }

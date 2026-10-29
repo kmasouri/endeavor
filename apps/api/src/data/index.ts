@@ -8,3 +8,6 @@ export * from './messages';
 export * from './notes';
 export * from './responsibilities';
 export * from './tasks';
+export * from './skills';
+export * from './connections';
+export * from './grants';
