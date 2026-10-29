@@ -1710,3 +1710,48 @@ progress::-webkit-progress-value {
     z-index: 12;
   }
 }
+
+/* Participant cards use the browser's top layer so chat scrolling cannot clip them. */
+button.participant-trigger {
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  vertical-align: baseline;
+  align-self: baseline;
+}
+button.participant-trigger:hover {
+  background: transparent;
+  text-decoration: underline;
+}
+button.participant-avatar:hover { text-decoration: none; }
+button.participant-avatar:hover .avatar { filter: brightness(1.12); }
+.participant-profile {
+  position: fixed;
+  inset: auto;
+  width: min(320px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  margin: 0;
+  padding: 20px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  border: 1px solid var(--border-200);
+  border-radius: var(--radius-lg);
+  background: var(--bg-100);
+  color: var(--text-100);
+  box-shadow: var(--shadow-pop);
+}
+.participant-profile-heading { justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+.participant-profile h2 { margin: 0; font-size: 18px; }
+.participant-profile p { margin: 4px 0 0; }
+.participant-profile .participant-purpose { margin-top: 16px; white-space: pre-wrap; }
+.participant-capabilities { margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--border-200); }
+.participant-capabilities div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; margin-top: 4px; font-size: 13px; }
+.participant-capabilities dt { color: var(--text-300); }
+.participant-capabilities dd { margin: 0; }
+.participant-profile-action { display: flex; justify-content: center; margin-top: 20px; padding: 8px 12px; border-radius: var(--radius-md); font-weight: 500; text-decoration: none; }

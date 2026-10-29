@@ -1,13 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { Message } from '../src/api';
+import type { Member, Message } from '../src/api';
 
 const createdAt = '2026-10-27T12:00:00Z';
-const researcher = { id: 'researcher', name: 'Researcher', purpose: 'Find evidence' };
+const researcher = { id: 'researcher', name: 'Researcher', purpose: 'Find evidence', capabilities: { provider: 'openai', model: 'research-model', skillCount: 2, connectionCount: 1 } };
 const reviewer = { id: 'reviewer', name: 'Reviewer', purpose: 'Check evidence' };
 
 // All network traffic is intercepted, including read markers and failed writes. No live API.
 async function fixture(page: Page, theme = 'dark', empty = false) {
   const state = {
+    extraMembers: [] as Member[],
     failSend: false,
     failMembers: false,
     failMessages: false,
@@ -95,6 +96,7 @@ async function fixture(page: Page, theme = 'dark', empty = false) {
           createdAt,
           members: [
             { participant: { type: 'human', id: 'person' }, name: 'Kayvan', historyFrom: null },
+            ...state.extraMembers,
             ...[researcher, ...(state.added ? [reviewer] : [])].map((a) => ({
               participant: { type: 'agent', id: a.id },
               name: a.name,
@@ -329,3 +331,92 @@ for (const theme of ['dark', 'light']) {
     });
   }
 }
+
+for (const theme of ['dark', 'light']) {
+  for (const width of [1440, 390, 320]) {
+    test(`participant profiles open from names and avatars in ${theme} at ${width}px`, async ({ page }, info) => {
+      const api = await fixture(page, theme);
+      api.state.messages.push({
+        id: 'answer', authorType: 'agent', authorId: 'researcher', body: 'Here is the evidence.',
+        taskId: null, mentions: [], inReplyToMessageId: null, createdAt
+      });
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto('/app/#/conversations/brief');
+      const person = page.locator('#m-question .meta').getByRole('button', { name: "View Kayvan's profile" });
+      const senderBox = await person.boundingBox();
+      const timeBox = await page.locator('#m-question .meta time').boundingBox();
+      expect(Math.abs(senderBox!.y - timeBox!.y)).toBeLessThan(8);
+      await person.focus();
+      await person.press('Enter');
+      const humanCard = page.getByRole('dialog', { name: "Kayvan's profile" });
+      await expect(humanCard).toBeVisible();
+      await expect(humanCard).toContainText('Person · You');
+      await expect(humanCard.getByRole('link', { name: 'Edit profile' })).toHaveAttribute('href', '#/settings');
+      await page.keyboard.press('Escape');
+      await expect(humanCard).not.toBeVisible();
+      await expect(person).toBeFocused();
+      await page.locator('#m-question .message-avatar .participant-trigger').click();
+      await expect(humanCard).toBeVisible();
+      await humanCard.getByRole('button', { name: 'Close profile' }).click();
+      await expect(page.locator('#m-question .message-avatar .participant-trigger')).toBeFocused();
+
+      const agent = page.locator('#m-answer .meta').getByRole('button', { name: "View Researcher's profile" });
+      await agent.click();
+      const agentCard = page.getByRole('dialog', { name: "Researcher's profile" });
+      await expect(agentCard).toContainText('Find evidence');
+      await expect(agentCard).toContainText('research-model');
+      await expect(agentCard).toContainText('2 skills · 1 connection');
+      await expect(agentCard.getByRole('link', { name: 'View agent' })).toHaveAttribute('href', '#/agents/researcher');
+      const box = await agentCard.boundingBox();
+      expect(box!.x).toBeGreaterThanOrEqual(12);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(width - 11);
+      expect(box!.y).toBeGreaterThanOrEqual(12);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(889);
+      await page.screenshot({ path: info.outputPath('participant-profile.png') });
+      await page.getByRole('textbox', { name: 'Message', exact: true }).click();
+      await expect(agentCard).not.toBeVisible();
+      expect(api.state.posts).toEqual([]);
+      expect(api.errors).toEqual([]);
+      expect(api.unexpected).toEqual([]);
+    });
+  }
+}
+
+test('unavailable authors retain profile attribution without broken agent links', async ({ page }) => {
+  const api = await fixture(page);
+  api.state.messages.push({
+    id: 'missing', authorType: 'agent', authorId: 'missing', body: 'Historical evidence.',
+    taskId: null, mentions: [], inReplyToMessageId: null, createdAt
+  });
+  await page.goto('/app/#/conversations/brief');
+  await page.locator('#m-missing .meta .participant-trigger').click();
+  const card = page.getByRole('dialog');
+  await expect(card).toContainText("This agent's details are no longer available.");
+  await expect(card.getByRole('link', { name: 'View agent' })).toHaveCount(0);
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+
+test('deleted agent profiles and member profiles preserve history and modal access', async ({ page }) => {
+  const api = await fixture(page);
+  api.state.extraMembers.push({ participant: { type: 'agent', id: 'deleted' }, name: 'Former researcher', deleted: true, purpose: 'Old research', historyFrom: null });
+  api.state.messages.push({ id: 'old', authorType: 'agent', authorId: 'deleted', body: 'An old answer.', taskId: null, mentions: [], inReplyToMessageId: null, createdAt });
+  await page.goto('/app/#/conversations/brief');
+  await page.locator('#m-old .meta .participant-trigger').click();
+  const deleted = page.getByRole('dialog', { name: "Former researcher's profile" });
+  await expect(deleted).toContainText('Agent · Deleted');
+  await expect(deleted).toContainText('Their messages remain');
+  await expect(deleted.getByRole('link')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /members. Show who's here/ }).click();
+  const members = page.getByRole('dialog', { name: 'People and agents', exact: true });
+  await members.getByRole('button', { name: "View Researcher's profile" }).last().click();
+  const card = page.getByRole('dialog', { name: "Researcher's profile" });
+  await expect(card).toContainText('Find evidence');
+  await card.getByRole('button', { name: 'Close profile' }).click();
+  await expect(members).toBeVisible();
+  await expect(members.getByRole('button', { name: "View Researcher's profile" }).last()).toBeFocused();
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});

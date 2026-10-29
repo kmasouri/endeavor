@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api, type DirectoryEntry, type Human, type Member } from '../api';
   import Avatar from '../Avatar.svelte';
+  import ParticipantProfile from '../ParticipantProfile.svelte';
   import Modal from '../Modal.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import { formatDateTime } from '../components';
@@ -57,8 +58,12 @@
       <div class="endeavor-members">
         {#each members as member (`${member.participant.type}:${member.participant.id}`)}
           <div class="row endeavor-member">
-            <Avatar name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} />
-            <span class="grow"><span class="row"><strong>{member.name}</strong>
+            <ParticipantProfile name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} meId={me.id} {member} directory={directory.data?.find((entry) => entry.id === member.participant.id)} avatar>
+              <Avatar name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} />
+            </ParticipantProfile>
+            <span class="grow"><span class="row"><ParticipantProfile name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} meId={me.id} {member} directory={directory.data?.find((entry) => entry.id === member.participant.id)}>
+                <strong>{member.name}</strong>
+              </ParticipantProfile>
               {#if member.participant.type === 'agent'}<span class="agent-label">agent</span>{/if}
               {#if member.participant.id === me.id}<span class="caption muted">(you)</span>{/if}
             </span>
