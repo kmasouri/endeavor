@@ -2,6 +2,7 @@
 @import './design-tokens.css';
 
 :root {
+  --app-bar-height: 112px;
   --bg: var(--bg-100);
   --surface: var(--bg-200);
   --text: var(--text-100);
@@ -417,7 +418,7 @@ pre {
   --sidebar-visibility: visible;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  grid-template-rows: 66px minmax(0, 1fr);
+  grid-template-rows: var(--app-bar-height) minmax(0, 1fr);
   min-height: 100dvh;
   transition: grid-template-columns 220ms ease;
 }
@@ -448,8 +449,8 @@ pre {
 }
 .sidebar {
   position: sticky;
-  top: 66px;
-  height: calc(100dvh - 66px);
+  top: var(--app-bar-height);
+  height: calc(100dvh - var(--app-bar-height));
   padding: 16px 12px;
   background: var(--bg-000);
   border-right: 1px solid var(--border-100);
@@ -493,7 +494,7 @@ pre {
 }
 .sidebar-resizer {
   position: fixed;
-  top: 66px;
+  top: var(--app-bar-height);
   bottom: 0;
   left: calc(var(--sidebar-width) - 4px);
   z-index: 11;
@@ -810,7 +811,7 @@ details summary {
 .conversation-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  height: calc(100dvh - 66px);
+  height: calc(100dvh - var(--app-bar-height));
 }
 .conversation-layout.with-details {
   grid-template-columns: minmax(0, 1fr) 320px;
@@ -1448,7 +1449,7 @@ progress::-webkit-progress-value {
   line-height: 20px;
 }
 .endeavor-empty {
-  min-height: calc(100dvh - 114px);
+  min-height: calc(100dvh - var(--app-bar-height) - 48px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1670,7 +1671,7 @@ progress::-webkit-progress-value {
 }
 @media (max-width: 700px) {
   .conversation-details {
-    inset-block-start: 66px;
+    inset-block-start: var(--app-bar-height);
     z-index: 12;
   }
 }
