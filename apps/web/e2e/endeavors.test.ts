@@ -382,7 +382,8 @@ test('keeps failed values and membership, prevents duplicate saves, then selects
   await name.fill('  Explain heat pumps  ');
   await dialog.getByLabel('Find people or agents').fill('research');
   await dialog.getByRole('checkbox', { name: 'Add Researcher' }).check();
-  await expect(dialog.locator('.spark')).toHaveCount(1);
+  await expect(dialog.getByRole('img', { name: 'Researcher · agent', exact: true })).toBeVisible();
+  await expect(dialog.getByText('agent', { exact: true })).toHaveCount(0);
   await dialog.getByLabel('Find people or agents').fill('lee');
   await dialog.getByRole('checkbox', { name: 'Add Lee' }).check();
   await dialog.getByRole('button', { name: 'Start', exact: true }).click();
@@ -407,9 +408,7 @@ test('keeps failed values and membership, prevents duplicate saves, then selects
   const details = page.getByRole('complementary', { name: 'Conversation details' });
   await expect(details.getByText('Lee', { exact: true })).toBeVisible();
   await details.getByRole('button', { name: /1 more agents/ }).click();
-  await expect(
-    details.getByRole('button', { name: 'Agent Researcher agent Free', exact: true })
-  ).toBeVisible();
+  await expect(details.getByRole('button', { name: /Researcher.*Free/ })).toBeVisible();
   expect(state.posts[1]).toEqual({
     title: 'explain-heat-pumps',
     agentIds: ['agent-1'],

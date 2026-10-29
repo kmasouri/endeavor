@@ -79,7 +79,7 @@
           <a class="agent-row" href={`#/agents/${agent.id}`}
             ><Avatar name={agent.name} id={agent.id} agent />
             <div>
-              <h3>{agent.name} <span class="agent-label">agent</span></h3>
+              <h3>{agent.name}</h3>
               <p class="agent-purpose">{agent.purpose}</p>
             </div>
             <div class="agent-model caption">

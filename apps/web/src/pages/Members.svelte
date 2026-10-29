@@ -64,7 +64,6 @@
             <span class="grow"><span class="row"><ParticipantProfile name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} meId={me.id} {member} directory={directory.data?.find((entry) => entry.id === member.participant.id)}>
                 <strong>{member.name}</strong>
               </ParticipantProfile>
-              {#if member.participant.type === 'agent'}<span class="agent-label">agent</span>{/if}
               {#if member.participant.id === me.id}<span class="caption muted">(you)</span>{/if}
             </span>
             {#if member.purpose}<span class="caption muted">{member.purpose}</span>{/if}
@@ -82,7 +81,7 @@
         {#each filtered as person (`${person.type}:${person.id}`)}
           <label class="check endeavor-member">
             <Avatar name={person.name} id={person.id} agent={person.type === 'agent'} />
-            <span class="grow"><span class="row"><strong>{person.name}</strong>{#if person.type === 'agent'}<span class="agent-label">agent</span>{/if}</span><span class="caption muted">{person.purpose}</span></span>
+            <span class="grow"><span class="row"><strong>{person.name}</strong></span><span class="caption muted">{person.purpose}</span></span>
             <input type="checkbox" aria-label={`Add ${person.name}`} checked={selected.includes(key(person.type, person.id))} onchange={() => toggle(key(person.type, person.id))} />
           </label>
         {/each}

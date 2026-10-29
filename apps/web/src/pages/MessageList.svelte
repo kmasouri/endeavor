@@ -145,9 +145,7 @@
             agent={replyTo.authorType === 'agent'}
             size="sm"
           />
-          <strong class="reply-name">{replyName}</strong>{#if replyTo.authorType === 'agent'}<span
-              class="agent-label">agent</span
-            >{/if}
+          <strong class="reply-name">{replyName}</strong>
           <span class="reply-excerpt">{buildMessagePreview(replyTo.body)}</span>
         </a>
       {/if}
@@ -173,9 +171,7 @@
                 directory={message.authorType === 'agent' ? props.directory.find((entry) => entry.id === message.authorId) : undefined}>
                 <strong>{name}</strong>
               </ParticipantProfile>
-            {:else}<strong>{name}</strong>{/if}{#if message.authorType === 'agent'}<span class="agent-label"
-                >agent</span
-              >{/if}<time class="caption muted" title={formatDateTime(message.createdAt)}
+            {:else}<strong>{name}</strong>{/if}<time class="caption muted" title={formatDateTime(message.createdAt)}
               >{formatShortTime(message.createdAt)}</time
             >
           </div>{:else}<time class="group-time caption muted" title={formatDateTime(message.createdAt)}
