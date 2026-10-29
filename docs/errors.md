@@ -81,17 +81,18 @@ The list lives in `apps/api/src/shared/errors.ts`. When you add an error there, 
 
 ## Catalogs (70xxx)
 
-| Code  | Name                      | HTTP | What it means                                                                              | How to fix it                                                                   |
-| ----- | ------------------------- | ---- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------- |
-| 70001 | `skillNotFound`           | 404  | No skill has this ID.                                                                      | Check the ID against `GET /skills`.                                             |
-| 70002 | `connectionNotFound`      | 404  | No connection has this ID.                                                                 | Check the ID against `GET /connections`.                                        |
-| 70003 | `catalogNameTaken`        | 409  | Another skill or connection already has this name. Names ignore case.                      | Pick a different name.                                                          |
-| 70004 | `catalogEntryUnavailable` | 409  | The skill or connection is disabled, or the skill has no version.                          | Enable it, or choose another.                                                   |
-| 70005 | `credentialsKeyMissing`   | 409  | A credential was sent, but `CREDENTIALS_KEY` isn't set, so it can't be stored safely.      | Set `CREDENTIALS_KEY` to 32 random bytes (base64 or hex) and restart.           |
-| 70006 | `toolAccessDenied`        | 403  | An agent's tool call was refused: no active grant, or a method or path that isn't allowed. | Agents see this as a tool error. Grant access, or widen the connection's rules. |
-| 70007 | `connectionSignInRequired` | 409 | OAuth authentication is unavailable or expired. | Sign in again from Catalogs. |
-| 70008 | `connectionOAuthFailed` | 400 | OAuth sign-in could not complete. | Check server setup and reconnect. |
-| 70009 | `connectionOAuthCallbackInvalid` | 400 | The callback is expired or does not match its browser, connection, or state. | Start sign-in again from Catalogs. |
+| Code  | Name                             | HTTP | What it means                                                                                     | How to fix it                                                                                               |
+| ----- | -------------------------------- | ---- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| 70001 | `skillNotFound`                  | 404  | No skill has this ID.                                                                             | Check the ID against `GET /skills`.                                                                         |
+| 70002 | `connectionNotFound`             | 404  | No connection has this ID.                                                                        | Check the ID against `GET /connections`.                                                                    |
+| 70003 | `catalogNameTaken`               | 409  | Another skill or connection already has this name. Names ignore case.                             | Pick a different name.                                                                                      |
+| 70004 | `catalogEntryUnavailable`        | 409  | The skill or connection is disabled, or the skill has no version.                                 | Enable it, or choose another.                                                                               |
+| 70005 | `credentialsKeyMissing`          | 409  | A credential was sent, but `CREDENTIALS_KEY` isn't set, so it can't be stored safely.             | Set `CREDENTIALS_KEY` to 32 random bytes (base64 or hex) and restart.                                       |
+| 70006 | `toolAccessDenied`               | 403  | An agent's tool call was refused: no active grant, or a method or path that isn't allowed.        | Agents see this as a tool error. Grant access, or widen the connection's rules.                             |
+| 70007 | `connectionSignInRequired`       | 409  | OAuth authentication is unavailable or expired.                                                   | Sign in again from Catalogs.                                                                                |
+| 70008 | `connectionOAuthFailed`          | 400  | OAuth sign-in could not complete.                                                                 | Check server setup and reconnect.                                                                           |
+| 70009 | `connectionOAuthCallbackInvalid` | 400  | The callback is expired or does not match its browser, connection, or state.                      | Start sign-in again from Catalogs.                                                                          |
+| 70010 | `connectionCallOutcomeUnknown`   | 409  | An HTTP call was claimed but its response is unavailable, or its request changed during recovery. | Check the external service. Resume with reconciliation instructions; request a new attempt only explicitly. |
 
 ## Notes and documents (80xxx)
 

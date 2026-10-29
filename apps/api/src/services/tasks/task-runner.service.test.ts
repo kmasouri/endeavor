@@ -11,7 +11,7 @@ import {
   mockMessageRepository,
   mockTaskRepository
 } from '../../data/repositories.test-helper';
-import { ConnectionOAuthRepository } from '../../data';
+import { ConnectionOAuthRepository, StoredHttpCall } from '../../data';
 import { ConnectionOAuthSession } from '../../shared/connection-oauth';
 import {
   ConnectionOAuthClient,
@@ -162,6 +162,22 @@ function setup(
   } = {}
 ) {
   const tasks = mockTaskRepository();
+  const httpCalls = new Map<string, StoredHttpCall>();
+  tasks.getHttpCall.mockImplementation(
+    async (taskId, callId) => httpCalls.get(`${taskId}:${callId}`) ?? null
+  );
+  tasks.claimHttpCall.mockImplementation(async (taskId, callId, requestHash) => {
+    const key = `${taskId}:${callId}`;
+    if (httpCalls.has(key)) return false;
+    httpCalls.set(key, { requestHash, response: null });
+    return true;
+  });
+  tasks.saveHttpCallResponse.mockImplementation(async (taskId, callId, requestHash, response) => {
+    const stored = httpCalls.get(`${taskId}:${callId}`);
+    if (!stored || stored.requestHash !== requestHash || stored.response) return false;
+    stored.response = response;
+    return true;
+  });
   const messages = mockMessageRepository();
   const conversations = mockConversationRepository();
   const agentRepo = mockAgentRepository();
@@ -261,6 +277,7 @@ function setup(
       onTaskRunFailed: jest.fn(),
       onRequestChainTooDeep: jest.fn(),
       onConnectionDenied: jest.fn(),
+      onHttpCallAuditFailed: jest.fn(),
       onApprovalRequested: jest.fn(),
       onAccessRequested: jest.fn(),
       onAccessGranted: jest.fn(),
@@ -1361,6 +1378,286 @@ describe('TaskRunnerService', () => {
       });
       return ctx;
     }
+
+    describe('durable HTTP recovery', () => {
+      function setupWrite() {
+        const ctx = setupWithConnection();
+        ctx.catalogs.getConnections.mockResolvedValue([
+          { ...billing, allowedMethods: ['GET', 'POST', 'PATCH', 'DELETE'], approvalMethods: [] }
+        ]);
+        const pending = event(1, 'model.turn', {
+          raw: {},
+          toolCalls: [callBilling('/invoices', 'POST')]
+        });
+        const queue = () =>
+          ctx.tasks.listEvents.mockResolvedValueOnce([pending]).mockResolvedValue([]);
+        queue();
+        return { ...ctx, pending, queue };
+      }
+
+      it('claims before dispatch and saves the bounded response before audit or batch results', async () => {
+        const { runner, tasks, connectionClient } = setupWrite();
+        await runner.runTask(makeTask());
+        expect(tasks.claimHttpCall.mock.invocationCallOrder[0]).toBeLessThan(
+          connectionClient.request.mock.invocationCallOrder[0]
+        );
+        const responseOrder = tasks.saveHttpCallResponse.mock.invocationCallOrder[0];
+        const auditIndex = tasks.addEvent.mock.calls.findIndex(
+          ([, type]) => type === 'connection.called'
+        );
+        expect(responseOrder).toBeLessThan(tasks.addEvent.mock.invocationCallOrder[auditIndex]);
+        expect(responseOrder).toBeLessThan(tasks.recordToolResults.mock.invocationCallOrder[0]);
+        expect(JSON.stringify(tasks.claimHttpCall.mock.calls)).not.toContain('Bearer secret');
+      });
+
+      it.each(['POST', 'PATCH', 'DELETE'])(
+        'reuses a saved %s result after a crash before batch persistence',
+        async (method) => {
+          const { runner, tasks, connectionClient, client, queue, pending } = setupWrite();
+          pending.data.toolCalls = [callBilling('/invoices', method)];
+          tasks.recordToolResults.mockRejectedValueOnce(
+            new Error('Process stopped before batch commit')
+          );
+          await expect(runner.runTask(makeTask())).rejects.toThrow('Process stopped');
+          queue();
+          await runner.runTask(makeTask());
+          expect(connectionClient.request).toHaveBeenCalledTimes(1);
+          expect(tasks.claimHttpCall).toHaveBeenCalledTimes(1);
+          expect(toolResult(tasks).results[0]).toMatchObject({
+            content: 'HTTP 200\n{"total":3}',
+            isError: false
+          });
+          expect(client.complete).toHaveBeenCalled();
+        }
+      );
+
+      it('recovers a saved response after losing the audit event too', async () => {
+        const { runner, tasks, connectionClient, queue } = setupWrite();
+        tasks.addEvent.mockImplementationOnce(async () => event(2, 'tool.started', {}));
+        tasks.addEvent.mockImplementationOnce(async () => {
+          throw new Error('Audit event unavailable');
+        });
+        tasks.recordToolResults.mockRejectedValueOnce(new Error('Crash'));
+        await expect(runner.runTask(makeTask())).rejects.toThrow('Crash');
+        queue();
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).toHaveBeenCalledTimes(1);
+        expect(toolResult(tasks).results[0].isError).toBe(false);
+      });
+
+      it('returns success for a saved response even when only its audit event fails', async () => {
+        const { runner, tasks, connectionClient } = setupWrite();
+        tasks.addEvent.mockImplementationOnce(async () => event(2, 'tool.started', {}));
+        tasks.addEvent.mockRejectedValueOnce(new Error('Audit unavailable'));
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).toHaveBeenCalledTimes(1);
+        expect(toolResult(tasks).results[0]).toMatchObject({
+          isError: false,
+          content: 'HTTP 200\n{"total":3}'
+        });
+      });
+
+      it('blocks a claimed call after a crash before dispatch, without making a request', async () => {
+        const { runner, tasks, connectionClient, current, client } = setupWrite();
+        tasks.getHttpCall.mockResolvedValue({ requestHash: 'original-claim', response: null });
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).not.toHaveBeenCalled();
+        expect(tasks.claimHttpCall).not.toHaveBeenCalled();
+        expect(current().state).toBe('blocked');
+        expect(current().stateReason).toContain('unknown outcome');
+        expect(client.complete).not.toHaveBeenCalled();
+      });
+
+      it.each(['transport', 'response persistence'])(
+        'blocks after an ambiguous %s failure and never repeats the call',
+        async (failure) => {
+          const {
+            runner,
+            tasks,
+            connectionClient,
+            current,
+            setCurrent,
+            queue,
+            client,
+            pending,
+            workspaceClient
+          } = setupWrite();
+          pending.data.toolCalls = [
+            ...(pending.data.toolCalls as ModelToolCall[]),
+            {
+              id: 'later',
+              name: 'write_file',
+              input: { path: 'later.txt', content: 'must not run' }
+            }
+          ];
+          if (failure === 'transport')
+            connectionClient.request.mockRejectedValueOnce(
+              new Error('Bearer secret: socket lost after remote commit')
+            );
+          else tasks.saveHttpCallResponse.mockRejectedValueOnce(new Error('Database unavailable'));
+          await runner.runTask(makeTask());
+          expect(current().state).toBe('blocked');
+          expect(current().stateReason).toContain('check the external service');
+          expect(client.complete).not.toHaveBeenCalled();
+          expect(workspaceClient.write).not.toHaveBeenCalled();
+          expect(JSON.stringify(toolResult(tasks))).not.toContain('Bearer secret');
+          // Even manually resuming cannot resend this call ID. A new attempt must be explicit.
+          setCurrent(makeTask());
+          queue();
+          await runner.runTask(makeTask());
+          expect(current().state).toBe('blocked');
+          expect(connectionClient.request).toHaveBeenCalledTimes(1);
+        }
+      );
+
+      it('recovers a response whose database commit succeeded but its acknowledgement was lost', async () => {
+        const { runner, tasks, connectionClient, current, setCurrent, queue } = setupWrite();
+        const save = tasks.saveHttpCallResponse.getMockImplementation()!;
+        tasks.saveHttpCallResponse.mockImplementationOnce(async (...args) => {
+          await save(...args);
+          throw new Error('Connection lost after commit');
+        });
+        await runner.runTask(makeTask());
+        expect(current().state).toBe('blocked');
+        setCurrent(makeTask());
+        queue();
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).toHaveBeenCalledTimes(1);
+        expect(current().state).toBe('working');
+      });
+
+      it('does not dispatch when another worker won the claim', async () => {
+        const { runner, tasks, connectionClient, current } = setupWrite();
+        tasks.claimHttpCall.mockResolvedValue(false);
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).not.toHaveBeenCalled();
+        expect(current().state).toBe('blocked');
+      });
+
+      it('leaves the call pending if persisting the reconciliation block fails', async () => {
+        const { runner, tasks, connectionClient, queue, current } = setupWrite();
+        connectionClient.request.mockRejectedValueOnce(new Error('Response lost'));
+        tasks.update.mockRejectedValueOnce(new Error('Block could not be saved'));
+        await expect(runner.runTask(makeTask())).rejects.toThrow('Block could not be saved');
+        expect(tasks.recordToolResults).not.toHaveBeenCalled();
+        queue();
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).toHaveBeenCalledTimes(1);
+        expect(current().state).toBe('blocked');
+      });
+
+      it('rechecks access before returning a saved result after revocation', async () => {
+        const { runner, tasks, catalogs, connectionClient, queue } = setupWrite();
+        await runner.runTask(makeTask());
+        catalogs.listGrants.mockResolvedValue([]);
+        queue();
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).toHaveBeenCalledTimes(1);
+        const results = tasks.addEvent.mock.calls.filter(([, type]) => type === 'tool.results');
+        expect(results.at(-1)?.[3]).toMatchObject({
+          results: [expect.objectContaining({ isError: true })]
+        });
+      });
+
+      it('returns the original response if policy now requires approval instead of sending a new action', async () => {
+        const { runner, catalogs, approvals, connectionClient, queue } = setupWrite();
+        await runner.runTask(makeTask());
+        catalogs.getConnections.mockResolvedValue([
+          { ...billing, allowedMethods: ['POST'], approvalMethods: ['POST'] }
+        ]);
+        queue();
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).toHaveBeenCalledTimes(1);
+        expect(approvals.create).not.toHaveBeenCalled();
+      });
+
+      it.each(['request body', 'endpoint'])(
+        'refuses to reuse a call ID with a changed %s',
+        async (change) => {
+          const { runner, catalogs, tasks, connectionClient, current, queue, pending } =
+            setupWrite();
+          await runner.runTask(makeTask());
+          if (change === 'request body')
+            pending.data.toolCalls = [
+              {
+                ...callBilling('/invoices', 'POST'),
+                input: {
+                  connection: 'billing api',
+                  method: 'POST',
+                  path: '/invoices',
+                  body: 'changed'
+                }
+              }
+            ];
+          else
+            catalogs.getConnections.mockResolvedValue([
+              {
+                ...billing,
+                baseUrl: 'https://changed.test',
+                allowedMethods: ['POST'],
+                approvalMethods: []
+              }
+            ]);
+          queue();
+          await runner.runTask(makeTask());
+          expect(connectionClient.request).toHaveBeenCalledTimes(1);
+          expect(current().state).toBe('blocked');
+          expect(tasks.claimHttpCall).toHaveBeenCalledTimes(1);
+        }
+      );
+
+      it.each([false, true])(
+        'does not repeat legacy HTTP evidence (approval now required: %s)',
+        async (approvalNowRequired) => {
+          const { runner, tasks, catalogs, approvals, connectionClient, current, pending } =
+            setupWrite();
+          if (approvalNowRequired)
+            catalogs.getConnections.mockResolvedValue([
+              { ...billing, allowedMethods: ['POST'], approvalMethods: ['POST'] }
+            ]);
+          const legacy = event(2, 'connection.called', {
+            callId: 'call-http',
+            connectionId: 'conn-1',
+            method: 'POST',
+            path: '/invoices',
+            status: 200
+          });
+          tasks.listEvents.mockReset().mockResolvedValue([pending, legacy]);
+          await runner.runTask(makeTask());
+          expect(connectionClient.request).not.toHaveBeenCalled();
+          expect(approvals.create).not.toHaveBeenCalled();
+          expect(current().state).toBe('blocked');
+        }
+      );
+
+      it('replays non-success statuses and truncation exactly as recorded', async () => {
+        const { runner, tasks, connectionClient, queue } = setupWrite();
+        connectionClient.request.mockResolvedValue({
+          status: 422,
+          body: 'validation details',
+          truncated: true
+        });
+        tasks.recordToolResults.mockRejectedValueOnce(new Error('Crash'));
+        await expect(runner.runTask(makeTask())).rejects.toThrow('Crash');
+        queue();
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).toHaveBeenCalledTimes(1);
+        expect(toolResult(tasks).results[0].content).toBe(
+          'HTTP 422 (cut off at 20,000 characters)\nvalidation details'
+        );
+      });
+
+      it('allows a distinct explicitly requested call without resetting the original claim', async () => {
+        const { runner, connectionClient, queue, pending } = setupWrite();
+        await runner.runTask(makeTask());
+        pending.data.toolCalls = [
+          { ...callBilling('/invoices', 'POST'), id: 'new-explicit-attempt' }
+        ];
+        queue();
+        await runner.runTask(makeTask());
+        expect(connectionClient.request).toHaveBeenCalledTimes(2);
+      });
+    });
 
     it('refuses inherited-only calls on a pinned task even with live grants and legacy metadata', async () => {
       const { runner, tasks, client, agentRepo, catalogs, connectionClient } =

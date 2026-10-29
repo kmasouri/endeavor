@@ -17,6 +17,9 @@ import {
 
 export function mockTaskRepository(): jest.Mocked<TaskRepository> {
   return {
+    getHttpCall: jest.fn().mockResolvedValue(null),
+    claimHttpCall: jest.fn().mockResolvedValue(true),
+    saveHttpCallResponse: jest.fn().mockResolvedValue(true),
     create: jest.fn(),
     getById: jest.fn(),
     getByRunKey: jest.fn(),
@@ -28,7 +31,7 @@ export function mockTaskRepository(): jest.Mocked<TaskRepository> {
     findOpenWaits: jest.fn().mockResolvedValue([]),
     resolveWait: jest.fn(),
     resolveOpenWaits: jest.fn().mockResolvedValue(0),
-    addEvent: jest.fn(),
+    addEvent: jest.fn().mockResolvedValue(undefined),
     recordToolResults: jest.fn().mockResolvedValue(true),
     listLatestEvents: jest.fn().mockResolvedValue([]),
     listEvents: jest.fn().mockResolvedValue([]),

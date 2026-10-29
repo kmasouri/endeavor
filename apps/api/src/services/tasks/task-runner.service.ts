@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   AgentRepository,
   ApprovalRepository,
@@ -10,7 +11,8 @@ import {
   NoteRepository,
   ResponsibilityRepository,
   TaskCapabilityRepository,
-  TaskRepository
+  TaskRepository,
+  StoredHttpCall
 } from '../../data';
 import {
   ConnectionClient,
@@ -731,6 +733,13 @@ export class TaskRunnerService {
         results.push({ callId: call.id, content, isError: false });
         stopped = STOPPING_TOOLS.has(call.name) || (typeof outcome !== 'string' && outcome.stop);
       } catch (error) {
+        if (error instanceof AppError && error.name === 'connectionCallOutcomeUnknown') {
+          // A model could retry an error under a fresh call ID. Block before saving batch
+          // results. If blocking fails, leave the calls pending for safe recovery instead.
+          await this.block(task, error.message);
+          stopped = true;
+          skippedReason = 'an HTTP call needs human reconciliation before work can continue.';
+        }
         results.push({ callId: call.id, content: (error as Error).message, isError: true });
       }
     }
@@ -1047,7 +1056,16 @@ export class TaskRunnerService {
     const body = typeof input.body === 'string' ? input.body : null;
     const connection = await this.checkHttpCall(task, agent, { name, method, path, callId });
 
-    if (connection.approvalMethods.includes(method)) {
+    // A previously sent unattended call must recover its own result, even if the current
+    // policy now requires approval. Creating a fresh approval could repeat the same action.
+    const previous = await this.taskRepository.getHttpCall(task.id, callId);
+    const needsNewApproval = !previous && connection.approvalMethods.includes(method);
+    const legacyCall =
+      needsNewApproval &&
+      (await this.loadEvents(task.id)).some(
+        (event) => event.type === TASK_EVENTS.connectionCalled && event.data.callId === callId
+      );
+    if (needsNewApproval && !legacyCall) {
       const approval = await this.requestApproval(task, agent, {
         clientKey: `tool:${task.id}:${callId}`,
         request: {
@@ -1397,30 +1415,89 @@ export class TaskRunnerService {
     connection: Connection,
     call: { method: HttpMethod; path: string; body: string | null; callId: string }
   ): Promise<{ status: number; body: string; truncated: boolean }> {
-    const response = await this.connectionClient
-      .request({
+    const requestHash = createHash('sha256')
+      .update(
+        JSON.stringify([
+          connection.id,
+          connection.baseUrl,
+          connection.authMethod,
+          connection.authHeader,
+          call.method,
+          call.path,
+          call.body
+        ])
+      )
+      .digest('hex');
+    const unknown = () =>
+      new AppError(
+        'connectionCallOutcomeUnknown',
+        `HTTP ${call.method} ${call.path} on ${connection.name} (call ${call.callId}) has an unknown outcome. It will not be retried automatically. A person must check the external service, then resume with instructions to accept the result or explicitly request a new attempt.`
+      );
+    const replay = (stored: StoredHttpCall) => {
+      if (stored.requestHash !== requestHash || !stored.response) throw unknown();
+      return stored.response;
+    };
+    const stored = await this.taskRepository.getHttpCall(task.id, call.callId);
+    if (stored) return replay(stored);
+    // Older builds recorded successful requests without a recoverable response. Treat that
+    // evidence conservatively instead of repeating a legacy action during the upgrade.
+    const events = await this.loadEvents(task.id);
+    if (
+      events.some(
+        (event) => event.type === TASK_EVENTS.connectionCalled && event.data.callId === call.callId
+      )
+    ) {
+      throw unknown();
+    }
+    const headers = await this.loadConnectionHeaders(connection);
+    if (!(await this.taskRepository.claimHttpCall(task.id, call.callId, requestHash))) {
+      const winner = await this.taskRepository.getHttpCall(task.id, call.callId);
+      if (!winner) throw unknown();
+      return replay(winner);
+    }
+    let response;
+    try {
+      response = await this.connectionClient.request({
         baseUrl: connection.baseUrl,
         method: call.method,
         path: call.path,
-        headers: await this.loadConnectionHeaders(connection),
+        headers,
         body: call.body
-      })
-      .catch((error: Error) => {
-        throw new AppError('validationError', `The call failed: ${error.message}`);
       });
-    // The response body isn't stored in the event; it is in the tool result.
-    await this.taskRepository.addEvent(
-      task.id,
-      TASK_EVENTS.connectionCalled,
-      { type: 'agent', id: agentId },
-      {
-        callId: call.callId,
-        connectionId: connection.id,
-        method: call.method,
-        path: call.path,
-        status: response.status
+      // Persist before audit/batch events. Losing either later must not resend the request.
+      if (
+        !(await this.taskRepository.saveHttpCallResponse(
+          task.id,
+          call.callId,
+          requestHash,
+          response
+        ))
+      ) {
+        throw unknown();
       }
-    );
+    } catch {
+      // A timeout, partial response, or lost database acknowledgement may follow a successful
+      // remote write. Keep the claim and never expose raw transport errors or credentials.
+      throw unknown();
+    }
+    await this.taskRepository
+      .addEvent(
+        task.id,
+        TASK_EVENTS.connectionCalled,
+        { type: 'agent', id: agentId },
+        {
+          callId: call.callId,
+          connectionId: connection.id,
+          method: call.method,
+          path: call.path,
+          status: response.status
+        }
+      )
+      .catch(() => {
+        // The durable response is authoritative. An audit failure must not look like a failed
+        // remote action to the model and provoke a duplicate under a fresh call ID.
+        this.runnerLogger.onHttpCallAuditFailed(task.id, call.callId);
+      });
     return response;
   }
 

@@ -84,7 +84,21 @@ export interface TaskCost {
   tokens: number;
 }
 
+export interface StoredHttpCall {
+  requestHash: string;
+  response: { status: number; body: string; truncated: boolean } | null;
+}
+
 export interface TaskRepository {
+  getHttpCall(taskId: string, callId: string): Promise<StoredHttpCall | null>;
+  // Only the insert winner may send this call. Existing claims are never reset.
+  claimHttpCall(taskId: string, callId: string, requestHash: string): Promise<boolean>;
+  saveHttpCallResponse(
+    taskId: string,
+    callId: string,
+    requestHash: string,
+    response: NonNullable<StoredHttpCall['response']>
+  ): Promise<boolean>;
   // Creates the task, or returns the existing one with the same runKey. For responsibility
   // starts, a competing open run can also be returned; services check its key before use.
   create(input: CreateTaskInput): Promise<{ task: Task; created: boolean }>;

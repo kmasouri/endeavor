@@ -23,6 +23,7 @@ import {
   CreateTaskWaitInput,
   ListTasksInput,
   TaskChanges,
+  StoredHttpCall,
   TaskRepository
 } from './task.repository';
 
@@ -97,6 +98,41 @@ const CHANGE_COLUMNS: Record<keyof TaskChanges, string> = {
 
 export class TaskPostgresRepository implements TaskRepository {
   constructor(private readonly db: FastifyInstance['pg']) {}
+
+  async getHttpCall(taskId: string, callId: string): Promise<StoredHttpCall | null> {
+    const result = await this.db.query<{
+      request_hash: string;
+      response: StoredHttpCall['response'];
+    }>(
+      `SELECT request_hash, response FROM endeavor.http_calls WHERE task_id = $1 AND call_id = $2`,
+      [taskId, callId]
+    );
+    const row = result.rows[0];
+    return row ? { requestHash: row.request_hash, response: row.response } : null;
+  }
+
+  async claimHttpCall(taskId: string, callId: string, requestHash: string): Promise<boolean> {
+    const result = await this.db.query(
+      `INSERT INTO endeavor.http_calls (task_id, call_id, request_hash)
+       VALUES ($1, $2, $3) ON CONFLICT (task_id, call_id) DO NOTHING`,
+      [taskId, callId, requestHash]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async saveHttpCallResponse(
+    taskId: string,
+    callId: string,
+    requestHash: string,
+    response: NonNullable<StoredHttpCall['response']>
+  ): Promise<boolean> {
+    const result = await this.db.query(
+      `UPDATE endeavor.http_calls SET response = $4, finished_at = now()
+       WHERE task_id = $1 AND call_id = $2 AND request_hash = $3 AND response IS NULL`,
+      [taskId, callId, requestHash, response]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
 
   async create(input: CreateTaskInput): Promise<{ task: Task; created: boolean }> {
     const result = await this.db.query<TaskRow>(

@@ -154,6 +154,12 @@ export const ERRORS = {
     statusCode: 400,
     message: 'This sign-in callback is invalid or expired. Start sign-in again from Catalogs.'
   },
+  connectionCallOutcomeUnknown: {
+    code: 70010,
+    statusCode: 409,
+    message:
+      'The HTTP call has an unknown outcome. A person must check the external service before requesting another attempt.'
+  },
 
   // 80xxx: saved notes and documents
   noteNotFound: { code: 80001, statusCode: 404, message: 'Note not found' },
