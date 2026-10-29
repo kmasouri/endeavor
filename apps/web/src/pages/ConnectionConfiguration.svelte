@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { tick } from 'svelte';
   import { authenticationLabel } from '../connection-auth';
   import { api, type Connection } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
@@ -6,10 +7,25 @@
   import DiscoverableToggle from './DiscoverableToggle.svelte';
   import EnableButton from './EnableButton.svelte';
   import ConnectionOAuth from './ConnectionOAuth.svelte';
+  import ConnectionEditForm from './ConnectionEditForm.svelte';
 
   let props: { connection: Connection; onChanged: () => Promise<boolean>; startSignIn?: boolean } = $props();
   let connection = $derived(props.connection);
   let credential = $state('');
+  let editing = $state(false);
+  let editButton = $state<HTMLButtonElement>();
+  async function closeEditor() {
+    editing = false;
+    await tick();
+    editButton?.focus();
+  }
+  async function savedConfiguration() {
+    if (!await props.onChanged()) throw new Error('Changes saved, but the connection could not be reloaded. Try saving again to refresh it.');
+    discovered = null;
+    allowedTools = null;
+    approvalTools = null;
+    await closeEditor();
+  }
   let discovered = $state<{ name: string; description: string }[] | null>(null);
   let allowedTools = $state<string[] | null>(null);
   let approvalTools = $state<string[] | null>(null);
@@ -67,17 +83,23 @@
 </script>
 
 <div class="stack">
-  <div class="row">
+  <div class="row wrap">
     <div class="grow">
       <h2>Configuration</h2>
       <p class="muted small">{connection.kind === 'mcp' ? 'MCP server' : 'HTTP API'} · {authenticationLabel(connection)}</p>
     </div>
+    {#if !editing}
+      <button type="button" class="secondary" bind:this={editButton} disabled={busy} onclick={() => { editing = true; }}>Edit configuration</button>
+    {/if}
     <EnableButton
       path={`/connections/${connection.id}`}
       disabled={Boolean(connection.disabledAt)}
       onChanged={props.onChanged}
     />
   </div>
+  {#if editing}
+    <ConnectionEditForm {connection} onDiscard={closeEditor} onSaved={savedConfiguration} onChanged={props.onChanged} />
+  {:else}
   <DiscoverableToggle
     path={`/connections/${connection.id}`}
     discoverable={connection.discoverable}
@@ -160,6 +182,7 @@
     </form>
     <ErrorNote error={credentialAction.error} />
   </details>
+  {/if}
 </div>
 
 <style>
