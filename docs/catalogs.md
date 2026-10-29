@@ -313,7 +313,10 @@ off, **Authentication required** when enabled but authentication is missing, or 
 otherwise. Disabled takes precedence even if credentials are saved or missing. Public
 connections need no authentication to show Enabled. The enable/disable control and OAuth
 controls stay in configuration. OAuth controls appear expanded near the top of an OAuth
-connection. An empty tool list still allows no tools after authentication.
+connection. Refresh status reloads the stored state, shows progress, and confirms completion
+even if the state has not changed. It does not test the provider. Disconnect is disabled
+while signed out. A successful disconnect updates the badge and confirms completion; failed
+actions show an error and allow retry. An empty tool list still allows no tools after authentication.
 
 Migration 015 records the authentication method. Existing OAuth sessions become OAuth
 connections; existing saved header credentials remain header authentication; other existing

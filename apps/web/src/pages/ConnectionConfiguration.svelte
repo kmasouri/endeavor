@@ -7,7 +7,7 @@
   import EnableButton from './EnableButton.svelte';
   import ConnectionOAuth from './ConnectionOAuth.svelte';
 
-  let props: { connection: Connection; onChanged: () => void; startSignIn?: boolean } = $props();
+  let props: { connection: Connection; onChanged: () => Promise<boolean>; startSignIn?: boolean } = $props();
   let connection = $derived(props.connection);
   let credential = $state('');
   let discovered = $state<{ name: string; description: string }[] | null>(null);

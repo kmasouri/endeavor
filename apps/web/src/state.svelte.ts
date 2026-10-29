@@ -19,24 +19,27 @@ export function createLoad<T>(
   let active = false;
   let pending = false;
 
-  function reload(): void {
-    if (!active) return;
+  function reload(): Promise<boolean> {
+    if (!active) return Promise.resolve(false);
     pending = true;
     const askedGeneration = generation;
     const askedRequest = ++request;
-    void Promise.resolve()
+    return Promise.resolve()
       .then(load)
       .then(
         (value) => {
           if (active && askedGeneration === generation && askedRequest === request) {
             data = value;
             error = null;
+            return true;
           }
+          return false;
         },
         (caught: unknown) => {
           if (active && askedGeneration === generation && askedRequest === request) {
             error = caught instanceof Error ? caught.message : String(caught);
           }
+          return false;
         }
       )
       .finally(() => {

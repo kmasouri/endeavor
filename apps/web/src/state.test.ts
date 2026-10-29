@@ -84,9 +84,10 @@ test('the newest reload wins even when an older request finishes later', async (
   try {
     flushSync();
     await settle();
-    resource.reload();
+    const reloaded = resource.reload();
     await settle();
     requests[1].resolve('newest');
+    assert.equal(await reloaded, true);
     await settle();
     requests[0].resolve('older');
     await settle();
@@ -168,4 +169,22 @@ test('actions show failures, clear them on retry, and prevent duplicate submissi
   assert.equal(action.error, 'Save failed');
   assert.equal(await action.run(async () => {}), true);
   assert.equal(action.error, null);
+});
+
+test('reload reports failures and closed resources without rejecting', async () => {
+  let resource!: ReturnType<typeof createLoad<string>>;
+  const destroy = root(() => {
+    resource = createLoad(
+      async () => {
+        throw new Error('load failed');
+      },
+      () => []
+    );
+  });
+  flushSync();
+  await settle();
+  assert.equal(await resource.reload(), false);
+  assert.equal(resource.error, 'load failed');
+  destroy();
+  assert.equal(await resource.reload(), false);
 });
