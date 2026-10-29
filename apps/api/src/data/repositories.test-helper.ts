@@ -29,6 +29,7 @@ export function mockTaskRepository(): jest.Mocked<TaskRepository> {
     resolveWait: jest.fn(),
     resolveOpenWaits: jest.fn().mockResolvedValue(0),
     addEvent: jest.fn(),
+    recordToolResults: jest.fn().mockResolvedValue(true),
     listLatestEvents: jest.fn().mockResolvedValue([]),
     listEvents: jest.fn().mockResolvedValue([]),
     addOutput: jest.fn(),

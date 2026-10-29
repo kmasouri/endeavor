@@ -310,6 +310,28 @@ export class TaskPostgresRepository implements TaskRepository {
     return toTaskEvent(result.rows[0]);
   }
 
+  async recordToolResults(
+    taskId: string,
+    workerId: string,
+    data: Record<string, unknown>
+  ): Promise<boolean> {
+    const result = await this.db.query(
+      `INSERT INTO endeavor.task_events (task_id, type, actor_type, actor_id, data)
+       SELECT id, 'tool.results', 'system', NULL, $3::jsonb
+       FROM (
+         SELECT id FROM endeavor.tasks
+         WHERE id = $1
+           AND (
+             (lease_owner = $2 AND lease_expires_at > now())
+             OR (lease_owner IS NULL AND (state <> 'working' OR paused_at IS NOT NULL))
+           )
+         FOR UPDATE
+       ) controlled_task`,
+      [taskId, workerId, data]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async listEvents(
     taskId: string,
     options: { afterId: number; limit: number }

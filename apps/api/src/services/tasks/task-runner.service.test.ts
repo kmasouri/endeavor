@@ -206,6 +206,10 @@ function setup(
     createdAt: new Date(),
     ...input
   }));
+  tasks.recordToolResults.mockImplementation(async (taskId, _workerId, data) => {
+    await tasks.addEvent(taskId, 'tool.results', { type: 'system', id: null }, data);
+    return true;
+  });
   tasks.countOutputs.mockResolvedValue(1);
   agentRepo.getById.mockImplementation(async (id) => agents[id] ?? null);
   agentRepo.getVersion.mockImplementation(async (id) => (id === version.id ? version : null));
@@ -324,6 +328,160 @@ describe('agent deletion execution gate', () => {
 });
 
 describe('TaskRunnerService', () => {
+  describe('queued tool controls', () => {
+    const calls: ModelToolCall[] = [
+      { id: 'first', name: 'write_file', input: { path: 'first.txt', content: 'one' } },
+      { id: 'second', name: 'write_file', input: { path: 'second.txt', content: 'two' } },
+      { id: 'third', name: 'send_message', input: { body: 'This must not be sent.' } }
+    ];
+
+    function setupBatch() {
+      const ctx = setup();
+      const pending = event(1, 'model.turn', { raw: {}, toolCalls: calls });
+      ctx.tasks.listEvents.mockResolvedValue([pending]);
+      ctx.workspaceClient.write.mockResolvedValue({ path: 'first.txt', bytes: 3 });
+      return { ...ctx, pending };
+    }
+
+    it.each([
+      ['pause', { pausedAt: new Date() }],
+      ['cancel', { state: 'cancelled' }],
+      ['wait', { state: 'waiting' }],
+      ['block', { state: 'blocked' }],
+      ['complete', { state: 'completed' }],
+      ['migrate', { agentVersionId: 'new-version' }]
+    ] as [string, Partial<Task>][])(
+      'skips later tools after %s during the first tool',
+      async (_label, changes) => {
+        const { runner, tasks, workspaceClient, messages, setCurrent, client, pending } =
+          setupBatch();
+        workspaceClient.write.mockImplementationOnce(async () => {
+          setCurrent(makeTask(changes));
+          if (changes.pausedAt || (changes.state && changes.state !== 'working')) {
+            // The real repository releases ownership when a task is paused or stops working.
+            tasks.renewLease.mockResolvedValue(false);
+          }
+          return { path: 'first.txt', bytes: 3 };
+        });
+
+        await runner.runTask(makeTask());
+
+        expect(workspaceClient.write).toHaveBeenCalledTimes(1);
+        expect(messages.create).not.toHaveBeenCalled();
+        expect(client.complete).not.toHaveBeenCalled();
+        const results = toolResult(tasks);
+        expect(results.results).toEqual([
+          expect.objectContaining({ callId: 'first', isError: false }),
+          expect.objectContaining({
+            callId: 'second',
+            isError: true,
+            content: expect.stringContaining('Skipped:')
+          }),
+          expect.objectContaining({
+            callId: 'third',
+            isError: true,
+            content: expect.stringContaining('Skipped:')
+          })
+        ]);
+        // A later resume or migration must not replay the skipped actions from this batch.
+        const rebuilt = await runner.rebuildTranscript(
+          '',
+          [pending, event(2, 'tool.results', results)],
+          'scripted'
+        );
+        expect(rebuilt.pendingCalls).toEqual([]);
+      }
+    );
+
+    it('checks controls after acquiring the execution lock and before the first tool', async () => {
+      const { runner, agentRepo, setCurrent, workspaceClient, tasks } = setupBatch();
+      const release = jest.fn();
+      agentRepo.acquireExecution.mockImplementationOnce(async () => {
+        setCurrent(makeTask({ pausedAt: new Date() }));
+        return release;
+      });
+      await runner.runTask(makeTask());
+      expect(workspaceClient.write).not.toHaveBeenCalled();
+      expect(release).toHaveBeenCalledTimes(1);
+      expect(toolResult(tasks).results).toHaveLength(3);
+    });
+
+    it('rechecks controls after recording tool activity', async () => {
+      const { runner, tasks, setCurrent, workspaceClient } = setupBatch();
+      tasks.addEvent.mockImplementation(async (_taskId, type, _actor, data) => {
+        if (type === 'tool.started') setCurrent(makeTask({ state: 'cancelled' }));
+        return event(2, type, data);
+      });
+      await runner.runTask(makeTask());
+      expect(workspaceClient.write).not.toHaveBeenCalled();
+      expect(toolResult(tasks).results.every((result) => result.isError)).toBe(true);
+    });
+
+    it('runs every queued tool when task control and ownership stay unchanged', async () => {
+      const { runner, tasks, workspaceClient, messages, pending } = setupBatch();
+      tasks.listEvents.mockResolvedValueOnce([pending]).mockResolvedValue([]);
+      await runner.runTask(makeTask());
+      expect(workspaceClient.write).toHaveBeenCalledTimes(2);
+      expect(messages.create).toHaveBeenCalledTimes(1);
+      expect(toolResult(tasks).results.every((result) => !result.isError)).toBe(true);
+    });
+
+    it('does not continue after a tool fails while a person cancels', async () => {
+      const { runner, workspaceClient, messages, setCurrent, tasks } = setupBatch();
+      workspaceClient.write.mockImplementationOnce(async () => {
+        setCurrent(makeTask({ state: 'cancelled' }));
+        throw new Error('Write failed');
+      });
+      await runner.runTask(makeTask());
+      expect(workspaceClient.write).toHaveBeenCalledTimes(1);
+      expect(messages.create).not.toHaveBeenCalled();
+      expect(toolResult(tasks).results[0]).toMatchObject({
+        isError: true,
+        content: 'Write failed'
+      });
+    });
+
+    it("stops after lease loss without finalizing the new owner's batch", async () => {
+      const { runner, tasks, workspaceClient, messages } = setupBatch();
+      workspaceClient.write.mockImplementationOnce(async () => {
+        tasks.renewLease.mockResolvedValue(false);
+        return { path: 'first.txt', bytes: 3 };
+      });
+      await runner.runTask(makeTask());
+      expect(workspaceClient.write).toHaveBeenCalledTimes(1);
+      expect(messages.create).not.toHaveBeenCalled();
+      expect(eventTypes(tasks)).not.toContain('tool.results');
+    });
+
+    it.each(['held', 'lost', 'failed'])(
+      'renews the lease during a slow tool (%s)',
+      async (outcome) => {
+        jest.useFakeTimers();
+        try {
+          const { runner, tasks, workspaceClient, messages, setCurrent } = setupBatch();
+          workspaceClient.write.mockImplementationOnce(async () => {
+            const before = tasks.renewLease.mock.calls.length;
+            if (outcome === 'lost') tasks.renewLease.mockResolvedValueOnce(false);
+            if (outcome === 'failed')
+              tasks.renewLease.mockRejectedValueOnce(new Error('Database unavailable'));
+            await jest.advanceTimersByTimeAsync(DEFAULT_RUNNER_OPTIONS.leaseMs);
+            expect(tasks.renewLease.mock.calls.length).toBeGreaterThan(before);
+            // Later successful renewals must not undo observed lease loss.
+            if (outcome === 'held') setCurrent(makeTask({ pausedAt: new Date() }));
+            return { path: 'first.txt', bytes: 3 };
+          });
+          await runner.runTask(makeTask());
+          expect(workspaceClient.write).toHaveBeenCalledTimes(1);
+          expect(messages.create).not.toHaveBeenCalled();
+          expect(eventTypes(tasks).includes('tool.results')).toBe(outcome === 'held');
+          expect(jest.getTimerCount()).toBe(0);
+        } finally {
+          jest.useRealTimers();
+        }
+      }
+    );
+  });
+
   describe('costs and budgets', () => {
     it('records what each model turn cost, from the price table', async () => {
       const { runner, tasks, client } = setup();
@@ -433,6 +591,24 @@ describe('TaskRunnerService', () => {
       );
       expect(current().state).toBe('completed');
       expect(current().criteriaCheck?.summary).toContain('Independent check: every criterion');
+    });
+
+    it('keeps the lease alive during a slow completion check and clears its timer', async () => {
+      jest.useFakeTimers();
+      try {
+        const { runner, tasks, checker, current } = setupChecked([]);
+        checker.complete.mockImplementationOnce(async () => {
+          const before = tasks.renewLease.mock.calls.length;
+          await jest.advanceTimersByTimeAsync(DEFAULT_RUNNER_OPTIONS.leaseMs * 2);
+          expect(tasks.renewLease.mock.calls.length - before).toBeGreaterThanOrEqual(6);
+          return turn({ text: 'MET: all covered' });
+        });
+        await runner.runTask(makeTask());
+        expect(current().state).toBe('completed');
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('sends the gaps back to the agent instead of completing', async () => {
