@@ -12,7 +12,9 @@ const service = new ExecutionService(
 await service.initialize();
 const app = buildServer(service, settings.EXECUTOR_TOKEN);
 const cleanup = setInterval(() => {
-  void service.cleanup();
+  void service.cleanup().catch(() => {
+    console.error('Workspace cleanup failed; the executor will retry on the next interval.');
+  });
 }, 60_000);
 cleanup.unref();
 app.addHook('onClose', async () => {

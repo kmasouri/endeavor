@@ -51,7 +51,8 @@ their worker pools to the execution budget. Large projects may still need serial
 libraries must be installed in the image; runtime installation cannot use root or the network. For a project needing installed packages,
 build an operator-controlled image containing its dependencies in `/opt/node_modules`, retain
 the worker entrypoint and the taskset utility, and set `EXECUTOR_IMAGE` to that image. The worker links these read-only
-packages into a fresh writable node_modules directory, so tool caches stay local to the run. Image builds happen outside agent execution. Use the
+packages into a writable node_modules directory, so tool caches stay local to the task. Image builds
+happen outside agent execution. Use the
 repository's lockfile, avoid embedding credentials or private registry configuration, and rebuild
 the image when dependencies change. The broker never pulls images during a task. A missing image
 fails the execution. Projects needing another toolchain can provide it in the configured image.
@@ -101,11 +102,15 @@ archive downloads have a separate 20 MB cap. `list_repository_files` is paginate
 
 ## Isolation, lifecycle, and recovery
 
-Each command receives a serialized snapshot in a fresh container. No host checkout, workspace
+Repository archive validation uses a disposable container. The first command creates a workspace
+container for the task; later commands reuse it. Separate tasks never share containers. Model calls
+and ordinary connections create no workspace container. No host checkout, workspace
 volume, Docker socket, provider credential, platform environment, or other task's files are
 mounted or passed to it. The container has no network, a read-only root, user 1000, no Linux
 capabilities, no new privileges, bounded tmpfs space, one CPU, 2 GiB memory, processes, file size, and
-open files. An init process reaps command descendants. The broker fixes the image and limits; tool arguments cannot change them.
+open files. An init process reaps orphaned processes. Background processes may survive commands;
+redirect their logs to files to avoid closed output pipes. The broker fixes the image and limits;
+tool arguments cannot change them.
 These controls are defense in depth around the shared host kernel, not a virtual machine.
 See [Docker security](https://docs.docker.com/engine/security/) and
 [resource limits](https://docs.docker.com/engine/containers/resource_constraints/).
@@ -113,16 +118,25 @@ See [Docker security](https://docs.docker.com/engine/security/) and
 Commands have a ten-minute outer deadline and an independent worker deadline. The broker runs
 at most two executions and keeps at most four task checkouts. Each task is serialized: edits,
 checkout replacement, and discard wait until the current execution ends or is cancelled.
-`cancel_execution` stops the container and discards its changes. A platform task cancellation
+`cancel_execution` removes the task container and its background processes, discarding changes since the last accepted source snapshot. A platform task cancellation
 does not send a broker cancellation automatically; an existing command ends at its deadline
-at the latest. Revocation prevents subsequent MCP calls but likewise does not undo a command
+at the latest; background processes end when the container is discarded or expires. Revocation
+prevents subsequent MCP calls but likewise does not undo a command
 already started. Container commands cannot publish externally because they have no network.
 
-Each run starts from the recorded source. Create new source files with `write_repository_file`.
-Commands may modify or remove existing source files; new generated files and directories are
-ephemeral and are discarded after the run. Build and test in the same command when tests need
-build output. This keeps caches, reports, and timestamps out of source revisions. Only a complete,
-validated source snapshot is imported. A nonzero test exit is recorded as a finished,
+The first command restores the recorded source. Later commands preserve the live workspace and apply
+explicit file-tool edits and deletions before execution. Unchanged source is not rewritten. Create
+publishable source files with `write_repository_file`. Commands may modify or remove existing source
+files. Generated files, dependencies, caches, build output, and background processes remain
+available across commands but are not automatically imported into source revisions. File tools read
+the last accepted source snapshot, not arbitrary generated output; use a command to inspect
+generated files. Only a complete, validated source snapshot is imported.
+
+Execution results include `workspaceReset` when a command created a new environment and
+`backgroundProcesses` when other workspace processes remained at export. A check with background
+processes cannot certify a revision: stop those processes and run the final check again. Results
+describe an observed source snapshot, not a live filesystem guarantee. A nonzero test exit is
+recorded as a finished,
 failing check; container failure, timeout, invalid export, or cancellation preserves the preceding
 checkout. Command logs are capped at 16,000 characters. The existing platform MCP result cap may
 truncate a long result further. Source code and logs are task evidence, so never put secrets in
@@ -131,8 +145,14 @@ them. Platform and provider secrets are not injected into the command environmen
 State is saved atomically in the `execution-data` volume. A broker restart removes labelled
 leftover containers, marks running jobs interrupted with unknown outcome, and never replays
 commands. Poll the recovered execution and verify again. The broker keeps 20 execution summaries
-per task. Inactive checkouts are removed after 24 hours; discard can remove them earlier. The agent examples release finished checkouts after saving evidence. Read-only probes do not
-reserve a workspace. Saved platform outputs and history remain. Broker shutdown cancels active work. Preserve the volume
+per task. Idle workspace containers are removed after 30 minutes, checked every minute. Accepted
+source and execution summaries remain for 24 idle hours; discard removes both earlier. No dedicated
+per-agent setting is added: access still comes from the selected execution connection. The agent
+examples release finished checkouts after saving evidence. Read-only probes do not
+reserve a workspace. Saved platform outputs and history remain. Broker shutdown cancels active work
+and removes idle containers. On restart or container failure, the next command restores the last
+accepted source; dependencies, generated output, and processes from the lost container are not
+restored. Preserve the volume
 and the Compose project when refreshing the app.
 
 ## Verification
