@@ -95,3 +95,8 @@ and controls remain present.
 CA-92 adds agent profile appearance coverage at 320px, 390px, and desktop widths in both themes:
 preview, saved/reloaded colors and icons, failed save retry, discard without writes, and reset
 without a configuration version. Each case captures the editor and checks for page overflow.
+
+Participant profile coverage in `chat.test.ts` checks author names and avatars, keyboard
+opening and Escape/focus restoration, outside dismissal, directory details, deleted and
+unavailable authors, and member cards inside the native members dialog. Geometry and review
+screenshots cover dark/light themes at 320px, 390px and 1440px.
