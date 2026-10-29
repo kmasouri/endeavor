@@ -58,10 +58,10 @@
       <div class="endeavor-members">
         {#each members as member (`${member.participant.type}:${member.participant.id}`)}
           <div class="row endeavor-member">
-            <ParticipantProfile name={member.name} id={member.participant.id} appearance={member} agent={member.participant.type === 'agent'} meId={me.id} {member} directory={directory.data?.find((entry) => entry.id === member.participant.id)} avatar>
+            <ParticipantProfile name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} meId={me.id} {member} directory={directory.data?.find((entry) => entry.id === member.participant.id)} avatar>
               <Avatar name={member.name} id={member.participant.id} appearance={member} agent={member.participant.type === 'agent'} />
             </ParticipantProfile>
-            <span class="grow"><span class="row"><ParticipantProfile name={member.name} id={member.participant.id} appearance={member} agent={member.participant.type === 'agent'} meId={me.id} {member} directory={directory.data?.find((entry) => entry.id === member.participant.id)}>
+            <span class="grow"><span class="row"><ParticipantProfile name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} meId={me.id} {member} directory={directory.data?.find((entry) => entry.id === member.participant.id)}>
                 <strong>{member.name}</strong>
               </ParticipantProfile>
               {#if member.participant.id === me.id}<span class="caption muted">(you)</span>{/if}

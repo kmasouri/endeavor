@@ -7,12 +7,21 @@
     agent = false,
     size = 'md',
     appearance
-  }: { name: string; id?: string; agent?: boolean; size?: 'sm' | 'md' | 'lg' | 'xl'; appearance?: AgentAppearance | null } = $props();
+  }: {
+    name: string;
+    id?: string;
+    agent?: boolean;
+    size?: 'sm' | 'md' | 'lg' | 'xl';
+    appearance?: AgentAppearance | null;
+  } = $props();
   let tint = $derived(
     1 + (Array.from(id).reduce((sum, char) => sum + char.charCodeAt(0), 0) % (agent ? 3 : 4))
   );
-  let color = $derived(agent && appearance?.avatarColor
-    ? { lime: 1, sky: 2, teal: 3 }[appearance.avatarColor] : tint);
+  let color = $derived(
+    agent && appearance?.avatarColor
+      ? { lime: 1, sky: 2, teal: 3 }[appearance.avatarColor]
+      : tint
+  );
   let icon = $derived(appearance?.avatarIcon ?? 'agents');
 </script>
 

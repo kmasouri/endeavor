@@ -1,12 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
-import type { Member, Message } from '../src/api';
+import type { AgentAppearance, Member, Message } from '../src/api';
 
 const createdAt = '2026-10-27T12:00:00Z';
 const researcher = { id: 'researcher', name: 'Researcher', purpose: 'Find evidence', capabilities: { provider: 'openai', model: 'research-model', skillCount: 2, connectionCount: 1 } };
-const reviewer = { id: 'reviewer', name: 'Reviewer', purpose: 'Check evidence' };
+const reviewer = { id: 'reviewer', name: 'Reviewer', purpose: 'Check evidence', avatarColor: null, avatarIcon: null };
 
 // All network traffic is intercepted, including read markers and failed writes. No live API.
-async function fixture(page: Page, theme = 'dark', empty = false) {
+async function fixture(page: Page, theme = 'dark', empty = false, appearance: AgentAppearance = {}) {
+  const shownResearcher = { ...researcher, ...appearance };
   const state = {
     extraMembers: [] as Member[],
     failSend: false,
@@ -85,8 +86,8 @@ async function fixture(page: Page, theme = 'dark', empty = false) {
     }
     if (path === '/humans')
       return reply({ data: [{ id: 'person', name: 'Kayvan', preferences: { theme } }] });
-    if (path === '/directory') return reply({ data: [researcher, reviewer] });
-    if (path === '/agents') return list([researcher, reviewer]);
+    if (path === '/directory') return reply({ data: [shownResearcher, reviewer] });
+    if (path === '/agents') return list([shownResearcher, reviewer]);
     if (path === '/conversations') return list([{ id: 'brief', title: 'source-brief', createdAt }]);
     if (path === '/conversations/brief')
       return reply({
@@ -97,10 +98,12 @@ async function fixture(page: Page, theme = 'dark', empty = false) {
           members: [
             { participant: { type: 'human', id: 'person' }, name: 'Kayvan', historyFrom: null },
             ...state.extraMembers,
-            ...[researcher, ...(state.added ? [reviewer] : [])].map((a) => ({
+            ...[shownResearcher, ...(state.added ? [reviewer] : [])].map((a) => ({
               participant: { type: 'agent', id: a.id },
               name: a.name,
               purpose: a.purpose,
+              avatarColor: a.avatarColor,
+              avatarIcon: a.avatarIcon,
               historyFrom: null
             }))
           ]
@@ -419,6 +422,43 @@ test('deleted agent profiles and member profiles preserve history and modal acce
   await expect(card).not.toBeVisible();
   await expect(members).toBeVisible();
   await expect(members.getByRole('button', { name: "View Researcher's profile" }).last()).toBeFocused();
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('custom agent appearance reaches chat avatars, profile cards and mention choices', async ({
+  page
+}) => {
+  const api = await fixture(page, 'dark', false, { avatarColor: 'teal', avatarIcon: 'file' });
+  api.state.messages.push({
+    id: 'answer',
+    authorType: 'agent',
+    authorId: 'researcher',
+    body: 'Here is the evidence.',
+    taskId: null,
+    mentions: [],
+    inReplyToMessageId: null,
+    createdAt
+  });
+  await page.goto('/app/#/conversations/brief');
+  const message = page.locator('#m-answer');
+  const avatar = message.getByRole('img', { name: 'Researcher · agent' });
+  await expect(avatar).toHaveAttribute('style', /agent-3-bg/);
+  const path = await avatar.locator('path').getAttribute('d');
+  expect(path).toContain('M6 3h8');
+  await message.locator('.message-avatar .participant-trigger').click();
+  const card = page.getByRole('dialog', { name: "Researcher's profile", exact: true });
+  await expect(card.getByRole('img')).toHaveAttribute('style', /agent-3-bg/);
+  await expect(card.getByRole('img').locator('path')).toHaveAttribute('d', path!);
+  await card.getByRole('button', { name: 'Close profile' }).click();
+  const input = page.getByRole('textbox', { name: 'Message', exact: true });
+  await input.fill('@Res');
+  const choice = page.getByRole('option').filter({ hasText: 'Researcher' });
+  await expect(choice.getByRole('img')).toHaveAttribute('style', /agent-3-bg/);
+  await expect(choice.getByRole('img').locator('path')).toHaveAttribute('d', path!);
+  await expect(
+    page.locator('.members-button').getByRole('img', { name: 'Researcher · agent' })
+  ).toHaveAttribute('style', /agent-3-bg/);
   expect(api.errors).toEqual([]);
   expect(api.unexpected).toEqual([]);
 });

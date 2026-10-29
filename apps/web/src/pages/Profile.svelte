@@ -1,6 +1,8 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { type Agent, type AgentAppearance, AGENT_AVATAR_COLORS, AGENT_AVATAR_ICONS, api } from '../api';
+  import {
+    type Agent, type AgentAppearance, AGENT_AVATAR_COLORS, AGENT_AVATAR_ICONS, api
+  } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Avatar from '../Avatar.svelte';
   import Icon from '../Icon.svelte';
@@ -21,9 +23,15 @@
   let avatarColor = $state<AgentAppearance['avatarColor']>(untrack(() => agent.avatarColor ?? null));
   let avatarIcon = $state<AgentAppearance['avatarIcon']>(untrack(() => agent.avatarIcon ?? null));
   const colors = { lime: 'Lime', sky: 'Sky', teal: 'Teal' };
-  const icons = { agents: 'Robot', search: 'Search', check: 'Check', file: 'Document', work: 'Briefcase', connections: 'Link', approvals: 'Shield', catalogs: 'Grid', setup: 'Sun', schedules: 'Clock' };
+  const icons = {
+    agents: 'Robot', search: 'Search', check: 'Check', file: 'Document', work: 'Briefcase',
+    connections: 'Link', approvals: 'Shield', catalogs: 'Grid', setup: 'Sun', schedules: 'Clock'
+  };
   const action = createAction();
-  let changed = $derived(name !== agent.name || purpose !== agent.purpose || avatarColor !== (agent.avatarColor ?? null) || avatarIcon !== (agent.avatarIcon ?? null));
+  let changed = $derived(
+    name !== agent.name || purpose !== agent.purpose ||
+    avatarColor !== (agent.avatarColor ?? null) || avatarIcon !== (agent.avatarIcon ?? null)
+  );
   const save = (event: SubmitEvent) => {
     event.preventDefault();
     void action
