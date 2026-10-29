@@ -1,13 +1,19 @@
 import type { Page } from '@playwright/test';
-import type { Message } from '../src/api';
+import type { Member, Message } from '../src/api';
 
 export const createdAt = '2026-10-27T12:00:00Z';
-const researcher = { id: 'researcher', name: 'Researcher', purpose: 'Find evidence' };
+const researcher = {
+  id: 'researcher',
+  name: 'Researcher',
+  purpose: 'Find evidence',
+  capabilities: { provider: 'openai', model: 'research-model', skillCount: 2, connectionCount: 1 }
+};
 const reviewer = { id: 'reviewer', name: 'Reviewer', purpose: 'Check evidence' };
 
 // All network traffic is intercepted, including read markers and failed writes. No live API.
 export async function fixture(page: Page, theme = 'dark', empty = false) {
   const state = {
+    extraMembers: [] as Member[],
     failSend: false,
     failMembers: false,
     failMessages: false,
@@ -105,6 +111,7 @@ export async function fixture(page: Page, theme = 'dark', empty = false) {
           createdAt,
           members: [
             { participant: { type: 'human', id: 'person' }, name: 'Kayvan', historyFrom: null },
+            ...state.extraMembers,
             ...[researcher, ...(state.added ? [reviewer] : [])].map((a) => ({
               participant: { type: 'agent', id: a.id },
               name: a.name,

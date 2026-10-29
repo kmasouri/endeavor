@@ -55,7 +55,7 @@ live under `apps/web/e2e/`.
 | Access approvals | `access-requests.test.ts`: ongoing approval, rejection, scope, phone layout and discovery | Audited and retained | Does not test all server grant/revocation combinations in the browser |
 | Shared navigation | `endeavors.test.ts`: destinations, route/selection restore, people switching, pagination, sidebar resize/collapse, touch/keyboard, responsive counts; `management.test.ts`: legacy routes | Audited and retained | Chromium only; no browser/device farm |
 | Schedules | All original Schedules cases retained: one-line badges, clipping/overlap, frame, empty/loading-error, themes/widths and keyboard; later management filters | Audited and retained | Real recurrence and DST behavior use service/unit tests |
-| Catalogs and authentication | Creation, failure retention, configuration, credentials, MCP discovery and OAuth setup in their existing suites | Refresh/disconnect busy states, unchanged-status feedback, signed-out disabling, errors/retries, failed post-disconnect reload and repeated refresh geometry/focus/opacity | OAuth redirects and external identity providers are mocked |
+| Catalogs and authentication | Creation, failure retention, configuration, credentials, MCP discovery and OAuth setup in their existing suites; connection errors stay in the failing section, with retry and shared busy controls | Refresh/disconnect busy states, unchanged-status feedback, signed-out disabling, errors/retries, failed post-disconnect reload and repeated refresh geometry/focus/opacity | OAuth redirects and external identity providers are mocked |
 
 ## Visual assertions and review
 
@@ -91,3 +91,8 @@ production stylesheet made the dark 390px chat case fail with `aligned: false` a
 `ordered: false`. Restoring the stylesheet and rebuilding made it pass. The experiment changed
 no committed app code; it proves the new assertion detects a broken composer even when its text
 and controls remain present.
+
+Participant profile coverage in `chat.test.ts` checks author names and avatars, keyboard
+opening and Escape/focus restoration, outside dismissal, directory details, deleted and
+unavailable authors, and member cards inside the native members dialog. Geometry and review
+screenshots cover dark/light themes at 320px, 390px and 1440px.

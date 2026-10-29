@@ -146,6 +146,8 @@ test('incremental chat retains messages on poll failure and retries failed visib
   state.failMessages = false;
   state.messages = history(621);
   await page.getByRole('button', { name: 'Retry messages' }).click();
+  await expect(page.locator('#m-history-0621')).toHaveCount(1);
+  await page.getByRole('button', { name: '1 new message ↓' }).click();
   await expect(page.locator('#m-history-0621')).toBeInViewport();
   expect(errors).toEqual([]);
   expect(unexpected).toEqual([]);

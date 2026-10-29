@@ -219,3 +219,16 @@ are exclusive and resolve to the stored timestamp plus ID, preserving order when
 tie or have finer precision than browser dates. Invalid query combinations return
 `validationError`; missing, cross-conversation, or hidden-history cursors return
 `messageNotFound`. Membership and `historyFrom` apply to every window.
+
+## Participant profiles
+
+Message author names and avatars, and current members in People and agents, open a compact
+profile card. The card shows the person's or agent's identity and available purpose. Agents
+also show the directory's model, provider and access counts. View agent opens the existing
+agent page; your own card links to profile settings. Deleted agents retain their attribution
+without an agent-page link. Cards use already loaded member and directory data and make no
+new API requests.
+
+`ParticipantProfile.svelte` uses a native automatic popover for outside-click and Escape
+dismissal. Cards appear in the browser's top layer, fit within the viewport and close when
+the surrounding page scrolls. Close restores focus to the name or avatar that opened it.

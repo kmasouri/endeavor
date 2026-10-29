@@ -12,6 +12,7 @@
   import { formatDateTime, formatShortTime } from '../components';
   import FormattedText from '../FormattedText.svelte';
   import Avatar from '../Avatar.svelte';
+  import ParticipantProfile from '../ParticipantProfile.svelte';
   import Icon from '../Icon.svelte';
   import Suggestion from './Suggestion.svelte';
   import TaskStatus from './TaskStatus.svelte';
@@ -145,7 +146,13 @@
         </a>
       {/if}
       <div class="message-avatar">
-        {#if !grouped}<Avatar
+        {#if !grouped && message.authorType !== 'system' && message.authorId}
+          <ParticipantProfile {name} id={message.authorId} agent={message.authorType === 'agent'} meId={props.meId}
+            member={props.members.find((member) => member.participant.id === message.authorId && member.participant.type === message.authorType)}
+            directory={message.authorType === 'agent' ? props.directory.find((entry) => entry.id === message.authorId) : undefined} avatar>
+            <Avatar {name} id={message.authorId} agent={message.authorType === 'agent'} size="lg" />
+          </ParticipantProfile>
+        {:else if !grouped}<Avatar
             {name}
             id={message.authorId ?? 'platform'}
             agent={message.authorType === 'agent'}
@@ -154,7 +161,13 @@
       </div>
       <div class="message-content">
         {#if !grouped}<div class="meta">
-            <strong>{name}</strong><time class="caption muted" title={formatDateTime(message.createdAt)}
+            {#if message.authorType !== 'system' && message.authorId}
+              <ParticipantProfile {name} id={message.authorId} agent={message.authorType === 'agent'} meId={props.meId}
+                member={props.members.find((member) => member.participant.id === message.authorId && member.participant.type === message.authorType)}
+                directory={message.authorType === 'agent' ? props.directory.find((entry) => entry.id === message.authorId) : undefined}>
+                <strong>{name}</strong>
+              </ParticipantProfile>
+            {:else}<strong>{name}</strong>{/if}<time class="caption muted" title={formatDateTime(message.createdAt)}
               >{formatShortTime(message.createdAt)}</time
             >
           </div>{:else}<time class="group-time caption muted" title={formatDateTime(message.createdAt)}
