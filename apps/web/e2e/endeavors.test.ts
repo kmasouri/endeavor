@@ -471,7 +471,7 @@ for (const width of [1440, 390, 320]) {
     const dialog = page.getByRole('dialog', { name: 'People and agents', exact: true });
     const search = dialog.getByLabel('Find people or agents');
     await expect(search).toBeFocused();
-    await expect(dialog.getByRole('region', { name: 'Current members' }).getByText('Kayvan', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('region', { name: 'Current members' }).getByRole('button', { name: "View Kayvan's profile", exact: true }).last()).toBeVisible();
     await search.fill('evidence');
     await dialog.getByRole('checkbox', { name: 'Add Researcher', exact: true }).check();
     await expect(dialog.getByRole('checkbox', { name: 'Add Lee', exact: true })).toHaveCount(0);
@@ -487,7 +487,7 @@ for (const width of [1440, 390, 320]) {
     state.fail = false;
     await dialog.getByRole('button', { name: 'Add (2)', exact: true }).click();
     await expect(dialog.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
-    await expect(dialog.getByRole('region', { name: 'Current members' }).getByText('Researcher', { exact: true })).toBeVisible();
+    await expect(dialog.getByRole('region', { name: 'Current members' }).getByRole('button', { name: "View Researcher's profile", exact: true }).last()).toBeVisible();
     expect(state.members).toEqual([
       { type: 'human', id: 'person-2', history: 'from_now' },
       { type: 'agent', id: 'agent-1', history: 'from_now' }
