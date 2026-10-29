@@ -18,5 +18,9 @@
   aria-label={agent ? `${name} · agent` : undefined}
   title={`${name}${agent ? ' · agent' : ''}`}
 >
-  {#if agent}<Icon name="agents" size={16} />{:else}{name.slice(0, 1).toUpperCase()}{/if}
+  {#if agent}<Icon
+      name={tint === 1 ? 'search' : tint === 2 ? 'check' : 'agents'}
+      size={16}
+    />{:else}{name.slice(0, 1).toUpperCase()}{/if}
+  {#if agent}<span class="agent-badge" aria-hidden="true"><Icon name="robot" size={10} /></span>{/if}
 </span>
