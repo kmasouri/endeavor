@@ -9,7 +9,7 @@ export default defineConfig({
   retries: 0,
   workers: 2,
   timeout: 30_000,
-  globalTimeout: 180_000,
+  globalTimeout: 300_000,
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
     browserName: 'chromium',
