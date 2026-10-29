@@ -414,7 +414,9 @@ test('deleted agent profiles and member profiles preserve history and modal acce
   await members.getByRole('button', { name: "View Researcher's profile" }).last().click();
   const card = page.getByRole('dialog', { name: "Researcher's profile" });
   await expect(card).toContainText('Find evidence');
-  await card.getByRole('button', { name: 'Close profile' }).click();
+  await expect(card.getByRole('button', { name: 'Close profile' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(card).not.toBeVisible();
   await expect(members).toBeVisible();
   await expect(members.getByRole('button', { name: "View Researcher's profile" }).last()).toBeFocused();
   expect(api.errors).toEqual([]);

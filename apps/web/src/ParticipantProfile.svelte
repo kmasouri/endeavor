@@ -39,6 +39,7 @@
   $effect(() => {
     if (!open) return;
     position();
+    card.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
     const observer = new ResizeObserver(position);
     observer.observe(card);
     window.addEventListener('resize', position);
@@ -75,6 +76,13 @@
   aria-label={`${name}'s profile`}
   class="participant-profile"
   ontoggle={(event) => { open = event.newState === 'open'; }}
+  onkeydown={(event) => {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    }
+  }}
 >
   <div class="row participant-profile-heading">
     <Avatar {name} {id} {agent} size="xl" />

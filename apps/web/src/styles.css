@@ -1713,6 +1713,8 @@ progress::-webkit-progress-value {
 
 /* Participant cards use the browser's top layer so chat scrolling cannot clip them. */
 button.participant-trigger {
+  min-height: 0;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   padding: 0;
