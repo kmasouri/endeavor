@@ -1,7 +1,5 @@
 import { Connection, Skill } from '../../shared/types';
-import { SkillRepository } from '../skills';
-import { ConnectionRepository } from '../connections';
-import { GrantRepository } from '../grants';
+import type { SkillRepository, ConnectionRepository, GrantRepository } from '..';
 
 // Thrown when a create or rename would give two skills, or two connections, the same name.
 export class CatalogNameConflictError extends Error {
