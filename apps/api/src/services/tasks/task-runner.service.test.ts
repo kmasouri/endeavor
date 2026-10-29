@@ -2673,6 +2673,25 @@ describe('TaskRunnerService', () => {
       updatedAt: new Date()
     };
 
+    it('records no creation when the schedule changed after listDue', async () => {
+      const { runner, tasks, responsibilities, conversations } = setup();
+      responsibilities.listDue.mockResolvedValue([due]);
+      conversations.getMember.mockResolvedValue({} as never);
+      tasks.createScheduled.mockResolvedValue(null);
+      await runner.startDueRuns(new Date('2026-10-22T01:10:00Z'));
+      expect(tasks.createScheduled).toHaveBeenCalledWith(
+        expect.objectContaining({ responsibilityId: due.id }),
+        due.nextRunAt
+      );
+      expect(tasks.create).not.toHaveBeenCalled();
+      expect(tasks.addEvent).not.toHaveBeenCalled();
+      expect(responsibilities.advance).toHaveBeenCalledWith(
+        'r1',
+        due.nextRunAt,
+        expect.objectContaining({ lastRunAt: null })
+      );
+    });
+
     it('recovers a persisted calendar slot after a crash without creating a second run', async () => {
       const { runner, tasks, responsibilities, conversations } = setup();
       const slot = new Date('2026-11-01T05:30:00Z');
@@ -2687,7 +2706,7 @@ describe('TaskRunnerService', () => {
       conversations.getMember.mockResolvedValue({} as never);
       let persisted: Task | null = null;
       tasks.getByRunKey.mockImplementation(async () => persisted);
-      tasks.create.mockImplementation(async (input) => {
+      tasks.createScheduled.mockImplementation(async (input) => {
         persisted = makeTask({ ...input } as never);
         return { task: persisted, created: true };
       });
@@ -2696,9 +2715,10 @@ describe('TaskRunnerService', () => {
         .mockResolvedValue(true);
       await runner.startDueRuns(new Date('2026-11-01T05:31:00Z'));
       await runner.startDueRuns(new Date('2026-11-01T05:32:00Z'));
-      expect(tasks.create).toHaveBeenCalledTimes(1);
-      expect(tasks.create).toHaveBeenCalledWith(
-        expect.objectContaining({ runKey: 'schedule:r1:2026-11-01T05:30:00.000Z' })
+      expect(tasks.createScheduled).toHaveBeenCalledTimes(1);
+      expect(tasks.createScheduled).toHaveBeenCalledWith(
+        expect.objectContaining({ runKey: 'schedule:r1:2026-11-01T05:30:00.000Z' }),
+        slot
       );
       expect(responsibilities.advance).toHaveBeenLastCalledWith(
         'r1',
@@ -2719,7 +2739,7 @@ describe('TaskRunnerService', () => {
       ]);
       tasks.findOpenRun.mockResolvedValue(makeTask({ state: 'waiting' }));
       await runner.startDueRuns(new Date('2026-03-08T13:01:00Z'));
-      expect(tasks.create).not.toHaveBeenCalled();
+      expect(tasks.createScheduled).not.toHaveBeenCalled();
       expect(responsibilities.advance).toHaveBeenCalledWith(
         'r1',
         new Date('2026-03-08T13:00:00Z'),
@@ -2731,7 +2751,7 @@ describe('TaskRunnerService', () => {
       const { runner, tasks, responsibilities, conversations } = setup();
       responsibilities.listDue.mockResolvedValue([due]);
       conversations.getMember.mockResolvedValue({} as never);
-      tasks.create.mockImplementation(async (input) => ({
+      tasks.createScheduled.mockImplementation(async (input) => ({
         task: makeTask({ ...input, id: 'run-1' } as never),
         created: true
       }));
@@ -2743,13 +2763,14 @@ describe('TaskRunnerService', () => {
         lastRunAt: new Date('2026-10-22T04:30:00Z'),
         catchUp: null
       });
-      expect(tasks.create).toHaveBeenCalledWith(
+      expect(tasks.createScheduled).toHaveBeenCalledWith(
         expect.objectContaining({
           runKey: 'schedule:r1:2026-10-22T04:00:00.000Z',
           responsibilityId: 'r1',
           requestedByType: 'schedule',
           brief: expect.stringContaining('3 earlier scheduled runs were missed')
-        })
+        }),
+        due.nextRunAt
       );
     });
 
@@ -2759,7 +2780,7 @@ describe('TaskRunnerService', () => {
 
       await runner.startDueRuns(new Date('2026-10-22T04:30:00Z'));
 
-      expect(tasks.create).not.toHaveBeenCalled();
+      expect(tasks.createScheduled).not.toHaveBeenCalled();
       expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
         nextRunAt: new Date('2026-10-22T05:00:00Z'),
         lastRunAt: null,
@@ -2784,7 +2805,7 @@ describe('TaskRunnerService', () => {
 
       await runner.startDueRuns(new Date('2026-10-22T01:10:00Z'));
 
-      expect(tasks.create).not.toHaveBeenCalled();
+      expect(tasks.createScheduled).not.toHaveBeenCalled();
       // The slot is still used up, and lastRunAt doesn't move.
       expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
         nextRunAt: new Date('2026-10-22T02:00:00Z'),
@@ -2797,14 +2818,14 @@ describe('TaskRunnerService', () => {
       const { runner, tasks, responsibilities, conversations } = setup();
       responsibilities.listDue.mockResolvedValue([due]);
       conversations.getMember.mockResolvedValue({} as never);
-      tasks.create.mockImplementation(async (input) => ({
+      tasks.createScheduled.mockImplementation(async (input) => ({
         task: makeTask({ ...input } as never),
         created: true
       }));
 
       await runner.startDueRuns(new Date('2026-10-22T01:10:00Z'));
 
-      expect(tasks.create.mock.invocationCallOrder[0]).toBeLessThan(
+      expect(tasks.createScheduled.mock.invocationCallOrder[0]).toBeLessThan(
         responsibilities.advance.mock.invocationCallOrder[0]
       );
     });
@@ -2813,10 +2834,12 @@ describe('TaskRunnerService', () => {
       const { runner, tasks, responsibilities, conversations } = setup();
       responsibilities.listDue.mockResolvedValue([due, { ...due, id: 'r2' }]);
       conversations.getMember.mockResolvedValue({} as never);
-      tasks.create.mockRejectedValueOnce(new Error('boom')).mockImplementation(async (input) => ({
-        task: makeTask({ ...input } as never),
-        created: true
-      }));
+      tasks.createScheduled
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockImplementation(async (input) => ({
+          task: makeTask({ ...input } as never),
+          created: true
+        }));
 
       await runner.startDueRuns(new Date('2026-10-22T01:10:00Z'));
 
@@ -2834,7 +2857,7 @@ describe('TaskRunnerService', () => {
 
       await runner.startDueRuns(new Date('2026-10-22T04:30:00Z'));
 
-      expect(tasks.create).not.toHaveBeenCalled();
+      expect(tasks.createScheduled).not.toHaveBeenCalled();
       expect(responsibilities.advance).toHaveBeenCalledWith('r1', due.nextRunAt, {
         nextRunAt: new Date('2026-10-22T05:00:00Z'),
         lastRunAt: null,

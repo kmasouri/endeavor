@@ -102,6 +102,12 @@ export interface TaskRepository {
   // Creates the task, or returns the existing one with the same runKey. For responsibility
   // starts, a competing open run can also be returned; services check its key before use.
   create(input: CreateTaskInput): Promise<{ task: Task; created: boolean }>;
+  // Scheduled starts lock and recheck the enabled schedule and expected slot through the
+  // insert. Null means pause, cancellation, retiming, or another runner invalidated the slot.
+  createScheduled(
+    input: CreateTaskInput,
+    expectedNextRunAt: Date
+  ): Promise<{ task: Task; created: boolean } | null>;
   getById(taskId: string): Promise<Task | null>;
   getByRunKey(runKey: string): Promise<Task | null>;
   list(input: ListTasksInput): Promise<Task[]>;
