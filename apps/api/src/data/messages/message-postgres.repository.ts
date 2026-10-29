@@ -98,6 +98,36 @@ export class MessagePostgresRepository implements MessageRepository {
     return result.rows.map(toMessage);
   }
 
+  async listWindow(
+    conversationId: string,
+    options: { since: Date | null; limit: number; beforeId?: string; afterId?: string }
+  ): Promise<Message[]> {
+    const order = options.afterId ? 'ASC' : 'DESC';
+    const result = await this.db.query<MessageRow>(
+      `SELECT * FROM (
+         SELECT * FROM endeavor.messages
+         WHERE conversation_id = $1
+           AND ($2::timestamptz IS NULL OR created_at >= $2)
+           AND ($4::uuid IS NULL OR (created_at, id) < (
+             SELECT created_at, id FROM endeavor.messages WHERE id = $4 AND conversation_id = $1
+           ))
+           AND ($5::uuid IS NULL OR (created_at, id) > (
+             SELECT created_at, id FROM endeavor.messages WHERE id = $5 AND conversation_id = $1
+           ))
+         ORDER BY created_at ${order}, id ${order}
+         LIMIT $3
+       ) message_window ORDER BY created_at, id`,
+      [
+        conversationId,
+        options.since,
+        options.limit,
+        options.beforeId ?? null,
+        options.afterId ?? null
+      ]
+    );
+    return result.rows.map(toMessage);
+  }
+
   async listRecent(
     conversationId: string,
     options: { since: Date | null; limit: number }

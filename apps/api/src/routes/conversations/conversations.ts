@@ -116,7 +116,8 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     '/conversations/:conversationId/messages',
     {
       schema: {
-        description: 'Messages, oldest first.',
+        description:
+          'Messages, oldest first. Use latest=true for the newest window, beforeId for older history or afterId for new arrivals. Cursor modes cannot be combined or used with offset. The default retains oldest-first offset pagination.',
         tags: ['conversations'],
         headers: actorHeadersSchema,
         params: conversationParamsSchema,

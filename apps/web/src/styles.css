@@ -1710,3 +1710,6 @@ progress::-webkit-progress-value {
     z-index: 12;
   }
 }
+
+.message-history { padding: 0 24px 8px; text-align: center; }
+.new-messages { display: block; margin: 0 auto 8px; }

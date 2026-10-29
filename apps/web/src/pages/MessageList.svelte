@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import {
     type CostReport,
     type DirectoryEntry,
@@ -35,16 +34,9 @@
     onInspectRun: (id: string) => void;
     selectedRunId?: string;
   } = $props();
-  let end = $state<HTMLDivElement | null>(null);
   let copied = $state('');
   let copyError = $state('');
   let count = $derived(props.messages.length);
-  $effect(() => {
-    count;
-    untrack(() => {
-      end?.scrollIntoView({ block: 'end' });
-    });
-  });
   let artifacts = $derived(
     collectConversationArtifacts(props.outputs, props.messages, props.tasks)
   );
@@ -111,6 +103,7 @@
       </li>{/if}
     <li
       id={`m-${message.id}`}
+      data-message-id={message.id}
       class="message"
       class:selected-run={Boolean(message.taskId && message.taskId === props.selectedRunId)}
       class:grouped
@@ -211,4 +204,3 @@
   {/each}
 </ol>
 {#if copyError}<p class="error">{copyError}</p>{/if}
-<div bind:this={end}></div>

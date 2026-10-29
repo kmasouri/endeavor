@@ -61,10 +61,24 @@ export const listConversationsQuerySchema = z.strictObject({
   offset: z.coerce.number().int().min(0).default(0)
 });
 
-export const listMessagesQuerySchema = z.strictObject({
-  limit: z.coerce.number().int().min(1).max(500).default(100),
-  offset: z.coerce.number().int().min(0).default(0)
-});
+export const listMessagesQuerySchema = z
+  .strictObject({
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+    offset: z.coerce.number().int().min(0).default(0),
+    latest: z
+      .enum(['true', 'false'])
+      .transform((value) => value === 'true')
+      .optional(),
+    beforeId: z.uuid().optional(),
+    afterId: z.uuid().optional()
+  })
+  .refine((input) => {
+    const modes =
+      Number(Boolean(input.latest)) +
+      Number(Boolean(input.beforeId)) +
+      Number(Boolean(input.afterId));
+    return modes <= 1 && (modes === 0 || input.offset === 0);
+  }, 'Use only one of latest, beforeId or afterId, without an offset');
 
 export const addDocumentBodySchema = z.strictObject({
   title: z.string().trim().min(1).max(200),
