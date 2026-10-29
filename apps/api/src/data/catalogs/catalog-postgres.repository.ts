@@ -8,12 +8,9 @@ import {
   Skill,
   SkillVersion
 } from '../../shared/types';
-import {
-  CatalogNameConflictError,
-  CatalogRepository,
-  ConnectionInput,
-  CreateSkillVersionInput
-} from './catalog.repository';
+import { CatalogNameConflictError, CatalogRepository } from './catalog.repository';
+import { ConnectionInput } from '../connections';
+import { CreateSkillVersionInput } from '../skills';
 import { CredentialCipher } from './credential-cipher';
 
 interface SkillRow {
