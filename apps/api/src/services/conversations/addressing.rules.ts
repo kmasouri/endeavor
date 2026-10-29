@@ -1,4 +1,4 @@
-import { ParticipantRef } from './types';
+import { ParticipantRef } from '../../shared/types';
 
 // Which agents a message is addressed to, using the v1 response rules: the agents it mentions,
 // plus the author of the message it replies to if that was an agent. Only current members

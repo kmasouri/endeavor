@@ -6,8 +6,8 @@ import {
   MessageRepository
 } from '../../data';
 import { ConversationLogger } from '../../observability';
-import { requireHuman, hasFullAccess } from '../../shared/access';
-import { addressedAgentIds } from '../../shared/addressing';
+import { requireHuman, hasFullAccess } from '../access/access.rules';
+import { addressedAgentIds } from './addressing.rules';
 import { canonicalConversationName } from '../../shared/conversation-name';
 import { AppError } from '../../shared/errors';
 import {

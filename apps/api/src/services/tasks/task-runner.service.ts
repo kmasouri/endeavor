@@ -30,8 +30,8 @@ import {
   WorkspaceClient
 } from '../../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../../observability';
-import { addressedAgentIds } from '../../shared/addressing';
-import { connectionCallDenied } from '../../shared/connection-access';
+import { addressedAgentIds } from '../conversations/addressing.rules';
+import { connectionCallDenied } from '../connections/connection-access.rules';
 import { AppError } from '../../shared/errors';
 import {
   ACCESS_DURATIONS,

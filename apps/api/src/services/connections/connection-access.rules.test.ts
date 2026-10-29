@@ -1,5 +1,5 @@
-import { connectionCallDenied } from './connection-access';
-import { Connection } from './types';
+import { connectionCallDenied } from './connection-access.rules';
+import { Connection } from '../../shared/types';
 
 const connection: Connection = {
   id: 'c1',

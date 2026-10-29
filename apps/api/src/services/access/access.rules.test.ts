@@ -1,5 +1,5 @@
-import { ADMIN_ONLY, hasFullAccess, requireHuman, ROLES_ENABLED } from './access';
-import { Human } from './types';
+import { ADMIN_ONLY, hasFullAccess, requireHuman, ROLES_ENABLED } from './access.rules';
+import { Human } from '../../shared/types';
 
 const person = (role: Human['role']): Human => ({
   id: '00000000-0000-4000-8000-000000000001',

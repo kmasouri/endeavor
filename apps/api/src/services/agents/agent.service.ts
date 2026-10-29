@@ -7,7 +7,7 @@ import {
   HumanRepository
 } from '../../data';
 import { AgentLogger } from '../../observability';
-import { ADMIN_ONLY, requireHuman } from '../../shared/access';
+import { ADMIN_ONLY, requireHuman } from '../access/access.rules';
 import { AppError } from '../../shared/errors';
 import {
   Agent,

@@ -5,7 +5,7 @@ import {
   NoteRepository
 } from '../../data';
 import { NoteLogger } from '../../observability';
-import { requireHuman, hasFullAccess } from '../../shared/access';
+import { requireHuman, hasFullAccess } from '../access/access.rules';
 import { AppError } from '../../shared/errors';
 import { AgentNote, Human, NoteScope } from '../../shared/types';
 
