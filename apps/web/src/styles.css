@@ -546,7 +546,7 @@ pre {
 }
 .brand {
   display: block;
-  width: 184px;
+  width: 320px;
   max-width: 100%;
   min-width: 0;
 }
@@ -1413,7 +1413,7 @@ progress::-webkit-progress-value {
 .app-bar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 244px minmax(0, 1fr);
+  grid-template-columns: 380px minmax(0, 1fr);
   align-items: center;
   gap: 20px;
   padding: 10px 20px;
@@ -1422,6 +1422,7 @@ progress::-webkit-progress-value {
   min-width: 0;
 }
 .app-brand {
+  align-items: center;
   flex-wrap: nowrap;
 }
 .search-launch {
