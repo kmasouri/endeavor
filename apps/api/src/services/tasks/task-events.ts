@@ -21,6 +21,7 @@ export const TASK_EVENTS = {
   messageReceived: 'message.received',
   nudge: 'runner.nudge',
   completionChecked: 'completion.checked',
+  completionFailed: 'completion.failed',
   participantSuggested: 'participant.suggested',
   noteSaved: 'note.saved',
   resultPosted: 'result.posted',

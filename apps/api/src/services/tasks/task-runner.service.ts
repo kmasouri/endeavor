@@ -25,6 +25,8 @@ import {
   ModelToolDefinition,
   ModelToolResult,
   ModelTranscriptEntry,
+  ModelTurnRequest,
+  ModelTurnResult,
   WorkspaceClient
 } from '../../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../../observability';
@@ -81,6 +83,7 @@ import {
   scopeOf
 } from './capability-access';
 import { buildMcpToolName, isMcpToolName, parseMcpConnectionId } from './mcp-tool-names';
+import { callTaskModel, ModelCallStoppedError } from './model-call';
 import { calculateCostUsd, formatDollars, PriceTable, startOfMonth } from './pricing';
 import { planRun } from './schedule';
 import { startResponsibilityRun } from './scheduled-runs';
@@ -100,6 +103,7 @@ export interface TaskRunnerOptions {
   // Model turns over the whole task before it is blocked. A stand-in until CA-5 adds budgets.
   maxTurnsPerTask: number;
   maxTokens: number;
+  modelTimeoutMs: number;
   historyLimit: number;
   // Before a task completes, a separate model call checks the result against its criteria, so
   // the agent's own word isn't enough. Skipped for the scripted test provider.
@@ -116,6 +120,7 @@ export const DEFAULT_RUNNER_OPTIONS: Omit<TaskRunnerOptions, 'workerId'> = {
   turnsPerClaim: 8,
   maxTurnsPerTask: 40,
   maxTokens: 16_000,
+  modelTimeoutMs: 120_000,
   historyLimit: 30,
   completionCheck: true,
   prices: {},
@@ -157,6 +162,9 @@ type ToolOutcome = string | { content: string; stop: boolean };
 // in the database, so a restart picks up where it stopped.
 export class TaskRunnerService {
   private readonly lifecycle: TaskLifecycle;
+  private readonly shutdownController = new AbortController();
+  private readonly runningTasks = new Map<string, Promise<void>>();
+  private polling = false;
 
   constructor(
     private readonly taskRepository: TaskRepository,
@@ -183,19 +191,48 @@ export class TaskRunnerService {
     this.lifecycle = new TaskLifecycle(taskRepository, taskLogger);
   }
 
-  // One pass: deliver new messages, wake tasks whose waits are done, then run claimed tasks.
-  async tick(): Promise<void> {
-    await this.startDueRuns();
-    await this.processDeliveries();
-    await this.repairWaitingTasks();
-    await this.postPendingResults();
-    await this.executeApprovedCalls();
-    const tasks = await this.taskRepository.claimRunnable(
-      this.options.workerId,
-      this.options.leaseMs,
-      this.options.concurrency
-    );
-    await Promise.all(tasks.map((task) => this.runClaimedTask(task)));
+  // Control work stays responsive while claimed tasks wait on providers. Callers can await
+  // newly started tasks for deterministic tests; the server polls without waiting for them.
+  async tick({ waitForTasks = true }: { waitForTasks?: boolean } = {}): Promise<void> {
+    if (this.shutdownController.signal.aborted || this.polling) return;
+    this.polling = true;
+    const started: Promise<void>[] = [];
+    try {
+      await this.startDueRuns();
+      await this.processDeliveries();
+      await this.repairWaitingTasks();
+      await this.postPendingResults();
+      await this.executeApprovedCalls();
+      const capacity = this.options.concurrency - this.runningTasks.size;
+      if (!this.shutdownController.signal.aborted && capacity > 0) {
+        const tasks = await this.taskRepository.claimRunnable(
+          this.options.workerId,
+          this.options.leaseMs,
+          capacity
+        );
+        for (const task of tasks) {
+          if (this.runningTasks.has(task.id)) continue;
+          const job = this.runClaimedTask(task)
+            .catch((error) => this.runnerLogger.onTaskRunFailed(task.id, error))
+            .finally(() => {
+              this.runningTasks.delete(task.id);
+            });
+          this.runningTasks.set(task.id, job);
+          started.push(job);
+        }
+      }
+    } finally {
+      this.polling = false;
+    }
+    if (waitForTasks) await Promise.all(started);
+  }
+
+  stop(): void {
+    this.shutdownController.abort();
+  }
+
+  async drain(): Promise<void> {
+    await Promise.all(this.runningTasks.values());
   }
 
   // Scheduling
@@ -444,6 +481,7 @@ export class TaskRunnerService {
   // Runs model turns until the task stops working or the turn budget for this claim is used.
   // Returns how long to wait before the task may be claimed again.
   async runTask(claimed: Task): Promise<number> {
+    if (this.shutdownController.signal.aborted) return 0;
     const agent = await this.agentRepository.getById(claimed.ownerAgentId);
     if (agent?.deletedAt) return 0;
     const version = await this.agentRepository.getVersion(claimed.agentVersionId);
@@ -472,6 +510,7 @@ export class TaskRunnerService {
     const prompt = await this.buildPrompt(claimed, agent);
 
     for (let turn = 0; turn < this.options.turnsPerClaim; turn++) {
+      if (this.shutdownController.signal.aborted) return 0;
       const task = await this.taskRepository.getById(claimed.id);
       if (!task || task.state !== 'working' || task.pausedAt) {
         return 0;
@@ -502,7 +541,14 @@ export class TaskRunnerService {
 
       // A tool call that was asked for but never run, such as after a crash, runs first.
       if (pendingCalls.length > 0) {
-        const stopped = await this.runToolCalls(task, agent, pendingCalls);
+        let stopped;
+        try {
+          stopped = await this.runToolCalls(task, agent, pendingCalls);
+        } catch (error) {
+          if (error instanceof ModelCallStoppedError) return 0;
+          throw error;
+        }
+        if (typeof stopped === 'number') return stopped;
         if (stopped) {
           return 0;
         }
@@ -558,6 +604,28 @@ export class TaskRunnerService {
     return 0;
   }
 
+  // All provider calls share the same deadline and task-control checks.
+  private requestModel(
+    task: Task,
+    version: AgentVersion,
+    events: TaskEvent[],
+    client: ModelClient,
+    request: ModelTurnRequest
+  ): Promise<ModelTurnResult> {
+    return callTaskModel({
+      repository: this.taskRepository,
+      task,
+      version,
+      events,
+      client,
+      request,
+      workerId: this.options.workerId,
+      leaseMs: this.options.leaseMs,
+      timeoutMs: this.options.modelTimeoutMs,
+      shutdownSignal: this.shutdownController.signal
+    });
+  }
+
   // Returns 'continue', 'stop', or a retry delay in milliseconds.
   private async callModel(
     task: Task,
@@ -572,35 +640,15 @@ export class TaskRunnerService {
     const release = await this.agentRepository.acquireExecution(agent.id);
     if (!release) return 'stop';
     const agentActor: Actor = toAgentActor(agent);
-    // Model calls can be slow. Keep the lease alive while waiting, and drop the result if the
-    // lease was lost anyway, because another worker may be running the task by now.
-    let leaseHeld = true;
-    const heartbeat = setInterval(() => {
-      this.taskRepository
-        .renewLease(task.id, this.options.workerId, this.options.leaseMs)
-        .then((held) => (leaseHeld = leaseHeld && held))
-        .catch(() => (leaseHeld = false));
-    }, this.options.leaseMs / 3);
     try {
       await this.taskRepository.addEvent(task.id, TASK_EVENTS.modelStarted, agentActor, {});
-      const result = await client.complete({
+      const result = await this.requestModel(task, version, events, client, {
         model: version.model,
         system,
         transcript,
         tools,
         maxTokens: this.options.maxTokens
       });
-      clearInterval(heartbeat);
-      if (
-        !leaseHeld ||
-        !(await this.taskRepository.renewLease(
-          task.id,
-          this.options.workerId,
-          this.options.leaseMs
-        ))
-      ) {
-        return 'stop';
-      }
       await this.taskRepository.addEvent(task.id, TASK_EVENTS.modelTurn, agentActor, {
         raw: result.raw,
         provider: version.provider,
@@ -620,7 +668,7 @@ export class TaskRunnerService {
       }
       return 'continue';
     } catch (error) {
-      clearInterval(heartbeat);
+      if (error instanceof ModelCallStoppedError) return 'stop';
       if (!(error instanceof ModelClientError)) {
         throw error;
       }
@@ -646,7 +694,11 @@ export class TaskRunnerService {
 
   // Rechecks human controls and the lease before each tool. An already issued action can
   // finish, but the rest of its batch must not start after control changes.
-  private async runToolCalls(task: Task, agent: Agent, calls: ModelToolCall[]): Promise<boolean> {
+  private async runToolCalls(
+    task: Task,
+    agent: Agent,
+    calls: ModelToolCall[]
+  ): Promise<boolean | number> {
     let leaseHeld = true;
     const heartbeat = setInterval(() => {
       this.taskRepository
@@ -666,11 +718,12 @@ export class TaskRunnerService {
     agent: Agent,
     calls: ModelToolCall[],
     holdsLease: () => boolean
-  ): Promise<boolean> {
+  ): Promise<boolean | number> {
     const results: ModelToolResult[] = [];
     let stopped = false;
     let skippedReason = 'an earlier tool call in this turn already ended your turn.';
     for (const call of calls) {
+      if (this.shutdownController.signal.aborted) return true;
       if (stopped) {
         results.push({
           callId: call.id,
@@ -733,6 +786,10 @@ export class TaskRunnerService {
         results.push({ callId: call.id, content, isError: false });
         stopped = STOPPING_TOOLS.has(call.name) || (typeof outcome !== 'string' && outcome.stop);
       } catch (error) {
+        if (error instanceof ModelCallStoppedError) throw error;
+        if (error instanceof ModelClientError) {
+          return this.handleCompletionFailure(task, call.id, error);
+        }
         if (error instanceof AppError && error.name === 'connectionCallOutcomeUnknown') {
           // A model could retry an error under a fresh call ID. Block before saving batch
           // results. If blocking fails, leave the calls pending for safe recovery instead.
@@ -2239,7 +2296,7 @@ export class TaskRunnerService {
           )
           .join('\n')
       : '(none)';
-    const reply = await client.complete({
+    const reply = await this.requestModel(task, version, events, client, {
       model: version.model,
       system: COMPLETION_CHECK_PROMPT,
       transcript: [
@@ -2265,6 +2322,28 @@ export class TaskRunnerService {
     });
     this.runnerLogger.onCompletionChecked(task.id, met);
     return { met, summary, failures: failuresBefore + (met ? 0 : 1) };
+  }
+
+  private async handleCompletionFailure(
+    task: Task,
+    callId: string,
+    error: ModelClientError
+  ): Promise<number> {
+    const events = await this.loadEvents(task.id);
+    const failures =
+      events.filter(
+        (event) => event.type === TASK_EVENTS.completionFailed && event.data.callId === callId
+      ).length + 1;
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.completionFailed, SYSTEM_ACTOR, {
+      callId,
+      provider: error.provider,
+      retryable: error.retryable,
+      message: error.message
+    });
+    this.runnerLogger.onModelFailed(task.id, error.provider, error.retryable, error.message);
+    if (error.retryable && failures < MAX_MODEL_FAILURES) return 5_000 * 2 ** (failures - 1);
+    await this.block(task, `The completion check failed: ${error.message}`);
+    return 0;
   }
 
   private async saveOutputOnce(

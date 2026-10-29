@@ -345,6 +345,127 @@ describe('agent deletion execution gate', () => {
 });
 
 describe('TaskRunnerService', () => {
+  describe('model deadlines and cancellation', () => {
+    function bounded() {
+      const ctx = setup();
+      Object.assign((ctx.runner as unknown as { options: object }).options, {
+        modelTimeoutMs: 50,
+        turnsPerClaim: 1
+      });
+      return ctx;
+    }
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    it('keeps control polls running while limiting background claims to available capacity', async () => {
+      const { runner, tasks, client, responsibilities, approvals } = bounded();
+      Object.assign((runner as unknown as { options: object }).options, { concurrency: 1 });
+      client.complete.mockImplementationOnce(() => new Promise(() => {}));
+      tasks.claimRunnable.mockResolvedValueOnce([makeTask()]).mockResolvedValue([]);
+      await runner.tick({ waitForTasks: false });
+      await jest.advanceTimersByTimeAsync(0);
+      await runner.tick({ waitForTasks: false });
+      expect(client.complete).toHaveBeenCalledTimes(1);
+      expect(tasks.claimRunnable).toHaveBeenCalledTimes(1);
+      expect(tasks.claimRunnable).toHaveBeenCalledWith('test', DEFAULT_RUNNER_OPTIONS.leaseMs, 1);
+      expect(responsibilities.listDue).toHaveBeenCalledTimes(2);
+      expect(approvals.listApprovedNotExecuted).toHaveBeenCalledTimes(2);
+      await jest.advanceTimersByTimeAsync(51);
+      await runner.drain();
+      expect(tasks.releaseLease).toHaveBeenCalledWith(TASK, 'test', 5000);
+      await runner.tick({ waitForTasks: false });
+      expect(tasks.claimRunnable).toHaveBeenCalledTimes(2);
+    });
+
+    it('drains a background model call on shutdown and releases its lease', async () => {
+      const { runner, tasks, client } = bounded();
+      client.complete.mockImplementationOnce(() => new Promise(() => {}));
+      tasks.claimRunnable.mockResolvedValueOnce([makeTask()]);
+      await runner.tick({ waitForTasks: false });
+      await jest.advanceTimersByTimeAsync(0);
+      runner.stop();
+      await runner.drain();
+      expect(tasks.releaseLease).toHaveBeenCalledWith(TASK, 'test', 0);
+      expect(eventTypes(tasks)).not.toContain('model.failed');
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('releases a timed-out task and processes a subsequent tick', async () => {
+      const { runner, tasks, client, setCurrent } = bounded();
+      client.complete.mockImplementationOnce(() => new Promise(() => {}));
+      tasks.claimRunnable
+        .mockResolvedValueOnce([makeTask()])
+        .mockResolvedValueOnce([makeTask({ id: 'second-task' })]);
+      const first = runner.tick();
+      await jest.advanceTimersByTimeAsync(51);
+      await first;
+      expect(tasks.releaseLease).toHaveBeenCalledWith(TASK, 'test', 5000);
+      setCurrent(makeTask({ id: 'second-task' }));
+      await runner.tick();
+      expect(tasks.claimRunnable).toHaveBeenCalledTimes(2);
+      expect(client.complete).toHaveBeenCalledTimes(2);
+      expect(tasks.releaseLease).toHaveBeenCalledWith('second-task', 'test', 0);
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it('persists timeout failures, retries twice, then blocks', async () => {
+      const { runner, tasks, client, current } = bounded();
+      client.complete.mockImplementation(() => new Promise(() => {}));
+      const history: TaskEvent[] = [];
+      tasks.listEvents.mockImplementation(async () => [...history]);
+      tasks.addEvent.mockImplementation(async (_id, type, _actor, data) => {
+        const saved = event(history.length + 1, type, data);
+        history.push(saved);
+        return saved;
+      });
+      for (const delay of [5000, 10000, 0]) {
+        const run = runner.runTask(makeTask());
+        await jest.advanceTimersByTimeAsync(51);
+        expect(await run).toBe(delay);
+      }
+      expect(current().state).toBe('blocked');
+      expect(history.filter((e) => e.type === 'model.failed')).toHaveLength(3);
+      expect(history.filter((e) => e.type === 'model.turn')).toHaveLength(0);
+      expect(client.complete).toHaveBeenCalledTimes(3);
+      expect(jest.getTimerCount()).toBe(0);
+    });
+
+    it.each(['pause', 'cancel', 'migration', 'lease loss', 'shutdown'])(
+      'stops on %s and ignores a late provider response',
+      async (reason) => {
+        const { runner, tasks, client, setCurrent, connectionClient } = bounded();
+        Object.assign((runner as unknown as { options: object }).options, {
+          modelTimeoutMs: 10_000,
+          leaseMs: 3000
+        });
+        let finish!: (result: ModelTurnResult) => void;
+        client.complete.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              finish = resolve;
+            })
+        );
+        const run = runner.runTask(makeTask());
+        await jest.advanceTimersByTimeAsync(0);
+        expect(client.complete).toHaveBeenCalledTimes(1);
+        if (reason === 'pause') setCurrent(makeTask({ pausedAt: new Date() }));
+        if (reason === 'cancel') setCurrent(makeTask({ state: 'cancelled' }));
+        if (reason === 'migration') setCurrent(makeTask({ agentVersionId: 'new-version' }));
+        if (reason === 'lease loss') tasks.renewLease.mockResolvedValue(false);
+        if (reason === 'shutdown') runner.stop();
+        await jest.advanceTimersByTimeAsync(1001);
+        expect(await run).toBe(0);
+        expect(client.complete.mock.calls[0][0].signal?.aborted).toBe(true);
+        finish(turn({ toolCalls: [{ id: 'late', name: 'http_request', input: {} }] }));
+        await jest.advanceTimersByTimeAsync(0);
+        expect(eventTypes(tasks)).not.toContain('model.turn');
+        expect(eventTypes(tasks)).not.toContain('model.failed');
+        expect(connectionClient.request).not.toHaveBeenCalled();
+        expect(jest.getTimerCount()).toBe(0);
+      }
+    );
+  });
+
   describe('queued tool controls', () => {
     const calls: ModelToolCall[] = [
       { id: 'first', name: 'write_file', input: { path: 'first.txt', content: 'one' } },
@@ -614,6 +735,8 @@ describe('TaskRunnerService', () => {
       jest.useFakeTimers();
       try {
         const { runner, tasks, checker, current } = setupChecked([]);
+        (runner as unknown as { options: { modelTimeoutMs: number } }).options.modelTimeoutMs =
+          DEFAULT_RUNNER_OPTIONS.leaseMs * 3;
         checker.complete.mockImplementationOnce(async () => {
           const before = tasks.renewLease.mock.calls.length;
           await jest.advanceTimersByTimeAsync(DEFAULT_RUNNER_OPTIONS.leaseMs * 2);
@@ -626,6 +749,60 @@ describe('TaskRunnerService', () => {
       } finally {
         jest.useRealTimers();
       }
+    });
+
+    it('retries a stalled completion check without consuming the pending tool, then blocks', async () => {
+      jest.useFakeTimers();
+      try {
+        const { runner, tasks, checker, current } = setupChecked([]);
+        Object.assign((runner as unknown as { options: object }).options, { modelTimeoutMs: 50 });
+        checker.complete.mockImplementation(() => new Promise(() => {}));
+        const history: TaskEvent[] = [
+          event(1, 'model.turn', {
+            raw: {},
+            toolCalls: [
+              {
+                id: 'call-done',
+                name: 'complete_task',
+                input: { result: 'Answer', criteria_check: 'Done', criteria_met: true }
+              }
+            ]
+          })
+        ];
+        tasks.listEvents.mockReset().mockImplementation(async () => [...history]);
+        tasks.addEvent.mockImplementation(async (_id, type, _actor, data) => {
+          const saved = event(history.length + 1, type, data);
+          history.push(saved);
+          return saved;
+        });
+        for (const delay of [5000, 10000, 0]) {
+          const run = runner.runTask(makeTask());
+          await jest.advanceTimersByTimeAsync(51);
+          expect(await run).toBe(delay);
+        }
+        expect(current().state).toBe('blocked');
+        expect(checker.complete).toHaveBeenCalledTimes(3);
+        expect(tasks.recordToolResults).not.toHaveBeenCalled();
+        expect(tasks.addOutput).not.toHaveBeenCalled();
+        expect(history.filter((e) => e.type === 'completion.failed')).toHaveLength(3);
+        expect(history.filter((e) => e.type === 'completion.checked')).toHaveLength(0);
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('stops a completion check on shutdown without recording a verdict or retry failure', async () => {
+      const { runner, tasks, checker } = setupChecked([]);
+      checker.complete.mockImplementationOnce(async () => {
+        runner.stop();
+        return new Promise(() => {});
+      });
+      await runner.runTask(makeTask());
+      expect(tasks.recordToolResults).not.toHaveBeenCalled();
+      expect(eventTypes(tasks)).not.toContain('completion.checked');
+      expect(eventTypes(tasks)).not.toContain('completion.failed');
+      expect(tasks.addOutput).not.toHaveBeenCalled();
     });
 
     it('sends the gaps back to the agent instead of completing', async () => {

@@ -37,6 +37,7 @@ export interface ModelTurnRequest {
   transcript: ModelTranscriptEntry[];
   tools: ModelToolDefinition[];
   maxTokens: number;
+  signal?: AbortSignal;
 }
 
 // end: the model finished its turn. tool_use: it wants tools run. max_tokens: it was cut off.

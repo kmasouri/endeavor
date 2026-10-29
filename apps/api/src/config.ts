@@ -51,6 +51,7 @@ const envSchema = z.object({
     .optional()
     .transform((value) => value !== 'false'),
   RUNNER_INTERVAL_MS: z.coerce.number().int().min(100).default(2000),
+  MODEL_TIMEOUT_MS: z.coerce.number().int().min(1).max(3_600_000).default(120_000),
   // Model prices in US dollars per million tokens, as JSON, such as
   // {"some-model":{"inputPerMillion":0.15,"outputPerMillion":0.6}}. Models not listed have an
   // unknown cost: their tokens are still counted, but dollar budgets can't count them.
@@ -145,6 +146,7 @@ export const config = {
   // Never runs in tests, so they need no database.
   RUNNER_ENABLED: env.RUNNER_ENABLED && env.ENVIRONMENT !== 'test',
   RUNNER_INTERVAL_MS: env.RUNNER_INTERVAL_MS,
+  MODEL_TIMEOUT_MS: env.MODEL_TIMEOUT_MS,
   COMPLETION_CHECK: env.COMPLETION_CHECK,
   MODEL_PRICES: env.MODEL_PRICES,
   TASK_BUDGET_USD: env.TASK_BUDGET_USD,
