@@ -245,6 +245,15 @@ button:disabled {
   width: 10px;
   height: 10px;
 }
+.reply-preview .agent-badge {
+  width: 10px;
+  height: 10px;
+  border-width: 1px;
+}
+.reply-preview .agent-badge svg {
+  width: 7px;
+  height: 7px;
+}
 .reply-name {
   color: var(--text-200);
   font-weight: 600;
@@ -711,6 +720,19 @@ pre {
   width: var(--avatar-lg);
   height: var(--avatar-lg);
   border-radius: var(--radius-lg);
+}
+.agent-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  background: var(--agent);
+  color: var(--agent-ink);
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--bg-100);
+  border-radius: var(--radius-full);
 }
 .page-header {
   display: flex;
