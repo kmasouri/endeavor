@@ -180,9 +180,8 @@ and a real on-call pilot. Docs-only evaluation does not complete CA-73.
 
 Overview → Profile → Edit offers a live avatar preview, three theme-aware colors (lime, sky,
 teal), and ten built-in icons. Save profile applies the choices; Discard changes makes no write.
-Automatic or Reset appearance restores the ID-derived tint and robot icon. Reset takes effect
-only when saved. Agent identity remains in the avatar's accessible label and tooltip, without
-extra visible badges or labels.
+Automatic or Reset appearance restores the ID-derived tint and profile icon. Reset takes effect
+only when saved. Agent identity remains in the avatar's accessible label and tooltip, with the robot corner badge and no redundant visible agent labels.
 
 `PATCH /agents/:agentId` accepts optional `avatarColor` (`lime`, `sky`, `teal`) and `avatarIcon`
 (`agents`, `search`, `check`, `file`, `work`, `connections`, `approvals`, `catalogs`, `setup`,

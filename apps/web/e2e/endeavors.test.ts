@@ -384,6 +384,14 @@ test('keeps failed values and membership, prevents duplicate saves, then selects
   await dialog.getByRole('checkbox', { name: 'Add Researcher' }).check();
   await expect(dialog.getByRole('img', { name: 'Researcher · agent', exact: true })).toBeVisible();
   await expect(dialog.getByText('agent', { exact: true })).toHaveCount(0);
+  await expect(dialog.locator('.agent-badge')).toHaveCount(1);
+  const badge = dialog.locator('.agent-badge');
+  const avatar = badge.locator('..');
+  const badgeBox = await badge.boundingBox();
+  const avatarBox = await avatar.boundingBox();
+  expect(badgeBox!.width).toBeLessThan(avatarBox!.width);
+  expect(badgeBox!.x).toBeGreaterThan(avatarBox!.x + avatarBox!.width / 2);
+  expect(badgeBox!.y).toBeGreaterThan(avatarBox!.y + avatarBox!.height / 2);
   await dialog.getByLabel('Find people or agents').fill('lee');
   await dialog.getByRole('checkbox', { name: 'Add Lee' }).check();
   await dialog.getByRole('button', { name: 'Start', exact: true }).click();

@@ -22,7 +22,7 @@
       ? { lime: 1, sky: 2, teal: 3 }[appearance.avatarColor]
       : tint
   );
-  let icon = $derived(appearance?.avatarIcon ?? 'agents');
+  let icon = $derived(appearance?.avatarIcon ?? (tint === 1 ? 'search' : tint === 2 ? 'check' : 'agents'));
 </script>
 
 <span
@@ -33,4 +33,5 @@
   title={`${name}${agent ? ' · agent' : ''}`}
 >
   {#if agent}<Icon name={icon} size={16} />{:else}{name.slice(0, 1).toUpperCase()}{/if}
+  {#if agent}<span class="agent-badge" aria-hidden="true"><Icon name="robot" size={10} /></span>{/if}
 </span>

@@ -620,7 +620,7 @@ for (const width of [320, 390, 1280]) {
       });
       const headingAvatar = page.locator('.agent-heading .avatar');
       await expect(headingAvatar).toHaveAttribute('style', /agent-3-bg/);
-      await expect(headingAvatar.locator('path')).toHaveAttribute('d', documentPath!);
+      await expect(headingAvatar.locator(':scope > svg path')).toHaveAttribute('d', documentPath!);
       await page.reload();
       await expect(headingAvatar).toHaveAttribute('style', /agent-3-bg/);
       await profile.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -629,7 +629,7 @@ for (const width of [320, 390, 1280]) {
       const beforeDiscard = writes.length;
       await form.getByRole('button', { name: 'Discard changes' }).click();
       expect(writes).toHaveLength(beforeDiscard);
-      await expect(headingAvatar.locator('path')).toHaveAttribute('d', documentPath!);
+      await expect(headingAvatar.locator(':scope > svg path')).toHaveAttribute('d', documentPath!);
       await profile.getByRole('button', { name: 'Edit', exact: true }).click();
       await expect(form.getByRole('radio', { name: 'Document', exact: true })).toBeChecked();
       await form.getByRole('button', { name: 'Reset appearance' }).click();

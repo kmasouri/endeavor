@@ -228,6 +228,6 @@ Kinds are `searching`, `reading`, `writing`, `checking`, `connection`, and `thin
 ### Agent appearance
 
 Agent records, directory entries, and agent conversation members include nullable `avatarColor`
-and `avatarIcon` overrides. `null` uses the existing ID-derived color or default robot icon.
+and `avatarIcon` overrides. `null` uses the existing ID-derived color or profile icon.
 `PATCH /agents/:agentId` accepts either field independently; omission preserves the saved value,
 and explicit `null` resets it. See [agent appearance](agents.md#avatar-appearance-ca-92) for choices.
