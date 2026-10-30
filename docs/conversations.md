@@ -199,6 +199,27 @@ the platform does not guess their purpose from tool names or use another model. 
 contain only a tool name and a short file path or output title, never request bodies or headers.
 Waiting, paused, approval, and stuck states keep plain words. Human typing is deferred in v1.
 
+
+## Incremental chat history
+
+The web chat opens with the latest 50 messages. Scrolling near the top loads an older batch,
+keeping the visible message in place. Polls request messages after the newest loaded ID and
+append them in batches of 50. Burst arrivals are drained over bounded polls; history already
+loaded stays available. A reply to an unloaded message fetches earlier batches only when its
+reference is clicked. New arrivals follow only when the viewer is within 80 pixels of the
+bottom. Otherwise a new-message button returns to the latest messages. Read markers advance
+only to messages intersecting the visible thread while the document is visible. Failed read
+updates retry, and a conversation change discards late history or poll responses.
+
+`GET /conversations/:conversationId/messages` retains the existing `{ data: Message[] }` response
+and oldest-first `limit`/`offset` default. `latest=true` selects the newest window; `beforeId`
+selects the preceding window, and `afterId` selects the next arrivals. Every window is returned
+oldest first. These three modes cannot be combined or used with a nonzero offset. Cursor IDs
+are exclusive and resolve to the stored timestamp plus ID, preserving order when timestamps
+tie or have finer precision than browser dates. Invalid query combinations return
+`validationError`; missing, cross-conversation, or hidden-history cursors return
+`messageNotFound`. Membership and `historyFrom` apply to every window.
+
 ## Participant profiles
 
 Message author names and avatars, and current members in People and agents, open a compact

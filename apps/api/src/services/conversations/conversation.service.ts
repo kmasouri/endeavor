@@ -252,9 +252,28 @@ export class ConversationService {
   async listMessages(
     actorId: string,
     conversationId: string,
-    input: { limit: number; offset: number }
+    input: { limit: number; offset: number; latest?: boolean; beforeId?: string; afterId?: string }
   ): Promise<Message[]> {
     const { conversation, member } = await this.requireAccess(actorId, conversationId);
+    if (input.latest || input.beforeId || input.afterId) {
+      const cursorId = input.beforeId ?? input.afterId;
+      if (cursorId) {
+        const anchor = await this.messageRepository.getById(cursorId);
+        if (
+          !anchor ||
+          anchor.conversationId !== conversation.id ||
+          (member?.historyFrom && anchor.createdAt < member.historyFrom)
+        ) {
+          throw new AppError('messageNotFound', `Message ${cursorId} was not found`);
+        }
+      }
+      return this.messageRepository.listWindow(conversation.id, {
+        since: member?.historyFrom ?? null,
+        limit: input.limit,
+        beforeId: input.beforeId,
+        afterId: input.afterId
+      });
+    }
     return this.messageRepository.list(conversation.id, {
       since: member?.historyFrom ?? null,
       ...input

@@ -176,3 +176,44 @@ describe('listing conversations', () => {
     await app.close();
   });
 });
+
+describe('message window queries', () => {
+  const CONVERSATION = '00000000-0000-4000-8000-000000000003';
+  it.each([
+    'latest=true&beforeId=' + PERSON,
+    'beforeId=' + PERSON + '&afterId=' + ACTOR,
+    'latest=true&offset=1',
+    'latest=wrong',
+    'afterId=invalid'
+  ])('rejects invalid window %s', async (query) => {
+    const app = setupApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: `/conversations/${CONVERSATION}/messages?${query}`,
+      headers: { 'x-actor-id': ACTOR }
+    });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+  it.each(['latest=true', 'beforeId=' + PERSON, 'afterId=' + PERSON])(
+    'passes the window query %s without changing its array response',
+    async (query) => {
+      const app = setupApp();
+      await app.ready();
+      const list = jest.spyOn(app.conversationService, 'listMessages').mockResolvedValue([]);
+      const response = await app.inject({
+        method: 'GET',
+        url: `/conversations/${CONVERSATION}/messages?limit=50&${query}`,
+        headers: { 'x-actor-id': ACTOR }
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ data: [] });
+      expect(list).toHaveBeenCalledWith(
+        ACTOR,
+        CONVERSATION,
+        expect.objectContaining({ limit: 50, offset: 0 })
+      );
+      await app.close();
+    }
+  );
+});

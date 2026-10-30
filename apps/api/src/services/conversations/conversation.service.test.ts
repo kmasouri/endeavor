@@ -253,6 +253,42 @@ describe('ConversationService', () => {
     expect(messages.list).toHaveBeenCalledWith(CONV, { since: joined, limit: 10, offset: 0 });
   });
 
+  it.each(['beforeId', 'afterId'] as const)(
+    'keeps history visibility for %s windows',
+    async (direction) => {
+      const { service, conversations, messages } = setup();
+      const joined = new Date('2026-10-01T00:00:00Z');
+      conversations.getMember.mockResolvedValue({ ...member('human', KIM), historyFrom: joined });
+      messages.getById.mockResolvedValue({
+        id: 'cursor',
+        conversationId: CONV,
+        createdAt: joined
+      } as Message);
+      await service.listMessages(KIM, CONV, { limit: 50, offset: 0, [direction]: 'cursor' });
+      expect(messages.listWindow).toHaveBeenCalledWith(
+        CONV,
+        expect.objectContaining({ since: joined, limit: 50, [direction]: 'cursor' })
+      );
+      expect(messages.list).not.toHaveBeenCalled();
+      messages.getById.mockResolvedValue({
+        id: 'cursor',
+        conversationId: CONV,
+        createdAt: new Date('2026-09-30')
+      } as Message);
+      await expect(
+        service.listMessages(KIM, CONV, { limit: 50, offset: 0, [direction]: 'cursor' })
+      ).rejects.toMatchObject({ name: 'messageNotFound' });
+    }
+  );
+  it('rejects a cursor from a different conversation', async () => {
+    const { service, messages } = setup();
+    messages.getById.mockResolvedValue({ id: 'cursor', conversationId: 'elsewhere' } as Message);
+    await expect(
+      service.listMessages(KIM, CONV, { limit: 50, offset: 0, afterId: 'cursor' })
+    ).rejects.toMatchObject({ name: 'messageNotFound' });
+    expect(messages.listWindow).not.toHaveBeenCalled();
+  });
+
   it('records who added a member and from when they can read', async () => {
     const { service, conversations } = setup();
 

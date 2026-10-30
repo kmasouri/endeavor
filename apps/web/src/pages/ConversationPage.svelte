@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack, tick } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import {
     api,
     type Approval,
@@ -28,6 +29,7 @@
   import TaskStatus from './TaskStatus.svelte';
   import LiveActivity from './LiveActivity.svelte';
   import { loadAll } from './agent-data';
+  import { createMessageFeed } from './message-feed.svelte';
   import ArtifactCard from './ArtifactCard.svelte';
   import AgentHistory from './AgentHistory.svelte';
   import RunInspector from './RunInspector.svelte';
@@ -107,11 +109,107 @@
     () => api.get<ConversationDetails>(`/conversations/${conversationId}`),
     () => [conversationId]
   );
-  const messages = createLoad(
-    () => api.list<Message>(`/conversations/${conversationId}/messages?limit=500`),
-    () => [conversationId],
-    2500
-  );
+  const messages = createMessageFeed(() => conversationId);
+  let scroll = $state<HTMLDivElement | null>(null);
+  let newMessages = $state(0);
+  let follow = true;
+  let previous: Message[] = [];
+  let previousHasOlder = false;
+  let unseen = new SvelteSet<string>();
+  let markedRead: string | null = null;
+  let readBusy = false;
+  let readTimer: ReturnType<typeof setTimeout> | undefined;
+  let viewGeneration = 0;
+
+  const nearBottom = () => !scroll || scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= 80;
+  const markVisible = async () => {
+    if (!scroll || document.visibilityState !== 'visible') return;
+    const frame = scroll.getBoundingClientRect();
+    const visible = [...scroll.querySelectorAll<HTMLElement>('[data-message-id]')]
+      .filter((element) => {
+        const box = element.getBoundingClientRect();
+        return box.bottom > frame.top && box.top < frame.bottom;
+      });
+    for (const element of visible) unseen.delete(element.dataset.messageId!);
+    newMessages = unseen.size;
+    if (readBusy) return;
+    const newest = visible.at(-1)?.dataset.messageId;
+    if (!newest || newest === markedRead) return;
+    const id = conversationId;
+    const generation = viewGeneration;
+    readBusy = true;
+    let retryMs = 150;
+    try {
+      await api.put(`/conversations/${id}/read`, { messageId: newest });
+      if (generation === viewGeneration) { markedRead = newest; onRead?.(); }
+    } catch {
+      retryMs = 2500;
+    } finally {
+      if (generation === viewGeneration) {
+        readBusy = false;
+        clearTimeout(readTimer);
+        readTimer = setTimeout(() => void markVisible(), retryMs);
+      }
+    }
+  };
+  const checkViewport = () => {
+    follow = nearBottom();
+    clearTimeout(readTimer);
+    readTimer = setTimeout(() => void markVisible(), 150);
+  };
+  const scrollToLatest = () => {
+    if (!scroll) return;
+    scroll.scrollTop = scroll.scrollHeight;
+    follow = true;
+    unseen.clear();
+    newMessages = 0;
+    checkViewport();
+  };
+  const onScroll = () => {
+    checkViewport();
+    if (scroll && scroll.scrollTop < 80 && !messages.historyError) void messages.older();
+  };
+  $effect(() => {
+    conversationId;
+    untrack(() => {
+      previous = []; previousHasOlder = false; unseen = new SvelteSet(); markedRead = null; readBusy = false;
+      newMessages = 0; follow = true; viewGeneration++;
+    });
+    return () => { viewGeneration++; clearTimeout(readTimer); };
+  });
+  $effect.pre(() => {
+    const current = messages.data.data;
+    const hasOlder = messages.hasOlder;
+    const container = scroll;
+    if (!container || !current.length) return;
+    untrack(() => {
+      const first = previous[0];
+      const prepended = first && current[0].id !== first.id;
+      const historyEnded = previousHasOlder && !hasOlder;
+      previousHasOlder = hasOlder;
+      const frame = container.getBoundingClientRect();
+      const anchor = [...container.querySelectorAll<HTMLElement>('[data-message-id]')]
+        .find((element) => element.getBoundingClientRect().bottom > frame.top);
+      const anchorTop = anchor?.getBoundingClientRect().top;
+      const initial = previous.length === 0;
+      // Existing history is not a new arrival. Track only messages appended since opening.
+      if (!initial && !prepended) {
+        const ids = new Set(previous.map((message) => message.id));
+        for (const message of current) if (!ids.has(message.id)) unseen.add(message.id);
+      }
+      newMessages = unseen.size;
+      previous = current;
+      const generation = viewGeneration;
+      void tick().then(() => {
+        if (generation !== viewGeneration) return;
+        if ((prepended || historyEnded) && anchor && anchorTop !== undefined) {
+          container.scrollTop += anchor.getBoundingClientRect().top - anchorTop;
+        } else if (initial || follow) container.scrollTop = container.scrollHeight;
+        checkViewport();
+        void markVisible();
+      });
+    });
+  });
   const directory = createLoad(
     () => api.get<DirectoryEntry[]>('/directory'),
     () => []
@@ -145,22 +243,6 @@
         document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus()
       );
     }
-  });
-  // Seeing the conversation marks it read up to the newest message shown, again whenever a
-  // new one arrives while it is open.
-  let markedRead: string | null = null;
-  $effect(() => {
-    const newest = messages.data?.data.at(-1);
-    if (!newest) return;
-    const key = `${conversationId}:${newest.id}`;
-    if (key === markedRead) return;
-    markedRead = key;
-    api.put(`/conversations/${conversationId}/read`, { messageId: newest.id }).then(
-      () => onRead?.(),
-      () => {
-        if (markedRead === key) markedRead = null;
-      }
-    );
   });
   let conversation = $derived(details.data!);
   let taskList = $derived(tasks.data ?? []);
@@ -235,7 +317,8 @@
   };
 </script>
 
-<svelte:window onkeydown={(event) => { if (event.key === "Escape" && showDetails) closeDetails(); }} />
+<svelte:document onvisibilitychange={checkViewport} />
+<svelte:window onresize={checkViewport} onkeydown={(event) => { if (event.key === "Escape" && showDetails) closeDetails(); }} />
 
 {#if details.error}<ErrorNote error={details.error} />{:else if !details.data}<p>Loading…</p>{:else}
   {#if showMembers}<Members
@@ -281,7 +364,7 @@
           >
         </div>
       </header>
-      <div class="conversation-scroll">
+      <div class="conversation-scroll" bind:this={scroll} onscroll={onScroll}>
         {#if attaching}<section class="inline-panel">
             <div class="row">
               <h2 class="grow">Attach context</h2>
@@ -294,7 +377,15 @@
             <KnowledgeSources {conversationId} />
           </section>{/if}
         <ErrorNote error={messages.error ?? tasks.error ?? outputs.error ?? approvals.error} />
-        <MessageList
+        {#if !messages.ready}<p class="muted">Loading messages…</p>{/if}
+        {#if messages.error}<button class="text-button" onclick={() => void messages.reload()}>Retry messages</button>{/if}
+        {#if messages.hasOlder}<div class="message-history">
+          <button class="text-button" disabled={messages.loadingOlder} onclick={() => void messages.older()}>
+            {messages.loadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}
+          </button>
+          <ErrorNote error={messages.historyError} />
+        </div>{/if}
+        {#if messages.ready}<MessageList
           messages={messages.data?.data ?? []}
           {nameOf}
           members={conversation.members}
@@ -305,12 +396,13 @@
           costs={costs.data}
           {onAdd}
           onReply={reply}
+          onReveal={async (id) => { await messages.reveal(id); await tick(); }}
           onRevise={revise}
           onChanged={reload}
           onInspect={inspectMessage}
           onInspectRun={inspectRun}
           selectedRunId={showDetails ? selectedRunId ?? undefined : undefined}
-        />
+        />{/if}
         {#each unattached as output (output.id)}<div class="orphan-artifact">
             <ArtifactCard
               {output}
@@ -354,6 +446,9 @@
           </div>{/each}
       </div>
       <div class="conversation-bottom">
+        {#if newMessages > 0}<button class="secondary new-messages" onclick={scrollToLatest}>
+          {newMessages} new {newMessages === 1 ? 'message' : 'messages'} ↓
+        </button>{/if}
         {#if busy.length}<div class="live-status caption" aria-live="polite">
             {#each busy as task (task.id)}<span
                 ><span aria-hidden="true"><Avatar name={nameOf({ type: 'agent', id: task.ownerAgentId })} id={task.ownerAgentId} appearance={appearanceOf(task.ownerAgentId)} agent size="sm" /></span><span><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>

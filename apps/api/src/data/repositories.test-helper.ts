@@ -105,6 +105,7 @@ export function mockMessageRepository(): jest.Mocked<MessageRepository> {
   return {
     create: jest.fn(),
     getById: jest.fn(),
+    listWindow: jest.fn().mockResolvedValue([]),
     list: jest.fn().mockResolvedValue([]),
     listRecent: jest.fn().mockResolvedValue([]),
     claimDeliveries: jest.fn().mockResolvedValue([]),

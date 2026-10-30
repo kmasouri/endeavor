@@ -22,6 +22,12 @@ export interface MessageRepository {
     conversationId: string,
     options: { since: Date | null; limit: number; offset: number }
   ): Promise<Message[]>;
+  // A bounded recent, older or newer window, always returned oldest first. Cursor IDs use
+  // their database timestamp and ID together so equal timestamps do not skip messages.
+  listWindow(
+    conversationId: string,
+    options: { since: Date | null; limit: number; beforeId?: string; afterId?: string }
+  ): Promise<Message[]>;
   // The newest messages, returned oldest first, for building an agent's context.
   listRecent(
     conversationId: string,
