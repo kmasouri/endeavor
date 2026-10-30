@@ -1512,6 +1512,9 @@ progress::-webkit-progress-value {
   box-shadow: var(--shadow-pop);
   overflow-y: auto;
 }
+.endeavor-dialog-wide {
+  width: min(760px, calc(100vw - 24px));
+}
 .endeavor-dialog::backdrop {
   background: var(--bg-000);
   opacity: 0.85;
@@ -1585,7 +1588,14 @@ progress::-webkit-progress-value {
 .endeavor-results button {
   justify-content: flex-start;
   text-align: left;
-  overflow-wrap: anywhere;
+  min-width: 0;
+  max-width: 100%;
+}
+.endeavor-results button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 @media (max-width: 700px) {
   .app-bar {

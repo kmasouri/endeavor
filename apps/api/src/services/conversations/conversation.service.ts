@@ -8,7 +8,10 @@ import {
 import { ConversationLogger } from '../../observability';
 import { requireHuman, hasFullAccess } from '../access/access.rules';
 import { addressedAgentIds } from './addressing.rules';
-import { canonicalConversationName } from '../../shared/conversation-name';
+import {
+  canonicalConversationName,
+  MAX_CONVERSATION_NAME_LENGTH
+} from '../../shared/conversation-name';
 import { AppError } from '../../shared/errors';
 import {
   AgentAppearance,
@@ -19,6 +22,14 @@ import {
   Message,
   ParticipantRef
 } from '../../shared/types';
+
+function requireChannelName(value: string): string {
+  const name = canonicalConversationName(value);
+  if (!name || name.length > MAX_CONVERSATION_NAME_LENGTH) {
+    throw new AppError('validationError', 'Use a channel name between 1 and 64 characters.');
+  }
+  return name;
+}
 
 export interface MemberDetails extends ConversationMember, AgentAppearance {
   deleted?: boolean;
@@ -64,7 +75,7 @@ export class ConversationService {
     }
 
     const conversation = await this.conversationRepository.create({
-      title: canonicalConversationName(input.title),
+      title: requireChannelName(input.title),
       createdByHumanId: human.id
     });
     await this.conversationRepository.addMember({
@@ -151,7 +162,7 @@ export class ConversationService {
     const { conversation } = await this.requireAccess(actorId, conversationId);
     const updated = await this.conversationRepository.update(conversation.id, {
       ...changes,
-      ...(changes.title !== undefined && { title: canonicalConversationName(changes.title) })
+      ...(changes.title !== undefined && { title: requireChannelName(changes.title) })
     });
     return this.loadDetails(updated ?? conversation);
   }

@@ -95,6 +95,18 @@ describe('ConversationService', () => {
     });
   });
 
+  it('rejects oversized creates and renames before writing', async () => {
+    const { service, conversations } = setup();
+    await expect(service.createConversation(KIM, { title: 'a'.repeat(65) })).rejects.toMatchObject({
+      name: 'validationError'
+    });
+    await expect(
+      service.updateConversation(KIM, CONV, { title: 'a'.repeat(65) })
+    ).rejects.toMatchObject({ name: 'validationError' });
+    expect(conversations.create).not.toHaveBeenCalled();
+    expect(conversations.update).not.toHaveBeenCalled();
+  });
+
   it('persists canonical names on create and rename', async () => {
     const { service, conversations } = setup();
     await service.createConversation(KIM, { title: '  Heat Pumps!! Brief  ' });

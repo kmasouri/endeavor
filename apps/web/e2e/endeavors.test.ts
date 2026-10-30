@@ -569,3 +569,44 @@ for (const theme of ['dark', 'light'] as const) {
       .screenshot({ path: testInfo.outputPath('notification-counts.png') });
   });
 }
+
+test('finder is wider and keeps long names on one line at every width', async ({ page }) => {
+  const { state } = await mockApi(page);
+  state.conversations.push({
+    id: 'long',
+    title: 'a-very-long-channel-name-'.repeat(7).replace(/-$/, ''),
+    createdAt: '2026-10-24T10:00:00Z'
+  });
+  await page.goto('/app/');
+  await page.getByRole('button', { name: 'Search endeavors', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Find an endeavor' });
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeLessThanOrEqual(width - 20);
+    if (width === 1280) expect(box!.width).toBe(760);
+    const label = dialog.locator('.endeavor-results button span').last();
+    const geometry = await label.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return {
+        height: el.getBoundingClientRect().height,
+        lineHeight: parseFloat(style.lineHeight),
+        width: el.clientWidth,
+        scrollWidth: el.scrollWidth,
+        whitespace: style.whiteSpace,
+        ellipsis: style.textOverflow
+      };
+    });
+    expect(geometry.whitespace).toBe('nowrap');
+    expect(geometry.ellipsis).toBe('ellipsis');
+    expect(geometry.height).toBeLessThanOrEqual(geometry.lineHeight + 1);
+    expect(geometry.scrollWidth).toBeGreaterThan(geometry.width);
+    expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  const creation = await openNew(page);
+  await expect(creation.getByLabel('Name', { exact: true })).toHaveAttribute('maxlength', '64');
+  await creation.getByLabel('Name', { exact: true }).pressSequentially('a'.repeat(65));
+  await expect(creation.getByLabel('Name', { exact: true })).toHaveValue('a'.repeat(64));
+});
