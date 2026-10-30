@@ -248,7 +248,6 @@ button:disabled {
 .reply-preview .avatar .agent-badge {
   width: 14px;
   height: 14px;
-  border-width: 1px;
 }
 .reply-preview .avatar .agent-badge svg {
   width: 10px;
@@ -729,17 +728,13 @@ pre {
   bottom: -5px;
   display: grid;
   place-items: center;
-  background: var(--agent);
-  color: var(--agent-ink);
+  color: var(--agent);
   width: 20px;
   height: 20px;
-  border: 2px solid var(--bg-100);
-  border-radius: var(--radius-full);
 }
 .avatar-sm .agent-badge {
   width: 16px;
   height: 16px;
-  border-width: 1px;
 }
 .avatar-sm .agent-badge svg {
   width: 12px;
