@@ -152,6 +152,11 @@ update. A follow-up during a completion check prevents that older result from co
 
 Everything it does is written to the task's events: model turns, tool results, failed model calls, and messages received. The model transcript is rebuilt from those events, so after a restart the task picks up where it stopped. A tool call that was asked for but never run is run first. Message tool calls use the tool call ID as the message's `client_key`, so running a call again doesn't post twice.
 
+The web composer also retains a failed submission's client key for an unchanged retry,
+including when the server committed the message but its response was lost. Editing that failed
+submission creates a distinct send. A successful send clears only the draft and reply context
+that still match what was submitted; edits made while waiting remain in the composer.
+
 Before each queued tool, the runner rechecks the task's working state, pause flag, pinned
 configuration, and lease. Pausing, cancelling, or migrating the task stops the rest of the
 batch and records those calls as skipped. Resuming rebuilds from those results rather than

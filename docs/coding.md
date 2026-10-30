@@ -144,7 +144,15 @@ them. Platform and provider secrets are not injected into the command environmen
 
 State is saved atomically in the `execution-data` volume. A broker restart removes labelled
 leftover containers, marks running jobs interrupted with unknown outcome, and never replays
-commands. Poll the recovered execution and verify again. The broker keeps 20 execution summaries
+commands. Persisted records have a version and are validated before use. Valid older records
+are upgraded on load. A malformed or unsupported record is copied byte for byte to
+`execution-data:/data/quarantine/`, then replaced with an unavailable marker. Other tasks still
+load. The affected task's tools report the problem rather than returning an empty history or
+creating a new checkout. The executor log identifies the task and recovery file without printing
+its contents. Stop the broker before restoring a repaired, validated record to `/data/<task-id>.json`;
+otherwise explicitly call `discard_repository` for that task to start over. Discard removes its
+marker and workspace but retains the quarantine copy for recovery. Storage failures while saving
+a recovery copy still stop startup. Poll any recovered interrupted execution and verify again. The broker keeps 20 execution summaries
 per task. Idle workspace containers are removed after 30 minutes, checked every minute. Accepted
 source and execution summaries remain for 24 idle hours; discard removes both earlier. No dedicated
 per-agent setting is added: access still comes from the selected execution connection. The agent

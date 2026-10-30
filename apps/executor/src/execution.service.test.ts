@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -537,6 +537,122 @@ test('failed workspace cleanup records failure and releases the task lock for re
       'original'
     );
     ctx.containers.client.release = release;
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test('quarantines damaged records, migrates healthy legacy data and keeps tasks isolated across restarts', async () => {
+  const ctx = await fixture();
+  const healthy = randomUUID();
+  const warnings: string[] = [];
+  const recovered = new ExecutionService(
+    ctx.settings,
+    ctx.containers.client,
+    ctx.source,
+    (warning) => warnings.push(warning)
+  );
+  const restarted = new ExecutionService(
+    ctx.settings,
+    ctx.containers.client,
+    ctx.source,
+    (warning) => warnings.push(warning)
+  );
+  try {
+    const job = await checkedOut(ctx, healthy);
+    const healthyPath = join(ctx.settings.EXECUTOR_DATA_DIR, `${healthy}.json`);
+    const stored = JSON.parse(await readFile(healthyPath, 'utf8'));
+    assert.equal(stored.version, 1);
+    // The old versionless format remains readable and is upgraded after validation.
+    await writeFile(healthyPath, JSON.stringify(stored.record));
+    const badPath = structuredClone(stored);
+    badPath.record.checkout.files[0].path = '../secret';
+    const badJob = structuredClone(stored);
+    badJob.record.executions[0].status = 'surprise';
+    const damaged = [
+      Buffer.from('{"private":"do-not-log",'),
+      Buffer.from(JSON.stringify({ ...stored.record, executions: null })),
+      Buffer.from(JSON.stringify({ version: 99, record: stored.record })),
+      Buffer.from(JSON.stringify(badPath)),
+      Buffer.from(JSON.stringify(badJob))
+    ].map((bytes) => ({ task: randomUUID(), bytes }));
+    for (const { task, bytes } of damaged)
+      await writeFile(join(ctx.settings.EXECUTOR_DATA_DIR, `${task}.json`), bytes);
+    await recovered.initialize();
+    assert.equal(ctx.containers.jobs.length, 1, 'recovery must never replay work');
+    assert.equal(warnings.length, damaged.length);
+    assert.ok(warnings.every((warning) => !warning.includes('do-not-log')));
+    assert.equal(JSON.parse(await readFile(healthyPath, 'utf8')).version, 1);
+    assert.equal(
+      (
+        (await recovered.call(healthy, 'get_execution', { execution_id: job.id })) as {
+          status: string;
+        }
+      ).status,
+      'finished'
+    );
+    const backups = new Map<string, string>();
+    for (const { task, bytes } of damaged) {
+      const marker = JSON.parse(
+        await readFile(join(ctx.settings.EXECUTOR_DATA_DIR, `${task}.json`), 'utf8')
+      );
+      const backup = join(ctx.settings.EXECUTOR_DATA_DIR, 'quarantine', marker.quarantinedFile);
+      backups.set(task, backup);
+      assert.deepEqual(await readFile(backup), bytes);
+      await assert.rejects(recovered.call(task, 'list_executions', {}), /quarantined/);
+      await assert.rejects(
+        recovered.call(task, 'checkout_repository', { repository: 'owner/repo', ref: 'main' }),
+        /quarantined/
+      );
+      await assert.rejects(
+        recovered.call(task, 'get_execution', { execution_id: job.id }),
+        /quarantined/
+      );
+    }
+    await recovered.close();
+    await restarted.initialize();
+    assert.equal(
+      (await readdir(join(ctx.settings.EXECUTOR_DATA_DIR, 'quarantine'))).length,
+      damaged.length,
+      'restart must reuse markers and preserve the original backups'
+    );
+    for (const { task, bytes } of damaged) {
+      await assert.rejects(restarted.call(task, 'list_executions', {}), /quarantined/);
+      assert.deepEqual(await readFile(backups.get(task)!), bytes);
+    }
+    const reset = damaged[0];
+    assert.deepEqual(await restarted.call(reset.task, 'discard_repository', {}), {
+      discarded: true
+    });
+    assert.ok(ctx.containers.released.includes(reset.task));
+    assert.deepEqual(
+      await readFile(backups.get(reset.task)!),
+      reset.bytes,
+      'explicit discard keeps recovery evidence'
+    );
+    await checkedOut({ ...ctx, service: restarted }, reset.task);
+    assert.equal(
+      ((await restarted.call(reset.task, 'list_executions', {})) as unknown[]).length,
+      1
+    );
+    assert.equal(((await restarted.call(healthy, 'list_executions', {})) as unknown[]).length, 1);
+  } finally {
+    await restarted.close();
+    await ctx.cleanup();
+  }
+});
+
+test('a failed quarantine write stops startup without replacing the damaged original', async () => {
+  const ctx = await fixture();
+  const task = randomUUID();
+  const original = Buffer.from('broken record');
+  const path = join(ctx.settings.EXECUTOR_DATA_DIR, `${task}.json`);
+  try {
+    await writeFile(path, original);
+    await writeFile(join(ctx.settings.EXECUTOR_DATA_DIR, 'quarantine'), 'not a directory');
+    const recovered = new ExecutionService(ctx.settings, ctx.containers.client, ctx.source);
+    await assert.rejects(recovered.initialize(), /EEXIST|ENOTDIR/);
+    assert.deepEqual(await readFile(path), original);
   } finally {
     await ctx.cleanup();
   }
