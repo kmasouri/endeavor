@@ -33,5 +33,9 @@
   title={`${name}${agent ? ' · agent' : ''}`}
 >
   {#if agent}<Icon name={icon} size={16} />{:else}{name.slice(0, 1).toUpperCase()}{/if}
-  {#if agent}<span class="agent-badge" aria-hidden="true"><Icon name="robot" size={14} /></span>{/if}
+  {#if agent}<span class="agent-badge" aria-hidden="true"
+      ><svg viewBox="0 0 24 24"
+        ><path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z" /></svg
+      ></span
+    >{/if}
 </span>
