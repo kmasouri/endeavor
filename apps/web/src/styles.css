@@ -531,6 +531,7 @@ pre {
   user-select: none;
 }
 .shell.sidebar-resizing,
+.shell.sidebar-resizing .app-bar,
 .shell.sidebar-resizing .sidebar,
 .shell.sidebar-resizing .sidebar nav a {
   transition: none;
@@ -544,6 +545,7 @@ pre {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .app-bar,
   .shell,
   .sidebar,
   .sidebar nav a,
@@ -1442,15 +1444,18 @@ progress::-webkit-progress-value {
 .app-bar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 244px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   align-items: center;
-  gap: 20px;
-  padding: 10px 20px;
+  gap: 0;
+  padding: 10px 0;
+  transition: grid-template-columns 220ms ease;
   background: var(--bg-000);
   border-bottom: 1px solid var(--border-100);
   min-width: 0;
 }
 .app-brand {
+  min-width: max-content;
+  padding-inline: 20px;
   align-items: center;
   flex-wrap: nowrap;
 }
@@ -1459,12 +1464,22 @@ progress::-webkit-progress-value {
   align-self: center;
 }
 .search-launch {
-  justify-self: end;
-  width: 100%;
+  justify-self: center;
+  width: calc(100% - 40px);
   max-width: 360px;
   justify-content: flex-start;
   color: var(--text-300);
   min-width: 0;
+}
+.search-launch span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.search-launch > svg,
+.search-launch kbd {
+  flex-shrink: 0;
 }
 .search-launch kbd {
   margin-left: auto;
@@ -1599,7 +1614,11 @@ progress::-webkit-progress-value {
     gap: 12px;
     padding: 10px 12px;
   }
+  .app-brand {
+    padding-inline: 0;
+  }
   .search-launch {
+    justify-self: end;
     width: 40px;
     height: 40px;
     justify-content: center;
