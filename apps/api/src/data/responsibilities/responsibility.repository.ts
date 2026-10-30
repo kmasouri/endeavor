@@ -29,6 +29,12 @@ export interface ResponsibilityChanges {
   status?: ResponsibilityStatus;
 }
 
+export interface CatchUpDecision {
+  slot: Date;
+  decision: 'run' | 'wait';
+  taskId: string | null;
+}
+
 export interface ResponsibilityRepository {
   create(input: CreateResponsibilityInput): Promise<Responsibility>;
   getById(responsibilityId: string): Promise<Responsibility | null>;
@@ -54,7 +60,6 @@ export interface ResponsibilityRepository {
       catchUp?: { slot: Date; missed: number } | null;
     }
   ): Promise<boolean>;
-  // Closes the open catch-up question for this slot. False if it was already answered or
-  // lapsed, so only one answer counts.
-  clearCatchUp(responsibilityId: string, slot: Date): Promise<boolean>;
+  // A saved answer remains replayable only in its enabled, unretimed, future schedule window.
+  getCatchUpDecision(responsibilityId: string, slot?: Date): Promise<CatchUpDecision | null>;
 }

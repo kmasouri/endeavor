@@ -75,3 +75,66 @@ describe('scheduled task persistence', () => {
     expect(release).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('atomic catch-up decisions', () => {
+  const resolution = { responsibilityId: 'r1', agentId: 'a1', slot, task: input };
+  function catchUpSetup() {
+    const state = setup();
+    state.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('FROM endeavor.agents'))
+        return { rows: [{ disabled_at: null, deleted_at: null, current_version_id: 'v1' }] };
+      if (sql.includes('FROM endeavor.responsibilities')) return { rows: [{ id: 'r1' }] };
+      if (sql.includes('INSERT INTO endeavor.tasks'))
+        return { rows: [{ id: 't1', run_key: input.runKey }] };
+      if (sql.includes('INSERT INTO endeavor.catch_up_decisions'))
+        return { rows: [{ responsibility_id: 'r1' }] };
+      return { rows: [] };
+    });
+    return state;
+  }
+  it.each([
+    'INSERT INTO endeavor.tasks',
+    'INSERT INTO endeavor.catch_up_decisions',
+    'UPDATE endeavor.responsibilities'
+  ])('rolls back both task and question when %s fails', async (failing) => {
+    const { repository, query, release } = catchUpSetup();
+    const original = query.getMockImplementation()!;
+    query.mockImplementation(async (sql: string, ...args: unknown[]) => {
+      if (sql.includes(failing)) throw new Error('Failure');
+      return original(sql, ...args);
+    });
+    await expect(repository.resolveCatchUp(resolution)).rejects.toThrow('Failure');
+    expect(query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+  it('does not consume a question when a competing open task won the insert', async () => {
+    const { repository, query } = catchUpSetup();
+    const original = query.getMockImplementation()!;
+    query.mockImplementation(async (sql: string, ...args: unknown[]) => {
+      if (sql.includes('INSERT INTO endeavor.tasks') || sql.includes('WHERE run_key'))
+        return { rows: [] };
+      if (sql.includes('SELECT * FROM endeavor.tasks WHERE responsibility_id'))
+        return { rows: [{ id: 'other', run_key: 'manual:other' }] };
+      return original(sql, ...args);
+    });
+    expect(await repository.resolveCatchUp(resolution)).toMatchObject({
+      task: { id: 'other' },
+      created: false
+    });
+    expect(
+      query.mock.calls.some(([sql]) => sql.includes('INSERT INTO endeavor.catch_up_decisions'))
+    ).toBe(false);
+    expect(query.mock.calls.some(([sql]) => sql.includes('UPDATE endeavor.responsibilities'))).toBe(
+      false
+    );
+  });
+  it('rechecks eligibility after acquiring the lock, before any insert', async () => {
+    const { repository, query } = catchUpSetup();
+    const original = query.getMockImplementation()!;
+    query.mockImplementation(async (sql: string, ...args: unknown[]) =>
+      sql.includes('clock_timestamp()') ? { rows: [] } : original(sql, ...args)
+    );
+    expect(await repository.resolveCatchUp(resolution)).toBeNull();
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT'))).toBe(false);
+  });
+});

@@ -216,3 +216,49 @@ for (const theme of ['dark', 'light'] as const) {
     await expect(page.locator('.brand')).not.toContainText('Collaborative Agents');
   });
 }
+
+test('catch-up failure survives reload and keeps Run once now available for a successful retry', async ({
+  page
+}) => {
+  await mockApi(page, 'light');
+  const pending = {
+    ...baseSchedule,
+    id: 'retry',
+    title: 'Retryable check',
+    status: 'enabled',
+    catchUp: { slot: '2026-10-26T12:00:00Z', missed: 2 }
+  };
+  let fail = true;
+  let resolved = false;
+  const decisions: unknown[] = [];
+  await page.route('**/responsibilities**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const reply = (data: unknown, status = 200) =>
+      route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
+    if (request.method() === 'POST' && url.pathname.endsWith('/catch-up')) {
+      decisions.push(request.postDataJSON());
+      if (fail) return reply({ error: { message: 'The agent is unavailable. Try again.' } }, 409);
+      resolved = true;
+      return reply({
+        data: { responsibility: { ...pending, catchUp: null }, task: { id: 'only-run' } }
+      });
+    }
+    return reply({
+      data: [{ ...pending, catchUp: resolved ? null : pending.catchUp }],
+      page: { limit: 100, offset: 0, total: 1 }
+    });
+  });
+  await page.goto('/app/#/schedules');
+  const run = page.getByRole('button', { name: 'Run once now', exact: true });
+  await run.click();
+  await expect(page.getByText('The agent is unavailable. Try again.')).toBeVisible();
+  await page.reload();
+  await expect(run).toBeEnabled();
+  await expect(page.getByText('Retryable check missed 2 runs')).toBeVisible();
+  fail = false;
+  await run.click();
+  await expect(page.getByText('Catch-up run started.', { exact: true })).toBeVisible();
+  await expect(page.locator('.schedule-catchup')).toHaveCount(0);
+  expect(decisions).toEqual([{ decision: 'run' }, { decision: 'run' }]);
+});

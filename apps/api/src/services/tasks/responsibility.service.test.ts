@@ -67,6 +67,10 @@ function setup() {
     task: { id: 't1', ...input } as never,
     created: true
   }));
+  tasks.resolveCatchUp.mockImplementation(async (input) => ({
+    task: input.task ? ({ id: 't1', ...input.task } as Task) : null,
+    created: Boolean(input.task)
+  }));
   const responsibilityLogger = {
     onResponsibilityCreated: jest.fn(),
     onResponsibilityStatusChanged: jest.fn(),
@@ -82,7 +86,7 @@ function setup() {
     responsibilityLogger,
     taskLogger
   );
-  return { service, responsibilities, tasks, conversations, humans };
+  return { service, responsibilities, tasks, conversations, humans, agents };
 }
 
 describe('ResponsibilityService', () => {
@@ -261,15 +265,18 @@ describe('ResponsibilityService', () => {
 
       const { task } = await service.resolveCatchUp(ADMIN, 'r1', 'run');
 
-      expect(responsibilities.clearCatchUp).toHaveBeenCalledWith('r1', slot);
       expect(task).not.toBeNull();
-      expect(tasks.create).toHaveBeenCalledWith(
-        expect.objectContaining({
+      expect(tasks.resolveCatchUp).toHaveBeenCalledWith({
+        responsibilityId: 'r1',
+        agentId: AGENT,
+        slot,
+        task: expect.objectContaining({
           runKey: 'catchup:r1:2026-10-22T04:00:00.000Z',
           brief: expect.stringContaining('4 scheduled runs were missed'),
           requestedByType: 'human'
         })
-      );
+      });
+      expect(tasks.create).not.toHaveBeenCalled();
     });
 
     it('starts nothing when the person says wait', async () => {
@@ -292,12 +299,94 @@ describe('ResponsibilityService', () => {
         ...responsibility,
         catchUp: { slot, missed: 2 }
       });
-      responsibilities.clearCatchUp.mockResolvedValue(false);
+      tasks.resolveCatchUp.mockResolvedValue(null);
 
       await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).rejects.toMatchObject({
         name: 'catchUpNotPending'
       });
       expect(tasks.create).not.toHaveBeenCalled();
+    });
+
+    it('keeps a refused question available for retry after the agent becomes available', async () => {
+      const { service, responsibilities, tasks, agents } = setup();
+      const pending = { ...responsibility, catchUp: { slot, missed: 2 } };
+      responsibilities.getById.mockResolvedValue(pending);
+      agents.getById.mockResolvedValueOnce(null);
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).rejects.toMatchObject({
+        name: 'agentUnavailable'
+      });
+      expect(tasks.resolveCatchUp).not.toHaveBeenCalled();
+      expect(pending.catchUp).toEqual({ slot, missed: 2 });
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).resolves.toMatchObject({
+        task: { id: 't1' }
+      });
+    });
+
+    it('leaves an open-run refusal pending, including a competing insert', async () => {
+      const { service, responsibilities, tasks } = setup();
+      responsibilities.getById.mockResolvedValue({
+        ...responsibility,
+        catchUp: { slot, missed: 2 }
+      });
+      tasks.resolveCatchUp.mockResolvedValue({
+        task: { id: 'other', runKey: 'manual:other', state: 'working' } as Task,
+        created: false
+      });
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).rejects.toMatchObject({
+        name: 'responsibilityRunOpen'
+      });
+      expect(responsibilities.getCatchUpDecision).not.toHaveBeenCalled();
+    });
+
+    it('retries an insert failure without clearing the question', async () => {
+      const { service, responsibilities, tasks } = setup();
+      responsibilities.getById.mockResolvedValue({
+        ...responsibility,
+        catchUp: { slot, missed: 2 }
+      });
+      tasks.resolveCatchUp.mockRejectedValueOnce(new Error('Database failure'));
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).rejects.toThrow('Database failure');
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).resolves.toMatchObject({
+        task: { id: 't1' }
+      });
+    });
+
+    it.each([false, true])(
+      'replays a committed run after response loss (stale pending=%s)',
+      async (stale) => {
+        const { service, responsibilities, tasks, agents } = setup();
+        responsibilities.getById.mockResolvedValue({
+          ...responsibility,
+          catchUp: stale ? { slot, missed: 2 } : null
+        });
+        responsibilities.getCatchUpDecision.mockResolvedValue({
+          slot,
+          decision: 'run',
+          taskId: 'original'
+        });
+        tasks.getById.mockResolvedValue({ id: 'original', runKey: 'catchup:r1:slot' } as Task);
+        tasks.resolveCatchUp.mockResolvedValue(null);
+        const result = await service.resolveCatchUp(ADMIN, 'r1', 'run');
+        expect(result.task?.id).toBe('original');
+        expect(result.responsibility.catchUp).toBeNull();
+        if (!stale) expect(agents.getById).not.toHaveBeenCalled();
+      }
+    );
+
+    it('replays wait, while preserving the first answer against an opposing retry', async () => {
+      const { service, responsibilities, tasks } = setup();
+      responsibilities.getCatchUpDecision.mockResolvedValue({
+        slot,
+        decision: 'wait',
+        taskId: null
+      });
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'wait')).resolves.toMatchObject({
+        task: null
+      });
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).rejects.toMatchObject({
+        name: 'catchUpNotPending'
+      });
+      expect(tasks.resolveCatchUp).not.toHaveBeenCalled();
     });
 
     it('refuses when there is no question at all', async () => {
