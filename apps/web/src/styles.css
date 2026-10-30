@@ -556,7 +556,7 @@ pre {
 }
 .brand {
   display: block;
-  width: 168px;
+  width: 136px;
   max-width: 100%;
   min-width: 0;
   -webkit-user-select: none;
@@ -1459,6 +1459,7 @@ progress::-webkit-progress-value {
   align-self: center;
 }
 .search-launch {
+  justify-self: end;
   width: 100%;
   max-width: 360px;
   justify-content: flex-start;
