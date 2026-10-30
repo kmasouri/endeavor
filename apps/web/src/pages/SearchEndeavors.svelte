@@ -15,7 +15,7 @@
   let results = $derived(conversations.filter((conversation) => conversationName(conversation.title).toLowerCase().includes(query.trim().toLowerCase())));
 </script>
 
-<Modal title="Find an endeavor" wide {onClose}>
+<Modal title="Find an endeavor" wide dismissOnBackdrop {onClose}>
   <form class="stack endeavor-form" onsubmit={(event) => { event.preventDefault(); if (results[0]) onPick(results[0].id); }}>
     <label>Search endeavors<input type="search" bind:value={query} placeholder="Search by name…" /></label>
     <ErrorNote {error} />

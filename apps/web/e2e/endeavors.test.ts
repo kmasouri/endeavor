@@ -334,6 +334,46 @@ test('unavailable saved selection falls back, and switching people resets access
   ).toHaveCount(0);
 });
 
+for (const theme of ['dark', 'light'] as const) {
+  for (const width of [1440, 320]) {
+    test(`${theme} at ${width}px: search backdrop dismisses without losing the thread or draft`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      const { state, errors } = await mockApi(page, { theme });
+      await page.goto('/app/#/conversations/site');
+      const draft = page.getByRole('textbox', { name: 'Message', exact: true });
+      await draft.fill('Keep this draft');
+      const opener = page.getByRole('button', { name: 'Search endeavors', exact: true });
+      await opener.click();
+      const dialog = page.getByRole('dialog', { name: 'Find an endeavor' });
+      const query = dialog.getByLabel('Search endeavors', { exact: true });
+      await query.fill('website');
+      await query.click();
+      await expect(dialog).toBeVisible();
+      const bounds = await dialog.boundingBox();
+      if (!bounds) throw new Error('Search dialog has no bounds');
+      // Empty dialog padding is inside the surface, not part of its backdrop.
+      await page.mouse.click(bounds.x + 4, bounds.y + 4);
+      await expect(dialog).toBeVisible();
+      const input = await query.boundingBox();
+      if (!input) throw new Error('Search input has no bounds');
+      // A drag that starts inside and ends outside must not dismiss search.
+      await page.mouse.move(input.x + 12, input.y + input.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(4, 4, { steps: 5 });
+      await page.mouse.up();
+      await expect(dialog).toBeVisible();
+      await expect(query).toHaveValue('website');
+      await page.mouse.click(4, 4);
+      await expect(dialog).toHaveCount(0);
+      await expect(opener).toBeFocused();
+      await expect(draft).toHaveValue('Keep this draft');
+      await expect(page).toHaveURL(/#\/conversations\/site$/);
+      expect(state.posts).toEqual([]);
+      expect(errors).toEqual([]);
+    });
+  }
+}
+
 test('cancel, Close and Escape preserve the thread and draft, trap focus, and restore the opener', async ({
   page
 }) => {

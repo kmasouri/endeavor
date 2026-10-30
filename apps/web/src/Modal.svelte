@@ -1,14 +1,23 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import Icon from './Icon.svelte';
-  let { title, busy = false, wide = false, onClose, children }: {
+  let { title, busy = false, wide = false, dismissOnBackdrop = false, onClose, children }: {
     title: string;
     busy?: boolean;
     wide?: boolean;
+    dismissOnBackdrop?: boolean;
     onClose: () => void;
     children: Snippet;
   } = $props();
   let dialog = $state<HTMLDialogElement>();
+  let startedOnBackdrop = false;
+  const isBackdrop = (event: MouseEvent, element: HTMLDialogElement) => {
+    const bounds = element.getBoundingClientRect();
+    return event.target === element && (
+      event.clientX < bounds.left || event.clientX > bounds.right ||
+      event.clientY < bounds.top || event.clientY > bounds.bottom
+    );
+  };
   $effect(() => {
     const element = dialog;
     const opener = document.activeElement;
@@ -27,6 +36,17 @@
   class="endeavor-dialog"
   class:endeavor-dialog-wide={wide}
   aria-labelledby="endeavor-dialog-title"
+  onpointerdown={(event) => {
+    startedOnBackdrop = isBackdrop(event, event.currentTarget);
+  }}
+  onpointercancel={() => { startedOnBackdrop = false; }}
+  onclick={(event) => {
+    const fromBackdrop = startedOnBackdrop;
+    startedOnBackdrop = false;
+    if (dismissOnBackdrop && !busy && fromBackdrop && isBackdrop(event, event.currentTarget)) {
+      onClose();
+    }
+  }}
   oncancel={(event) => {
     event.preventDefault();
     if (!busy) onClose();
