@@ -27,6 +27,7 @@ export async function fixture(
   const state = {
     extraMembers: [] as Member[],
     failSend: false,
+    loseSendResponse: false,
     failMembers: false,
     failMessages: false,
     failHistory: false,
@@ -83,6 +84,12 @@ export async function fixture(
           state.releaseSend = resolve;
         });
       if (state.failSend) return reply({ error: { message: 'Message not sent. Try again.' } }, 503);
+      const existing = state.messages.find(
+        (message) =>
+          body.clientKey &&
+          (message as Message & { clientKey?: string }).clientKey === body.clientKey
+      );
+      if (existing) return reply({ data: existing });
       const message: Message = {
         ...body,
         id: `sent-${state.posts.length}`,
@@ -93,6 +100,10 @@ export async function fixture(
         createdAt
       };
       state.messages.push(message);
+      if (state.loseSendResponse) {
+        state.loseSendResponse = false;
+        return route.abort('failed');
+      }
       return reply({ data: message }, 201);
     }
     if (req.method() === 'POST' && path === '/conversations/brief/members') {

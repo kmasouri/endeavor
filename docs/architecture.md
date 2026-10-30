@@ -435,7 +435,9 @@ transport header. Its GitHub integration resolves immutable snapshots only from 
 repository allowlist. Commands reuse a task-scoped Docker container, created lazily on the first command, with
 no network, credentials, or mounts, and explicit resource limits. The main app has no Docker
 socket. The broker alone controls Docker and persists validated snapshots and execution
-summaries in a separate volume. Explicit file edits are synchronized before the next command;
+summaries in a separate volume. Versioned records are validated on load; corrupt or unsupported
+records are quarantined with a durable per-task unavailable marker. Healthy tasks still load, and
+the affected task requires operator repair or explicit discard before reuse. Explicit file edits are synchronized before the next command;
 generated files and background processes stay in the live container. Containers expire after 30 idle
 minutes; accepted source expires after 24 idle hours. Shutdown and restart remove containers; the
 next command restores accepted source, not caches or processes. It never runs repository code in its

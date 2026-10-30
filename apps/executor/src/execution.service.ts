@@ -19,36 +19,48 @@ const executionResult = z.strictObject({
   files: filesSchema,
   backgroundProcesses: z.boolean().default(false)
 });
-type Execution = {
-  id: string;
-  status: 'running' | 'finished' | 'cancelled' | 'interrupted' | 'failed';
-  command: string;
-  startedAt: string;
-  finishedAt?: string;
-  exitCode?: number;
-  log?: string;
-  error?: string;
-  revision: number;
-  inputRevision: number;
-  verifiedRevision?: number | null;
-  workspaceChanged?: boolean;
-  sha: string | null;
-  repository: string | null;
-  workspaceReset?: boolean;
-  backgroundProcesses?: boolean;
-};
-type Checkout = {
-  repository: string;
-  sha: string;
-  files: WorkspaceFile[];
-  baseline: WorkspaceFile[];
-};
-type RecordData = {
-  revision: number;
-  checkout: Checkout | null;
-  executions: Execution[];
-  touchedAt: number;
-};
+const revisionSchema = z.number().int().nonnegative();
+const repositorySchema = toolSchemas.checkout_repository.shape.repository;
+const shaSchema = z.string().regex(/^[a-f0-9]{40}$/);
+const executionSchema = z.strictObject({
+  id: z.uuid(),
+  status: z.enum(['running', 'finished', 'cancelled', 'interrupted', 'failed']),
+  command: z.string(),
+  startedAt: z.iso.datetime(),
+  finishedAt: z.iso.datetime().optional(),
+  exitCode: z.number().int().optional(),
+  log: z.string().max(16_000).optional(),
+  error: z.string().optional(),
+  revision: revisionSchema,
+  inputRevision: revisionSchema,
+  verifiedRevision: revisionSchema.nullable().optional(),
+  workspaceChanged: z.boolean().optional(),
+  sha: shaSchema.nullable(),
+  repository: repositorySchema.nullable(),
+  workspaceReset: z.boolean().optional(),
+  backgroundProcesses: z.boolean().optional()
+});
+const checkoutSchema = z.strictObject({
+  repository: repositorySchema,
+  sha: shaSchema,
+  files: filesSchema,
+  baseline: filesSchema
+});
+const recordSchema = z.strictObject({
+  revision: revisionSchema,
+  checkout: checkoutSchema.nullable(),
+  executions: z.array(executionSchema).max(20),
+  touchedAt: z.number().int().nonnegative()
+});
+const storedRecordSchema = z.strictObject({ version: z.literal(1), record: recordSchema });
+const quarantineSchema = z.strictObject({
+  version: z.literal(1),
+  quarantinedFile: z.string().regex(/^[a-f0-9-]{36}\.[a-f0-9-]{36}\.json$/),
+  reason: z.enum(['invalid JSON', 'invalid record', 'unsupported version'])
+});
+type Execution = z.infer<typeof executionSchema>;
+type RecordData = z.infer<typeof recordSchema>;
+type Quarantine = z.infer<typeof quarantineSchema>;
 type Active = { cancelled: boolean; container?: ContainerRun; done?: Promise<void> };
 const fresh = (): RecordData => ({
   revision: 0,
@@ -66,27 +78,73 @@ export class ExecutionService {
   private readonly settings: Settings;
   private readonly containers: ContainerClient;
   private readonly source: RepositorySource;
+  private readonly warn: (message: string) => void;
   private readonly records = new Map<string, RecordData>();
+  private readonly unavailable = new Map<string, Quarantine>();
   private readonly busy = new Set<string>();
   private readonly active = new Map<string, Active>();
   private readonly dirty = new Map<string, Set<string>>();
-  constructor(settings: Settings, containers: ContainerClient, source: RepositorySource) {
+  constructor(
+    settings: Settings,
+    containers: ContainerClient,
+    source: RepositorySource,
+    warn: (message: string) => void = console.warn
+  ) {
     this.settings = settings;
     this.containers = containers;
     this.source = source;
+    this.warn = warn;
   }
 
   async initialize(): Promise<void> {
     await mkdir(this.settings.EXECUTOR_DATA_DIR, { recursive: true, mode: 0o700 });
     await this.containers.recover();
     for (const name of await readdir(this.settings.EXECUTOR_DATA_DIR)) {
-      if (!/^[a-f0-9-]{36}\.json$/.test(name)) continue;
+      if (!/^[a-f0-9-]{36}\.json$/.test(name) || !z.uuid().safeParse(name.slice(0, -5)).success) continue;
       const taskId = name.slice(0, -5);
-      const record = JSON.parse(
-        await readFile(join(this.settings.EXECUTOR_DATA_DIR, name), 'utf8')
-      ) as RecordData;
+      const bytes = await readFile(this.file(taskId));
+      let parsed: unknown;
+      let reason: Quarantine['reason'] = 'invalid record';
+      try {
+        parsed = JSON.parse(bytes.toString('utf8'));
+      } catch {
+        reason = 'invalid JSON';
+      }
+      const marker = quarantineSchema.safeParse(parsed);
+      if (marker.success) {
+        this.markUnavailable(taskId, marker.data);
+        continue;
+      }
+      const version = z.object({ version: z.number() }).safeParse(parsed);
+      if (version.success && version.data.version !== 1) reason = 'unsupported version';
+      const loaded = version.success
+        ? storedRecordSchema.safeParse(parsed).data?.record
+        : recordSchema.safeParse(parsed).data;
+      if (!loaded) {
+        const quarantinedFile = `${taskId}.${randomUUID()}.json`;
+        await mkdir(join(this.settings.EXECUTOR_DATA_DIR, 'quarantine'), {
+          recursive: true,
+          mode: 0o700
+        });
+        // Keep the original bytes before replacing the root file with a durable marker.
+        // If either write fails, stop startup rather than hiding a storage failure.
+        await writeFile(
+          join(this.settings.EXECUTOR_DATA_DIR, 'quarantine', quarantinedFile),
+          bytes,
+          {
+            flag: 'wx',
+            mode: 0o600
+          }
+        );
+        const marker: Quarantine = { version: 1, quarantinedFile, reason };
+        await this.writeRecord(taskId, marker);
+        this.markUnavailable(taskId, marker);
+        continue;
+      }
+      const record = loaded;
       for (const job of record.executions.filter((job) => job.status === 'running')) {
         job.status = 'interrupted';
+        job.verifiedRevision = null;
         job.error =
           'Executor restarted. Outcome is unknown; changes were not imported. Run verification again.';
         job.finishedAt = new Date().toISOString();
@@ -139,9 +197,18 @@ export class ExecutionService {
   private file(task: string): string {
     return join(this.settings.EXECUTOR_DATA_DIR, `${task}.json`);
   }
-  private async persist(task: string, record: RecordData): Promise<void> {
-    await writeFile(`${this.file(task)}.tmp`, JSON.stringify(record), { mode: 0o600 });
+  private markUnavailable(task: string, marker: Quarantine): void {
+    this.unavailable.set(task, marker);
+    this.warn(
+      `Executor task ${task} unavailable: ${marker.reason}. Original record: quarantine/${marker.quarantinedFile}. Restore a validated record while stopped, or explicitly call discard_repository to start over. The quarantine copy is retained.`
+    );
+  }
+  private async writeRecord(task: string, value: unknown): Promise<void> {
+    await writeFile(`${this.file(task)}.tmp`, JSON.stringify(value), { mode: 0o600 });
     await rename(`${this.file(task)}.tmp`, this.file(task));
+  }
+  private async persist(task: string, record: RecordData): Promise<void> {
+    await this.writeRecord(task, { version: 1, record });
   }
 
   async call(task: string, name: ToolName, raw: unknown): Promise<unknown> {
@@ -159,6 +226,16 @@ export class ExecutionService {
     while (this.busy.has(task)) await new Promise((resolve) => setTimeout(resolve, 5));
     this.busy.add(task);
     try {
+      if (this.unavailable.has(task)) {
+        if (name !== 'discard_repository')
+          throw new OperationError(
+            'This task has a quarantined executor record. Its original data is preserved. Ask an operator to restore it, or explicitly discard_repository before starting over.'
+          );
+        await this.containers.release(task);
+        await rm(this.file(task), { force: true });
+        this.unavailable.delete(task);
+        return { discarded: true };
+      }
       let record = this.records.get(task);
       if (!record) {
         if (name === 'list_executions') return [];

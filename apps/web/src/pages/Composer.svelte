@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import {
     api,
+    getActorId,
     type DirectoryEntry,
     type Member,
     type Message,
@@ -93,6 +94,19 @@
     input?.focus();
     input?.setSelectionRange(caret, caret);
   };
+  let active = true;
+  onDestroy(() => {
+    active = false;
+  });
+  let pendingMessage: {
+    identity: string;
+    payload: {
+      body: string;
+      mentions: ParticipantRef[];
+      inReplyToMessageId?: string;
+      clientKey: string;
+    };
+  } | null = null;
   const send = () => {
     if (!body.trim() || action.busy) return;
     // Text pasted or typed in full works just like selecting a member in the picker.
@@ -114,28 +128,64 @@
         ).test(body)
       )
       .map((member) => member.participant);
+    const submitted = {
+      conversationId,
+      actorId: getActorId(),
+      body,
+      replyId: replyTo?.id ?? null,
+      revisionId: revision?.id ?? null,
+      revisionAgent:
+        members.find((member) => member.participant.id === revision?.ownerAgentId)?.name ??
+        'the agent'
+    };
+    // Identity treats mention order as irrelevant; a retry sends the original payload exactly.
+    const identity = JSON.stringify({
+      conversationId: submitted.conversationId,
+      actorId: submitted.actorId,
+      body: submitted.body,
+      replyId: submitted.replyId,
+      mentions: refs
+        .map(({ type, id }) => ({ type, id }))
+        .sort((a, b) => `${a.type}:${a.id}`.localeCompare(`${b.type}:${b.id}`))
+    });
+    if (!submitted.revisionId && pendingMessage?.identity !== identity) {
+      pendingMessage = {
+        identity,
+        payload: {
+          body: submitted.body,
+          mentions: refs.map(({ type, id }) => ({ type, id })),
+          ...(submitted.replyId && { inReplyToMessageId: submitted.replyId }),
+          clientKey: crypto.randomUUID()
+        }
+      };
+    }
+    const attempt = pendingMessage;
     void action
       .run(() =>
-        revision
-          ? api.post<Task>(`/tasks/${revision.id}/restart`, { reason: body })
-          : api.post(`/conversations/${conversationId}/messages`, {
-              body,
-              mentions: refs,
-              ...(replyTo && { inReplyToMessageId: replyTo.id }),
-              clientKey: crypto.randomUUID()
-            })
+        submitted.revisionId
+          ? api.post<Task>(`/tasks/${submitted.revisionId}/restart`, { reason: submitted.body })
+          : api.post(`/conversations/${submitted.conversationId}/messages`, attempt!.payload)
       )
       .then((ok) => {
-        if (ok) {
-          revisionSent = revision
-            ? `Changes sent to ${members.find((member) => member.participant.id === revision?.ownerAgentId)?.name ?? 'the agent'} as a linked new run.`
-            : '';
+        if (!ok || !active) return;
+        if (!submitted.revisionId && pendingMessage === attempt) pendingMessage = null;
+        if (conversationId !== submitted.conversationId || getActorId() !== submitted.actorId) return;
+        revisionSent = submitted.revisionId
+          ? `Changes sent to ${submitted.revisionAgent} as a linked new run.`
+          : '';
+        // A later draft, reply or revision belongs to the user; acknowledging this send must
+        // not erase it. Unchanged failed submissions keep their key until acknowledged.
+        if (
+          body === submitted.body &&
+          (replyTo?.id ?? null) === submitted.replyId &&
+          (revision?.id ?? null) === submitted.revisionId
+        ) {
           revision = null;
           body = '';
           mentions = [];
           replyTo = null;
-          onPosted();
         }
+        onPosted();
       });
   };
 </script>
