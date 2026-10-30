@@ -5,7 +5,7 @@
     approvals: 'M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z',
     schedules: 'M12 8v4l3 2',
     agents: 'M5 7h14v11H5zM12 4v3M9 12h.01M15 12h.01',
-    robot: 'M5 7h14v13H5zM12 3v4M2 11v5M22 11v5M9 12h.01M15 12h.01M9 16h6',
+    robot: 'M11 1h2v4h6a3 3 0 013 3v2h2v8h-2v2a3 3 0 01-3 3H5a3 3 0 01-3-3v-2H0v-8h2V8a3 3 0 013-3h6V1zM6 10v5h4v-5H6zm8 0v5h4v-5h-4z',
     connections: 'M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-2 2M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l2-2',
     catalogs: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM17 14v6M14 17h6',
     setup: 'M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2',
@@ -40,5 +40,10 @@
   {#if name === 'schedules'}<circle cx="12" cy="12" r="8" />{/if}
   {#if name === 'setup'}<circle cx="12" cy="12" r="3" />{/if}
   {#if name === 'search'}<circle cx="10" cy="10" r="6" />{/if}
-  <path d={paths[name] ?? paths.agents} />
+  <path
+    d={paths[name] ?? paths.agents}
+    fill={name === 'robot' ? 'currentColor' : 'none'}
+    stroke={name === 'robot' ? 'none' : 'currentColor'}
+    fill-rule="evenodd"
+  />
 </svg>

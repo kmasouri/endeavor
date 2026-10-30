@@ -390,8 +390,11 @@ test('keeps failed values and membership, prevents duplicate saves, then selects
   const badgeBox = await badge.boundingBox();
   const avatarBox = await avatar.boundingBox();
   expect(badgeBox!.width).toBeLessThan(avatarBox!.width);
-  expect(badgeBox!.x).toBeGreaterThan(avatarBox!.x + avatarBox!.width / 2);
-  expect(badgeBox!.y).toBeGreaterThan(avatarBox!.y + avatarBox!.height / 2);
+  expect(badgeBox!.width).toBeGreaterThanOrEqual(20);
+  const glyphBox = await badge.locator('svg').boundingBox();
+  expect(glyphBox!.width).toBeGreaterThanOrEqual(14);
+  expect(badgeBox!.x + badgeBox!.width / 2).toBeGreaterThan(avatarBox!.x + avatarBox!.width / 2);
+  expect(badgeBox!.y + badgeBox!.height / 2).toBeGreaterThan(avatarBox!.y + avatarBox!.height / 2);
   await dialog.getByLabel('Find people or agents').fill('lee');
   await dialog.getByRole('checkbox', { name: 'Add Lee' }).check();
   await dialog.getByRole('button', { name: 'Start', exact: true }).click();
