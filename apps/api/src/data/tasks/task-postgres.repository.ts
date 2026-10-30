@@ -223,7 +223,8 @@ export class TaskPostgresRepository implements TaskRepository {
       }
       const saved = await client.query(
         `INSERT INTO endeavor.catch_up_decisions (responsibility_id, slot, next_run_at, decision, task_id)
-         SELECT id, catch_up_slot, next_run_at, $2, $3 FROM endeavor.responsibilities WHERE id = $1
+         SELECT id, catch_up_slot, next_run_at, $2, $3 FROM endeavor.responsibilities
+         WHERE id = $1 AND next_run_at > clock_timestamp()
          ON CONFLICT DO NOTHING RETURNING responsibility_id`,
         [input.responsibilityId, input.task ? 'run' : 'wait', result.task?.id ?? null]
       );
