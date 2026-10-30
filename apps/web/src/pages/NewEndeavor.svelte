@@ -47,7 +47,7 @@
       id="new-endeavor-name"
       value={title}
       required
-      maxlength="200"
+      maxlength="64"
       pattern="[a-z0-9]+(-[a-z0-9]+)*-?"
       placeholder="e.g. explain-heat-pumps"
       aria-describedby="channel-name-hint"
@@ -63,7 +63,7 @@
       }}
       onblur={() => (title = canonicalConversationName(title))}
     /></span></div>
-    <p id="channel-name-hint" class="caption muted">Lowercase letters, numbers, and hyphens. Spaces become hyphens.</p>
+    <p id="channel-name-hint" class="caption muted">Up to 64 characters. Lowercase letters, numbers, and hyphens. Spaces become hyphens.</p>
     <fieldset disabled={action.busy}>
       <legend>People and agents <span class="muted">(optional)</span></legend>
       <p class="caption muted">You can add members later. Agents respond when you mention them.</p>

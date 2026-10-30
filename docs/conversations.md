@@ -232,3 +232,5 @@ new API requests.
 `ParticipantProfile.svelte` uses a native automatic popover for outside-click and Escape
 dismissal. Cards appear in the browser's top layer, fit within the viewport and close when
 the surrounding page scrolls. Close restores focus to the name or avatar that opened it.
+
+Channel names are limited to 64 characters after normalization on creates and renames. The creation field shows this limit. Existing longer names remain intact and usable; renaming them requires a name within the limit. A database trigger enforces the limit for inserts and changed names, while allowing unrelated edits to older channels.

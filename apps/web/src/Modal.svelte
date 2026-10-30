@@ -1,9 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import Icon from './Icon.svelte';
-  let { title, busy = false, onClose, children }: {
+  let { title, busy = false, wide = false, onClose, children }: {
     title: string;
     busy?: boolean;
+    wide?: boolean;
     onClose: () => void;
     children: Snippet;
   } = $props();
@@ -24,6 +25,7 @@
 <dialog
   bind:this={dialog}
   class="endeavor-dialog"
+  class:endeavor-dialog-wide={wide}
   aria-labelledby="endeavor-dialog-title"
   oncancel={(event) => {
     event.preventDefault();

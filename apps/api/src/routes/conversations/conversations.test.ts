@@ -42,7 +42,7 @@ describe('conversation creation', () => {
     expect(create).toHaveBeenCalledWith(ACTOR, { title: 'goal', humanIds: [PERSON], agentIds: [] });
     await app.close();
   });
-  it.each(['', '   ', '#!?', '---', '🧪', 'a'.repeat(201)])(
+  it.each(['', '   ', '#!?', '---', '🧪', 'a'.repeat(65), 'a'.repeat(201)])(
     'rejects an empty or oversized canonical name: %s',
     async (title) => {
       const app = setupApp();
@@ -56,6 +56,31 @@ describe('conversation creation', () => {
       });
       expect(response.statusCode).toBe(400);
       expect(create).not.toHaveBeenCalled();
+      await app.close();
+    }
+  );
+
+  it.each(['POST', 'PATCH'] as const)(
+    'enforces the 64-character boundary on %s',
+    async (method) => {
+      const app = setupApp();
+      await app.ready();
+      const create = jest
+        .spyOn(app.conversationService, 'createConversation')
+        .mockResolvedValue({ title: 'a'.repeat(64) } as never);
+      const update = jest
+        .spyOn(app.conversationService, 'updateConversation')
+        .mockResolvedValue({ title: 'a'.repeat(64) } as never);
+      for (const length of [64, 65]) {
+        const response = await app.inject({
+          method,
+          url: method === 'POST' ? '/conversations' : `/conversations/${ACTOR}`,
+          headers: { 'x-actor-id': ACTOR },
+          payload: { title: 'a'.repeat(length) }
+        });
+        expect(response.statusCode).toBe(length === 65 ? 400 : method === 'POST' ? 201 : 200);
+      }
+      expect(create.mock.calls.length + update.mock.calls.length).toBe(1);
       await app.close();
     }
   );

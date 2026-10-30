@@ -32,7 +32,7 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     {
       schema: {
         description:
-          'Start a conversation. Names are stored as lowercase letters, numbers, and hyphens. You become a member; agentIds and humanIds add chosen members.',
+          'Start a conversation. Names are stored as lowercase letters, numbers, and hyphens, with at most 64 characters after normalization. You become a member; agentIds and humanIds add chosen members.',
         tags: ['conversations'],
         headers: actorHeadersSchema,
         body: createConversationBodySchema
@@ -60,7 +60,7 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     {
       schema: {
         description:
-          'Change a conversation: its channel name (normalized to lowercase letters, numbers, and hyphens), or its budget for all agent work in it (budgetUsd, null for none).',
+          'Change a conversation: its channel name (at most 64 characters after normalization to lowercase letters, numbers, and hyphens), or its budget for all agent work in it (budgetUsd, null for none).',
         tags: ['conversations'],
         headers: actorHeadersSchema,
         params: conversationParamsSchema,

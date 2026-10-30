@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { canonicalConversationName } from '../../shared/conversation-name';
+import {
+  canonicalConversationName,
+  MAX_CONVERSATION_NAME_LENGTH
+} from '../../shared/conversation-name';
 
 const conversationTitleSchema = z
   .string()
@@ -9,7 +12,7 @@ const conversationTitleSchema = z
     z
       .string()
       .min(1, 'Use at least one letter or number.')
-      .max(200)
+      .max(MAX_CONVERSATION_NAME_LENGTH, 'Use no more than 64 characters.')
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
   );
 
