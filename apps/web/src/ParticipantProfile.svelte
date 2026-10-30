@@ -85,7 +85,7 @@
   }}
 >
   <div class="row participant-profile-heading">
-    <Avatar {name} {id} {agent} size="xl" />
+    <Avatar {name} {id} {agent} appearance={member ?? directory} size="xl" />
     <button type="button" class="quiet icon-button" aria-label="Close profile" onclick={close}><Icon name="close" /></button>
   </div>
   <h2>{name}</h2>

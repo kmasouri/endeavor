@@ -77,7 +77,7 @@
         {@const costs = spending.data?.get(agent.id)}
         <li>
           <a class="agent-row" href={`#/agents/${agent.id}`}
-            ><Avatar name={agent.name} id={agent.id} agent />
+            ><Avatar name={agent.name} id={agent.id} appearance={agent} agent />
             <div>
               <h3>{agent.name}</h3>
               <p class="agent-purpose">{agent.purpose}</p>

@@ -2,6 +2,7 @@
 @import './design-tokens.css';
 
 :root {
+  --app-bar-height: 112px;
   --bg: var(--bg-100);
   --surface: var(--bg-200);
   --text: var(--text-100);
@@ -244,6 +245,15 @@ button:disabled {
   width: 10px;
   height: 10px;
 }
+.reply-preview .agent-badge {
+  width: 10px;
+  height: 10px;
+  border-width: 1px;
+}
+.reply-preview .agent-badge svg {
+  width: 7px;
+  height: 7px;
+}
 .reply-name {
   color: var(--text-200);
   font-weight: 600;
@@ -417,7 +427,7 @@ pre {
   --sidebar-visibility: visible;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
-  grid-template-rows: 66px minmax(0, 1fr);
+  grid-template-rows: var(--app-bar-height) minmax(0, 1fr);
   min-height: 100dvh;
   transition: grid-template-columns 220ms ease;
 }
@@ -448,8 +458,8 @@ pre {
 }
 .sidebar {
   position: sticky;
-  top: 66px;
-  height: calc(100dvh - 66px);
+  top: var(--app-bar-height);
+  height: calc(100dvh - var(--app-bar-height));
   padding: 16px 12px;
   background: var(--bg-000);
   border-right: 1px solid var(--border-100);
@@ -493,7 +503,7 @@ pre {
 }
 .sidebar-resizer {
   position: fixed;
-  top: 66px;
+  top: var(--app-bar-height);
   bottom: 0;
   left: calc(var(--sidebar-width) - 4px);
   z-index: 11;
@@ -545,21 +555,15 @@ pre {
   }
 }
 .brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  white-space: nowrap;
+  display: block;
+  width: 320px;
+  max-width: 100%;
+  min-width: 0;
 }
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-md);
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-size: 12px;
+.brand svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 .icon-button {
   display: inline-flex;
@@ -717,6 +721,19 @@ pre {
   height: var(--avatar-lg);
   border-radius: var(--radius-lg);
 }
+.agent-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  place-items: center;
+  background: var(--agent);
+  color: var(--agent-ink);
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--bg-100);
+  border-radius: var(--radius-full);
+}
 .page-header {
   display: flex;
   align-items: center;
@@ -816,7 +833,7 @@ details summary {
 .conversation-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  height: calc(100dvh - 66px);
+  height: calc(100dvh - var(--app-bar-height));
 }
 .conversation-layout.with-details {
   grid-template-columns: minmax(0, 1fr) 320px;
@@ -1419,7 +1436,7 @@ progress::-webkit-progress-value {
 .app-bar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 244px minmax(0, 1fr);
+  grid-template-columns: 380px minmax(0, 1fr);
   align-items: center;
   gap: 20px;
   padding: 10px 20px;
@@ -1428,7 +1445,12 @@ progress::-webkit-progress-value {
   min-width: 0;
 }
 .app-brand {
+  align-items: center;
   flex-wrap: nowrap;
+}
+.app-brand > button,
+.app-bar > button {
+  align-self: center;
 }
 .search-launch {
   width: 100%;
@@ -1453,7 +1475,7 @@ progress::-webkit-progress-value {
   line-height: 20px;
 }
 .endeavor-empty {
-  min-height: calc(100dvh - 114px);
+  min-height: calc(100dvh - var(--app-bar-height) - 48px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1675,7 +1697,7 @@ progress::-webkit-progress-value {
 }
 @media (max-width: 700px) {
   .conversation-details {
-    inset-block-start: 66px;
+    inset-block-start: var(--app-bar-height);
     z-index: 12;
   }
 }

@@ -64,7 +64,7 @@
         class="quiet agent-line"
         aria-expanded={selected === member.participant.id}
         onclick={() => (selected = selected === member.participant.id ? '' : member.participant.id)}
-        ><Avatar name={member.name} id={member.participant.id} agent /><span class="grow"
+        ><Avatar name={member.name} id={member.participant.id} appearance={member} agent /><span class="grow"
           >{member.name}</span
         ><span class="caption muted"
           >{current[0]?.pausedAt ? 'Paused' : (current[0]?.state ?? 'Free')}</span

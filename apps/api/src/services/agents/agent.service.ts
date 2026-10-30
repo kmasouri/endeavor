@@ -10,6 +10,7 @@ import { AgentLogger } from '../../observability';
 import { ADMIN_ONLY, requireHuman } from '../access/access.rules';
 import { AppError } from '../../shared/errors';
 import {
+  AgentAppearance,
   Agent,
   AgentLimits,
   AgentVersion,
@@ -138,7 +139,7 @@ export class AgentService {
   async updateProfile(
     actorId: string,
     agentId: string,
-    changes: { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
+    changes: AgentAppearance & { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
   ): Promise<AgentDetails> {
     requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     const agent = await this.requireAgent(agentId);
@@ -377,6 +378,8 @@ function toDirectoryEntry(agent: Agent, version: AgentVersion): DirectoryEntry {
     id: agent.id,
     name: agent.name,
     purpose: agent.purpose,
+    avatarColor: agent.avatarColor ?? null,
+    avatarIcon: agent.avatarIcon ?? null,
     capabilities: {
       provider: version.provider,
       model: version.model,

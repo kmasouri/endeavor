@@ -388,3 +388,15 @@ describe('ConversationService', () => {
     expect(conversations.markRead).not.toHaveBeenCalled();
   });
 });
+
+it('returns saved agent appearance on conversation members', async () => {
+  const { service, agents, conversations } = setup();
+  agents.getById.mockResolvedValue({ ...agent, avatarColor: 'teal', avatarIcon: 'file' });
+  conversations.listMembers.mockResolvedValue([member('human', KIM), member('agent', AGENT)]);
+  const details = await service.getConversation(KIM, CONV);
+  expect(details.members.find((m) => m.participant.id === AGENT)).toMatchObject({
+    avatarColor: 'teal',
+    avatarIcon: 'file'
+  });
+  expect(details.members.find((m) => m.participant.id === KIM)).not.toHaveProperty('avatarIcon');
+});

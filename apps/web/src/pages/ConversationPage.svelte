@@ -267,6 +267,9 @@
       ? 'Platform'
       : (directory.data?.find((agent) => agent.id === ref.id)?.name ??
         (ref.type === 'agent' ? 'Deleted agent' : 'Someone')));
+  const appearanceOf = (id: string | null) =>
+    details.data?.members.find((member) => member.participant.type === 'agent' && member.participant.id === id)
+      ?? directory.data?.find((agent) => agent.id === id);
   const historyName = $derived(
     historyAgentId ? nameOf({ type: 'agent', id: historyAgentId }) : 'Agent'
   );
@@ -344,7 +347,7 @@
           >
             {#each conversation.members.slice(0, 4) as member (member.participant.id)}<Avatar
                 name={member.name}
-                id={member.participant.id}
+                id={member.participant.id} appearance={member}
                 agent={member.participant.type === 'agent'}
               />{/each}
             {#if conversation.members.length > 4}<span class="caption"
@@ -414,7 +417,7 @@
             <div class="row">
               <Avatar
                 name={nameOf({ type: 'agent', id: approval.agentId })}
-                id={approval.agentId}
+                id={approval.agentId} appearance={appearanceOf(approval.agentId)}
                 agent
               /><strong>{nameOf({ type: 'agent', id: approval.agentId })}</strong>
             </div>
@@ -435,7 +438,7 @@
             <div class="row">
               <Avatar
                 name={nameOf({ type: 'agent', id: task.ownerAgentId })}
-                id={task.ownerAgentId}
+                id={task.ownerAgentId} appearance={appearanceOf(task.ownerAgentId)}
                 agent
               /><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
             </div>
@@ -448,7 +451,7 @@
         </button>{/if}
         {#if busy.length}<div class="live-status caption" aria-live="polite">
             {#each busy as task (task.id)}<span
-                ><span aria-hidden="true"><Avatar name={nameOf({ type: 'agent', id: task.ownerAgentId })} id={task.ownerAgentId} agent size="sm" /></span><span><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
+                ><span aria-hidden="true"><Avatar name={nameOf({ type: 'agent', id: task.ownerAgentId })} id={task.ownerAgentId} appearance={appearanceOf(task.ownerAgentId)} agent size="sm" /></span><span><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
                 {#if waitingApproval(task)}is <span class="waiting-ok">waiting for your OK</span>
                   <span class="muted">· {describeApproval(waitingApproval(task))}</span
                   >{:else if task.state === 'working' && !task.pausedAt && task.activity}<LiveActivity activity={task.activity} />{:else}{liveStatus(task)}{/if}</span></span
@@ -486,7 +489,7 @@
               onLoaded={(task) => { historyAgentId = task.ownerAgentId; }}
               onRevise={askForChanges} onSelect={inspectRun} onChanged={reload} />{/key}
           {:else if historyAgentId}
-            {#key historyAgentId}<AgentHistory {conversationId} conversationTitle={conversation.title} agentId={historyAgentId} agentName={historyName} costs={costs.data?.tasks ?? []} onSelect={inspectRun} />{/key}
+            {#key historyAgentId}<AgentHistory {conversationId} conversationTitle={conversation.title} agentId={historyAgentId} appearance={appearanceOf(historyAgentId)} agentName={historyName} costs={costs.data?.tasks ?? []} onSelect={inspectRun} />{/key}
           {/if}
         {:else}
         <div class="row">
@@ -505,7 +508,7 @@
           {#each conversation.members.filter((member) => member.participant.type === 'human') as member (member.participant.id)}<div
               class="person-line row"
             >
-              <Avatar name={member.name} id={member.participant.id} /><span
+              <Avatar name={member.name} id={member.participant.id} appearance={member} /><span
                 >{member.name}{member.participant.id === me.id ? ' (you)' : ''}</span
               >
             </div>{/each}

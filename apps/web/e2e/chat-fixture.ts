@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import type { Member, Message } from '../src/api';
+import type { AgentAppearance, Member, Message } from '../src/api';
 
 export const createdAt = '2026-10-27T12:00:00Z';
 const researcher = {
@@ -8,10 +8,22 @@ const researcher = {
   purpose: 'Find evidence',
   capabilities: { provider: 'openai', model: 'research-model', skillCount: 2, connectionCount: 1 }
 };
-const reviewer = { id: 'reviewer', name: 'Reviewer', purpose: 'Check evidence' };
+const reviewer = {
+  id: 'reviewer',
+  name: 'Reviewer',
+  purpose: 'Check evidence',
+  avatarColor: null,
+  avatarIcon: null
+};
 
 // All network traffic is intercepted, including read markers and failed writes. No live API.
-export async function fixture(page: Page, theme = 'dark', empty = false) {
+export async function fixture(
+  page: Page,
+  theme = 'dark',
+  empty = false,
+  appearance: AgentAppearance = {}
+) {
+  const shownResearcher = { ...researcher, ...appearance };
   const state = {
     extraMembers: [] as Member[],
     failSend: false,
@@ -100,8 +112,8 @@ export async function fixture(page: Page, theme = 'dark', empty = false) {
     }
     if (path === '/humans')
       return reply({ data: [{ id: 'person', name: 'Kayvan', preferences: { theme } }] });
-    if (path === '/directory') return reply({ data: [researcher, reviewer] });
-    if (path === '/agents') return list([researcher, reviewer]);
+    if (path === '/directory') return reply({ data: [shownResearcher, reviewer] });
+    if (path === '/agents') return list([shownResearcher, reviewer]);
     if (path === '/conversations') return list([{ id: 'brief', title: 'source-brief', createdAt }]);
     if (path === '/conversations/brief')
       return reply({
@@ -112,10 +124,12 @@ export async function fixture(page: Page, theme = 'dark', empty = false) {
           members: [
             { participant: { type: 'human', id: 'person' }, name: 'Kayvan', historyFrom: null },
             ...state.extraMembers,
-            ...[researcher, ...(state.added ? [reviewer] : [])].map((a) => ({
+            ...[shownResearcher, ...(state.added ? [reviewer] : [])].map((a) => ({
               participant: { type: 'agent', id: a.id },
               name: a.name,
               purpose: a.purpose,
+              avatarColor: a.avatarColor,
+              avatarIcon: a.avatarIcon,
               historyFrom: null
             }))
           ]

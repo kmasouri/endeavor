@@ -288,3 +288,40 @@ test('deleted agent profiles and member profiles preserve history and modal acce
   expect(api.errors).toEqual([]);
   expect(api.unexpected).toEqual([]);
 });
+
+test('custom agent appearance reaches chat avatars, profile cards and mention choices', async ({
+  page
+}) => {
+  const api = await fixture(page, 'dark', false, { avatarColor: 'teal', avatarIcon: 'file' });
+  api.state.messages.push({
+    id: 'answer',
+    authorType: 'agent',
+    authorId: 'researcher',
+    body: 'Here is the evidence.',
+    taskId: null,
+    mentions: [],
+    inReplyToMessageId: null,
+    createdAt
+  });
+  await page.goto('/app/#/conversations/brief');
+  const message = page.locator('#m-answer');
+  const avatar = message.getByRole('img', { name: 'Researcher · agent' });
+  await expect(avatar).toHaveAttribute('style', /agent-3-bg/);
+  const path = await avatar.locator(':scope > svg path').getAttribute('d');
+  expect(path).toContain('M6 3h8');
+  await message.locator('.message-avatar .participant-trigger').click();
+  const card = page.getByRole('dialog', { name: "Researcher's profile", exact: true });
+  await expect(card.getByRole('img')).toHaveAttribute('style', /agent-3-bg/);
+  await expect(card.getByRole('img').locator(':scope > svg path')).toHaveAttribute('d', path!);
+  await card.getByRole('button', { name: 'Close profile' }).click();
+  const input = page.getByRole('textbox', { name: 'Message', exact: true });
+  await input.fill('@Res');
+  const choice = page.getByRole('option').filter({ hasText: 'Researcher' });
+  await expect(choice.getByRole('img')).toHaveAttribute('style', /agent-3-bg/);
+  await expect(choice.getByRole('img').locator(':scope > svg path')).toHaveAttribute('d', path!);
+  await expect(
+    page.locator('.members-button').getByRole('img', { name: 'Researcher · agent' })
+  ).toHaveAttribute('style', /agent-3-bg/);
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});

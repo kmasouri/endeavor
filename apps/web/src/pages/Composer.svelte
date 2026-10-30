@@ -56,6 +56,8 @@
           name: member.name,
           type: member.participant.type,
           inside: true,
+          avatarColor: member.avatarColor,
+          avatarIcon: member.avatarIcon,
           purpose: member.purpose
         })),
       ...directory
@@ -65,6 +67,8 @@
           name: agent.name,
           type: 'agent' as const,
           inside: false,
+          avatarColor: agent.avatarColor,
+          avatarIcon: agent.avatarIcon,
           purpose: agent.purpose
         }))
     ]
@@ -174,7 +178,7 @@
             onmousedown={(event) => event.preventDefault()}
             onclick={() => void pick(member)}
           >
-            <Avatar name={member.name} id={member.id} agent={member.type === 'agent'} />
+            <Avatar name={member.name} id={member.id} appearance={member} agent={member.type === 'agent'} />
             <span class="grow"
               >{member.name}
               {#if member.purpose}<span class="picker-purpose caption muted">{member.purpose}</span

@@ -224,3 +224,10 @@ waiting, blocked, completed, or cancelled. Working tasks return:
 
 Kinds are `searching`, `reading`, `writing`, `checking`, `connection`, and `thinking`.
 `since` marks the recorded step start, not the polling time. This adds no model calls.
+
+### Agent appearance
+
+Agent records, directory entries, and agent conversation members include nullable `avatarColor`
+and `avatarIcon` overrides. `null` uses the existing ID-derived color or profile icon.
+`PATCH /agents/:agentId` accepts either field independently; omission preserves the saved value,
+and explicit `null` resets it. See [agent appearance](agents.md#avatar-appearance-ca-92) for choices.
