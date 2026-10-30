@@ -170,6 +170,82 @@ export class TaskPostgresRepository implements TaskRepository {
     }
   }
 
+  async resolveCatchUp(input: {
+    responsibilityId: string;
+    agentId: string;
+    slot: Date;
+    task: CreateTaskInput | null;
+  }): Promise<{ task: Task | null; created: boolean } | null> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      // Match permanent deletion's agent-before-schedule lock order.
+      const agent = await client.query<{
+        disabled_at: Date | null;
+        deleted_at: Date | null;
+        current_version_id: string | null;
+      }>(
+        'SELECT disabled_at, deleted_at, current_version_id FROM endeavor.agents WHERE id = $1 FOR SHARE',
+        [input.agentId]
+      );
+      if (
+        input.task &&
+        (!agent.rows[0] ||
+          agent.rows[0].disabled_at ||
+          agent.rows[0].deleted_at ||
+          agent.rows[0].current_version_id !== input.task.agentVersionId)
+      ) {
+        await client.query('COMMIT');
+        return { task: null, created: false };
+      }
+      // Non-key updates serialize answers without blocking a competing task's foreign key.
+      await client.query(
+        'SELECT id FROM endeavor.responsibilities WHERE id = $1 AND agent_id = $2 FOR NO KEY UPDATE',
+        [input.responsibilityId, input.agentId]
+      );
+      // Check after taking the lock: a wait may have crossed the question's expiry. now()
+      // would still be the transaction's start time, so use the live database clock.
+      const pending = await client.query(
+        `SELECT id FROM endeavor.responsibilities WHERE id = $1 AND agent_id = $2
+         AND status = 'enabled' AND catch_up_slot = $3 AND next_run_at > clock_timestamp()`,
+        [input.responsibilityId, input.agentId, input.slot]
+      );
+      if (!pending.rows.length) {
+        await client.query('COMMIT');
+        return null;
+      }
+      const result = input.task
+        ? await this.insertTask(input.task, client)
+        : { task: null, created: false };
+      if (input.task && result.task?.runKey !== input.task.runKey) {
+        await client.query('COMMIT');
+        return result;
+      }
+      const saved = await client.query(
+        `INSERT INTO endeavor.catch_up_decisions (responsibility_id, slot, next_run_at, decision, task_id)
+         SELECT id, catch_up_slot, next_run_at, $2, $3 FROM endeavor.responsibilities WHERE id = $1
+         ON CONFLICT DO NOTHING RETURNING responsibility_id`,
+        [input.responsibilityId, input.task ? 'run' : 'wait', result.task?.id ?? null]
+      );
+      if (!saved.rows.length) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      await client.query(
+        `UPDATE endeavor.responsibilities SET catch_up_slot = NULL,
+        catch_up_missed = NULL, updated_at = now() WHERE id = $1`,
+        [input.responsibilityId]
+      );
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   private async insertTask(
     input: CreateTaskInput,
     db: Pick<FastifyInstance['pg'], 'query'>

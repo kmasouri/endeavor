@@ -7,6 +7,7 @@ import {
   ResponsibilityStatus
 } from '../../shared/types';
 import {
+  CatchUpDecision,
   CreateResponsibilityInput,
   ResponsibilityChanges,
   ResponsibilityRepository
@@ -181,19 +182,21 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
     return (result.rowCount ?? 0) > 0;
   }
 
-  async clearCatchUp(responsibilityId: string, slot: Date): Promise<boolean> {
-    const result = await this.db.query(
-      `UPDATE endeavor.responsibilities
-       SET catch_up_slot = NULL,
-           catch_up_missed = NULL,
-           updated_at = now()
-       WHERE id = $1
-         AND catch_up_slot = $2
-         AND status = 'enabled'
-         AND next_run_at > now()`,
-      [responsibilityId, slot]
+  async getCatchUpDecision(responsibilityId: string, slot?: Date): Promise<CatchUpDecision | null> {
+    const result = await this.db.query<{
+      slot: Date;
+      decision: 'run' | 'wait';
+      task_id: string | null;
+    }>(
+      `SELECT d.slot, d.decision, d.task_id FROM endeavor.catch_up_decisions d
+       JOIN endeavor.responsibilities r ON r.id = d.responsibility_id
+       WHERE r.id = $1 AND r.status = 'enabled' AND r.next_run_at > clock_timestamp()
+         AND d.next_run_at = r.next_run_at AND ($2::timestamptz IS NULL OR d.slot = $2)
+       ORDER BY d.slot DESC LIMIT 1`,
+      [responsibilityId, slot ?? null]
     );
-    return (result.rowCount ?? 0) > 0;
+    const row = result.rows[0];
+    return row ? { slot: row.slot, decision: row.decision, taskId: row.task_id } : null;
   }
 }
 

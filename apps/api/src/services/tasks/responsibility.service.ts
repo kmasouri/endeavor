@@ -261,15 +261,17 @@ export class ResponsibilityService {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const responsibility = await this.requireResponsibility(responsibilityId);
     const pending = responsibility.catchUp;
-    if (
-      !pending ||
-      !(await this.responsibilityRepository.clearCatchUp(responsibility.id, pending.slot))
-    ) {
-      throw new AppError('catchUpNotPending');
-    }
-    this.responsibilityLogger.onCatchUpResolved(responsibility.id, decision);
+    if (!pending) return this.replayCatchUp(responsibility, decision);
     const cleared = { ...responsibility, catchUp: null };
     if (decision === 'wait') {
+      const result = await this.taskRepository.resolveCatchUp({
+        responsibilityId: responsibility.id,
+        agentId: responsibility.agentId,
+        slot: pending.slot,
+        task: null
+      });
+      if (!result) return this.replayCatchUp(responsibility, decision, pending.slot);
+      this.responsibilityLogger.onCatchUpResolved(responsibility.id, decision);
       return { responsibility: cleared, task: null };
     }
     const result = await startResponsibilityRun(
@@ -283,16 +285,32 @@ export class ResponsibilityService {
       {
         runKey: `catchup:${responsibility.id}:${pending.slot.toISOString()}`,
         startedBy: { type: 'human', id: human.id },
+        catchUpSlot: pending.slot,
         note: `(Catching up: ${pending.missed} scheduled run${pending.missed === 1 ? ' was' : 's were'} missed while the platform was off. ${human.name} asked to run now.)`
       }
     );
     if ('skippedReason' in result) {
+      if (result.catchUpNotPending)
+        return this.replayCatchUp(responsibility, decision, pending.slot);
       throw new AppError(
         result.openRunId ? 'responsibilityRunOpen' : 'agentUnavailable',
         result.skippedReason
       );
     }
+    this.responsibilityLogger.onCatchUpResolved(responsibility.id, decision);
     return { responsibility: cleared, task: result.task };
+  }
+
+  private async replayCatchUp(
+    responsibility: Responsibility,
+    decision: 'run' | 'wait',
+    slot?: Date
+  ): Promise<{ responsibility: Responsibility; task: Task | null }> {
+    const saved = await this.responsibilityRepository.getCatchUpDecision(responsibility.id, slot);
+    if (!saved || saved.decision !== decision) throw new AppError('catchUpNotPending');
+    const task = saved.taskId ? await this.taskRepository.getById(saved.taskId) : null;
+    if (saved.taskId && !task) throw new AppError('catchUpNotPending');
+    return { responsibility: { ...responsibility, catchUp: null }, task };
   }
 
   private async requireResponsibility(responsibilityId: string): Promise<Responsibility> {

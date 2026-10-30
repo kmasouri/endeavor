@@ -22,6 +22,7 @@ export function mockTaskRepository(): jest.Mocked<TaskRepository> {
     saveHttpCallResponse: jest.fn().mockResolvedValue(true),
     create: jest.fn(),
     createScheduled: jest.fn(),
+    resolveCatchUp: jest.fn(),
     getById: jest.fn(),
     getByRunKey: jest.fn(),
     list: jest.fn(),
@@ -195,6 +196,6 @@ export function mockResponsibilityRepository(): jest.Mocked<ResponsibilityReposi
     update: jest.fn(),
     listDue: jest.fn().mockResolvedValue([]),
     advance: jest.fn().mockResolvedValue(true),
-    clearCatchUp: jest.fn().mockResolvedValue(true)
+    getCatchUpDecision: jest.fn().mockResolvedValue(null)
   };
 }

@@ -108,6 +108,16 @@ export interface TaskRepository {
     input: CreateTaskInput,
     expectedNextRunAt: Date
   ): Promise<{ task: Task; created: boolean } | null>;
+  // Locks/revalidates a catch-up question, then saves its answer, optional task and question
+  // removal in one transaction. Null means the question is no longer pending. A competing
+  // open task is returned without consuming the question; the service checks its run key.
+  // For a run request, task:null means the agent changed before the transaction.
+  resolveCatchUp(input: {
+    responsibilityId: string;
+    agentId: string;
+    slot: Date;
+    task: CreateTaskInput | null;
+  }): Promise<{ task: Task | null; created: boolean } | null>;
   getById(taskId: string): Promise<Task | null>;
   getByRunKey(runKey: string): Promise<Task | null>;
   list(input: ListTasksInput): Promise<Task[]>;

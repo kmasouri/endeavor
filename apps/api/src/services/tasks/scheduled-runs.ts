@@ -19,17 +19,26 @@ export async function startResponsibilityRun(
     lifecycle: TaskLifecycle;
   },
   responsibility: Responsibility,
-  input: { runKey: string; startedBy: Actor; note?: string; expectedNextRunAt?: Date }
-): Promise<{ task: Task; created: boolean } | { skippedReason: string; openRunId?: string }> {
+  input: {
+    runKey: string;
+    startedBy: Actor;
+    note?: string;
+    expectedNextRunAt?: Date;
+    catchUpSlot?: Date;
+  }
+): Promise<
+  | { task: Task; created: boolean }
+  | { skippedReason: string; openRunId?: string; catchUpNotPending?: boolean }
+> {
   // A repeat of the same run returns it, even while it is still going.
   const existing = await deps.taskRepository.getByRunKey(input.runKey);
-  if (existing) {
+  if (existing && !input.catchUpSlot) {
     return { task: existing, created: false };
   }
   // One run at a time. A new run doesn't start while the last one is still open, so runs never
   // pile up or compete for the agent's messages in the conversation.
   const open = await deps.taskRepository.findOpenRun(responsibility.id);
-  if (open) {
+  if (open && (!input.catchUpSlot || open.runKey !== input.runKey)) {
     return {
       skippedReason: `The previous run (task ${open.id}) is still ${open.state}.`,
       openRunId: open.id
@@ -65,12 +74,24 @@ export async function startResponsibilityRun(
     restartedFromTaskId: null,
     responsibilityId: responsibility.id
   };
-  const result = input.expectedNextRunAt
-    ? await deps.taskRepository.createScheduled(taskInput, input.expectedNextRunAt)
-    : await deps.taskRepository.create(taskInput);
+  const result = input.catchUpSlot
+    ? await deps.taskRepository.resolveCatchUp({
+        responsibilityId: responsibility.id,
+        agentId: agent.id,
+        slot: input.catchUpSlot,
+        task: taskInput
+      })
+    : input.expectedNextRunAt
+      ? await deps.taskRepository.createScheduled(taskInput, input.expectedNextRunAt)
+      : await deps.taskRepository.create(taskInput);
   if (!result) {
-    return { skippedReason: 'The schedule changed before this run could start.' };
+    return {
+      skippedReason: 'The schedule changed before this run could start.',
+      catchUpNotPending: Boolean(input.catchUpSlot)
+    };
   }
+  if (!result.task)
+    return { skippedReason: 'The agent is unavailable or its configuration changed. Try again.' };
   const { task, created } = result;
   // A different slot or manual request may have won the database's open-run constraint
   // after the check above. Return a skip instead of attributing that task to this slot.

@@ -153,7 +153,7 @@ export async function responsibilitiesRouter(fastifyInstance: FastifyInstance): 
     {
       schema: {
         description:
-          'Answer the question about missed runs: "run" starts one run now, "wait" leaves it for the next scheduled run. Only the first answer counts.',
+          'Answer the question about missed runs: "run" starts one run now, "wait" leaves it for the next scheduled run. Only the first answer counts. A failed/refused start leaves the question pending. Retrying the same committed answer returns its original outcome while the enabled schedule still has the same future next run; an opposing answer is refused.',
         tags: ['responsibilities'],
         headers: actorHeadersSchema,
         params: responsibilityParamsSchema,
