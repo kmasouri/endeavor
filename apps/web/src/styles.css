@@ -2,7 +2,7 @@
 @import './design-tokens.css';
 
 :root {
-  --app-bar-height: 112px;
+  --app-bar-height: 66px;
   --bg: var(--bg-100);
   --surface: var(--bg-200);
   --text: var(--text-100);
@@ -556,9 +556,11 @@ pre {
 }
 .brand {
   display: block;
-  width: 320px;
+  width: 168px;
   max-width: 100%;
   min-width: 0;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .brand svg {
   display: block;
@@ -1445,7 +1447,7 @@ progress::-webkit-progress-value {
 .app-bar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 380px minmax(0, 1fr);
+  grid-template-columns: 244px minmax(0, 1fr);
   align-items: center;
   gap: 20px;
   padding: 10px 20px;
