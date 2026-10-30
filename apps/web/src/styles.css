@@ -531,7 +531,6 @@ pre {
   user-select: none;
 }
 .shell.sidebar-resizing,
-.shell.sidebar-resizing .app-bar,
 .shell.sidebar-resizing .sidebar,
 .shell.sidebar-resizing .sidebar nav a {
   transition: none;
@@ -545,7 +544,6 @@ pre {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .shell .app-bar,
   .shell,
   .sidebar,
   .sidebar nav a,
@@ -1444,18 +1442,18 @@ progress::-webkit-progress-value {
 .app-bar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  /* Matching outer columns center search across the full header. */
+  grid-template-columns: 220px minmax(0, 360px) 220px;
+  justify-content: space-between;
   align-items: center;
   gap: 0;
-  padding: 10px 0;
-  transition: grid-template-columns 220ms ease;
+  padding: 10px 20px;
   background: var(--bg-000);
   border-bottom: 1px solid var(--border-100);
   min-width: 0;
 }
 .app-brand {
   min-width: max-content;
-  padding-inline: 20px;
   align-items: center;
   flex-wrap: nowrap;
 }
@@ -1465,7 +1463,7 @@ progress::-webkit-progress-value {
 }
 .search-launch {
   justify-self: center;
-  width: calc(100% - 40px);
+  width: 100%;
   max-width: 360px;
   justify-content: flex-start;
   color: var(--text-300);
@@ -1613,9 +1611,6 @@ progress::-webkit-progress-value {
     grid-template-columns: minmax(0, 1fr) auto;
     gap: 12px;
     padding: 10px 12px;
-  }
-  .app-brand {
-    padding-inline: 0;
   }
   .search-launch {
     justify-self: end;
