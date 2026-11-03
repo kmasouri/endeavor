@@ -29,7 +29,6 @@
   import PickPerson from './PickPerson.svelte';
   import SwitchPerson from './SwitchPerson.svelte';
 
-  import Brand from './Brand.svelte';
   import Avatar from './Avatar.svelte';
   import Icon from './Icon.svelte';
   import SettingsPage from './pages/SettingsPage.svelte';
@@ -241,7 +240,7 @@
     <header class="app-bar">
       <div class="row app-brand">
         <button class="quiet icon-button" aria-label={collapsed ? 'Open sidebar' : 'Collapse sidebar'} aria-expanded={!collapsed} aria-controls="main-sidebar" onclick={() => (collapsed = !collapsed)}><Icon name="panel" /></button>
-        <a class="brand" href="#/" aria-label="Endeavor"><Brand /></a>
+        <a class="brand" href="#/"><span class="brand-mark" aria-hidden="true">E</span>Endeavor</a>
       </div>
       <button class="secondary search-launch" aria-label="Search endeavors" onclick={searchEndeavors}><Icon name="search" /><span>Search endeavors…</span><kbd>⌘ / Ctrl K</kbd></button>
     </header>
