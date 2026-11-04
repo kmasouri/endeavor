@@ -356,6 +356,18 @@ for (const { theme, width } of [
     await expect(page.getByRole('button', { name: 'New request', exact: true })).toBeFocused();
     await page.getByRole('link', { name: /open-goal/ }).click();
     await expect(page.getByRole('region', { name: 'Endeavor goal' })).toBeVisible();
+    const stateBox = (await page
+      .getByRole('region', { name: 'Endeavor goal' })
+      .locator('strong')
+      .boundingBox())!;
+    const editBox = (await page
+      .getByRole('button', { name: 'Edit goal', exact: true })
+      .boundingBox())!;
+    expect(
+      stateBox.x + stateBox.width <= editBox.x ||
+        stateBox.y + stateBox.height <= editBox.y ||
+        editBox.y + editBox.height <= stateBox.y
+    ).toBe(true);
     const box = await page.getByRole('button', { name: 'Confirm goal done' }).boundingBox();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(width);

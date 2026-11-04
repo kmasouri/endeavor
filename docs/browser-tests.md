@@ -180,3 +180,6 @@ still fail its strict contract checks.
 CA-102 sensitivity check: a temporary `.projects-page { min-width: 640px; }` made the dark
 320px overview fail its document-width assertion. The stylesheet was restored before the final
 build and full checks.
+The prepared CI browser image is also used for the phone checks. Tall participant profiles can
+cover the composer, so their outside-dismissal test clicks empty app-bar padding. Goal-state and
+edit controls must not overlap with the CI image's fonts.

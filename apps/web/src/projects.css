@@ -118,3 +118,7 @@
     gap: 8px;
   }
 }
+
+.endeavor-goal .row > strong {
+  flex: 1 0 140px;
+}

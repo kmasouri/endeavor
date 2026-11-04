@@ -268,7 +268,8 @@ for (const { theme, width } of [
     expect(box!.y).toBeGreaterThanOrEqual(12);
     expect(box!.y + box!.height).toBeLessThanOrEqual(889);
     await captureReviewScreenshot(page, { path: info.outputPath('participant-profile.png') });
-    await page.getByRole('textbox', { name: 'Message', exact: true }).click();
+    // Tall profiles can cover the composer on phones. Click empty app-bar padding outside it.
+    await page.locator('.app-bar').click({ position: { x: width - 8, y: 8 } });
     await expect(agentCard).not.toBeVisible();
     expect(api.state.posts).toEqual([]);
     expect(api.errors).toEqual([]);
