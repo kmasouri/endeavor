@@ -298,3 +298,18 @@ dismissal. Cards appear in the browser's top layer, fit within the viewport and 
 the surrounding page scrolls. Close restores focus to the name or avatar that opened it.
 
 Channel names are limited to 64 characters after normalization on creates and renames. The creation field shows this limit. Existing longer names remain intact and usable; renaming them requires a name within the limit. A database trigger enforces the limit for inserts and changed names, while allowing unrelated edits to older channels.
+
+## Member handoff profiles (CA-98)
+
+Agent members in conversation details include nullable `produces` and `needs`, `skillNames`
+from their current configuration, and `status` (`idle` or `busy`). Busy means the agent has
+a working, waiting, or blocked task in this endeavor, including paused work. Other
+endeavors do not affect it. Deleted agents have empty profile fields and null status.
+Human member responses are unchanged.
+
+The task prompt lists the other members' purpose, skill names, handoff descriptions,
+and status, with profile text kept on one line so it cannot create prompt headings.
+The running agent's own peer profile is omitted. These public descriptions are current,
+while each task keeps its own pinned instructions and configuration. No peer instructions,
+notes, credentials, or connection details enter the prompt. Directory search is CA-99;
+the existing outside-member name-and-purpose directory remains until that ticket.

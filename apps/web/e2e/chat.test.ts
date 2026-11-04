@@ -252,6 +252,10 @@ for (const { theme, width } of [
     await agent.click();
     const agentCard = page.getByRole('dialog', { name: "Researcher's profile" });
     await expect(agentCard).toContainText('Find evidence');
+    await expect(agentCard).toContainText('Research, Writing');
+    await expect(agentCard).toContainText('A sourced brief');
+    await expect(agentCard).toContainText('A question and source documents');
+    await expect(agentCard).toContainText('Busy in this endeavor');
     await expect(agentCard).toContainText('research-model');
     await expect(agentCard).toContainText('2 skills · 1 connection');
     await expect(agentCard.getByRole('link', { name: 'View agent' })).toHaveAttribute(
@@ -374,4 +378,30 @@ test('custom agent appearance reaches chat avatars, profile cards and mention ch
   ).toHaveAttribute('style', /agent-3-bg/);
   expect(api.errors).toEqual([]);
   expect(api.unexpected).toEqual([]);
+});
+
+test('member profile status refreshes while the endeavor stays open', async ({ page }) => {
+  const { state, errors, unexpected } = await fixture(page);
+  state.messages.push({
+    id: 'profile-status',
+    authorType: 'agent',
+    authorId: 'researcher',
+    body: 'Checking evidence.',
+    taskId: null,
+    mentions: [],
+    inReplyToMessageId: null,
+    createdAt
+  });
+  await page.goto('/app/#/conversations/brief');
+  await page
+    .locator('#m-profile-status .meta')
+    .getByRole('button', { name: "View Researcher's profile" })
+    .click();
+  const card = page.getByRole('dialog', { name: "Researcher's profile" });
+  await expect(card).toContainText('Busy in this endeavor');
+  state.profileStatus = 'idle';
+  await expect(card).toContainText('Idle', { timeout: 7000 });
+  expect(state.posts).toEqual([]);
+  expect(errors).toEqual([]);
+  expect(unexpected).toEqual([]);
 });

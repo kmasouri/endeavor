@@ -1789,5 +1789,5 @@ button.participant-avatar:hover .avatar { filter: brightness(1.12); }
 .participant-capabilities { margin: 16px 0 0; padding-top: 12px; border-top: 1px solid var(--border-200); }
 .participant-capabilities div { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 12px; margin-top: 4px; font-size: 13px; }
 .participant-capabilities dt { color: var(--text-300); }
-.participant-capabilities dd { margin: 0; }
+.participant-capabilities dd { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
 .participant-profile-action { display: flex; justify-content: center; margin-top: 20px; padding: 8px 12px; border-radius: var(--radius-md); font-weight: 500; text-decoration: none; }

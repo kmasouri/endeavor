@@ -99,7 +99,11 @@ it('saves and resets appearance independently without changing the configuration
     true,
     'teal',
     true,
-    'file'
+    'file',
+    false,
+    null,
+    false,
+    null
   ]);
   await repository.update('a', { avatarColor: null });
   expect(db.query.mock.calls[1][1]).toEqual([
@@ -111,12 +115,20 @@ it('saves and resets appearance independently without changing the configuration
     true,
     null,
     false,
+    null,
+    false,
+    null,
+    false,
     null
   ]);
   await repository.update('a', { name: 'Renamed' });
   expect(db.query.mock.calls[2][1]).toEqual([
     'a',
     'Renamed',
+    null,
+    false,
+    null,
+    false,
     null,
     false,
     null,

@@ -293,6 +293,9 @@ describe('AgentService', () => {
         id: AGENT_ID,
         name: 'QA',
         purpose: 'Tests the staging site',
+        produces: null,
+        needs: null,
+        skillNames: [],
         avatarColor: 'sky',
         avatarIcon: 'search',
         capabilities: {

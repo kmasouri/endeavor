@@ -652,3 +652,50 @@ describe('ConversationService projects and goals', () => {
     expect(notes.delete).toHaveBeenCalledWith('d1');
   });
 });
+
+it('returns only public handoff fields and endeavor status on agent members', async () => {
+  const { service, agents } = setup();
+  agents.getProfiles.mockResolvedValue([
+    {
+      id: AGENT,
+      name: 'Researcher',
+      purpose: 'Research',
+      produces: 'Sourced brief',
+      needs: 'A question',
+      skillNames: ['Research'],
+      status: 'busy'
+    }
+  ]);
+  const details = await service.getConversation(KIM, CONV);
+  expect(agents.getProfiles).toHaveBeenCalledWith([AGENT], CONV);
+  expect(details.members.find((member) => member.participant.id === AGENT)).toEqual(
+    expect.objectContaining({
+      produces: 'Sourced brief',
+      needs: 'A question',
+      skillNames: ['Research'],
+      status: 'busy'
+    })
+  );
+  const profile = details.members.find((member) => member.participant.id === AGENT)!;
+  expect(Object.keys(profile).sort()).toEqual(
+    [
+      'addedAt',
+      'addedByHumanId',
+      'avatarColor',
+      'avatarIcon',
+      'conversationId',
+      'deleted',
+      'historyFrom',
+      'name',
+      'needs',
+      'participant',
+      'produces',
+      'purpose',
+      'skillNames',
+      'status'
+    ].sort()
+  );
+  expect(details.members.find((member) => member.participant.type === 'human')).not.toHaveProperty(
+    'status'
+  );
+});

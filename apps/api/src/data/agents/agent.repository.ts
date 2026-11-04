@@ -1,4 +1,6 @@
 import {
+  AgentProfileFields,
+  AgentProfile,
   AgentAppearance,
   Agent,
   AgentLimits,
@@ -6,7 +8,7 @@ import {
   ModelProvider
 } from '../../shared/types';
 
-export interface CreateAgentInput {
+export interface CreateAgentInput extends AgentProfileFields {
   name: string;
   purpose: string;
 }
@@ -58,6 +60,7 @@ export interface AgentRepository {
     firstVersion: CreateAgentVersionInput,
     access?: AgentAccessChanges
   ): Promise<{ agent: Agent; version: AgentVersion }>;
+  getProfiles(agentIds: string[], conversationId: string | null): Promise<AgentProfile[]>;
   getById(agentId: string): Promise<Agent | null>;
   getByName(name: string): Promise<Agent | null>;
   list(input: { limit: number; offset: number; includeDisabled: boolean }): Promise<Agent[]>;
@@ -68,7 +71,8 @@ export interface AgentRepository {
   // monthlyBudgetUsd: a number sets the cap, null removes it, undefined leaves it.
   update(
     agentId: string,
-    changes: AgentAppearance & { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
+    changes: AgentAppearance &
+      AgentProfileFields & { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
   ): Promise<Agent | null>;
   setDisabled(agentId: string, disabled: boolean): Promise<Agent | null>;
 

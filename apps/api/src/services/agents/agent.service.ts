@@ -10,6 +10,7 @@ import { AgentLogger } from '../../observability';
 import { ADMIN_ONLY, requireHuman } from '../access/access.rules';
 import { AppError } from '../../shared/errors';
 import {
+  AgentProfileFields,
   AgentAppearance,
   Agent,
   AgentLimits,
@@ -79,7 +80,7 @@ export class AgentService {
 
   async createAgent(
     actorId: string,
-    input: { name: string; purpose: string } & AgentConfigInput
+    input: { name: string; purpose: string } & AgentProfileFields & AgentConfigInput
   ): Promise<AgentDetails> {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     await this.requireFreeName(input.name);
@@ -88,7 +89,7 @@ export class AgentService {
 
     const { agent, version } = await this.agentRepository
       .create(
-        { name: input.name, purpose: input.purpose },
+        { name: input.name, purpose: input.purpose, produces: input.produces, needs: input.needs },
         {
           instructions: input.instructions,
           provider: input.provider,
@@ -139,7 +140,8 @@ export class AgentService {
   async updateProfile(
     actorId: string,
     agentId: string,
-    changes: AgentAppearance & { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
+    changes: AgentAppearance &
+      AgentProfileFields & { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
   ): Promise<AgentDetails> {
     requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     const agent = await this.requireAgent(agentId);
@@ -253,9 +255,19 @@ export class AgentService {
         )
       ).map((version) => [version.id, version])
     );
+    const profiles = new Map(
+      (
+        await this.agentRepository.getProfiles(
+          agents.map((agent) => agent.id),
+          null
+        )
+      ).map((profile) => [profile.id, profile])
+    );
     const entries = agents.flatMap((agent): DirectoryEntry[] => {
       const version = versions.get(agent.currentVersionId as string);
-      return version ? [toDirectoryEntry(agent, version)] : [];
+      return version
+        ? [toDirectoryEntry(agent, version, profiles.get(agent.id)?.skillNames ?? [])]
+        : [];
     });
     return { entries, total };
   }
@@ -373,11 +385,18 @@ function toNameTaken(error: unknown): never {
   throw error;
 }
 
-function toDirectoryEntry(agent: Agent, version: AgentVersion): DirectoryEntry {
+function toDirectoryEntry(
+  agent: Agent,
+  version: AgentVersion,
+  skillNames: string[]
+): DirectoryEntry {
   return {
     id: agent.id,
     name: agent.name,
     purpose: agent.purpose,
+    produces: agent.produces ?? null,
+    needs: agent.needs ?? null,
+    skillNames,
     avatarColor: agent.avatarColor ?? null,
     avatarIcon: agent.avatarIcon ?? null,
     capabilities: {

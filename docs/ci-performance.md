@@ -152,3 +152,10 @@ all lint/type/build phases, 831 unit/pilot tests, and 109 browser tests. It is a
 on a shared machine, not a replacement for the earlier local baseline comparison. No running
 app or shared checkout was modified during local verification. The CI image is public and
 requires no repository-owned image publication.
+
+## Integration with current main
+
+CA-98 merged after the original local measurements. Its new handoff profile assertions and
+status-refresh case are retained. The integrated suite contains 110 browser cases; the
+171-to-109 table above records the earlier audit baseline rather than removing the new feature's
+regression. The pull request records fresh validation and hosted CI timings after this merge.

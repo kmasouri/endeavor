@@ -40,6 +40,10 @@ export interface MemberDetails extends ConversationMember, AgentAppearance {
   name: string;
   // An agent's purpose, so participants know whom to ask. null for humans.
   purpose: string | null;
+  produces?: string | null;
+  needs?: string | null;
+  skillNames?: string[];
+  status?: 'idle' | 'busy' | null;
 }
 
 export interface ConversationDetails extends Conversation {
@@ -483,6 +487,16 @@ export class ConversationService {
 
   private async loadDetails(conversation: Conversation): Promise<ConversationDetails> {
     const members = await this.conversationRepository.listMembers(conversation.id);
+    const profiles = new Map(
+      (
+        await this.agentRepository.getProfiles(
+          members
+            .filter((member) => member.participant.type === 'agent')
+            .map((member) => member.participant.id),
+          conversation.id
+        )
+      ).map((profile) => [profile.id, profile])
+    );
     const details = await Promise.all(
       members.map(async (member): Promise<MemberDetails> => {
         if (member.participant.type === 'agent') {
@@ -491,7 +505,11 @@ export class ConversationService {
             ...member,
             name: agent?.name ?? 'Unknown agent',
             deleted: Boolean(agent?.deletedAt),
-            purpose: agent?.purpose ?? null,
+            purpose: agent?.deletedAt ? null : (agent?.purpose ?? null),
+            produces: profiles.get(member.participant.id)?.produces ?? null,
+            needs: profiles.get(member.participant.id)?.needs ?? null,
+            skillNames: profiles.get(member.participant.id)?.skillNames ?? [],
+            status: profiles.get(member.participant.id)?.status ?? null,
             avatarColor: agent?.avatarColor ?? null,
             avatarIcon: agent?.avatarIcon ?? null
           };

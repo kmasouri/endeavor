@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import {
+  AgentProfileFields,
+  AgentProfile,
   AgentAppearance,
   Agent,
   AgentLimits,
@@ -21,6 +23,8 @@ interface AgentRow {
   id: string;
   name: string;
   purpose: string;
+  produces: string | null;
+  needs: string | null;
   avatar_color: Agent['avatarColor'];
   avatar_icon: Agent['avatarIcon'];
   current_version_id: string | null;
@@ -133,7 +137,7 @@ export class AgentPostgresRepository implements AgentRepository {
       await client.query(`SELECT pg_advisory_xact_lock(hashtextextended($1, 63))`, [agentId]);
       const deleted = await client.query(
         `UPDATE endeavor.agents SET deleted_at = now(), disabled_at = coalesce(disabled_at, now()),
-           name = 'Deleted agent ' || id::text, purpose = '', current_version_id = NULL,
+           name = 'Deleted agent ' || id::text, purpose = '', produces = NULL, needs = NULL, current_version_id = NULL,
            monthly_budget_usd = NULL, avatar_color = NULL, avatar_icon = NULL, updated_at = now()
          WHERE id = $1 AND deleted_at IS NULL RETURNING id`,
         [agentId]
@@ -208,8 +212,8 @@ export class AgentPostgresRepository implements AgentRepository {
     const result = await this.db
       .query<{ agent: AgentRow; version: AgentVersionRow }>(
         `WITH agent AS (
-           INSERT INTO endeavor.agents (id, name, purpose, current_version_id)
-           VALUES ($1, $2, $3, $4)
+           INSERT INTO endeavor.agents (id, name, purpose, current_version_id, produces, needs)
+           VALUES ($1, $2, $3, $4, $13, $14)
            RETURNING *
          ), version AS (
            INSERT INTO endeavor.agent_versions (
@@ -235,7 +239,9 @@ export class AgentPostgresRepository implements AgentRepository {
           firstVersion.connectionIds,
           firstVersion.createdByHumanId,
           firstVersion.limits,
-          JSON.stringify(access ?? { grant: [], revoke: [] })
+          JSON.stringify(access ?? { grant: [], revoke: [] }),
+          input.produces?.trim() || null,
+          input.needs?.trim() || null
         ]
       )
       .catch((error) => rethrowNameConflict(error, input.name));
@@ -245,6 +251,25 @@ export class AgentPostgresRepository implements AgentRepository {
       agent: toAgent(parseJsonDates(row.agent)),
       version: toAgentVersion(parseJsonDates(row.version))
     };
+  }
+
+  async getProfiles(agentIds: string[], conversationId: string | null): Promise<AgentProfile[]> {
+    if (agentIds.length === 0) return [];
+    const result = await this.db.query<AgentProfile>(
+      `SELECT a.id, a.name, a.purpose, a.produces, a.needs,
+         ARRAY(SELECT DISTINCT s.name FROM endeavor.agent_versions av
+           JOIN endeavor.skill_versions sv ON sv.id = ANY(av.skill_version_ids)
+           JOIN endeavor.skills s ON s.id = sv.skill_id
+           WHERE av.id = a.current_version_id ORDER BY s.name) AS "skillNames",
+         CASE WHEN $2::uuid IS NULL THEN NULL
+           WHEN EXISTS (SELECT 1 FROM endeavor.tasks t
+             WHERE t.owner_agent_id = a.id AND t.conversation_id = $2
+               AND t.state IN ('working', 'waiting', 'blocked')) THEN 'busy'
+           ELSE 'idle' END AS status
+       FROM endeavor.agents a WHERE a.id = ANY($1::uuid[]) AND a.deleted_at IS NULL`,
+      [agentIds, conversationId]
+    );
+    return result.rows;
   }
 
   async getByName(name: string): Promise<Agent | null> {
@@ -316,7 +341,8 @@ export class AgentPostgresRepository implements AgentRepository {
 
   async update(
     agentId: string,
-    changes: AgentAppearance & { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
+    changes: AgentAppearance &
+      AgentProfileFields & { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
   ): Promise<Agent | null> {
     // $4 says whether the budget is being changed, since null (no cap) is a real value.
     const result = await this.db
@@ -327,6 +353,8 @@ export class AgentPostgresRepository implements AgentRepository {
            monthly_budget_usd = CASE WHEN $4 THEN $5 ELSE monthly_budget_usd END,
            avatar_color = CASE WHEN $6 THEN $7 ELSE avatar_color END,
            avatar_icon = CASE WHEN $8 THEN $9 ELSE avatar_icon END,
+           produces = CASE WHEN $10 THEN $11 ELSE produces END,
+           needs = CASE WHEN $12 THEN $13 ELSE needs END,
            updated_at = now()
        WHERE id = $1 AND deleted_at IS NULL
        RETURNING *`,
@@ -339,7 +367,11 @@ export class AgentPostgresRepository implements AgentRepository {
           changes.avatarColor !== undefined,
           changes.avatarColor ?? null,
           changes.avatarIcon !== undefined,
-          changes.avatarIcon ?? null
+          changes.avatarIcon ?? null,
+          changes.produces !== undefined,
+          changes.produces?.trim() || null,
+          changes.needs !== undefined,
+          changes.needs?.trim() || null
         ]
       )
       .catch((error) => rethrowNameConflict(error, changes.name ?? ''));
@@ -491,6 +523,8 @@ function toAgent(row: AgentRow): Agent {
     name: row.deleted_at ? 'Deleted agent' : row.name,
     deletedAt: row.deleted_at,
     purpose: row.purpose,
+    produces: row.produces ?? null,
+    needs: row.needs ?? null,
     avatarColor: row.avatar_color ?? null,
     avatarIcon: row.avatar_icon ?? null,
     currentVersionId: row.current_version_id,

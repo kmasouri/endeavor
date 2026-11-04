@@ -27,6 +27,8 @@
   const preset = example && Object.hasOwn(examples, example) ? examples[example as keyof typeof examples] : undefined;
   let name = $state(preset?.name ?? '');
   let purpose = $state(preset?.purpose ?? '');
+  let produces = $state('');
+  let needs = $state('');
   let config = $state<ConfigValues>({
     ...initialConfig(),
     instructions: preset?.instructions ?? ''
@@ -36,7 +38,7 @@
   const create = (event: SubmitEvent) => {
     event.preventDefault();
     void action.run(async () => {
-      const agent = await api.post<Agent>('/agents', { name, purpose, ...config });
+      const agent = await api.post<Agent>('/agents', { name, purpose, produces: produces.trim() || null, needs: needs.trim() || null, ...config });
       go(`/agents/${agent.id}`);
     });
   };
@@ -55,6 +57,8 @@
       <label>Name<input bind:value={name} required /></label><label
         >Purpose<input bind:value={purpose} required /></label
       >
+      <label>Produces<textarea bind:value={produces} maxlength={500} rows={2}></textarea><small class="muted">Optional. What this agent hands back. Up to 500 characters.</small></label>
+      <label>Needs<textarea bind:value={needs} maxlength={500} rows={2}></textarea><small class="muted">Optional. The input this agent needs. Up to 500 characters.</small></label>
     </fieldset>
     <AgentConfigFields {initial} onChange={(values) => (config = values)} />
     <ErrorNote error={action.error} />

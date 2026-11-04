@@ -190,3 +190,23 @@ The same fields are returned on agents, directory entries, and agent conversatio
 Appearance belongs to the profile and never creates a configuration version. Existing agents
 start with null overrides. Migration 017 adds the nullable columns and allowed-value constraints.
 Pictures, uploads, arbitrary colors, and object storage are outside this feature.
+
+## Public handoff profiles (CA-98)
+
+`POST /agents` and `PATCH /agents/:agentId` accept optional `produces` and `needs`
+strings (at most 500 characters each after trimming). Produces says what the agent hands
+back; Needs says what input it expects. Omission preserves a field on PATCH; null or blank
+text clears it. Storage returns missing values as null. Migration 023 adds the columns and
+length constraints. These are public profile descriptions, not instructions, and changes
+do not create a version or change grants or task pins.
+
+New agent and Overview → Profile → Edit use the existing profile form. Save applies
+the fields; Discard leaves storage unchanged. Participant popovers show purpose, skill
+names from the current configuration, Produces, Needs, and status in the current endeavor.
+Busy means an open task (working, waiting, or blocked), including paused work. Work in
+another endeavor does not make the agent busy here. Completed and cancelled work does
+not count. Directory entries have no endeavor status.
+
+The runner and member responses use the same public projection. It selects only identity,
+purpose, handoff descriptions, skill names, and endeavor status. It never selects skill
+instructions, notes, credentials, connection details, or other conversations.

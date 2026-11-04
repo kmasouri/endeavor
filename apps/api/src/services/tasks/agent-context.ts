@@ -23,6 +23,10 @@ export interface ContextParticipant {
   id: string;
   name: string;
   purpose: string | null;
+  produces?: string | null;
+  needs?: string | null;
+  skillNames?: string[];
+  status?: 'idle' | 'busy' | null;
 }
 
 export const DEFAULT_RESPONSE_CRITERIA =
@@ -117,6 +121,14 @@ export function buildTaskPrompt(input: {
       lines.push(
         `- ${oneLine(participant.name)} (${kind})${participant.purpose ? `: ${oneLine(participant.purpose)}` : ''}`
       );
+      if (participant.type === 'agent') {
+        lines.push(
+          `  Skills: ${(participant.skillNames ?? []).map(oneLine).join(', ') || 'None'}`,
+          `  Produces: ${oneLine(participant.produces ?? '') || 'Not specified'}`,
+          `  Needs: ${oneLine(participant.needs ?? '') || 'Not specified'}`,
+          `  Status: ${participant.status === 'busy' ? 'busy in this endeavor' : 'idle'}`
+        );
+      }
     }
   }
 

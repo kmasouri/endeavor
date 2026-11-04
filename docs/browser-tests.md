@@ -158,3 +158,10 @@ same Pending-to-History transition and adds payload, busy-state, and failure ass
 The API, web, executor, and pilot unit suites are retained: they run quickly and cover separate
 contracts, domain rules, and failure modes. Counts are not the pruning criterion. See
 [local runtime measurements](ci-performance.md) for the benchmark and per-suite changes.
+
+CA-98 profile assertions are preserved in the lean suite: Produces/Needs save, retry, discard,
+clear, and reload; participant popovers show skill names, handoff fields, and refreshed endeavor
+status. Appearance checks resize the existing form for desktop/phone geometry; popovers use the
+representative theme/width pairs above. Model prompt and API privacy checks remain beside the
+runner, conversation service, and agent routes. Integrating CA-98 adds one distinct browser case,
+so the current suite contains 110 cases; the 171-to-109 figures describe the original local audit.

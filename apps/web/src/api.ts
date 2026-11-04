@@ -84,7 +84,14 @@ export interface Conversation {
   unreadCount?: number;
 }
 
-export interface Member extends AgentAppearance {
+export interface AgentProfileFields {
+  produces?: string | null;
+  needs?: string | null;
+}
+
+export interface Member extends AgentAppearance, AgentProfileFields {
+  skillNames?: string[];
+  status?: 'idle' | 'busy' | null;
   deleted?: boolean;
   participant: ParticipantRef;
   name: string;
@@ -107,7 +114,8 @@ export interface Message {
   createdAt: string;
 }
 
-export interface DirectoryEntry extends AgentAppearance {
+export interface DirectoryEntry extends AgentAppearance, AgentProfileFields {
+  skillNames?: string[];
   id: string;
   name: string;
   purpose: string;
@@ -163,7 +171,7 @@ export interface AgentAppearance {
   avatarIcon?: (typeof AGENT_AVATAR_ICONS)[number] | null;
 }
 
-export interface Agent extends AgentAppearance {
+export interface Agent extends AgentAppearance, AgentProfileFields {
   id: string;
   name: string;
   purpose: string;
