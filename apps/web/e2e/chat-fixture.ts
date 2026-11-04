@@ -191,6 +191,7 @@ export async function fixture(
     if (
       [
         '/conversations/brief/routing',
+        '/projects',
         '/tasks',
         '/responsibilities',
         '/approvals',

@@ -6,6 +6,7 @@
     setActorId,
     type Approval,
     type Conversation,
+    type Project,
     type Responsibility
   } from './api';
   import ErrorNote from './ErrorNote.svelte';
@@ -21,6 +22,11 @@
   import NewSkill from './pages/NewSkill.svelte';
   import NewConnection from './pages/NewConnection.svelte';
   import ConversationPage from './pages/ConversationPage.svelte';
+  import NewRequest from './pages/NewRequest.svelte';
+  import ProjectsPage from './pages/ProjectsPage.svelte';
+  import ProjectPage from './pages/ProjectPage.svelte';
+  import { loadAll } from './pages/agent-data';
+  import './projects.css';
   import NewEndeavor from './pages/NewEndeavor.svelte';
   import SearchEndeavors from './pages/SearchEndeavors.svelte';
   import { loadEndeavors, readLastEndeavor, rememberEndeavor } from './endeavors';
@@ -76,6 +82,7 @@
   let switching = $state(false);
   let creating = $state(false);
   let searching = $state(false);
+  let currentProjectId = $state<string | null>(null);
   let focusConversation = $state<string | null>(null);
   let additions = $state<Conversation[]>([]);
   let switchError = $state<string | null>(null);
@@ -94,6 +101,8 @@
     () => [actorId],
     15000
   );
+  const projects = createLoad(() => actorId ? loadAll<Project>('/projects') : Promise.resolve([]), () => [actorId], 10000);
+  const searchable = createLoad(() => actorId && searching ? loadEndeavors('all') : Promise.resolve([]), () => [actorId, searching]);
   const conversations = createLoad(
     () =>
       actorId ? loadEndeavors() : Promise.resolve(undefined),
@@ -124,6 +133,7 @@
       searching = false;
       additions = [];
       focusConversation = null;
+      currentProjectId = null;
       savedPerson = person;
       setActorId(id);
       actorId = id;
@@ -172,6 +182,7 @@
     window.location.hash = `/conversations/${id}`;
     if (window.innerWidth < 700) collapsed = true;
   };
+  const requestProject = $derived((projects.data ?? []).find((p) => p.id === (section === 'projects' ? id : currentProjectId)) ?? (!currentProjectId ? (projects.data ?? []).find((p) => p.isDefault) : undefined));
   const newEndeavor = () => { if (guard()) creating = true; };
   const searchEndeavors = () => {
     if (!creating && !picking && !searching && guard()) searching = true;
@@ -246,7 +257,7 @@
     </header>
     <aside class="sidebar" id="main-sidebar" aria-label="Sidebar">
       <nav aria-label="Main">
-        {#each [['', 'Endeavors', 'conversations'], ['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['skills', 'Skills', 'file'], ['connections', 'Connections', 'connections'], ['setup', 'Setup', 'setup']] as [path, label, icon] (path)}
+        {#each [['projects', 'Projects', 'catalogs'], ['', 'Endeavors', 'conversations'], ['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['skills', 'Skills', 'file'], ['connections', 'Connections', 'connections'], ['setup', 'Setup', 'setup']] as [path, label, icon] (path)}
           <a
             class:active={path === ''
               ? !section || section === 'conversations'
@@ -267,10 +278,17 @@
           </a>
         {/each}
       </nav>
+      {#if !section || section === 'conversations' || section === 'projects'}
+        <div class="sidebar-projects">
+          <span class="label">Projects</span>
+          <ErrorNote error={projects.error} />
+          {#each projects.data ?? [] as project (project.id)}<a class="ellipsis" class:active={section === 'projects' && id === project.id} href={`#/projects/${project.id}`} title={project.name} onclick={() => { if (window.innerWidth < 700) collapsed = true; }}>{project.name}</a>{/each}
+        </div>
+      {/if}
       {#if !section || section === 'conversations'}
         <div class="sidebar-conversations">
           <div class="row">
-            <span class="label grow">Recent</span><button class="quiet new-endeavor" aria-label="New endeavor" onclick={newEndeavor}><Icon name="plus" size={14} /> New</button>
+            <span class="label grow">Recent</span><button class="quiet new-endeavor" aria-label="New endeavor" disabled={Boolean(currentProjectId && projects.data && !requestProject)} onclick={newEndeavor}><Icon name="plus" size={14} /> New</button>
           </div>
           <ErrorNote error={conversations.error} />
           {#each recent as conversation (conversation.id)}
@@ -381,13 +399,18 @@
           <CatalogEntryPage kind={section} entryId={id} />
         {:else if catalogKind === 'skills' || catalogKind === 'connections'}
           <CatalogsPage kind={catalogKind} />
+        {:else if section === 'projects' && id}
+          <ProjectPage projectId={id} onChanged={projects.reload} onCreated={created} />
+        {:else if section === 'projects'}
+          <ProjectsPage onChanged={projects.reload} />
         {:else if section === 'conversations' && id}
           <ConversationPage conversationId={id} initialRunId={new URLSearchParams(hash.split('?')[1]).get('run')} {me} onReady={(conversation) => {
             rememberEndeavor(actorId!, conversation.id);
+            currentProjectId = conversation.projectId ?? null;
             const focus = focusConversation === conversation.id;
             if (focus) focusConversation = null;
             return focus;
-          }} onRead={conversations.reload} />
+          }} onRead={conversations.reload} onChanged={() => { additions = []; conversations.reload(); }} />
         {:else}
           <section class="endeavor-empty">
             <Icon name="conversations" size={36} />
@@ -398,15 +421,15 @@
             {:else}
               <h1>What do you want to accomplish?</h1>
               <p class="muted">Start your first endeavor. Bring in people and agents whenever you need them.</p>
-              <button aria-label="New endeavor" onclick={newEndeavor}><Icon name="plus" /> New endeavor</button>
+              <button aria-label="New endeavor" disabled={Boolean(currentProjectId && projects.data && !requestProject)} onclick={newEndeavor}><Icon name="plus" /> New endeavor</button>
             {/if}
           </section>
         {/if}
       {/key}
     </main>
     {#key actorId}
-      {#if creating}<NewEndeavor people={people.data} {me} onCreated={created} onClose={() => (creating = false)} />{/if}
-      {#if searching}<SearchEndeavors conversations={recent} error={conversations.error} loading={!conversations.data} onPick={openConversation} onClose={() => (searching = false)} onRetry={conversations.reload} />{/if}
+      {#if creating}{#if requestProject}<NewRequest project={requestProject} onCreated={created} onClose={() => (creating = false)} />{:else}<NewEndeavor people={people.data} {me} onCreated={created} onClose={() => (creating = false)} />{/if}{/if}
+      {#if searching}<SearchEndeavors conversations={searchable.data ?? recent} error={searchable.error} loading={!searchable.data} onPick={openConversation} onClose={() => (searching = false)} onRetry={searchable.reload} />{/if}
     {/key}
     {#if picking}
       <SwitchPerson

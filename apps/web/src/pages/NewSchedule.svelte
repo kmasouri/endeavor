@@ -1,13 +1,14 @@
 <script lang="ts">
+  import { loadAll } from './agent-data';
   import { type Agent, api, type Conversation } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import { createAction, createLoad } from '../state.svelte';
   import { getDeviceTimezone, timeDisplay } from '../time-display.svelte';
   import { policyLabels, summarizeRecurrence, formatTimezoneLabel, weekdays } from '../schedules';
 
-  let { onCreated, onDiscard }: { onCreated: () => void; onDiscard: () => void } = $props();
+  let { onCreated, onDiscard, conversationIds }: { conversationIds?: string[]; onCreated: () => void; onDiscard: () => void } = $props();
   const agents = createLoad(() => api.list<Agent>('/agents?limit=100'), () => []);
-  const conversations = createLoad(() => api.list<Conversation>('/conversations?limit=100'), () => []);
+  const conversations = createLoad(() => loadAll<Conversation>('/conversations'), () => []);
   let agentId = $state('');
   let conversationId = $state('');
   let title = $state('');
@@ -52,8 +53,8 @@
     <label>Agent <select bind:value={agentId} required><option value="">Choose an agent…</option>
       {#each agents.data?.data ?? [] as agent (agent.id)}<option value={agent.id}>{agent.name}</option>{/each}
     </select></label>
-    <label>Post results in <select bind:value={conversationId}><option value="">Nowhere; see run history</option>
-      {#each conversations.data?.data ?? [] as conversation (conversation.id)}<option value={conversation.id}>{conversation.title}</option>{/each}
+    <label>Post results in <select bind:value={conversationId} required={Boolean(conversationIds)}><option value="">{conversationIds ? 'Choose an endeavor…' : 'Nowhere; see run history'}</option>
+      {#each (conversations.data ?? []).filter((c) => !conversationIds || conversationIds.includes(c.id)) as conversation (conversation.id)}<option value={conversation.id}>{conversation.title}</option>{/each}
     </select><span class="muted small">The agent must already be in that conversation.</span></label>
   </div>
   <ErrorNote error={agents.error ?? conversations.error} />

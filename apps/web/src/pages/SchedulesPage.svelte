@@ -15,6 +15,8 @@
   import NewSchedule from './NewSchedule.svelte';
   import './schedules.css';
 
+  let { conversationIds }: { conversationIds?: string[] } = $props();
+
   // Load every page so cancelled schedules cannot hide older active schedules.
   async function loadSchedules(): Promise<Responsibility[]> {
     const all: Responsibility[] = [];
@@ -29,10 +31,11 @@
   let view = $state<'list' | 'new' | 'details'>('list');
   let selected = $state<Responsibility | null>(null);
   let current = $derived(schedules.data?.find((schedule) => schedule.id === selected?.id) ?? selected);
-  let active = $derived((schedules.data ?? []).filter((schedule) => schedule.status !== 'cancelled'));
+  const scoped = $derived((schedules.data ?? []).filter((s) => !conversationIds || (s.conversationId && conversationIds.includes(s.conversationId))));
+  let active = $derived(scoped.filter((schedule) => schedule.status !== 'cancelled'));
   let filter = $state('All');
   let search = $state('');
-  const shown = $derived((schedules.data ?? []).filter((schedule) =>
+  const shown = $derived(scoped.filter((schedule) =>
     (filter === 'All' || schedule.status === ({ Active: 'enabled', Paused: 'paused', Cancelled: 'cancelled' } as Record<string, string>)[filter]) &&
     `${schedule.title} ${name({ type: 'agent', id: schedule.agentId })} ${summarizeRecurrence(schedule, timeDisplay.format === '12h')}`.toLowerCase().includes(search.trim().toLowerCase())
   ));
@@ -63,7 +66,7 @@
     <p class="schedule-notice" role="status">{notice}</p>
     {#if view === 'new'}
       <button class="schedule-back" onclick={() => navigate('list')}>← Back to schedules</button>
-      <NewSchedule onDiscard={() => navigate('list')} onCreated={() => {
+      <NewSchedule {conversationIds} onDiscard={() => navigate('list')} onCreated={() => {
         schedules.reload(); notice = 'Schedule created.'; void navigate('list');
       }} />
     {:else if view === 'details' && current}
@@ -86,7 +89,7 @@
         <h2 class="schedule-eyebrow" tabindex="-1">Schedules · {shown.length}</h2>
       {/if}
       {#if !schedules.data && !schedules.error}<p class="muted">Loading schedules…</p>{/if}
-      {#if schedules.data?.length === 0 && !schedules.error}
+      {#if schedules.data && scoped.length === 0 && !schedules.error}
         <section class="schedule-empty" aria-labelledby="schedules-empty-title">
           <div class="schedule-empty-clock"><Icon name="schedules" /></div>
           <h2 id="schedules-empty-title" tabindex="-1">No schedules yet</h2>
@@ -111,7 +114,7 @@
         {/each}
       {/snippet}
       <div class="schedule-list" aria-label="Schedules">{@render rows(shown)}</div>
-      {#if schedules.data?.length && !shown.length}<p class="muted">No schedules match your filters.</p>{/if}
+      {#if scoped.length && !shown.length}<p class="muted">No schedules match your filters.</p>{/if}
     {/if}
   </div>
 </div>

@@ -335,3 +335,17 @@ and status, with profile text kept on one line so it cannot create prompt headin
 The running agent's own peer profile is omitted. These public descriptions are current,
 while each task keeps its own pinned instructions and configuration. No peer instructions,
 notes, credentials, or connection details enter the prompt. Outside specialists are found with `find_agents`; only members are listed in the prompt.
+
+### Projects and goals in the web app
+
+Projects navigation opens a project overview without a chat feed. The overview lists open
+endeavors first and keeps closed ones under Archived endeavors. Its other sections manage shared
+knowledge sources, default members for new endeavors, and schedules whose destination endeavor
+belongs to the project. Project creation, rename, archive, and restore use the existing project API.
+
+New request starts an endeavor in the current project and posts the request as its first message.
+The request becomes the goal and the API fills in done criteria. If posting fails after creation,
+the dialog keeps the endeavor ID and retries that message with the same client key. Replies use
+the existing endeavor composer. Edit goal changes the goal and done criteria; Confirm goal done
+asks for confirmation before closing. Closed endeavors show their history with a Reopen endeavor
+control instead of the composer. Global search includes open and closed endeavors.

@@ -23,7 +23,7 @@
     const opener = document.activeElement;
     element?.showModal();
     // Focus the primary field; the native dialog makes the rest of the app inert.
-    element?.querySelector<HTMLInputElement>('input')?.focus();
+    element?.querySelector<HTMLElement>('input, textarea')?.focus();
     return () => {
       element?.close();
       if (opener instanceof HTMLElement && opener.isConnected) opener.focus();

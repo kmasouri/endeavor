@@ -76,10 +76,26 @@ export interface ParticipantRef {
   id: string;
 }
 
+export interface Project {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface ProjectDetails extends Project {
+  members: (Member & { addedAt?: string })[];
+}
+
 export interface Conversation {
   id: string;
   title: string;
   createdAt: string;
+  projectId?: string;
+  goal?: string | null;
+  doneCriteria?: string | null;
+  state?: 'open' | 'closed';
   // Messages from others you haven't seen. Only the conversations list sends it.
   unreadCount?: number;
 }
