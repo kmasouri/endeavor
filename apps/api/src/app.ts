@@ -19,6 +19,7 @@ import conversationPlugin from './plugins/conversation';
 import humanPlugin from './plugins/human';
 import itemPlugin from './plugins/item';
 import notePlugin from './plugins/note';
+import projectPlugin from './plugins/project';
 import responsibilityPlugin from './plugins/responsibility';
 import runnerPlugin from './plugins/runner';
 import taskPlugin from './plugins/task';
@@ -201,6 +202,7 @@ export function setupApp(): FastifyInstance {
   app.register(humanPlugin);
   app.register(itemPlugin);
   app.register(notePlugin);
+  app.register(projectPlugin);
   app.register(responsibilityPlugin);
   app.register(taskPlugin);
   app.register(runnerPlugin);
@@ -212,6 +214,7 @@ export function setupApp(): FastifyInstance {
   app.register(routes.humansRouter);
   app.register(routes.itemsRouter);
   app.register(routes.notesRouter);
+  app.register(routes.projectsRouter);
   app.register(routes.responsibilitiesRouter);
   app.register(routes.tasksRouter);
 

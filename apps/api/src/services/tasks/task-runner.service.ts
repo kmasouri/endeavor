@@ -1064,15 +1064,16 @@ export class TaskRunnerService {
     if (text.length > MAX_NOTE_CHARS) {
       throw new AppError('validationError', 'Keep notes under 2,000 characters.');
     }
-    // Saved for this conversation only, so it can't carry its details into another. The
-    // tool call is the note's key, so a replay after a crash finds the first save.
+    // Saved for the conversation's project, so every endeavor in it sees the note, but no other
+    // project does. The tool call is the note's key, so a replay after a crash finds the first
+    // save.
     const note = await this.noteRepository.create({
       clientKey: `tool:${task.id}:${callId}`,
       agentId: agent.id,
       body: text,
       sourceTaskId: task.id,
       sourceConversationId: task.conversationId,
-      scope: task.conversationId ? 'conversation' : 'agent',
+      scope: task.conversationId ? 'project' : 'agent',
       createdBy: agentActor
     });
     await this.taskRepository.addEvent(task.id, TASK_EVENTS.noteSaved, agentActor, {
@@ -2437,7 +2438,8 @@ export class TaskRunnerService {
         ? await this.lookupParticipantName({ type: task.requestedByType, id: task.requestedById })
         : 'a schedule';
 
-    // Notes from this conversation, plus agent-wide ones. Never notes from other conversations.
+    // Notes from this conversation and its project, plus agent-wide ones. Never notes from other
+    // projects.
     const notes = await this.noteRepository.list({
       agentId: agent.id,
       visibility: { conversationId: task.conversationId },
@@ -2457,10 +2459,13 @@ export class TaskRunnerService {
     }
     // Newest first, each cut to what the prompt can hold, so huge documents aren't loaded.
     const [documents, participants, membership] = await Promise.all([
-      this.documentRepository.list(task.conversationId, {
-        limit: 50,
-        maxChars: MAX_DOCUMENT_CHARS
-      }),
+      this.documentRepository.list(
+        { conversationId: task.conversationId },
+        {
+          limit: 50,
+          maxChars: MAX_DOCUMENT_CHARS
+        }
+      ),
       this.loadParticipants(task.conversationId),
       this.conversationRepository.getMember(task.conversationId, toAgentActor(agent))
     ]);

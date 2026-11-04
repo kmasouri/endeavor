@@ -2,6 +2,23 @@
 
 People and agents work together in conversations. People post through the API. Agents post through the runner, which runs their work.
 
+## Projects, endeavors, and goals
+
+A conversation is an **endeavor**: one goal. Endeavors are grouped into long-lived **projects**. A project holds knowledge sources, saved notes, and default people and agents. It has no chat of its own.
+
+- `POST /projects` creates a project with a `name` and optional default `agentIds` and `humanIds`. The creator becomes a default member. `GET /projects` lists active projects (`archived=true` for archived ones), and `GET /projects/:projectId` returns one with its members.
+- `PATCH /projects/:projectId` renames it, replaces its default agents or people, or archives it (`archived: true`) and restores it (`archived: false`). Member changes apply to endeavors started afterwards. No new endeavor starts in an archived project (`projectArchived`).
+- One project is the default. `POST /conversations` without `projectId` puts the endeavor there, so older clients keep working. The default can't be archived (`defaultProjectArchive`). All conversations that existed before projects were moved into it, named General, with their IDs unchanged.
+- Creating an endeavor adds the project's default members along with the chosen ones. A default agent that can't join now, like a disabled one, is skipped.
+
+**The goal** is the request that opened the endeavor. People never have to write one. `POST /conversations` can take a `goal`; otherwise the first message a person posts becomes it (`goalMessageId` points to that message). Older conversations got the first message a person wrote in them.
+
+**Done criteria** are filled in from the goal: "Done when the result meets this request and a person confirms it: …", quoting up to 300 characters of it. People can send their own `doneCriteria` when creating, or change it, and the `goal`, with `PATCH /conversations/:conversationId`.
+
+**Closing.** `POST /conversations/:conversationId/close` records that a person confirmed the goal is done (`state: "closed"`, `closedAt`, `closedByHumanId`). A closed endeavor is archived: `GET /conversations` lists only open ones unless `state=closed` or `state=all`, and posting returns `conversationClosed`. Work that is already running isn't stopped. `POST /conversations/:conversationId/reopen` opens it again for follow-ups, with its goal and history kept. `GET /conversations?projectId=` lists one project's endeavors.
+
+Tasks don't see the goal yet; that is CA-101.
+
 ## Who gets woken up (v1 response rules)
 
 A message is addressed to:

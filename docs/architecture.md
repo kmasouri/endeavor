@@ -341,11 +341,20 @@ A task is one run of work by one agent. `TaskService` owns every change to a tas
 
 ### Sharing lifecycle rules between services
 
-Two services change tasks: `TaskService`, for the API and human actions, and `TaskRunnerService`, the runner acting for agents. Services never use each other, so both use `TaskLifecycle` (`apps/api/src/services/tasks/task-lifecycle.ts`). It is a helper inside the tasks feature, not a service, and it holds the rules for state changes, waits, outputs, and completion. Keep business rules in the service layer even when several features use them. Put reusable rules in feature-owned `<name>.rules.ts` files: `services/access/access.rules.ts` for human authorization, `services/conversations/addressing.rules.ts` for message recipients, and `services/connections/connection-access.rules.ts` for connection calls. Services import these helpers directly, including across feature folders; do not export them through the service barrel. Rule helpers work on plain values and import only shared contracts or packages, which lint enforces. They never load records, call providers, log, or import service classes.
+Two services change tasks: `TaskService`, for the API and human actions, and `TaskRunnerService`, the runner acting for agents. Services never use each other, so both use `TaskLifecycle` (`apps/api/src/services/tasks/task-lifecycle.ts`). It is a helper inside the tasks feature, not a service, and it holds the rules for state changes, waits, outputs, and completion. Keep business rules in the service layer even when several features use them. Put reusable rules in feature-owned `<name>.rules.ts` files: `services/access/access.rules.ts` for human authorization, `services/conversations/addressing.rules.ts` for message recipients, `services/conversations/goal.rules.ts` for default done criteria, and `services/connections/connection-access.rules.ts` for connection calls. Services import these helpers directly, including across feature folders; do not export them through the service barrel. Rule helpers work on plain values and import only shared contracts or packages, which lint enforces. They never load records, call providers, log, or import service classes.
 
 `shared/` holds cross-layer contracts and infrastructure: types, response helpers, and the error catalog. Conversation-name normalization stays there because both input schemas and services use it. The OAuth session type stays there because repositories, integrations, and services use that contract. Usage by several services alone is not a reason to put business rules in `shared/`.
 
 How messages become work is in `docs/conversations.md`.
+
+## Projects and endeavors
+
+A **project** is a long-lived group of endeavors (`ProjectService`, `services/projects/`). It holds knowledge sources, the notes agents save for it, and default people and agents that join every new endeavor in it. It has no messages of its own. An **endeavor** is a conversation with one goal: `ConversationService` gives it a `projectId`, a `goal`, `doneCriteria`, and an open or closed `state`.
+
+- The project and conversation services never call each other. Both use `ProjectRepository`, and both use `DocumentRepository` (`data/projects/`).
+- The default done criteria come from `services/conversations/goal.rules.ts`. Migration `021_projects.sql` builds the same text for older conversations.
+- One project has `is_default`. Endeavors created without a `projectId` go there, so older clients keep working. It can't be archived.
+- Documents and notes carry a `project_id`. The runner asks the repositories for what one conversation may see, and the queries work out its project. See `docs/notes.md`.
 
 ## Configuration
 

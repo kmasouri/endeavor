@@ -27,6 +27,13 @@ describe('conversation creation', () => {
     const create = jest.spyOn(app.conversationService, 'createConversation').mockResolvedValue({
       id: 'created',
       title: 'Goal',
+      projectId: 'project-1',
+      goal: null,
+      goalMessageId: null,
+      doneCriteria: null,
+      state: 'open',
+      closedAt: null,
+      closedByHumanId: null,
       createdByHumanId: ACTOR,
       budgetUsd: null,
       createdAt: new Date(),
@@ -90,9 +97,16 @@ describe('conversation creation', () => {
     async (title) => {
       const app = setupApp();
       await app.ready();
-      const saved = {
+      const saved: Awaited<ReturnType<typeof app.conversationService.createConversation>> = {
         id: ACTOR,
         title: 'heat-pumps-brief',
+        projectId: 'project-1',
+        goal: null,
+        goalMessageId: null,
+        doneCriteria: null,
+        state: 'open',
+        closedAt: null,
+        closedByHumanId: null,
         createdByHumanId: ACTOR,
         budgetUsd: null,
         createdAt: new Date(),
@@ -183,6 +197,13 @@ describe('listing conversations', () => {
         {
           id: PERSON,
           title: 'website-check',
+          projectId: 'project-1',
+          goal: null,
+          goalMessageId: null,
+          doneCriteria: null,
+          state: 'open',
+          closedAt: null,
+          closedByHumanId: null,
           createdByHumanId: ACTOR,
           budgetUsd: null,
           createdAt: new Date(),

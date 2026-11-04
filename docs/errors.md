@@ -13,7 +13,7 @@ Every error response has a `code` and a `name` from this list. Clients should ch
 }
 ```
 
-Codes are grouped by feature: `10xxx` general, `20xxx` items, `30xxx` people and access, `40xxx` tasks, `50xxx` agents, `60xxx` conversations, `70xxx` catalogs, `80xxx` notes. A code never changes or gets reused once it ships.
+Codes are grouped by feature: `10xxx` general, `20xxx` items, `30xxx` people and access, `40xxx` tasks, `50xxx` agents, `60xxx` conversations and projects, `70xxx` catalogs, `80xxx` notes. A code never changes or gets reused once it ships.
 
 The list lives in `apps/api/src/shared/errors.ts`. When you add an error there, add it here too. A test fails if this page is missing one.
 
@@ -69,15 +69,19 @@ The list lives in `apps/api/src/shared/errors.ts`. When you add an error there, 
 
 ## Conversations (60xxx)
 
-| Code  | Name                     | HTTP | What it means                                                                                  | How to fix it                                                  |
-| ----- | ------------------------ | ---- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| 60001 | `conversationNotFound`   | 404  | No conversation has this ID.                                                                   | Check the ID against `GET /conversations`.                     |
-| 60002 | `notConversationMember`  | 403  | You are not a member of this conversation.                                                     | Ask a member to add you.                                       |
-| 60003 | `mentionNotMember`       | 422  | A mention names someone who isn't in the conversation.                                         | Add them first, or remove the mention.                         |
-| 60004 | `messageNotFound`        | 404  | The message being replied to isn't in this conversation.                                       | Check `inReplyToMessageId`.                                    |
-| 60005 | `participantNotFound`    | 404  | The person or agent being added doesn't exist.                                                 | Check the ID against `GET /humans` or `GET /agents`.           |
-| 60006 | `suggestionNotAvailable` | 422  | An agent suggested an agent that isn't in the directory, or is disabled.                       | The agent sees this as a tool error and can pick another name. |
-| 60007 | `agentNotInConversation` | 422  | The agent must be in the conversation first, such as before it can report there on a schedule. | Add the agent to the conversation.                             |
+| Code  | Name                     | HTTP | What it means                                                                                  | How to fix it                                                                                |
+| ----- | ------------------------ | ---- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 60001 | `conversationNotFound`   | 404  | No conversation has this ID.                                                                   | Check the ID against `GET /conversations`.                                                   |
+| 60002 | `notConversationMember`  | 403  | You are not a member of this conversation.                                                     | Ask a member to add you.                                                                     |
+| 60003 | `mentionNotMember`       | 422  | A mention names someone who isn't in the conversation.                                         | Add them first, or remove the mention.                                                       |
+| 60004 | `messageNotFound`        | 404  | The message being replied to isn't in this conversation.                                       | Check `inReplyToMessageId`.                                                                  |
+| 60005 | `participantNotFound`    | 404  | The person or agent being added doesn't exist.                                                 | Check the ID against `GET /humans` or `GET /agents`.                                         |
+| 60006 | `suggestionNotAvailable` | 422  | An agent suggested an agent that isn't in the directory, or is disabled.                       | The agent sees this as a tool error and can pick another name.                               |
+| 60007 | `agentNotInConversation` | 422  | The agent must be in the conversation first, such as before it can report there on a schedule. | Add the agent to the conversation.                                                           |
+| 60008 | `projectNotFound`        | 404  | No project has this ID, or you can't see it.                                                   | Check the ID against `GET /projects`.                                                        |
+| 60009 | `projectArchived`        | 409  | The project is archived, so no new endeavors start in it.                                      | Restore it with `PATCH /projects/:projectId` and `archived: false`, or pick another project. |
+| 60010 | `defaultProjectArchive`  | 409  | The default project takes endeavors started without a project, so it can't be archived.        | Leave it active.                                                                             |
+| 60011 | `conversationClosed`     | 409  | The endeavor is closed, so it takes no new messages.                                           | Reopen it with `POST /conversations/:conversationId/reopen`.                                 |
 
 ## Catalogs (70xxx)
 
@@ -96,10 +100,10 @@ The list lives in `apps/api/src/shared/errors.ts`. When you add an error there, 
 
 ## Notes and documents (80xxx)
 
-| Code  | Name               | HTTP | What it means                                 | How to fix it                                         |
-| ----- | ------------------ | ---- | --------------------------------------------- | ----------------------------------------------------- |
-| 80001 | `noteNotFound`     | 404  | No note has this ID, or you can't change it.  | Check `GET /agents/:agentId/notes`.                   |
-| 80002 | `documentNotFound` | 404  | No document has this ID in this conversation. | Check `GET /conversations/:conversationId/documents`. |
+| Code  | Name               | HTTP | What it means                                            | How to fix it                                                                                 |
+| ----- | ------------------ | ---- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 80001 | `noteNotFound`     | 404  | No note has this ID, or you can't change it.             | Check `GET /agents/:agentId/notes`.                                                           |
+| 80002 | `documentNotFound` | 404  | No document has this ID in this project or conversation. | Check `GET /projects/:projectId/documents` or `GET /conversations/:conversationId/documents`. |
 
 ## Task workspaces (90xxx)
 

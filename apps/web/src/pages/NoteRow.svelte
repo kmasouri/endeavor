@@ -16,6 +16,8 @@
   let body = $state(untrack(() => note.body));
   const action = createAction();
   let path = $derived(`/agents/${props.agentId}/notes/${note.id}`);
+  // Narrowing an agent-wide note keeps it to its project, or to its conversation for older notes.
+  let narrowScope = $derived(note.projectId ? 'project' : 'conversation');
   const save = (event: SubmitEvent) => {
     event.preventDefault();
     void action
@@ -65,6 +67,8 @@
 
     {#if note.scope === 'agent'}
       used in all its work
+    {:else if note.scope === 'project'}
+      used in every endeavor of that project
     {:else}
       used only in that conversation
     {/if}
@@ -79,10 +83,12 @@
         disabled={action.busy}
         onclick={() =>
           void action
-            .run(() => api.patch(path, { scope: note.scope === 'agent' ? 'conversation' : 'agent' }))
+            .run(() => api.patch(path, { scope: note.scope === 'agent' ? narrowScope : 'agent' }))
             .then(props.onChanged)}
       >
-        {#if note.scope === 'agent'}
+        {#if note.scope === 'agent' && narrowScope === 'project'}
+          Use only in its project
+        {:else if note.scope === 'agent'}
           Use only in its conversation
         {:else}
           Use in all its work

@@ -369,7 +369,9 @@ export interface AgentNote {
   body: string;
   sourceTaskId: string | null;
   sourceConversationId: string | null;
-  scope: 'conversation' | 'agent';
+  // The source conversation's project. Notes saved before projects have scope 'conversation'.
+  projectId: string | null;
+  scope: 'conversation' | 'project' | 'agent';
   createdBy: Actor;
   updatedByHumanId: string | null;
   createdAt: string;

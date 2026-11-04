@@ -139,7 +139,10 @@ export interface AgentNote {
   body: string;
   sourceTaskId: string | null;
   sourceConversationId: string | null;
-  // 'conversation': shown only in tasks in the source conversation. 'agent': in all of them.
+  // The project of the source conversation. null for notes saved outside any conversation.
+  projectId: string | null;
+  // 'project': shown in tasks in every endeavor of the project. 'conversation': only in tasks
+  // in the source conversation (notes saved before projects). 'agent': in all of them.
   scope: NoteScope;
   createdBy: Actor;
   updatedByHumanId: string | null;
@@ -147,12 +150,15 @@ export interface AgentNote {
   updatedAt: Date;
 }
 
-export type NoteScope = 'conversation' | 'agent';
+export const NOTE_SCOPES = ['conversation', 'project', 'agent'] as const;
+export type NoteScope = (typeof NOTE_SCOPES)[number];
 
-// A knowledge source a person attached to a conversation.
-export interface ConversationDocument {
+// A knowledge source a person attached to a project. conversationId, when set, limits it to that
+// one endeavor.
+export interface ProjectDocument {
   id: string;
-  conversationId: string;
+  projectId: string;
+  conversationId: string | null;
   title: string;
   content: string;
   addedByHumanId: string;
@@ -226,9 +232,42 @@ export interface AgentVersion {
   createdAt: Date;
 }
 
+// A long-lived group of endeavors. It holds knowledge sources, saved notes, and the people and
+// agents added to each new endeavor in it.
+export interface Project {
+  id: string;
+  name: string;
+  // New endeavors go here when no project is named.
+  isDefault: boolean;
+  createdByHumanId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  archivedAt: Date | null;
+}
+
+export interface ProjectMember {
+  projectId: string;
+  participant: ParticipantRef;
+  addedByHumanId: string | null;
+  addedAt: Date;
+}
+
+export type EndeavorState = 'open' | 'closed';
+
+// An endeavor in the web app: one goal inside a project.
 export interface Conversation {
   id: string;
   title: string;
+  projectId: string;
+  // The request that opened the endeavor. null until someone asks for something.
+  goal: string | null;
+  goalMessageId: string | null;
+  // When the goal is met. Filled in from the goal; people can edit it.
+  doneCriteria: string | null;
+  // Closed when a person confirms the goal is done. Closed endeavors are archived.
+  state: EndeavorState;
+  closedAt: Date | null;
+  closedByHumanId: string | null;
   createdByHumanId: string;
   // A cap on what all agent work in this conversation spends, in US dollars. null: no cap.
   budgetUsd: number | null;
