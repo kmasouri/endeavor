@@ -48,7 +48,7 @@ export class ProjectService {
   // The creator becomes a default member, like the creator of an endeavor.
   async createProject(
     actorId: string,
-    input: { name: string; agentIds?: string[]; humanIds?: string[] }
+    input: { name: string; about?: string | null; agentIds?: string[]; humanIds?: string[] }
   ): Promise<ProjectDetails> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const participants = await this.requireParticipants([
@@ -58,6 +58,7 @@ export class ProjectService {
     ]);
     const project = await this.projectRepository.create({
       name: input.name,
+      about: input.about?.trim() || null,
       createdByHumanId: human.id
     });
     await this.projectRepository.setMembers({
@@ -92,7 +93,13 @@ export class ProjectService {
   async updateProject(
     actorId: string,
     projectId: string,
-    changes: { name?: string; agentIds?: string[]; humanIds?: string[]; archived?: boolean }
+    changes: {
+      name?: string;
+      about?: string | null;
+      agentIds?: string[];
+      humanIds?: string[];
+      archived?: boolean;
+    }
   ): Promise<ProjectDetails> {
     const { project, human } = await this.requireAccess(actorId, projectId);
     if (changes.archived && project.isDefault) {
@@ -119,9 +126,10 @@ export class ProjectService {
     }
 
     const updated =
-      changes.name !== undefined || changes.archived !== undefined
+      changes.name !== undefined || changes.about !== undefined || changes.archived !== undefined
         ? await this.projectRepository.update(project.id, {
             name: changes.name,
+            about: changes.about === undefined ? undefined : changes.about?.trim() || null,
             archived: changes.archived
           })
         : project;

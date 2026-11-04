@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const projectNameSchema = z.string().trim().min(1).max(100);
+const projectAboutSchema = z.string().trim().max(5_000).nullable();
 
 export const projectParamsSchema = z.object({
   projectId: z.uuid()
@@ -13,6 +14,7 @@ export const projectDocumentParamsSchema = z.object({
 
 export const createProjectBodySchema = z.strictObject({
   name: projectNameSchema,
+  about: projectAboutSchema.optional(),
   // Default people and agents, added to every new endeavor in the project.
   agentIds: z.array(z.uuid()).max(20).optional(),
   humanIds: z.array(z.uuid()).max(20).optional()
@@ -21,6 +23,7 @@ export const createProjectBodySchema = z.strictObject({
 export const updateProjectBodySchema = z
   .strictObject({
     name: projectNameSchema.optional(),
+    about: projectAboutSchema.optional(),
     // Replace that kind of default member. The other kind is kept.
     agentIds: z.array(z.uuid()).max(20).optional(),
     humanIds: z.array(z.uuid()).max(20).optional(),

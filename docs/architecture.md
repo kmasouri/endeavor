@@ -366,6 +366,10 @@ A **project** is a long-lived group of endeavors (`ProjectService`, `services/pr
 - Migration `022_one_open_endeavor_task.sql` enforces one open task per agent and endeavor,
   including paused work. A concurrent message delivery joins the winning task. Run-key retries
   still find their original task; conflicting restarts are rejected and schedule starts are skipped.
+- Projects expose optional `about` background. Migration `025_project_context.sql` adds a JSON
+  context object so more project context can be added later. Project updates change only the
+  About key. The runner receives `ProjectRepository` from its plugin and reads the current
+  background for the endeavor on each model turn, under its own quoted section.
 - Documents and notes carry a `project_id`. The runner asks the repositories for what one conversation may see, and the queries work out its project. See `docs/notes.md`.
 
 ## Configuration

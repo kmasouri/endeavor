@@ -34,6 +34,7 @@ const kim: Human = {
 const project: Project = {
   id: PROJECT,
   name: 'General',
+  about: null,
   isDefault: true,
   createdByHumanId: null,
   createdAt: new Date(),

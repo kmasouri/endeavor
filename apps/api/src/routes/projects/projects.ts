@@ -26,7 +26,7 @@ export async function projectsRouter(fastifyInstance: FastifyInstance): Promise<
     {
       schema: {
         description:
-          'Create a project: a long-lived group of endeavors that holds knowledge sources, saved notes, and default members. You become a default member; agentIds and humanIds add more.',
+          'Create a project: a long-lived group of endeavors that holds knowledge sources, saved notes, and default members. Optional about text (up to 5,000 characters) supplies background for every endeavor; null or blank means none. You become a default member; agentIds and humanIds add more.',
         tags: ['projects'],
         headers: actorHeadersSchema,
         body: createProjectBodySchema
@@ -53,7 +53,7 @@ export async function projectsRouter(fastifyInstance: FastifyInstance): Promise<
     '/projects/:projectId',
     {
       schema: {
-        description: 'Get a project with its default people and agents.',
+        description: 'Get a project with its optional about text and default people and agents.',
         tags: ['projects'],
         headers: actorHeadersSchema,
         params: projectParamsSchema
@@ -67,7 +67,7 @@ export async function projectsRouter(fastifyInstance: FastifyInstance): Promise<
     {
       schema: {
         description:
-          'Rename a project, replace its default agents or people (for endeavors started afterwards), or archive (archived: true) and restore it. The default project cannot be archived.',
+          'Rename a project, set or clear its optional About text (about: null or blank clears it; omitted preserves it; up to 5,000 characters), replace its default agents or people (for endeavors started afterwards), or archive (archived: true) and restore it. The default project cannot be archived.',
         tags: ['projects'],
         headers: actorHeadersSchema,
         params: projectParamsSchema,

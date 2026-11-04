@@ -35,6 +35,7 @@ const agent: Agent = {
 const project: Project = {
   id: PROJECT,
   name: 'Billing',
+  about: null,
   isDefault: false,
   createdByHumanId: KIM,
   createdAt: new Date(),
@@ -68,6 +69,7 @@ function setup() {
   projects.update.mockImplementation(async (_id, changes) => ({
     ...project,
     ...(changes.name !== undefined && { name: changes.name }),
+    ...(changes.about !== undefined && { about: changes.about }),
     archivedAt: changes.archived ? new Date() : null
   }));
   const logger = {
@@ -91,7 +93,11 @@ describe('ProjectService', () => {
       humanIds: [KIM]
     });
 
-    expect(projects.create).toHaveBeenCalledWith({ name: 'Billing', createdByHumanId: KIM });
+    expect(projects.create).toHaveBeenCalledWith({
+      name: 'Billing',
+      about: null,
+      createdByHumanId: KIM
+    });
     expect(projects.setMembers).toHaveBeenCalledWith({
       projectId: PROJECT,
       participants: [
@@ -101,6 +107,42 @@ describe('ProjectService', () => {
       addedByHumanId: KIM
     });
     expect(logger.onProjectCreated).toHaveBeenCalledWith(PROJECT, KIM);
+  });
+
+  it('stores About separately from documents and notes on creation', async () => {
+    const { service, projects, documents, notes } = setup();
+    await service.createProject(KIM, { name: 'Billing', about: '  Team background  ' });
+    expect(projects.create).toHaveBeenCalledWith({
+      name: 'Billing',
+      about: 'Team background',
+      createdByHumanId: KIM
+    });
+    expect(documents.add).not.toHaveBeenCalled();
+    expect(notes.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['  Updated background  ', 'Updated background'],
+    ['', null],
+    ['  ', null],
+    [null, null]
+  ])('updates or clears About: %p', async (about, expected) => {
+    const { service, projects } = setup();
+    const result = await service.updateProject(KIM, PROJECT, { about });
+    expect(projects.update).toHaveBeenCalledWith(
+      PROJECT,
+      expect.objectContaining({ about: expected })
+    );
+    expect(result.about).toBe(expected);
+  });
+
+  it('preserves About when only renaming a project', async () => {
+    const { service, projects } = setup();
+    await service.updateProject(KIM, PROJECT, { name: 'Renamed' });
+    expect(projects.update).toHaveBeenCalledWith(
+      PROJECT,
+      expect.objectContaining({ about: undefined })
+    );
   });
 
   it("refuses an agent that can't join before creating anything", async () => {

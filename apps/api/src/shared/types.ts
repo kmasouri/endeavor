@@ -252,6 +252,8 @@ export interface AgentVersion {
 export interface Project {
   id: string;
   name: string;
+  // Human-supplied background included in every endeavor of this project.
+  about: string | null;
   // New endeavors go here when no project is named.
   isDefault: boolean;
   createdByHumanId: string | null;
