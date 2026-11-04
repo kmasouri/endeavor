@@ -354,6 +354,11 @@ A **project** is a long-lived group of endeavors (`ProjectService`, `services/pr
 - The project and conversation services never call each other. Both use `ProjectRepository`, and both use `DocumentRepository` (`data/projects/`).
 - The default done criteria come from `services/conversations/goal.rules.ts`. Migration `021_projects.sql` builds the same text for older conversations.
 - One project has `is_default`. Endeavors created without a `projectId` go there, so older clients keep working. It can't be archived.
+- Every model turn loads the endeavor's current goal and done criteria before the task request.
+  Agents finish their own tasks and may propose goal completion; only people close endeavors.
+- Migration `022_one_open_endeavor_task.sql` enforces one open task per agent and endeavor,
+  including paused work. A concurrent message delivery joins the winning task. Run-key retries
+  still find their original task; conflicting restarts are rejected and schedule starts are skipped.
 - Documents and notes carry a `project_id`. The runner asks the repositories for what one conversation may see, and the queries work out its project. See `docs/notes.md`.
 
 ## Configuration

@@ -17,7 +17,16 @@ A conversation is an **endeavor**: one goal. Endeavors are grouped into long-liv
 
 **Closing.** `POST /conversations/:conversationId/close` records that a person confirmed the goal is done (`state: "closed"`, `closedAt`, `closedByHumanId`). A closed endeavor is archived: `GET /conversations` lists only open ones unless `state=closed` or `state=all`, and posting returns `conversationClosed`. Work that is already running isn't stopped. `POST /conversations/:conversationId/reopen` opens it again for follow-ups, with its goal and history kept. `GET /conversations?projectId=` lists one project's endeavors.
 
-Tasks don't see the goal yet; that is CA-101.
+Every task in an endeavor sees its current goal and done criteria before **Task (your part)**,
+which holds the request that started that task and its own completion criteria. The runner reloads
+this context before each model turn, so edits appear on the next turn. The goal is shared endeavor
+metadata, even for members whose message history starts when they joined. Message history still
+respects that boundary. Standalone tasks have only their own request and criteria.
+
+Agents decide when their own work is done. They can say the overall goal looks met in a result or
+`send_message`, asking a person to confirm. `complete_task` finishes only that task; it never closes
+the endeavor. A request about another goal belongs in that goal's endeavor. Tools post only in the
+current endeavor; a person opens or selects a different one.
 
 ## Who gets woken up (v1 response rules)
 
@@ -52,6 +61,13 @@ When a message reaches an agent:
   - If the task is waiting for a reply from the message's author, the wait is resolved. An answer, a clarifying question, or "I can't help" all count as a reply.
   - If the task is blocked and the message is from a person, the task goes back to working. A person answering is the attention it needed.
 - **Otherwise**: the message starts a new task for the agent. The task uses the agent's current configuration version and records the message that asked for it.
+
+The database enforces at most one open task per agent and endeavor, including paused tasks.
+Concurrent delivery attaches the losing message to the winning task as an update. Schedules skip
+starts that would compete with that work; restarting finished work returns `taskStateConflict`
+if the agent already has open work there. Another endeavor can have its own task for the same agent.
+Migration `022_one_open_endeavor_task.sql` adds the constraint. It preserves all existing work:
+if older data has duplicates, finish or explicitly cancel extra runs before applying it.
 
 Delivering the same message twice finds the same task (its run key is `message:<message>:<agent>`), so a crash in the middle of delivery doesn't create duplicate work.
 
@@ -210,6 +226,10 @@ human reconciliation. See [HTTP recovery](catalogs.md#connections).
 
 Limits:
 
+- Agent requests can start at most 20 successive tasks in a chain, raised from 5 to allow longer
+  review loops (up to ten request/review exchanges). Updates to existing open tasks still arrive.
+  At the limit, the runner posts a system reply asking a person to review and send a new request;
+  it never silently drops the handoff. Per-task limits and conversation spending caps still apply.
 - A task is blocked after 40 model turns, or at its agent version's own limits (`docs/agents.md`).
 - A failed model call that can be retried waits 5 s, then 10 s. After 3 failures, the task is blocked.
 - Each model request, including a completion check, has a `MODEL_TIMEOUT_MS` deadline

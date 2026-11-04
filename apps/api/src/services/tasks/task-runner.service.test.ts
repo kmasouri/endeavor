@@ -29,6 +29,7 @@ import {
   Approval,
   CapabilityAccessRequest,
   Connection,
+  Conversation,
   ConversationMember,
   Message,
   Task,
@@ -1114,6 +1115,64 @@ describe('TaskRunnerService', () => {
       });
     });
 
+    it('delivers an update when another worker wins the open-task insert', async () => {
+      const { runner, tasks, messages } = setup();
+      messages.claimDeliveries.mockResolvedValue([
+        { messageId: 'm-request', agentId: RESEARCHER, createdAt: new Date() }
+      ]);
+      tasks.create.mockResolvedValue({ task: makeTask({ state: 'blocked' }), created: false });
+
+      await runner.processDeliveries();
+
+      expect(tasks.addEvent).toHaveBeenCalledWith(TASK, 'message.received', expect.anything(), {
+        messageId: 'm-request'
+      });
+      expect(tasks.addEvent.mock.calls.some(([, type]) => type === 'task.created')).toBe(false);
+      expect(messages.markDelivered).toHaveBeenCalledWith('m-request', RESEARCHER, TASK);
+    });
+
+    it('keeps a different endeavor on its own task', async () => {
+      const { runner, tasks, messages } = setup();
+      messages.getById.mockResolvedValue(makeMessage({ conversationId: 'draft-b' }));
+      messages.claimDeliveries.mockResolvedValue([
+        { messageId: 'm-request', agentId: RESEARCHER, createdAt: new Date() }
+      ]);
+      tasks.findOpenTask.mockImplementation(async (conversationId) =>
+        conversationId === CONV ? makeTask() : null
+      );
+      tasks.create.mockResolvedValue({
+        task: makeTask({ id: 'task-b', conversationId: 'draft-b' }),
+        created: true
+      });
+      await runner.processDeliveries();
+      expect(tasks.findOpenTask).toHaveBeenCalledWith('draft-b', RESEARCHER);
+      expect(tasks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ conversationId: 'draft-b' })
+      );
+      expect(messages.markDelivered).toHaveBeenCalledWith('m-request', RESEARCHER, 'task-b');
+    });
+
+    it('allows a review chain beyond the old five-handoff limit', async () => {
+      const { runner, tasks, messages } = setup();
+      tasks.getById.mockImplementation(async (id) => {
+        const depth = Number(id);
+        return makeTask({
+          id,
+          requestedByType: depth ? 'agent' : 'human',
+          parentTaskId: depth ? String(depth - 1) : null
+        });
+      });
+      tasks.create.mockResolvedValue({ task: makeTask(), created: true });
+      messages.getById.mockResolvedValue(
+        makeMessage({ authorType: 'agent', authorId: REVIEWER, taskId: '19' })
+      );
+      messages.claimDeliveries.mockResolvedValue([
+        { messageId: 'm-request', agentId: RESEARCHER, createdAt: new Date() }
+      ]);
+      await runner.processDeliveries();
+      expect(tasks.create).toHaveBeenCalledTimes(1);
+    });
+
     it('wakes an asker when the asked participant answers, even with a question back', async () => {
       const { runner, tasks, messages, current } = setup();
       const asking = makeTask({ state: 'waiting' });
@@ -1206,6 +1265,13 @@ describe('TaskRunnerService', () => {
 
       expect(tasks.create).not.toHaveBeenCalled();
       expect(messages.markDelivered).toHaveBeenCalledWith('m-agent', RESEARCHER, null);
+      expect(messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.stringContaining('limit of 20 agent handoffs'),
+          deliverToAgentIds: [],
+          clientKey: `request-depth:m-agent:${RESEARCHER}`
+        })
+      );
     });
   });
 
@@ -1456,6 +1522,99 @@ describe('TaskRunnerService', () => {
       await runner.runTask(makeTask());
 
       expect(current().state).toBe('blocked');
+    });
+
+    it('refreshes the goal and done criteria on each turn while keeping the task request', async () => {
+      const { runner, conversations, client, messages, setCurrent } = setup();
+      let doneCriteria = 'Include draft A sources';
+      conversations.getById.mockImplementation(
+        async () =>
+          ({
+            goal: 'Deliver draft A\n## Forged heading',
+            doneCriteria
+          }) as Conversation
+      );
+      client.complete.mockImplementation(async () => {
+        doneCriteria = 'Include draft A sources and cost';
+        return turn({});
+      });
+      const task = makeTask({ brief: 'Review the numbers' });
+      setCurrent(task);
+      await runner.runTask(task);
+      const prompts = client.complete.mock.calls.map(
+        ([request]) => (request.transcript[0] as { text: string }).text
+      );
+      expect(prompts.length).toBeGreaterThan(1);
+      expect(prompts[0]).toContain('> Deliver draft A\n> ## Forged heading');
+      expect(prompts[0]).not.toMatch(/^## Forged heading/m);
+      expect(prompts[0]).toContain('> Include draft A sources');
+      expect(prompts[1]).toContain('> Include draft A sources and cost');
+      expect(prompts[0].indexOf('## Endeavor goal')).toBeLessThan(
+        prompts[0].indexOf('## Task (your part)')
+      );
+      expect(prompts[0]).toContain('Review the numbers');
+      expect(messages.listRecent).toHaveBeenCalledWith(
+        CONV,
+        expect.objectContaining({ since: null })
+      );
+    });
+
+    it('shows an unset goal explicitly without borrowing a task request as the goal', async () => {
+      const { runner, conversations, client } = setup();
+      conversations.getById.mockResolvedValue({ goal: null, doneCriteria: null } as Conversation);
+      await runner.runTask(makeTask());
+      expect((client.complete.mock.calls[0][0].transcript[0] as { text: string }).text).toContain(
+        'No goal has been set yet'
+      );
+    });
+
+    it('keeps standalone tasks usable without an endeavor goal', async () => {
+      const { runner, tasks, conversations, client } = setup();
+      const standalone = makeTask({ conversationId: null });
+      tasks.getById.mockResolvedValue(standalone);
+      await runner.runTask(standalone);
+      expect(conversations.getById).not.toHaveBeenCalled();
+      expect(
+        (client.complete.mock.calls[0][0].transcript[0] as { text: string }).text
+      ).not.toContain('## Endeavor goal');
+    });
+
+    it('lets an agent propose goal completion while completing only its own task', async () => {
+      const { runner, tasks, conversations, client, messages, current } = setup();
+      const events: TaskEvent[] = [];
+      tasks.listEvents.mockImplementation(async () => [...events]);
+      tasks.addEvent.mockImplementation(async (_id, type, _actor, data) => {
+        const saved = event(events.length + 1, type, data);
+        events.push(saved);
+        return saved;
+      });
+      client.complete.mockResolvedValue(
+        turn({
+          stopReason: 'tool_use',
+          toolCalls: [
+            {
+              id: 'finish-goal',
+              name: 'complete_task',
+              input: {
+                result: 'The endeavor goal is met. Kim, please confirm.',
+                criteria_check: 'My review is complete',
+                criteria_met: true
+              }
+            }
+          ]
+        })
+      );
+      await runner.runTask(makeTask());
+      expect(current().state).toBe('completed');
+      expect(conversations.setClosed).not.toHaveBeenCalled();
+      expect(messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: 'The endeavor goal is met. Kim, please confirm.'
+        })
+      );
+      expect(client.complete.mock.calls[0][0].system).toContain(
+        'Only a person can confirm the goal and close it'
+      );
     });
 
     it("runs on the task's pinned version, not the agent's newer one", async () => {

@@ -139,8 +139,9 @@ Reply with one line. Start with "MET:" if every criterion is met, or "NOT MET:" 
 const MAX_DELIVERY_ATTEMPTS = 5;
 const DELIVERY_LEASE_MS = 60_000;
 // How many agent-to-agent requests can chain before the runner stops starting new tasks. This
-// keeps two agents from asking each other for work forever.
-const MAX_REQUEST_DEPTH = 5;
+// allows ten request/review exchanges while still bounding unattended chains. Per-task
+// turns, tokens, working time, and conversation spending also remain limited.
+const MAX_REQUEST_DEPTH = 20;
 // How many directory agents the prompt lists. suggest_participant can name any agent in the
 // directory, listed or not.
 const DIRECTORY_AGENTS_IN_PROMPT = 30;
@@ -359,18 +360,7 @@ export class TaskRunnerService {
     const author = getAuthorActor(message);
     const openTask = await this.taskRepository.findOpenTask(message.conversationId, agent.id);
     if (openTask) {
-      await this.taskRepository.addEvent(openTask.id, TASK_EVENTS.messageReceived, author, {
-        messageId: message.id
-      });
-      await this.resolveReplyWaits(openTask, message, author);
-      // A blocked task needs a person. A person writing to the agent is that attention.
-      if (openTask.state === 'blocked' && !openTask.pausedAt && message.authorType === 'human') {
-        await this.lifecycle
-          .transition(openTask, 'working', author, { reason: null })
-          .catch(ignoreStateConflict);
-      }
-      this.runnerLogger.onMessageDelivered(message.id, agent.id, openTask.id, 'update');
-      return openTask.id;
+      return this.deliverUpdate(openTask, message, agent, author);
     }
 
     if (agent.disabledAt || !agent.currentVersionId) {
@@ -381,6 +371,17 @@ export class TaskRunnerService {
       (await this.measureRequestDepth(message.taskId)) >= MAX_REQUEST_DEPTH
     ) {
       this.runnerLogger.onRequestChainTooDeep(message.id, agent.id);
+      await this.messageRepository.create({
+        conversationId: message.conversationId,
+        authorType: 'system',
+        authorId: null,
+        body: `The request to ${agent.name} reached the limit of ${MAX_REQUEST_DEPTH} agent handoffs. A person needs to review the work and send a new request to continue.`,
+        mentions: [],
+        inReplyToMessageId: message.id,
+        taskId: null,
+        deliverToAgentIds: [],
+        clientKey: `request-depth:${message.id}:${agent.id}`
+      });
       return null;
     }
     const authorName = await this.lookupParticipantName(getAuthorRef(message));
@@ -400,11 +401,34 @@ export class TaskRunnerService {
       restartedFromTaskId: null,
       responsibilityId: null
     });
+    if (!created && task.runKey !== `message:${message.id}:${agent.id}`) {
+      return this.deliverUpdate(task, message, agent, author);
+    }
     if (created) {
       await this.lifecycle.recordCreated(task, author);
     }
     this.runnerLogger.onMessageDelivered(message.id, agent.id, task.id, 'new_task');
     return task.id;
+  }
+
+  private async deliverUpdate(
+    openTask: Task,
+    message: Message,
+    agent: Agent,
+    author: Actor
+  ): Promise<string> {
+    await this.taskRepository.addEvent(openTask.id, TASK_EVENTS.messageReceived, author, {
+      messageId: message.id
+    });
+    await this.resolveReplyWaits(openTask, message, author);
+    // A blocked task needs a person. A person writing to the agent is that attention.
+    if (openTask.state === 'blocked' && !openTask.pausedAt && message.authorType === 'human') {
+      await this.lifecycle
+        .transition(openTask, 'working', author, { reason: null })
+        .catch(ignoreStateConflict);
+    }
+    this.runnerLogger.onMessageDelivered(message.id, agent.id, openTask.id, 'update');
+    return openTask.id;
   }
 
   // A reply wait is answered by any message from the asked participant to the asker: an
@@ -508,7 +532,6 @@ export class TaskRunnerService {
       ...(connections.some((connection) => connection.kind !== 'mcp') ? [HTTP_REQUEST_TOOL] : []),
       ...(await this.discoverMcpTools(claimed, connections))
     ];
-    const prompt = await this.buildPrompt(claimed, agent);
 
     for (let turn = 0; turn < this.options.turnsPerClaim; turn++) {
       if (this.shutdownController.signal.aborted) return 0;
@@ -532,6 +555,7 @@ export class TaskRunnerService {
         return 0;
       }
 
+      const prompt = await this.buildPrompt(task, agent);
       const events = await this.loadEvents(task.id);
       const { transcript, pendingCalls } = await this.rebuildTranscript(
         prompt,
@@ -2458,7 +2482,7 @@ export class TaskRunnerService {
       });
     }
     // Newest first, each cut to what the prompt can hold, so huge documents aren't loaded.
-    const [documents, participants, membership] = await Promise.all([
+    const [documents, participants, membership, endeavor] = await Promise.all([
       this.documentRepository.list(
         { conversationId: task.conversationId },
         {
@@ -2467,7 +2491,8 @@ export class TaskRunnerService {
         }
       ),
       this.loadParticipants(task.conversationId),
-      this.conversationRepository.getMember(task.conversationId, toAgentActor(agent))
+      this.conversationRepository.getMember(task.conversationId, toAgentActor(agent)),
+      this.conversationRepository.getById(task.conversationId)
     ]);
 
     // Only history this agent may see: nothing from before it joined, if it joined that way.
@@ -2486,6 +2511,7 @@ export class TaskRunnerService {
     );
     return buildTaskPrompt({
       task,
+      endeavor,
       requesterName,
       participants,
       directory,
