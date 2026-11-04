@@ -676,6 +676,19 @@ describe('TaskService', () => {
       expect(tasks.addEvent).not.toHaveBeenCalled();
     });
 
+    it('refuses a competing endeavor task instead of returning it as a restart', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed', conversationId: 'c1' }));
+      tasks.create.mockResolvedValue({
+        task: makeTask({ id: NEW_TASK_ID, runKey: 'message:other', conversationId: 'c1' }),
+        created: false
+      });
+      await expect(service.restartTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+      expect(tasks.addEvent).not.toHaveBeenCalled();
+    });
+
     it('only restarts finished work', async () => {
       const { service, tasks } = setup();
       tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));

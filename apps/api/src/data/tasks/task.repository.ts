@@ -100,7 +100,8 @@ export interface TaskRepository {
     response: NonNullable<StoredHttpCall['response']>
   ): Promise<boolean>;
   // Creates the task, or returns the existing one with the same runKey. For responsibility
-  // starts, a competing open run can also be returned; services check its key before use.
+  // starts, or an agent already working in an endeavor, a competing open task can also be
+  // returned; services check its key before using it as a new run.
   create(input: CreateTaskInput): Promise<{ task: Task; created: boolean }>;
   // Scheduled starts lock and recheck the enabled schedule and expected slot through the
   // insert. Null means pause, cancellation, retiming, or another runner invalidated the slot.

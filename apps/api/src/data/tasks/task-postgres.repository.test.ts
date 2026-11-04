@@ -138,3 +138,35 @@ describe('atomic catch-up decisions', () => {
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT'))).toBe(false);
   });
 });
+
+describe('one open task per agent and endeavor', () => {
+  it('recovers the winning open task after a concurrent insert conflict', async () => {
+    const { repository, outsideQuery } = setup();
+    outsideQuery.mockImplementation(async (sql: string) => ({
+      rows: sql.includes('WHERE conversation_id')
+        ? [{ id: 'winner', run_key: 'message:other', conversation_id: 'c1', owner_agent_id: 'a1' }]
+        : []
+    }));
+    expect(
+      await repository.create({ ...input, conversationId: 'c1', responsibilityId: null })
+    ).toMatchObject({ task: { id: 'winner' }, created: false });
+    expect(outsideQuery).toHaveBeenLastCalledWith(
+      expect.stringContaining("state IN ('working', 'waiting', 'blocked')"),
+      ['c1', 'a1']
+    );
+  });
+
+  it('returns a run-key replay before considering a different open task', async () => {
+    const { repository, outsideQuery } = setup();
+    outsideQuery.mockImplementation(async (sql: string) => ({
+      rows: sql.includes('WHERE run_key') ? [{ id: 'original', run_key: input.runKey }] : []
+    }));
+    expect(await repository.create({ ...input, conversationId: 'c1' })).toMatchObject({
+      task: { id: 'original' },
+      created: false
+    });
+    expect(outsideQuery.mock.calls.some(([sql]) => sql.includes('WHERE conversation_id'))).toBe(
+      false
+    );
+  });
+});

@@ -336,6 +336,12 @@ export class TaskService {
     });
 
     if (!created && task.runKey !== runKey) {
+      if (task.conversationId === previous.conversationId && previous.conversationId) {
+        throw new AppError(
+          'taskStateConflict',
+          'This agent already has an open task in the endeavor. Send it a message instead.'
+        );
+      }
       throw new AppError('responsibilityRunOpen', 'Another run of this schedule is already open');
     }
     if (created) {

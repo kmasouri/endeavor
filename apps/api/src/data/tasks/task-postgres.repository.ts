@@ -288,8 +288,17 @@ export class TaskPostgresRepository implements TaskRepository {
     const byKey = await db.query<TaskRow>('SELECT * FROM endeavor.tasks WHERE run_key = $1', [
       input.runKey
     ]);
+    const byEndeavor =
+      !byKey.rows[0] && input.conversationId
+        ? await db.query<TaskRow>(
+            `SELECT * FROM endeavor.tasks WHERE conversation_id = $1 AND owner_agent_id = $2
+             AND state IN ('working', 'waiting', 'blocked') LIMIT 1`,
+            [input.conversationId, input.ownerAgentId]
+          )
+        : null;
     const existing =
       byKey.rows[0] ??
+      byEndeavor?.rows[0] ??
       (input.responsibilityId
         ? (
             await db.query<TaskRow>(
