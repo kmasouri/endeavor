@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { formatMessage, toSafeHref, buildMessagePreview } from './message-format.ts';
+import {
+  formatMessage,
+  toSafeHref,
+  buildMessagePreview,
+  findTextMentions
+} from './message-format.ts';
 test('message formatting retains HTML as inert text and rejects script links', () => {
   const blocks = formatMessage(
     '<img src=x onerror=alert(1)> [click](javascript:evil) **<script>** `</code><script>`'
@@ -79,4 +84,30 @@ test('autolinks do not change code samples or accept unsafe protocols', () => {
   );
   assert.equal(blocks[0].items[0][0].kind, 'code');
   assert.ok(blocks.every((b) => b.items.flat().every((t) => t.kind !== 'link')));
+});
+
+test('mention matching consumes the longest name and keeps separately addressed shorter names', () => {
+  const names = [{ name: 'Research' }, { name: 'Research Bot' }, { name: 'C++ (QA)' }];
+  const text = '@research bot, then @Research! (@C++ (QA)) @Researcher person@Research';
+  assert.deepEqual(
+    findTextMentions(text, names).map(({ entry }) => entry.name),
+    ['Research Bot', 'Research', 'C++ (QA)']
+  );
+  assert.deepEqual(
+    formatMessage(text, names)
+      .flatMap((block) => block.items.flat())
+      .filter((token) => token.kind === 'mention')
+      .map((token) => token.text),
+    ['@research bot', '@Research', '@C++ (QA)']
+  );
+});
+
+test('mention matching supports Unicode names and rejects word suffixes and email addresses', () => {
+  const names = [{ name: 'Zoë' }, { name: '研究' }];
+  assert.deepEqual(
+    findTextMentions('@Zoë2 @Zoë_name a@Zoë @@Zoë @研究者 @Zoë, @研究。', names).map(
+      ({ entry }) => entry.name
+    ),
+    ['Zoë', '研究']
+  );
 });

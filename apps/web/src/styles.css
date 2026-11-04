@@ -931,6 +931,11 @@ button.chosen {
 .message-body {
   overflow-wrap: anywhere;
 }
+.message-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
 .message-body p,
 .artifact-preview p {
   margin: 0;

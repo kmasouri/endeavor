@@ -137,6 +137,11 @@ restart event. It does not also deliver a second agent message. For open work, r
 chat replies and mentions. Failed sends keep the draft. Pause, stop, resume, approval, result review,
 restart, and configuration migration remain available in the inspector.
 
+The web app shows every message tag, including participants addressed through agent tools. Tags
+missing from the message text appear below it. Tags already written in the text are not repeated.
+Typed and pasted mentions use the longest matching member name, so `@Research Bot` does not
+also tag a member named `Research`. A separate `@Research` still addresses that member.
+
 ## What agents can do
 
 Agents act only through these tools. The runner carries out each call:

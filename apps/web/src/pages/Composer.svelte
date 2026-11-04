@@ -13,7 +13,7 @@
   import Avatar from '../Avatar.svelte';
   import Icon from '../Icon.svelte';
   import { createAction } from '../state.svelte';
-  import { buildMessagePreview } from '../message-format';
+  import { buildMessagePreview, findTextMentions } from '../message-format';
   import { conversationName } from '../appearance';
   let {
     conversationId,
@@ -120,14 +120,10 @@
         name: agent.name,
         participant: { type: 'agent' as const, id: agent.id }
       }));
-    const refs = [...members.filter((member) => !member.deleted), ...selectedMembers]
-      .filter((member) =>
-        new RegExp(
-          `(?:^|\\s)@${member.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_])`,
-          'iu'
-        ).test(body)
-      )
-      .map((member) => member.participant);
+    const refs = [...new Map(
+      findTextMentions(body, [...members.filter((member) => !member.deleted), ...selectedMembers])
+        .map(({ entry }) => [`${entry.participant.type}:${entry.participant.id}`, entry.participant])
+    ).values()];
     const submitted = {
       conversationId,
       actorId: getActorId(),

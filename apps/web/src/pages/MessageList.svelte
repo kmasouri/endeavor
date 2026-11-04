@@ -8,7 +8,7 @@
     type TaskOutput
   } from '../api';
   import { collectConversationArtifacts } from '../conversation-artifacts';
-  import { buildMessagePreview } from '../message-format';
+  import { buildMessagePreview, findTextMentions } from '../message-format';
   import { formatDateTime, formatShortTime } from '../components';
   import FormattedText from '../FormattedText.svelte';
   import Avatar from '../Avatar.svelte';
@@ -65,6 +65,16 @@
       you: member.participant.id === props.meId
     }))
   );
+  const tagsFor = (message: Message) => {
+    const tags = [...new Map(message.mentions.map((ref) => [
+      `${ref.type}:${ref.id}`,
+      { ...ref, name: props.members.find((member) => member.participant.type === ref.type && member.participant.id === ref.id)?.name ?? props.nameOf(ref) }
+    ])).values()];
+    const written = new Set(findTextMentions(message.body, [
+      ...props.members.map((member) => ({ name: member.name })), ...tags
+    ]).map(({ entry }) => entry.name.toLowerCase()));
+    return tags.filter((tag) => !written.has(tag.name.toLowerCase()));
+  };
   const appearanceOf = (id: string | null) =>
     props.members.find((member) => member.participant.type === 'agent' && member.participant.id === id)
       ?? props.directory.find((agent) => agent.id === id);
@@ -94,6 +104,7 @@
       Date.parse(message.createdAt) - Date.parse(previous.createdAt) < 300000}
     {@const replyTo = message.inReplyToMessageId ? byId.get(message.inReplyToMessageId) : null}
     {@const name = props.nameOf({ type: message.authorType, id: message.authorId })}
+    {@const missingTags = tagsFor(message)}
     {@const you = message.mentions.some((mention) => mention.id === props.meId && mention.type === 'human')}
     {#if !previous || new Date(previous.createdAt).toDateString() !== new Date(message.createdAt).toDateString()}<li
         class="date-divider"
@@ -176,7 +187,15 @@
           </div>{:else}<time class="group-time caption muted" title={formatDateTime(message.createdAt)}
             >{formatShortTime(message.createdAt)}</time
           >{/if}
-        <div class="message-body"><FormattedText text={message.body} {names} /></div>
+        <div class="message-body"><FormattedText text={message.body} {names} />
+          {#if missingTags.length}
+            <p class="message-tags" aria-label="Tagged participants">
+              {#each missingTags as tag (`${tag.type}:${tag.id}`)}
+                <mark class={tag.type === 'human' && tag.id === props.meId ? 'mention-you' : 'mention'}>@{tag.name}</mark>
+              {/each}
+            </p>
+          {/if}
+        </div>
         {#if message.taskId && lastForTask.get(message.taskId) === message.id}
           {#if !props.outputs.some((output) => output.taskId === message.taskId) || artifacts.some((output) => output.taskId === message.taskId)}<RunSteps
               taskId={message.taskId}
