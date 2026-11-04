@@ -513,8 +513,10 @@ for (const width of [1280, 390, 320]) {
   }) => {
     await page.setViewportSize({ width, height: 900 });
     await page.emulateMedia({ reducedMotion: 'reduce' });
+    const now = new Date('2026-10-24T12:00:00Z');
+    await page.clock.install({ time: now });
     const { state, errors } = await fixture(page);
-    const since = new Date(Date.now() - 18_000).toISOString();
+    const since = new Date(now.getTime() - 18_000).toISOString();
     const first = state.tasks[0];
     first.state = 'working';
     first.activity = { kind: 'reading', detail: 'reading sources/air-source-heat-pump.md', since };
@@ -530,6 +532,7 @@ for (const width of [1280, 390, 320]) {
     await page.screenshot({ path: test.info().outputPath('live-agent-status.png') });
     const elapsed = live.locator('.muted[aria-hidden="true"]').first();
     const before = await elapsed.innerText();
+    await page.clock.fastForward(1001);
     await expect(elapsed).not.toHaveText(before);
     const geometry = await live.evaluate((el) => {
       const rect = el.getBoundingClientRect();
@@ -540,15 +543,18 @@ for (const width of [1280, 390, 320]) {
     expect(geometry.scroll).toBeLessThanOrEqual(geometry.width + 1);
     first.pausedAt = since;
     second.state = 'blocked';
-    await expect(live).toContainText('Researcher is paused', { timeout: 6500 });
+    await page.clock.fastForward(4001);
+    await expect(live).toContainText('Researcher is paused');
     await expect(live).toContainText('Reviewer is stuck');
     await expect(live).not.toContainText('skimming');
     first.pausedAt = null;
     first.state = 'waiting';
-    await expect(live).toContainText('Researcher is waiting', { timeout: 6500 });
+    await page.clock.fastForward(4001);
+    await expect(live).toContainText('Researcher is waiting');
     first.state = 'completed';
     second.state = 'completed';
-    await expect(live).toHaveCount(0, { timeout: 6500 });
+    await page.clock.fastForward(4001);
+    await expect(live).toHaveCount(0);
     expect(errors).toEqual([]);
   });
 }

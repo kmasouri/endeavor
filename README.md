@@ -121,7 +121,7 @@ npm run test:coverage
 npm run build          # builds the API (apps/api/dist) and the web interface (apps/web/dist)
 npm run lint
 npm run format
-npm run check          # lint + typecheck + build + unit and browser tests (CI runs this)
+npm run check          # lint + typecheck + build + unit and browser tests
 npm run test:e2e       # build the web app and run its Playwright regression suite
 npm run db:up          # start local Postgres
 npm run db:migrate     # apply apps/api/db/schema/ files
@@ -214,9 +214,11 @@ the served app. The suite mocks the HTTP API; it needs no database, Docker app, 
 model calls, and it never changes real schedules or runs.
 
 Run `npm run test:e2e` for browser tests alone. Chromium downloads on the first run. In CI the
-runner also installs Chromium's system libraries; the existing CI workflow runs these tests through
-`npm run check`. No deployment workflow changes are needed. On a new Linux workstation, install
-missing system libraries with `npx playwright install-deps chromium` from `apps/web/` if needed.
+runner caches browser binaries and installs Chromium's system libraries on every run. Browser
+tests run alongside the other checks in a separate job; the final `check` job requires both to
+pass. Superseded runs for the same PR are canceled. Main pushes run independently. On a new Linux
+workstation, install missing system libraries with `npx playwright install-deps chromium` from
+`apps/web/` if needed.
 
 The suite covers conversation creation and chat, agent configuration/history, approvals, catalogs,
 authentication setup, navigation, and Schedules. It checks failed saves and retry, keyboard/focus,

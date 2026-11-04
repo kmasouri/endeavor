@@ -21,6 +21,7 @@ for (const width of [1440, 390])
     page
   }, testInfo) => {
     await page.setViewportSize({ width, height: 900 });
+    await page.clock.install();
     const { state, errors, unexpected } = await fixture(page);
     state.messages = history(620);
     await page.goto('/app/#/conversations/brief');
@@ -42,7 +43,8 @@ for (const width of [1440, 390])
     expect(state.queries.filter((q) => q.includes('beforeId'))).toHaveLength(1);
     // More than two pages arrive while reading older history. No forced jump or premature read.
     state.messages = history(745);
-    await expect(page.locator('.message')).toHaveCount(225, { timeout: 10000 });
+    await page.clock.fastForward(2501);
+    await expect(page.locator('.message')).toHaveCount(225);
     await expect(page.getByRole('button', { name: '125 new messages ↓' })).toBeVisible();
     expect(state.reads).not.toContain('history-0745');
     expect(
@@ -55,7 +57,8 @@ for (const width of [1440, 390])
     await expect.poll(() => state.reads.at(-1)).toBe('history-0745');
     // At the bottom, the next arrival follows automatically; posting also refreshes the cursor.
     state.messages = history(746);
-    await expect(page.locator('#m-history-0746')).toBeInViewport({ timeout: 10000 });
+    await page.clock.fastForward(2501);
+    await expect(page.locator('#m-history-0746')).toBeInViewport();
     await page.locator('.composer textarea').fill('Reply beyond the old cutoff');
     await page.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect(page.getByText('Reply beyond the old cutoff', { exact: true })).toBeVisible();
@@ -133,15 +136,18 @@ test('incremental chat ignores delayed history after navigating to another conve
 test('incremental chat retains messages on poll failure and retries failed visible read markers', async ({
   page
 }) => {
+  await page.clock.install();
   const { state, errors, unexpected } = await fixture(page);
   state.messages = history(620);
   state.failRead = true;
   await page.goto('/app/#/conversations/brief');
   await expect.poll(() => state.reads.length).toBeGreaterThan(0);
   state.failRead = false;
-  await expect.poll(() => state.reads.length, { timeout: 7000 }).toBeGreaterThan(1);
+  await page.clock.fastForward(2501);
+  await expect.poll(() => state.reads.length).toBeGreaterThan(1);
   state.failMessages = true;
-  await expect(page.getByText('Messages unavailable')).toBeVisible({ timeout: 7000 });
+  await page.clock.fastForward(2501);
+  await expect(page.getByText('Messages unavailable')).toBeVisible();
   await expect(page.locator('.message')).toHaveCount(50);
   state.failMessages = false;
   state.messages = history(621);
