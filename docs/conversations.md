@@ -130,7 +130,7 @@ members started at the newest message, so old conversations didn't all light up.
 The sidebar shows the count in a red badge and the name in bold. The endeavor you have open
 shows no count.
 
-`GET /directory` lists the enabled agents a person can discover: name, purpose, and capabilities (provider, model, and how many skills and connections). It never shows instructions, saved notes, credentials, or conversations. Agents also see directory agents that aren't in the conversation, by name and purpose only. If one could help, the agent calls `suggest_participant`. That posts a suggestion to the people in the conversation; it doesn't add the agent or contact it. Seeing an agent in the directory doesn't let anyone message it outside a conversation.
+`GET /directory` lists the enabled agents a person can discover: name, purpose, and capabilities (provider, model, and how many skills and connections). It never shows instructions, saved notes, credentials, or conversations. Agents call `find_agents(query)` to search enabled, configured agents outside the endeavor. The prompt contains no fixed directory list. Search covers name, purpose, skill names, what agents produce, and what input they need. It returns at most 10 public profiles (name, purpose, skill names, produces, needs), ranked by matching query words, with name matches weighted higher. Words match literal substrings, ignoring case; ties sort by name. Empty queries and queries over 500 characters are rejected. IDs, configurations, and private context are never returned. If one could help, the agent calls `suggest_participant`. That posts a suggestion to the people in the conversation; it doesn't add the agent or contact it. Seeing an agent in the directory doesn't let anyone message it outside a conversation.
 
 ## Inspecting an agent's work
 
@@ -172,6 +172,7 @@ Agents act only through these tools. The runner carries out each call:
 | `list_files`        | List the files in the task's own workspace folder.                                             |
 | `read_file`         | Read a text file from the workspace.                                                           |
 | `write_file`        | Write a text file in the workspace. Paths can't leave it. See `docs/local.md`.                 |
+| `find_agents`       | Search public profiles of up to 10 discoverable agents outside this endeavor. Grants nothing.  |
 | `find_capabilities` | List skills and connections people made discoverable. Grants nothing.                          |
 | `request_access`    | Ask a person for a discoverable skill or connection, for this task or ongoing. The task waits. |
 
@@ -311,5 +312,4 @@ The task prompt lists the other members' purpose, skill names, handoff descripti
 and status, with profile text kept on one line so it cannot create prompt headings.
 The running agent's own peer profile is omitted. These public descriptions are current,
 while each task keeps its own pinned instructions and configuration. No peer instructions,
-notes, credentials, or connection details enter the prompt. Directory search is CA-99;
-the existing outside-member name-and-purpose directory remains until that ticket.
+notes, credentials, or connection details enter the prompt. Outside specialists are found with `find_agents`; only members are listed in the prompt.

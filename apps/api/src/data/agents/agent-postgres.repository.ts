@@ -315,6 +315,37 @@ export class AgentPostgresRepository implements AgentRepository {
     return result.rows.map(toAgent);
   }
 
+  async searchDirectory(input: {
+    excludeIds: string[];
+    terms: string[];
+    limit: number;
+  }): Promise<AgentProfile[]> {
+    const result = await this.db.query<AgentProfile>(
+      `WITH profiles AS (
+         SELECT a.id, a.name, a.purpose, a.produces, a.needs,
+           ARRAY(SELECT DISTINCT s.name FROM endeavor.agent_versions av
+             JOIN endeavor.skill_versions sv ON sv.id = ANY(av.skill_version_ids)
+             JOIN endeavor.skills s ON s.id = sv.skill_id
+             WHERE av.id = a.current_version_id ORDER BY s.name) AS "skillNames"
+         FROM endeavor.agents a
+         WHERE a.deleted_at IS NULL AND a.disabled_at IS NULL
+           AND a.current_version_id IS NOT NULL AND NOT (a.id = ANY($1::uuid[]))
+       ), ranked AS (
+         SELECT p.*, (SELECT sum(
+           CASE WHEN strpos(lower(p.name), term) > 0 THEN 3 ELSE 0 END +
+           CASE WHEN strpos(lower(concat_ws(' ', p.purpose, p.produces, p.needs,
+             array_to_string(p."skillNames", ' '))), term) > 0 THEN 1 ELSE 0 END
+         ) FROM unnest($2::text[]) AS term) AS score
+         FROM profiles p
+       )
+       SELECT id, name, purpose, produces, needs, "skillNames", NULL AS status
+       FROM ranked WHERE score > 0
+       ORDER BY score DESC, lower(name), id LIMIT $3`,
+      [input.excludeIds, input.terms, input.limit]
+    );
+    return result.rows;
+  }
+
   async countDirectory(input: { excludeIds: string[] }): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
