@@ -9,7 +9,25 @@ A message is addressed to:
 - every agent member it mentions (`mentions`), and
 - the agent who wrote the message it replies to (`inReplyToMessageId`).
 
-Each addressed agent must respond, or say why it can't. A message that addresses no agent is saved, but starts no work and makes no model call. No model decides who should answer; relevance routing is future work.
+Each addressed agent must respond, or say why it can't. A message that addresses no agent is saved, but starts no work and makes no model call. No model decides who should answer yet.
+
+### Routing (not wired in yet)
+
+`integrations/routing/` holds the `RoutingClient` that will fill two gaps (CA-11; the app starts using it in CA-105):
+
+- **A message that tags no one:** pick one member agent, no one (the message asks for nothing), or ask a person.
+- **A task that ends without a handoff:** pick the next agent, done, or ask a person, judged against the goal.
+
+The client only sees what the caller passes in: the message or result, the goal, the member agents' names and purposes, and recent messages the members can already see. It can only pick from the agents it was given, so it can't add members or reach private context. Tags that people or agents make never go through it.
+
+Each decision comes with a confidence from 0 to 1 and every option ranked. The caller acts alone only when the pick is an agent (or none, or done) and the confidence is at or above its threshold (0.6 for `gpt-6-luna`, from the CA-11 evaluation). Otherwise it asks a person, offering the top-ranked options.
+
+Two engines implement it:
+
+- `RoutingDecisionModelClient`, the default: OpenAI's decision model `gpt-6-luna`. It returns a probability for each option, so confidence comes from the model, not from a number it writes down.
+- `RoutingLanguageModelClient`: any OpenAI language model, asked for a probability per option. Use it with an OpenAI-compatible API that has no decision model.
+
+`npm run routing:eval -w apps/api -- <cases.json> [engine ...]` compares engines on a labeled set of cases. The comment at the top of `apps/api/src/routing-eval.ts` describes the file format.
 
 When a message reaches an agent:
 
@@ -203,7 +221,6 @@ connection calls have known labels. Arbitrary MCP tools are described as connect
 the platform does not guess their purpose from tool names or use another model. Status events
 contain only a tool name and a short file path or output title, never request bodies or headers.
 Waiting, paused, approval, and stuck states keep plain words. Human typing is deferred in v1.
-
 
 ## Incremental chat history
 
