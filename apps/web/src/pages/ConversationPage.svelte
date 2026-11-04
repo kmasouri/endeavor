@@ -19,6 +19,7 @@
   import { conversationName } from '../appearance';
   import { formatDateTime, formatShortTime } from '../components';
   import { createLoad } from '../state.svelte';
+  import EndeavorGoal from './EndeavorGoal.svelte';
   import KnowledgeSources from './KnowledgeSources.svelte';
   import Spending from './Spending.svelte';
   import MessageList from './MessageList.svelte';
@@ -39,7 +40,8 @@
     initialRunId = null,
     me,
     onReady,
-    onRead
+    onRead,
+    onChanged
   }: {
     conversationId: string;
     initialRunId?: string | null;
@@ -47,6 +49,7 @@
     onReady?: (conversation: ConversationDetails) => boolean;
     // Called after the conversation is marked read, so the sidebar can refresh its counts.
     onRead?: () => void;
+    onChanged?: () => void;
   } = $props();
   let draft = $state('');
   let historyAgentId = $state<string | null>(null);
@@ -366,6 +369,8 @@
           >
         </div>
       </header>
+      {#if conversation.projectId}<a class="caption project-breadcrumb" href={`#/projects/${conversation.projectId}`}>← Project</a>{/if}
+      <EndeavorGoal {conversation} onChanged={() => { details.reload(); onChanged?.(); }} />
       <div class="conversation-scroll" bind:this={scroll} onscroll={onScroll}>
         {#if attaching}<section class="inline-panel">
             <div class="row">
@@ -460,6 +465,7 @@
                   >{:else if task.state === 'working' && !task.pausedAt && task.activity}<LiveActivity activity={task.activity} />{:else}{liveStatus(task)}{/if}</span></span
               >{/each}
           </div>{/if}
+        {#if conversation.state === 'closed'}<p class="endeavor-closed muted">This endeavor is archived. Reopen it to reply.</p>{:else}
         <Composer
           {conversationId}
           title={conversation.title}
@@ -469,10 +475,10 @@
           bind:replyTo
           bind:body={draft}
           bind:revision
-          onPosted={reload}
+          onPosted={() => { reload(); details.reload(); onChanged?.(); }}
           {onAdd}
           onAttach={() => (attaching = !attaching)}
-        />
+        />{/if}
       </div>
     </section>
     {#if showDetails}<aside class="conversation-details" aria-label="Conversation details">

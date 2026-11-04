@@ -1,0 +1,120 @@
+.projects-page {
+  max-width: 1000px;
+  margin: 0 auto;
+  min-width: 0;
+}
+.project-back {
+  display: inline-block;
+  margin: 8px 0 20px;
+}
+.project-list {
+  border-top: 1px solid var(--border-100);
+}
+.project-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 8px;
+  border-bottom: 1px solid var(--border-100);
+  color: var(--text);
+  text-decoration: none;
+  min-width: 0;
+}
+.project-row:hover {
+  background: var(--bg-200);
+}
+.project-row .grow {
+  min-width: 0;
+}
+.project-row strong,
+.project-row .caption {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.project-row .caption {
+  margin-top: 4px;
+}
+.project-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 16px 0 28px;
+}
+.project-archive {
+  margin-top: 28px;
+}
+.endeavor-goal {
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border-100);
+  background: var(--bg-100);
+}
+.endeavor-goal summary {
+  margin-top: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.endeavor-goal details[open] summary {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.goal-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.endeavor-closed {
+  padding: 16px 24px;
+  margin: 0;
+}
+.sidebar-projects {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-100);
+}
+.sidebar-projects .label {
+  display: block;
+  margin-bottom: 8px;
+}
+.sidebar-projects a {
+  display: block;
+  padding: 8px 0;
+  color: var(--text);
+  text-decoration: none;
+}
+.sidebar-projects a.active {
+  color: var(--accent);
+}
+@media (max-width: 700px) {
+  .endeavor-goal {
+    padding: 10px 16px;
+  }
+  .endeavor-goal button,
+  .project-tabs button {
+    min-height: 44px;
+  }
+}
+
+.project-breadcrumb {
+  display: block;
+  padding: 8px 24px;
+}
+.projects-page .header-actions {
+  flex-wrap: wrap;
+}
+.sidebar-projects {
+  width: calc(var(--sidebar-open-width) - 25px);
+  flex-shrink: 0;
+  opacity: var(--sidebar-opacity);
+  visibility: var(--sidebar-visibility);
+}
+@media (max-width: 700px) {
+  .projects-page .page-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .projects-page .header-actions {
+    flex-shrink: 1;
+  }
+  .project-row {
+    gap: 8px;
+  }
+}
