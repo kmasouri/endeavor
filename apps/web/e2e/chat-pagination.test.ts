@@ -1,3 +1,4 @@
+import { captureReviewScreenshot } from './review-screenshot';
 import { expect, test } from '@playwright/test';
 import type { Message } from '../src/api';
 import { fixture, createdAt } from './chat-fixture';
@@ -51,7 +52,9 @@ for (const width of [1440, 390])
       Math.abs((await page.locator('#m-history-0571').boundingBox())!.y - before)
     ).toBeLessThan(2);
     expect(state.queries.filter((q) => q.includes('afterId=history-0670'))).toHaveLength(1);
-    await page.screenshot({ path: testInfo.outputPath(`incremental-chat-unread-${width}.png`) });
+    await captureReviewScreenshot(page, {
+      path: testInfo.outputPath(`incremental-chat-unread-${width}.png`)
+    });
     await page.getByRole('button', { name: '125 new messages ↓' }).click();
     await expect(page.locator('#m-history-0745')).toBeInViewport();
     await expect.poll(() => state.reads.at(-1)).toBe('history-0745');
@@ -67,7 +70,9 @@ for (const width of [1440, 390])
         .locator('.message')
         .evaluateAll((elements) => new Set(elements.map((e) => e.id)).size)
     ).toBe(227);
-    await page.screenshot({ path: testInfo.outputPath(`incremental-chat-${width}.png`) });
+    await captureReviewScreenshot(page, {
+      path: testInfo.outputPath(`incremental-chat-${width}.png`)
+    });
     expect(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
     ).toBe(true);

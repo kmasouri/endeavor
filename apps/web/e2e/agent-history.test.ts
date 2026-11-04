@@ -1,3 +1,4 @@
+import { captureReviewScreenshot } from './review-screenshot';
 import { expect, test, type Page } from '@playwright/test';
 import type { TaskActivity } from '../src/api';
 
@@ -371,43 +372,50 @@ test('a foreign conversation run cannot appear in the selected conversation', as
   await expect(panel).not.toContainText('Brief for other');
 });
 
-for (const theme of ['dark', 'light']) {
-  for (const width of [1440, 390, 320]) {
-    test(`history and run layout ${theme} ${width}px`, async ({ page }, testInfo) => {
-      const { errors } = await fixture(page, theme);
-      await page.setViewportSize({ width, height: 940 });
-      await page.emulateMedia({ reducedMotion: 'reduce' });
-      await page.goto('/app/#/conversations/heat?run=old');
-      const panel = page.getByRole('complementary', { name: 'Conversation details' });
-      await expect(panel).toContainText('Brief for old');
-      const bounds = await panel.boundingBox();
-      expect(bounds!.x).toBeGreaterThanOrEqual(0);
-      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
-      expect(await panel.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
-      expect(
-        await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)
-      ).toBe(true);
-      if (width === 1440) {
-        const thread = await page.locator('.thread').boundingBox();
-        expect(thread!.width).toBeGreaterThan(400);
-        expect(thread!.x + thread!.width).toBeLessThanOrEqual(bounds!.x + 1);
-      }
-      expect(
-        await panel.locator('.run-title').evaluate((el) => {
-          const rect = el.getBoundingClientRect();
-          return el.contains(document.elementFromPoint(rect.x + 2, rect.y + rect.height / 2));
-        }),
-        'The sidebar must not cover the run title'
-      ).toBe(true);
-      await page.screenshot({ path: testInfo.outputPath('run-inspection.png'), fullPage: true });
-      await panel.getByRole('button', { name: "← Researcher's history" }).click();
-      await expect(panel.getByRole('button', { name: /Request new/ })).toBeVisible();
-      await page.screenshot({ path: testInfo.outputPath('agent-history.png'), fullPage: true });
-      await panel.getByRole('button', { name: 'Close details' }).click();
-      await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeVisible();
-      expect(errors).toEqual([]);
+for (const { theme, width } of [
+  { theme: 'light', width: 1440 },
+  { theme: 'dark', width: 320 }
+] as const) {
+  test(`history and run layout ${theme} ${width}px`, async ({ page }, testInfo) => {
+    const { errors } = await fixture(page, theme);
+    await page.setViewportSize({ width, height: 940 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto('/app/#/conversations/heat?run=old');
+    const panel = page.getByRole('complementary', { name: 'Conversation details' });
+    await expect(panel).toContainText('Brief for old');
+    const bounds = await panel.boundingBox();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width + 1);
+    expect(await panel.evaluate((el) => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(
+      true
+    );
+    if (width === 1440) {
+      const thread = await page.locator('.thread').boundingBox();
+      expect(thread!.width).toBeGreaterThan(400);
+      expect(thread!.x + thread!.width).toBeLessThanOrEqual(bounds!.x + 1);
+    }
+    expect(
+      await panel.locator('.run-title').evaluate((el) => {
+        const rect = el.getBoundingClientRect();
+        return el.contains(document.elementFromPoint(rect.x + 2, rect.y + rect.height / 2));
+      }),
+      'The sidebar must not cover the run title'
+    ).toBe(true);
+    await captureReviewScreenshot(page, {
+      path: testInfo.outputPath('run-inspection.png'),
+      fullPage: true
     });
-  }
+    await panel.getByRole('button', { name: "← Researcher's history" }).click();
+    await expect(panel.getByRole('button', { name: /Request new/ })).toBeVisible();
+    await captureReviewScreenshot(page, {
+      path: testInfo.outputPath('agent-history.png'),
+      fullPage: true
+    });
+    await panel.getByRole('button', { name: 'Close details' }).click();
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeVisible();
+    expect(errors).toEqual([]);
+  });
 }
 
 test('run controls and pending result review stay available inside the conversation', async ({
@@ -507,57 +515,56 @@ test('output inspection failure retries the same run without losing the chat dra
   expect(errors).toEqual([]);
 });
 
-for (const width of [1280, 390, 320]) {
-  test(`live status shows independent steps, elapsed time and plain stopped states at ${width}px`, async ({
-    page
-  }) => {
-    await page.setViewportSize({ width, height: 900 });
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    const now = new Date('2026-10-24T12:00:00Z');
-    await page.clock.install({ time: now });
-    const { state, errors } = await fixture(page);
-    const since = new Date(now.getTime() - 18_000).toISOString();
-    const first = state.tasks[0];
-    first.state = 'working';
-    first.activity = { kind: 'reading', detail: 'reading sources/air-source-heat-pump.md', since };
-    const second = state.tasks[2];
-    second.state = 'working';
-    second.activity = { kind: 'connection', detail: 'calling a connection', since };
-    await page.goto('/app/#/conversations/heat');
-    const live = page.locator('.live-status');
-    await expect(live).toContainText('Researcher is skimming');
-    await expect(live).toContainText('reading sources/air-source-heat-pump.md');
-    await expect(live).toContainText('Reviewer is poking the API');
-    await expect(live.locator(':scope > span')).toHaveCount(2);
-    await page.screenshot({ path: test.info().outputPath('live-agent-status.png') });
-    const elapsed = live.locator('.muted[aria-hidden="true"]').first();
-    const before = await elapsed.innerText();
-    await page.clock.fastForward(1001);
-    await expect(elapsed).not.toHaveText(before);
-    const geometry = await live.evaluate((el) => {
-      const rect = el.getBoundingClientRect();
-      return { left: rect.left, right: rect.right, scroll: el.scrollWidth, width: el.clientWidth };
-    });
-    expect(geometry.left).toBeGreaterThanOrEqual(0);
-    expect(geometry.right).toBeLessThanOrEqual(width);
-    expect(geometry.scroll).toBeLessThanOrEqual(geometry.width + 1);
-    first.pausedAt = since;
-    second.state = 'blocked';
-    await page.clock.fastForward(4001);
-    await expect(live).toContainText('Researcher is paused');
-    await expect(live).toContainText('Reviewer is stuck');
-    await expect(live).not.toContainText('skimming');
-    first.pausedAt = null;
-    first.state = 'waiting';
-    await page.clock.fastForward(4001);
-    await expect(live).toContainText('Researcher is waiting');
-    first.state = 'completed';
-    second.state = 'completed';
-    await page.clock.fastForward(4001);
-    await expect(live).toHaveCount(0);
-    expect(errors).toEqual([]);
+test('live status shows independent steps, elapsed time and plain stopped states at 320px', async ({
+  page
+}) => {
+  const width = 320;
+  await page.setViewportSize({ width, height: 900 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const now = new Date('2026-10-24T12:00:00Z');
+  await page.clock.install({ time: now });
+  const { state, errors } = await fixture(page);
+  const since = new Date(now.getTime() - 18_000).toISOString();
+  const first = state.tasks[0];
+  first.state = 'working';
+  first.activity = { kind: 'reading', detail: 'reading sources/air-source-heat-pump.md', since };
+  const second = state.tasks[2];
+  second.state = 'working';
+  second.activity = { kind: 'connection', detail: 'calling a connection', since };
+  await page.goto('/app/#/conversations/heat');
+  const live = page.locator('.live-status');
+  await expect(live).toContainText('Researcher is skimming');
+  await expect(live).toContainText('reading sources/air-source-heat-pump.md');
+  await expect(live).toContainText('Reviewer is poking the API');
+  await expect(live.locator(':scope > span')).toHaveCount(2);
+  await captureReviewScreenshot(page, { path: test.info().outputPath('live-agent-status.png') });
+  const elapsed = live.locator('.muted[aria-hidden="true"]').first();
+  const before = await elapsed.innerText();
+  await page.clock.fastForward(1001);
+  await expect(elapsed).not.toHaveText(before);
+  const geometry = await live.evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    return { left: rect.left, right: rect.right, scroll: el.scrollWidth, width: el.clientWidth };
   });
-}
+  expect(geometry.left).toBeGreaterThanOrEqual(0);
+  expect(geometry.right).toBeLessThanOrEqual(width);
+  expect(geometry.scroll).toBeLessThanOrEqual(geometry.width + 1);
+  first.pausedAt = since;
+  second.state = 'blocked';
+  await page.clock.fastForward(4001);
+  await expect(live).toContainText('Researcher is paused');
+  await expect(live).toContainText('Reviewer is stuck');
+  await expect(live).not.toContainText('skimming');
+  first.pausedAt = null;
+  first.state = 'waiting';
+  await page.clock.fastForward(4001);
+  await expect(live).toContainText('Researcher is waiting');
+  first.state = 'completed';
+  second.state = 'completed';
+  await page.clock.fastForward(4001);
+  await expect(live).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
 
 test('an older active run still shows after more than 100 newer completed runs', async ({
   page

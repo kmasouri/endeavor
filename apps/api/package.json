@@ -60,6 +60,7 @@
       "ts",
       "js",
       "json"
-    ]
+    ],
+    "maxWorkers": 1
   }
 }

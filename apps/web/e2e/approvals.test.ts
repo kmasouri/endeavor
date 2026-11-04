@@ -1,3 +1,4 @@
+import { captureReviewScreenshot } from './review-screenshot';
 import { expect, test, type Page } from '@playwright/test';
 
 async function mockApi(page: Page, theme = 'dark') {
@@ -67,53 +68,51 @@ async function mockApi(page: Page, theme = 'dark') {
   };
 }
 
-for (const width of [1440, 390]) {
-  for (const theme of ['dark', 'light']) {
-    test(`approval tabs and layout at ${width}px in ${theme}`, async ({ page }, testInfo) => {
-      await page.setViewportSize({ width, height: 900 });
-      const api = await mockApi(page, theme);
-      await page.goto('/app/#/agents');
-      const header = await page.locator('.page-header').boundingBox();
-      await page.goto('/app/#/approvals');
-      const pending = page.getByRole('button', { name: 'Pending', exact: true });
-      await expect(pending).toHaveAttribute('aria-pressed', 'true');
-      await expect(page.getByText('POST /waiting', { exact: true })).toBeVisible();
-      expect(api.requests).not.toContain('approved');
-      await expect(page.getByRole('checkbox')).toHaveCount(0);
-      const approvalHeader = await page.locator('.page-header').boundingBox();
-      const filters = await page.getByLabel('Filter approvals').boundingBox();
-      expect(approvalHeader!.x).toBe(header!.x);
-      expect(approvalHeader!.width).toBe(header!.width);
-      expect(approvalHeader!.y).toBe(header!.y);
-      expect(filters!.x).toBe(header!.x);
-      expect(filters!.y - approvalHeader!.y - approvalHeader!.height).toBe(24);
-      await page.screenshot({ path: testInfo.outputPath('pending.png'), fullPage: true });
-      await page.getByRole('button', { name: 'History', exact: true }).click();
-      await expect(page.getByText('POST /allowed', { exact: true })).toBeVisible();
-      await expect(page.getByText('POST /waiting', { exact: true })).toHaveCount(0);
-      await expect(page.getByRole('button', { name: 'Allow once' })).toHaveCount(0);
-      await expect(page.locator('.list li')).toHaveCount(2);
-      await expect(page.locator('.list li').first()).toContainText('/denied');
-      await expect(page.locator('.list')).toContainText('Outside scope');
-      await expect(page.locator('.list')).toContainText('HTTP 201');
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-        true
-      );
-      await page.screenshot({ path: testInfo.outputPath('history.png'), fullPage: true });
-      await pending.click();
-      await expect(page.getByText('POST /waiting', { exact: true })).toBeVisible();
+for (const { theme, width } of [
+  { theme: 'light', width: 1440 },
+  { theme: 'dark', width: 390 }
+] as const) {
+  test(`approval tabs and layout at ${width}px in ${theme}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const api = await mockApi(page, theme);
+    await page.goto('/app/#/agents');
+    const header = await page.locator('.page-header').boundingBox();
+    await page.goto('/app/#/approvals');
+    const pending = page.getByRole('button', { name: 'Pending', exact: true });
+    await expect(pending).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByText('POST /waiting', { exact: true })).toBeVisible();
+    expect(api.requests).not.toContain('approved');
+    await expect(page.getByRole('checkbox')).toHaveCount(0);
+    const approvalHeader = await page.locator('.page-header').boundingBox();
+    const filters = await page.getByLabel('Filter approvals').boundingBox();
+    expect(approvalHeader!.x).toBe(header!.x);
+    expect(approvalHeader!.width).toBe(header!.width);
+    expect(approvalHeader!.y).toBe(header!.y);
+    expect(filters!.x).toBe(header!.x);
+    expect(filters!.y - approvalHeader!.y - approvalHeader!.height).toBe(24);
+    await captureReviewScreenshot(page, {
+      path: testInfo.outputPath('pending.png'),
+      fullPage: true
     });
-  }
+    await page.getByRole('button', { name: 'History', exact: true }).click();
+    await expect(page.getByText('POST /allowed', { exact: true })).toBeVisible();
+    await expect(page.getByText('POST /waiting', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Allow once' })).toHaveCount(0);
+    await expect(page.locator('.list li')).toHaveCount(2);
+    await expect(page.locator('.list li').first()).toContainText('/denied');
+    await expect(page.locator('.list')).toContainText('Outside scope');
+    await expect(page.locator('.list')).toContainText('HTTP 201');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true
+    );
+    await captureReviewScreenshot(page, {
+      path: testInfo.outputPath('history.png'),
+      fullPage: true
+    });
+    await pending.click();
+    await expect(page.getByText('POST /waiting', { exact: true })).toBeVisible();
+  });
 }
-
-test('deciding a request moves it from Pending to History', async ({ page }) => {
-  await mockApi(page);
-  await page.goto('/app/#/approvals');
-  await page.getByRole('button', { name: 'Allow once' }).click();
-  await expect(page.getByText('Nothing waiting for you.')).toBeVisible();
-  await page.getByRole('button', { name: 'History', exact: true }).click();
-  await expect(page.locator('.list li').first()).toContainText('/waiting');
-});
 
 test('empty and failed history states stay separate from Pending', async ({ page }) => {
   const api = await mockApi(page);

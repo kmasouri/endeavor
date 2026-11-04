@@ -47,12 +47,16 @@ The API and the web interface are separate npm workspaces, so each has its own d
 The web interface uses one Svelte component per page or form. Shared request and action state lives in `apps/web/src/state.svelte.ts`; hash navigation stays in `App.svelte`. Requests ignore answers from closed pages or older reloads, and polling stops when its component is removed. The typed HTTP client stays in `api.ts`. `svelte-check` checks components and TypeScript together. Web unit tests use Node's test runner with Svelte's compiler and browser runtime; they need no browser or database.
 The committed Playwright suite in `apps/web/e2e/` exercises the production web build with a mocked
 HTTP API. `npm run check` runs it locally, including browser setup. CI runs browser tests in
-parallel with lint, type checks, workspace builds, and unit/pilot tests; the final `check` job
-requires both jobs to pass. CI caches browser binaries and cancels superseded PR runs.
+four browser shards and separate lint/type/build/unit jobs in one fail-fast matrix. A failed
+matrix job cancels the remaining jobs in that run; the final `check` gate requires the complete
+matrix to pass. Locally, the check runner overlaps lint, types, unit tests, and builds;
+browser tests start as soon as the web build passes. CI browser shards use the pinned official Playwright container image and install only web
+workspace dependencies. Quality jobs stay on the host; superseded PR runs are canceled.
 The suite checks core chat, configuration, approvals and navigation flows, alongside schedule
 badge geometry, themes,
 responsive layout, empty/error states, and keyboard navigation without starting agents or
-requiring a database. Browser traces and screenshots are retained on failure. The
+requiring a database. Failure screenshots are automatic; full browser traces and success
+screenshots are opt-in. The
 [browser coverage matrix](browser-tests.md) records covered behavior, design references and gaps.
 
 Endeavors is the product-facing conversation destination. Its header search and native creation

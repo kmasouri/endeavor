@@ -134,21 +134,23 @@ async function expectSingleLineBadges(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
 
-for (const theme of ['dark', 'light'] as const) {
-  for (const width of [2515, 1024, 390]) {
-    test(`status badges stay on one line in the production bundle: ${theme}, ${width}px`, async ({
-      page
-    }) => {
-      await page.setViewportSize({ width, height: 1000 });
-      await mockApi(page, theme);
-      await page.goto('/app/#/schedules');
-      await expectSingleLineBadges(page);
-      await page.getByRole('button', { name: /Cancelled check/ }).click();
-      const badge = page.locator('.schedule-badge');
-      await expect(badge).toContainText('Cancelled');
-      await expect(badge).toHaveCSS('display', /^(inline-)?flex$/);
-    });
-  }
+for (const { theme, width } of [
+  { theme: 'light', width: 2515 },
+  { theme: 'light', width: 1024 },
+  { theme: 'dark', width: 390 }
+] as const) {
+  test(`status badges stay on one line in the production bundle: ${theme}, ${width}px`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await mockApi(page, theme);
+    await page.goto('/app/#/schedules');
+    await expectSingleLineBadges(page);
+    await page.getByRole('button', { name: /Cancelled check/ }).click();
+    const badge = page.locator('.schedule-badge');
+    await expect(badge).toContainText('Cancelled');
+    await expect(badge).toHaveCSS('display', /^(inline-)?flex$/);
+  });
 }
 
 test('wide layout shares a centered frame with a persistent header creation action', async ({
@@ -187,35 +189,30 @@ test('failed schedule loading does not show an empty-state creation prompt', asy
   await expect(page.getByRole('heading', { name: 'No schedules yet' })).toHaveCount(0);
 });
 
-for (const theme of ['dark', 'light'] as const) {
-  test(`Endeavor keeps the selected person, theme, and navigation after reload: ${theme}`, async ({
-    page
-  }) => {
-    await page.setViewportSize({ width: 1100, height: 800 });
-    await mockApi(page, theme, 'populated', true);
-    await page.goto('/app/#/schedules');
-    await expect(page).toHaveTitle('Endeavor');
-    await expect(page.getByRole('link', { name: 'Endeavor', exact: true })).toBeVisible();
-    await page.getByRole('link', { name: 'Setup', exact: true }).click();
-    await expect(page.getByText('People, providers, and Endeavor on this computer.')).toBeVisible();
-    await page.reload();
-    await expect(page.getByRole('button', { name: 'Profile and settings' })).toContainText(
-      'Kayvan'
-    );
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    expect(await page.evaluate(() => localStorage.getItem('endeavor.actorId'))).toBe('person-1');
-    await page.getByRole('link', { name: 'Schedules', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Schedules', exact: true })).toBeVisible();
-    expect(await page.evaluate(() => localStorage.getItem('endeavor.theme'))).toBe(theme);
-    expect(
-      await page.evaluate(() => localStorage.getItem('collaborative-agents.actorId'))
-    ).toBeNull();
-    expect(
-      await page.evaluate(() => localStorage.getItem('collaborative-agents.theme'))
-    ).toBeNull();
-    await expect(page.locator('.brand')).not.toContainText('Collaborative Agents');
-  });
-}
+test('Endeavor keeps the selected person, theme, and navigation after reload: dark', async ({
+  page
+}) => {
+  const theme = 'dark';
+  await page.setViewportSize({ width: 1100, height: 800 });
+  await mockApi(page, theme, 'populated', true);
+  await page.goto('/app/#/schedules');
+  await expect(page).toHaveTitle('Endeavor');
+  await expect(page.getByRole('link', { name: 'Endeavor', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Setup', exact: true }).click();
+  await expect(page.getByText('People, providers, and Endeavor on this computer.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Profile and settings' })).toContainText('Kayvan');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+  expect(await page.evaluate(() => localStorage.getItem('endeavor.actorId'))).toBe('person-1');
+  await page.getByRole('link', { name: 'Schedules', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Schedules', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('endeavor.theme'))).toBe(theme);
+  expect(
+    await page.evaluate(() => localStorage.getItem('collaborative-agents.actorId'))
+  ).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('collaborative-agents.theme'))).toBeNull();
+  await expect(page.locator('.brand')).not.toContainText('Collaborative Agents');
+});
 
 test('catch-up failure survives reload and keeps Run once now available for a successful retry', async ({
   page

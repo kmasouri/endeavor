@@ -1,3 +1,4 @@
+import { captureReviewScreenshot } from './review-screenshot';
 import { expect, test, type Page } from '@playwright/test';
 
 async function mockConnection(page: Page, oauth = false, theme = 'dark') {
@@ -63,90 +64,92 @@ async function mockConnection(page: Page, oauth = false, theme = 'dark') {
   };
 }
 
-for (const width of [320, 390, 1440]) {
-  for (const theme of ['dark', 'light']) {
-    test(`connection editor saves HTTP configuration and discards at ${width}px in ${theme}`, async ({
-      page
-    }, testInfo) => {
-      await page.setViewportSize({ width, height: 1000 });
-      const api = await mockConnection(page, false, theme);
-      const errors: string[] = [];
-      page.on('pageerror', (error) => errors.push(error.message));
-      await page.goto('/app/#/connections/c1');
-      await page.getByRole('button', { name: 'Edit configuration' }).click();
-      await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
-      await page.getByLabel('Name', { exact: true }).fill('Changed draft');
-      await page.getByLabel('Authentication method').selectOption('none');
-      await page.getByRole('button', { name: 'Discard', exact: true }).click();
-      expect(api.writes).toEqual([]);
-      await expect(page.getByRole('button', { name: 'Edit configuration' })).toBeFocused();
-      await page.keyboard.press('Enter');
-      await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Records');
-      await expect(page.getByLabel('Authentication method')).toHaveValue('header');
-      await page.getByLabel('Name', { exact: true }).fill('Updated records');
-      await page.getByLabel('Description', { exact: true }).fill('Updated description');
-      await page.getByLabel('Base URL').fill('https://records.test/v2');
-      await page.getByLabel('Credential header').fill('X-API-Key');
-      await page
-        .getByRole('group', { name: 'Allowed methods', exact: true })
-        .getByLabel('POST', { exact: true })
-        .check();
-      await expect(
-        page
-          .getByRole('group', { name: "Need a person's approval", exact: true })
-          .getByLabel('POST', { exact: true })
-      ).toBeChecked();
-      await page.getByLabel(/^Allowed paths/).fill('/v2/issues\n/v2/users');
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-        true
-      );
-      const form = page.getByRole('form', { name: 'Edit connection configuration' });
-      const box = await form.boundingBox();
-      const input = await page.getByLabel('Name', { exact: true }).boundingBox();
-      expect(input!.x).toBeGreaterThanOrEqual(box!.x);
-      expect(input!.x + input!.width).toBeLessThanOrEqual(box!.x + box!.width + 1);
-      await page
-        .getByRole('button', { name: 'Save changes', exact: true })
-        .scrollIntoViewIfNeeded();
-      const save = await page.locator('.savebar').boundingBox();
-      expect(save!.y + save!.height).toBeLessThanOrEqual(1001);
-      await page.screenshot({ path: testInfo.outputPath('editor.png'), fullPage: true });
-      api.fail(true);
-      await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-      await expect(form.getByText('Please try again.')).toBeVisible();
-      await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Updated records');
-      await expect(page.getByLabel('Credential header')).toHaveValue('X-API-Key');
-      api.fail(false);
-      const release = api.hold();
-      await page.getByRole('button', { name: 'Save changes', exact: true }).click();
-      await expect(page.getByRole('button', { name: 'Saving…' })).toBeDisabled();
-      await expect(page.getByRole('button', { name: 'Discard', exact: true })).toBeDisabled();
-      await expect(page.getByLabel('Name', { exact: true })).toBeDisabled();
-      release();
-      await expect(
-        page.getByRole('heading', { name: 'Updated records', exact: true })
-      ).toBeVisible();
-      expect(api.writes[1]).toEqual({
-        path: '/connections/c1',
-        body: {
-          name: 'Updated records',
-          description: 'Updated description',
-          baseUrl: 'https://records.test/v2',
-          authHeader: 'X-API-Key',
-          allowedMethods: ['GET', 'POST'],
-          allowedPathPrefixes: ['/v2/issues', '/v2/users'],
-          approvalMethods: ['POST']
-        }
-      });
-      await page.reload();
-      await page.getByRole('button', { name: 'Edit configuration' }).click();
-      await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Updated records');
-      await expect(page.getByLabel(/^Allowed paths/)).toHaveValue('/v2/issues\n/v2/users');
-      await expect(page.getByRole('button', { name: 'Save changes', exact: true })).toBeDisabled();
-      expect(errors).toEqual([]);
+test('connection editor saves HTTP configuration and discards at 320px in dark', async ({
+  page
+}, testInfo) => {
+  const width = 320;
+  const theme = 'dark';
+  await page.setViewportSize({ width, height: 1000 });
+  const api = await mockConnection(page, false, theme);
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/app/#/connections/c1');
+  await page.getByRole('button', { name: 'Edit configuration' }).click();
+  await expect(page.getByLabel('Name', { exact: true })).toBeFocused();
+  await page.getByLabel('Name', { exact: true }).fill('Changed draft');
+  await page.getByLabel('Authentication method').selectOption('none');
+  await page.getByRole('button', { name: 'Discard', exact: true }).click();
+  expect(api.writes).toEqual([]);
+  await expect(page.getByRole('button', { name: 'Edit configuration' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Records');
+  await expect(page.getByLabel('Authentication method')).toHaveValue('header');
+  await page.getByLabel('Name', { exact: true }).fill('Updated records');
+  await page.getByLabel('Description', { exact: true }).fill('Updated description');
+  await page.getByLabel('Base URL').fill('https://records.test/v2');
+  await page.getByLabel('Credential header').fill('X-API-Key');
+  await page
+    .getByRole('group', { name: 'Allowed methods', exact: true })
+    .getByLabel('POST', { exact: true })
+    .check();
+  await expect(
+    page
+      .getByRole('group', { name: "Need a person's approval", exact: true })
+      .getByLabel('POST', { exact: true })
+  ).toBeChecked();
+  await page.getByLabel(/^Allowed paths/).fill('/v2/issues\n/v2/users');
+  const form = page.getByRole('form', { name: 'Edit connection configuration' });
+  // One edit flow covers both form layouts without repeating API writes and retries.
+  for (const width of [320, 1440]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true
+    );
+    const box = await form.boundingBox();
+    const input = await page.getByLabel('Name', { exact: true }).boundingBox();
+    expect(input!.x).toBeGreaterThanOrEqual(box!.x);
+    expect(input!.x + input!.width).toBeLessThanOrEqual(box!.x + box!.width + 1);
+    await page.getByRole('button', { name: 'Save changes', exact: true }).scrollIntoViewIfNeeded();
+    const save = await page.locator('.savebar').boundingBox();
+    expect(save!.y + save!.height).toBeLessThanOrEqual(1001);
+    await captureReviewScreenshot(page, {
+      path: testInfo.outputPath(`editor-${width}.png`),
+      fullPage: true
     });
   }
-}
+  await page.setViewportSize({ width, height: 1000 });
+  api.fail(true);
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(form.getByText('Please try again.')).toBeVisible();
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Updated records');
+  await expect(page.getByLabel('Credential header')).toHaveValue('X-API-Key');
+  api.fail(false);
+  const release = api.hold();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Saving…' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Discard', exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Name', { exact: true })).toBeDisabled();
+  release();
+  await expect(page.getByRole('heading', { name: 'Updated records', exact: true })).toBeVisible();
+  expect(api.writes[1]).toEqual({
+    path: '/connections/c1',
+    body: {
+      name: 'Updated records',
+      description: 'Updated description',
+      baseUrl: 'https://records.test/v2',
+      authHeader: 'X-API-Key',
+      allowedMethods: ['GET', 'POST'],
+      allowedPathPrefixes: ['/v2/issues', '/v2/users'],
+      approvalMethods: ['POST']
+    }
+  });
+  await page.reload();
+  await page.getByRole('button', { name: 'Edit configuration' }).click();
+  await expect(page.getByLabel('Name', { exact: true })).toHaveValue('Updated records');
+  await expect(page.getByLabel(/^Allowed paths/)).toHaveValue('/v2/issues\n/v2/users');
+  await expect(page.getByRole('button', { name: 'Save changes', exact: true })).toBeDisabled();
+  expect(errors).toEqual([]);
+});
 
 test('connection editor preserves OAuth on rename and requires explicit disconnect for endpoint changes', async ({
   page

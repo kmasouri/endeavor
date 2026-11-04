@@ -15,83 +15,81 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  quality:
+  validation:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    strategy:
+      # One failed check cancels the queued/running checks in this workflow run.
+      fail-fast: true
+      matrix:
+        include:
+          - name: lint
+            browser: false
+            command: npm run lint
+          - name: types
+            browser: false
+            command: npm run typecheck
+          - name: build
+            browser: false
+            command: npm run build
+          - name: unit and pilot tests
+            browser: false
+            command: npm test
+          - name: browser (1/4)
+            browser: true
+            command: --shard=1/4 --max-failures=1
+          - name: browser (2/4)
+            browser: true
+            command: --shard=2/4 --max-failures=1
+          - name: browser (3/4)
+            browser: true
+            command: --shard=3/4 --max-failures=1
+          - name: browser (4/4)
+            browser: true
+            command: --shard=4/4 --max-failures=1
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Node
+        if: ${{ !matrix.browser }}
         uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
+        if: ${{ !matrix.browser }}
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Type check
-        run: npm run typecheck
-
-      - name: Build all workspaces
-        run: npm run build
-
-      - name: Unit and pilot tests
-        run: npm test
-
-  browser:
-    runs-on: ubuntu-latest
-    env:
-      # run.mjs skips its automatic install because CI installs the browser explicitly below.
-      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Read Playwright version
-        id: playwright
-        run: node -p '"version=" + require("@playwright/test/package.json").version' >> "$GITHUB_OUTPUT"
-
-      - name: Cache browser binaries
+      - name: Cache browser npm downloads
+        if: matrix.browser
         uses: actions/cache@v4
         with:
-          path: ${{ env.PLAYWRIGHT_BROWSERS_PATH }}
-          key: playwright-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}
+          path: ${{ runner.temp }}/endeavor-ci-browser-npm
+          key: browser-npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', '.nvmrc') }}
 
-      # Also install Linux libraries on cache hits. Playwright reuses existing binaries.
-      - name: Install Chromium and system libraries
-        run: npx playwright install --with-deps chromium
+      - name: Run browser shard in the prepared image
+        if: matrix.browser
+        env:
+          CHECK_COMMAND: ${{ matrix.command }}
+        run: |
+          # Commands in browser matrix rows supply only the Playwright shard options.
+          read -r -a options <<< "$CHECK_COMMAND"
+          bash scripts/ci-browser.sh "$GITHUB_WORKSPACE" "${options[@]}"
 
-      - name: Build web workspace
-        run: npm run build --workspace=apps/web
+      - name: Run quality check
+        if: ${{ !matrix.browser }}
+        run: ${{ matrix.command }}
 
-      - name: Browser tests
-        run: npm run test:e2e --workspace=apps/web
-
-  # Keep the existing check name, and fail it if either suite fails or is canceled/skipped.
+  # Preserve the existing gate; failures, cancellations and skipped checks cannot pass it.
   check:
     if: ${{ always() }}
-    needs: [quality, browser]
+    needs: [validation]
     runs-on: ubuntu-latest
     steps:
-      - name: Require both suites to pass
+      - name: Require every matrix check to pass
         env:
-          QUALITY_RESULT: ${{ needs.quality.result }}
-          BROWSER_RESULT: ${{ needs.browser.result }}
-        run: |
-          test "$QUALITY_RESULT" = success
-          test "$BROWSER_RESULT" = success
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+        run: test "$VALIDATION_RESULT" = success

@@ -1,3 +1,4 @@
+import { captureReviewScreenshot } from './review-screenshot';
 import { expect, test, type Page } from '@playwright/test';
 
 const accessRequest = {
@@ -95,7 +96,10 @@ test('approve an access request ongoing after seeing its scope', async ({ page }
   await expect(page.getByText('GET on /wiki', { exact: true })).toBeVisible();
 
   await page.getByRole('radio', { name: /^Ongoing/ }).check();
-  await page.screenshot({ path: testInfo.outputPath('access-request.png'), fullPage: true });
+  await captureReviewScreenshot(page, {
+    path: testInfo.outputPath('access-request.png'),
+    fullPage: true
+  });
   await page.getByRole('button', { name: 'Allow ongoing', exact: true }).click();
   await expect
     .poll(() => writes.find((write) => write.path === '/approvals/ap-access/approve')?.body)
