@@ -142,9 +142,7 @@ const DELIVERY_LEASE_MS = 60_000;
 // allows ten request/review exchanges while still bounding unattended chains. Per-task
 // turns, tokens, working time, and conversation spending also remain limited.
 const MAX_REQUEST_DEPTH = 20;
-// How many directory agents the prompt lists. suggest_participant can name any agent in the
-// directory, listed or not.
-const DIRECTORY_AGENTS_IN_PROMPT = 30;
+
 const NOTES_IN_PROMPT = 20;
 const MAX_NUDGES = 2;
 const NUDGE_TEXT =
@@ -864,6 +862,8 @@ export class TaskRunnerService {
         return this.runCompleteTaskTool(task, agent, call.id, input);
       case AGENT_TOOLS.reportBlocked:
         return this.runReportBlockedTool(task, agent, call.id, input);
+      case AGENT_TOOLS.findAgents:
+        return this.runFindAgentsTool(task, agent, input);
       case AGENT_TOOLS.suggestParticipant:
         return this.runSuggestParticipantTool(task, agent, call.id, input);
       case AGENT_TOOLS.saveNote:
@@ -1021,6 +1021,39 @@ export class TaskRunnerService {
     return 'Task blocked. A person will look at it.';
   }
 
+  private async runFindAgentsTool(task: Task, agent: Agent, input: ToolInput): Promise<string> {
+    const query = readRequiredString(input, 'query').trim();
+    if (!query || query.length > 500) {
+      throw new AppError('validationError', 'query must contain 1 to 500 characters.');
+    }
+    const terms = [...new Set(query.toLowerCase().split(/\s+/))];
+    const members = task.conversationId
+      ? await this.conversationRepository.listMembers(task.conversationId)
+      : [];
+    const profiles = await this.agentRepository.searchDirectory({
+      excludeIds: [
+        ...new Set([
+          agent.id,
+          ...members
+            .filter((member) => member.participant.type === 'agent')
+            .map((member) => member.participant.id)
+        ])
+      ],
+      terms,
+      limit: 10
+    });
+    // Explicitly select public fields. IDs, configurations, and private context never leave here.
+    return JSON.stringify(
+      profiles.map(({ name, purpose, skillNames, produces, needs }) => ({
+        name,
+        purpose,
+        skillNames,
+        produces: produces ?? null,
+        needs: needs ?? null
+      }))
+    );
+  }
+
   private async runSuggestParticipantTool(
     task: Task,
     agent: Agent,
@@ -1045,7 +1078,7 @@ export class TaskRunnerService {
     if (!suggested || suggested.disabledAt || !suggested.currentVersionId) {
       throw new AppError(
         'suggestionNotAvailable',
-        `No available agent named "${name}" in the directory. Pick one from the directory list.`
+        `No available agent named "${name}" in the directory. Search with find_agents for an available specialist.`
       );
     }
     // Addressed to the people here by ID, never by name, so no agent is woken: people get
@@ -2503,12 +2536,6 @@ export class TaskRunnerService {
     const names = new Map(
       participants.map((participant) => [`${participant.type}:${participant.id}`, participant.name])
     );
-    const directory = (await this.listDirectoryAgentsOutside(participants)).map(
-      ({ name, purpose }) => ({
-        name,
-        purpose
-      })
-    );
     return buildTaskPrompt({
       task,
       endeavor,
@@ -2516,22 +2543,10 @@ export class TaskRunnerService {
       participants: participants.filter(
         (participant) => participant.type !== 'agent' || participant.id !== agent.id
       ),
-      directory,
       notes,
       documents,
       history,
       nameOf: (message) => names.get(`${message.authorType}:${message.authorId}`) ?? 'Someone'
-    });
-  }
-
-  // Enabled agents with a configuration that aren't members. Only name and purpose are shown.
-  private async listDirectoryAgentsOutside(participants: ContextParticipant[]): Promise<Agent[]> {
-    return this.agentRepository.listDirectory({
-      excludeIds: participants
-        .filter((participant) => participant.type === 'agent')
-        .map((participant) => participant.id),
-      limit: DIRECTORY_AGENTS_IN_PROMPT,
-      offset: 0
     });
   }
 

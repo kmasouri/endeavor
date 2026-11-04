@@ -9,6 +9,7 @@ export const AGENT_TOOLS = {
   completeTask: 'complete_task',
   reportBlocked: 'report_blocked',
   suggestParticipant: 'suggest_participant',
+  findAgents: 'find_agents',
   httpRequest: 'http_request',
   saveNote: 'save_note',
   listFiles: 'list_files',
@@ -197,13 +198,26 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
     }
   },
   {
+    name: AGENT_TOOLS.findAgents,
+    description:
+      'Search public profiles of discoverable agents outside this endeavor. Returns at most 10 matches by name, purpose, skill names, what they produce, and what input they need. Finding an agent grants nothing: use suggest_participant to ask a person to add them.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Words describing the specialist you need.' }
+      },
+      required: ['query'],
+      additionalProperties: false
+    }
+  },
+  {
     name: AGENT_TOOLS.suggestParticipant,
     description:
       'Suggest that a person add an agent from the directory to this conversation. It only posts the suggestion to the people here; it does not add anyone or contact the agent.',
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'The agent name, from the directory.' },
+        name: { type: 'string', description: 'The agent name returned by find_agents.' },
         reason: { type: 'string', description: 'Why they would help.' }
       },
       required: ['name', 'reason'],
