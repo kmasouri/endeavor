@@ -5,6 +5,7 @@ import {
   CatalogRepository,
   ConnectionOAuthRepository,
   ConversationRepository,
+  ProjectRepository,
   DocumentRepository,
   HumanRepository,
   MessageRepository,
@@ -169,6 +170,7 @@ export class TaskRunnerService {
     private readonly taskRepository: TaskRepository,
     private readonly messageRepository: MessageRepository,
     private readonly conversationRepository: ConversationRepository,
+    private readonly projectRepository: ProjectRepository,
     private readonly agentRepository: AgentRepository,
     private readonly humanRepository: HumanRepository,
     private readonly catalogRepository: CatalogRepository,
@@ -2536,9 +2538,13 @@ export class TaskRunnerService {
     const names = new Map(
       participants.map((participant) => [`${participant.type}:${participant.id}`, participant.name])
     );
+    const project = endeavor?.projectId
+      ? await this.projectRepository.getById(endeavor.projectId)
+      : null;
     return buildTaskPrompt({
       task,
       endeavor,
+      projectAbout: project?.about,
       requesterName,
       participants: participants.filter(
         (participant) => participant.type !== 'agent' || participant.id !== agent.id

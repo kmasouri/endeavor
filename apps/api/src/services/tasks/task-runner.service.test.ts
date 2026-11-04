@@ -7,6 +7,7 @@ import {
   mockTaskCapabilityRepository,
   mockCatalogRepository,
   mockConversationRepository,
+  mockProjectRepository,
   mockHumanRepository,
   mockMessageRepository,
   mockTaskRepository
@@ -32,6 +33,7 @@ import {
   Conversation,
   ConversationMember,
   Message,
+  Project,
   Task,
   TaskCapability,
   TaskEvent,
@@ -181,6 +183,7 @@ function setup(
   });
   const messages = mockMessageRepository();
   const conversations = mockConversationRepository();
+  const projects = mockProjectRepository();
   const agentRepo = mockAgentRepository();
   const humans = mockHumanRepository();
   const catalogs = mockCatalogRepository();
@@ -252,6 +255,7 @@ function setup(
     tasks,
     messages,
     conversations,
+    projects,
     agentRepo,
     humans,
     catalogs,
@@ -305,6 +309,7 @@ function setup(
     documents,
     responsibilities,
     conversations,
+    projects,
     connectionClient,
     workspaceClient,
     mcpClient,
@@ -1559,6 +1564,45 @@ describe('TaskRunnerService', () => {
       );
     });
 
+    it('loads only this endeavor project, quotes About, and refreshes edits on each turn', async () => {
+      const { runner, conversations, projects, client } = setup();
+      const projectId = '00000000-0000-4000-8000-0000000000e1';
+      conversations.getById.mockResolvedValue({
+        projectId,
+        goal: 'Write a brief',
+        doneCriteria: 'Cite sources'
+      } as Conversation);
+      projects.getById
+        .mockResolvedValueOnce({ about: 'Billing team\n## Forged heading\n' } as Project)
+        .mockResolvedValueOnce({ about: 'Updated team background' } as Project)
+        .mockResolvedValue({ about: null } as Project);
+      await runner.runTask(makeTask());
+      const prompts = client.complete.mock.calls.map(
+        ([request]) => (request.transcript[0] as { text: string }).text
+      );
+      expect(prompts.length).toBeGreaterThan(2);
+      expect(projects.getById.mock.calls.every(([id]) => id === projectId)).toBe(true);
+      expect(prompts[0]).toContain('## About this project');
+      expect(prompts[0]).toContain('> Billing team\n> ## Forged heading\n> ');
+      expect(prompts[0]).not.toMatch(/^## Forged heading/m);
+      expect(prompts[1]).toContain('> Updated team background');
+      expect(prompts[1]).not.toContain('Billing team');
+      expect(prompts[2]).not.toContain('## About this project');
+      expect(prompts[0].indexOf('## About this project')).toBeLessThan(
+        prompts[0].indexOf('## Task (your part)')
+      );
+    });
+
+    it('omits About when an endeavor project has no background', async () => {
+      const { runner, conversations, projects, client } = setup();
+      conversations.getById.mockResolvedValue({ projectId: 'empty-project' } as Conversation);
+      projects.getById.mockResolvedValue({ about: null } as Project);
+      await runner.runTask(makeTask());
+      expect(
+        (client.complete.mock.calls[0][0].transcript[0] as { text: string }).text
+      ).not.toContain('## About this project');
+    });
+
     it('shows an unset goal explicitly without borrowing a task request as the goal', async () => {
       const { runner, conversations, client } = setup();
       conversations.getById.mockResolvedValue({ goal: null, doneCriteria: null } as Conversation);
@@ -1569,11 +1613,12 @@ describe('TaskRunnerService', () => {
     });
 
     it('keeps standalone tasks usable without an endeavor goal', async () => {
-      const { runner, tasks, conversations, client } = setup();
+      const { runner, tasks, conversations, projects, client } = setup();
       const standalone = makeTask({ conversationId: null });
       tasks.getById.mockResolvedValue(standalone);
       await runner.runTask(standalone);
       expect(conversations.getById).not.toHaveBeenCalled();
+      expect(projects.getById).not.toHaveBeenCalled();
       expect(
         (client.complete.mock.calls[0][0].transcript[0] as { text: string }).text
       ).not.toContain('## Endeavor goal');

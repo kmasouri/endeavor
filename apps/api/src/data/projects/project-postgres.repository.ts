@@ -6,6 +6,7 @@ import { ProjectRepository } from './project.repository';
 interface ProjectRow {
   id: string;
   name: string;
+  context: { about?: string };
   is_default: boolean;
   created_by_human_id: string | null;
   created_at: Date;
@@ -46,12 +47,21 @@ const VISIBLE_TO_HUMAN = `(
 export class ProjectPostgresRepository implements ProjectRepository {
   constructor(private readonly db: FastifyInstance['pg']) {}
 
-  async create(input: { name: string; createdByHumanId: string }): Promise<Project> {
+  async create(input: {
+    name: string;
+    about?: string | null;
+    createdByHumanId: string;
+  }): Promise<Project> {
     const result = await this.db.query<ProjectRow>(
-      `INSERT INTO endeavor.projects (id, name, created_by_human_id)
-       VALUES ($1, $2, $3)
+      `INSERT INTO endeavor.projects (id, name, created_by_human_id, context)
+       VALUES ($1, $2, $3, $4::jsonb)
        RETURNING *`,
-      [randomUUID(), input.name, input.createdByHumanId]
+      [
+        randomUUID(),
+        input.name,
+        input.createdByHumanId,
+        JSON.stringify(input.about ? { about: input.about } : {})
+      ]
     );
     return toProject(result.rows[0]);
   }
@@ -102,7 +112,7 @@ export class ProjectPostgresRepository implements ProjectRepository {
 
   async update(
     projectId: string,
-    changes: { name?: string; archived?: boolean }
+    changes: { name?: string; about?: string | null; archived?: boolean }
   ): Promise<Project | null> {
     const result = await this.db.query<ProjectRow>(
       `UPDATE endeavor.projects
@@ -112,10 +122,21 @@ export class ProjectPostgresRepository implements ProjectRepository {
              WHEN $3 THEN coalesce(archived_at, now())
              ELSE NULL
            END,
+           context = CASE WHEN $4::boolean
+             THEN (context - 'about') || CASE WHEN $5::text IS NULL
+               THEN '{}'::jsonb ELSE jsonb_build_object('about', $5::text) END
+             ELSE context
+           END,
            updated_at = now()
        WHERE id = $1
        RETURNING *`,
-      [projectId, changes.name ?? null, changes.archived ?? null]
+      [
+        projectId,
+        changes.name ?? null,
+        changes.archived ?? null,
+        changes.about !== undefined,
+        changes.about ?? null
+      ]
     );
     return result.rows[0] ? toProject(result.rows[0]) : null;
   }
@@ -192,6 +213,7 @@ function toProject(row: ProjectRow): Project {
   return {
     id: row.id,
     name: row.name,
+    about: row.context.about ?? null,
     isDefault: row.is_default,
     createdByHumanId: row.created_by_human_id,
     createdAt: row.created_at,

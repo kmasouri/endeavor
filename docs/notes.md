@@ -2,12 +2,28 @@
 
 **Context** is what goes into a model for one turn. It isn't stored anywhere as its own thing. For each task, the runner builds it from these parts, each labeled the same way in prompts, the API, and the UI:
 
-| Label                      | What it is                                                                     | Example                                             | Who controls it                               |
-| -------------------------- | ------------------------------------------------------------------------------ | --------------------------------------------------- | --------------------------------------------- |
-| Instructions               | How the agent should behave, from its configuration version.                   | "Investigate billing issues and cite your sources." | People                                        |
-| Knowledge sources          | Documents people attach to a project or one endeavor, and connections to outside sources. | A refund policy document.                           | The source's owners                           |
-| Conversation history       | Messages the agent may see in this conversation.                               | "Kim: please summarize the billing changes"         | Everyone in the conversation                  |
-| Saved notes (agent memory) | What the agent wrote down for later work. May be incomplete or wrong.          | "Yesterday's check ruled out the payment gateway."  | The agent writes; people inspect, fix, delete |
+| Label                      | What it is                                                                                | Example                                               | Who controls it                               |
+| -------------------------- | ----------------------------------------------------------------------------------------- | ----------------------------------------------------- | --------------------------------------------- |
+| Instructions               | How the agent should behave, from its configuration version.                              | "Investigate billing issues and cite your sources."   | People                                        |
+| About this project         | Optional background supplied by a person for every endeavor in one project.               | "We maintain the billing API for European customers." | People                                        |
+| Knowledge sources          | Documents people attach to a project or one endeavor, and connections to outside sources. | A refund policy document.                             | The source's owners                           |
+| Conversation history       | Messages the agent may see in this conversation.                                          | "Kim: please summarize the billing changes"           | Everyone in the conversation                  |
+| Saved notes (agent memory) | What the agent wrote down for later work. May be incomplete or wrong.                     | "Yesterday's check ruled out the payment gateway."    | The agent writes; people inspect, fix, delete |
+
+## About this project
+
+- Projects expose optional `about` text in create, list, get, and update responses. Set it with
+  `POST /projects` or `PATCH /projects/:projectId`. It is trimmed and capped at 5,000 characters.
+  `null` or blank text clears it; omitting it from a PATCH keeps the current value. Existing
+  projects return `about: null` until someone supplies it.
+- Every model turn in an endeavor loads its project's current About text under
+  `## About this project`. Each line is quoted, like a document, so it cannot pose as a prompt
+  section. It is background, not agent instructions or permission to use tools.
+- About is separate from knowledge sources and saved notes. Tasks outside an endeavor receive
+  no project background, and endeavors never receive another project's About text.
+- Migration `025_project_context.sql` stores it in `projects.context`, a JSON object. Updates
+  change only its `about` key, preserving any future project context fields. The public API
+  exposes `about`, not the storage object. The web editing field belongs to CA-102.
 
 ## Saved notes
 

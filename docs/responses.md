@@ -219,7 +219,7 @@ before switching methods, as for endpoint or credential changes.
 waiting, blocked, completed, or cancelled. Working tasks return:
 
 ```json
-{"kind":"reading","detail":"reading notes/source.md","since":"2026-10-27T12:00:00.000Z"}
+{ "kind": "reading", "detail": "reading notes/source.md", "since": "2026-10-27T12:00:00.000Z" }
 ```
 
 Kinds are `searching`, `reading`, `writing`, `checking`, `connection`, and `thinking`.
@@ -241,3 +241,11 @@ that endeavor; null for deleted/unavailable profiles. These fields never include
 instructions, saved notes, or credentials. See [agent profiles](agents.md#public-handoff-profiles-ca-98).
 
 Routing decisions use the same response helpers: `GET /conversations/:conversationId/routing` returns a paged list with `limit` and `offset`; choosing through `POST .../routing/:decisionId/choice` returns the updated decision in `data`. Records include `kind`, `status`, `selectedAgentId`, `reason`, `confidence`, eligible `candidates`, and a `revision` for competing choices.
+
+## Project background
+
+Project create, list, get, and update responses include `about`: the optional
+"About this project" text, or `null` when unset. Create and PATCH accept a string
+of up to 5,000 characters or `null`. Whitespace at either end is trimmed; blank text
+clears it. An omitted `about` on PATCH preserves the current value. The response
+helpers and list pagination stay the same.
