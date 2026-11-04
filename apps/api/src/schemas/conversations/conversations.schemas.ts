@@ -59,7 +59,7 @@ export const addMemberBodySchema = z.strictObject({
 
 export const postMessageBodySchema = z.strictObject({
   body: z.string().trim().min(1).max(20_000),
-  // Agents mentioned here are asked to respond. Messages that mention no one start no work.
+  // Agents mentioned here are asked to respond. Untagged messages without a reply enter routing.
   mentions: z.array(participantRefSchema).max(20).optional(),
   inReplyToMessageId: z.uuid().optional(),
   clientKey: z.string().trim().min(1).max(200).optional()

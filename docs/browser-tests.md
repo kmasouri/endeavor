@@ -165,3 +165,5 @@ status. Appearance checks resize the existing form for desktop/phone geometry; p
 representative theme/width pairs above. Model prompt and API privacy checks remain beside the
 runner, conversation service, and agent routes. Integrating CA-98 adds one distinct browser case,
 so the current suite contains 110 cases; the 171-to-109 figures describe the original local audit.
+
+CA-105 routing choices are covered by `routing.test.ts`: member buttons and No one, conflict feedback, retry, exact revision payloads, and desktop/phone rendering. Real model choices and database delivery are verified separately.

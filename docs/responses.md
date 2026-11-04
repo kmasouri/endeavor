@@ -239,3 +239,5 @@ Agent create, read, list, and profile-update responses include nullable `produce
 members in conversation details add the same fields plus `status`: `idle` or `busy` in
 that endeavor; null for deleted/unavailable profiles. These fields never include private
 instructions, saved notes, or credentials. See [agent profiles](agents.md#public-handoff-profiles-ca-98).
+
+Routing decisions use the same response helpers: `GET /conversations/:conversationId/routing` returns a paged list with `limit` and `offset`; choosing through `POST .../routing/:decisionId/choice` returns the updated decision in `data`. Records include `kind`, `status`, `selectedAgentId`, `reason`, `confidence`, eligible `candidates`, and a `revision` for competing choices.

@@ -41,6 +41,10 @@ export class MessagePostgresRepository implements MessageRepository {
          SELECT saved.id, agent_id
          FROM saved, unnest($10::uuid[]) AS agent_id
        )
+       , routed AS (
+         INSERT INTO endeavor.routing_decisions(id, conversation_id, message_id, kind)
+         SELECT gen_random_uuid(), conversation_id, id, 'starter' FROM saved WHERE $11::boolean
+       )
        SELECT * FROM saved`,
       [
         randomUUID(),
@@ -53,7 +57,8 @@ export class MessagePostgresRepository implements MessageRepository {
         input.inReplyToMessageId,
         input.taskId,
         input.clientKey,
-        input.deliverToAgentIds
+        input.deliverToAgentIds,
+        input.routeRequest ?? false
       ]
     );
 

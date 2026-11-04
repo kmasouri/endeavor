@@ -35,18 +35,40 @@ A message is addressed to:
 - every agent member it mentions (`mentions`), and
 - the agent who wrote the message it replies to (`inReplyToMessageId`).
 
-Each addressed agent must respond, or say why it can't. A message that addresses no agent is saved, but starts no work and makes no model call. No model decides who should answer yet.
+Each addressed agent must respond, or say why it can't. Explicit tags and replies bypass the routing model. Untagged human messages are saved with a durable routing job in the same statement.
 
-### Routing (not wired in yet)
+### Routing
 
-`integrations/routing/` holds the `RoutingClient` that will fill two gaps (CA-11; the app starts using it in CA-105):
+`integrations/routing/` holds the `RoutingClient`. The routing service uses it to fill two gaps:
 
 - **A message that tags no one:** pick one member agent, no one (the message asks for nothing), or ask a person.
 - **A task that ends without a handoff:** pick the next agent, done, or ask a person, judged against the goal.
 
 The client only sees what the caller passes in: the message or result, the goal, the member agents' names and purposes, and recent messages the members can already see. It can only pick from the agents it was given, so it can't add members or reach private context. Tags that people or agents make never go through it.
 
-Each decision comes with a confidence from 0 to 1 and every option ranked. The caller acts alone only when the pick is an agent (or none, or done) and the confidence is at or above its threshold (0.6 for `gpt-6-luna`, from the CA-11 evaluation). Otherwise it asks a person, offering the top-ranked options.
+Each decision comes with a confidence from 0 to 1 and every option ranked. The caller acts alone only when the pick is an agent (or none, or done) and the confidence is at or above its threshold (0.6 for `gpt-6-luna`, from the CA-11 evaluation). Otherwise it saves a question and offers eligible member agents and No one. No delivery is created until a person chooses. Without an OpenAI key, or when a model call fails, it asks a person. Scheduled completions use the same waiting behavior.
+
+Decisions have leases and revisions. A restart reclaims unfinished decisions; saving a decision,
+its visible message and its delivery is atomic. Old tasks from before migration 024 are not
+routed retroactively. Completed tasks with explicit outgoing agent deliveries bypass the model.
+Automatic handoff chains stop after eight parents and ask a person. A done decision never closes
+the endeavor; a person still confirms completion.
+
+`GET /conversations/:conversationId/routing` returns visible decisions, newest first, with limit/offset pagination (50 by default).
+`POST /conversations/:conversationId/routing/:decisionId/choice` takes `agentId` (null means
+No one) and `revision`. Only members choose. Changing an automatic pick withdraws its pending
+delivery or cancels the active task it created before delivering the replacement. Completed work
+and external effects stay recorded. An update to an unrelated existing task cannot cancel that
+task; stop it through the normal controls and send a directed request. A competing choice or
+in-flight delivery assignment returns `routingConflict` (409); reload and retry.
+
+The model sees only public member profiles, the shared goal, and recent messages after every
+member's history boundary. Agents whose history excludes the source are not candidates.
+It sees no private instructions, saved notes, connection credentials, or tool access. Membership
+and enabled state are checked again when the decision is saved. Model, token usage, confidence,
+and outcome are stored with the decision, and decisions are logged as `routing.decided`.
+`ROUTING_MODEL` defaults to `gpt-6-luna`; calls have a 30-second deadline and do not retry.
+The conversation shows the reason and a Change agent control, or choice buttons while waiting.
 
 Two engines implement it:
 

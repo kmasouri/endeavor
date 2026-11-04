@@ -19,6 +19,7 @@ export interface RoutingMessage {
 }
 
 export interface StarterRequest {
+  goal?: string;
   // The message that tags no one.
   message: string;
   // The agents in the endeavor. The engine can only pick one of these.

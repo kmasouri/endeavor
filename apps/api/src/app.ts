@@ -22,6 +22,7 @@ import notePlugin from './plugins/note';
 import projectPlugin from './plugins/project';
 import responsibilityPlugin from './plugins/responsibility';
 import runnerPlugin from './plugins/runner';
+import routingPlugin from './plugins/routing';
 import taskPlugin from './plugins/task';
 import { AppError, ErrorName, ERRORS } from './shared/errors';
 import { ErrorDetail, failure } from './shared/response';
@@ -205,6 +206,7 @@ export function setupApp(): FastifyInstance {
   app.register(projectPlugin);
   app.register(responsibilityPlugin);
   app.register(taskPlugin);
+  app.register(routingPlugin);
   app.register(runnerPlugin);
 
   app.register(routes.agentsRouter);
@@ -217,6 +219,7 @@ export function setupApp(): FastifyInstance {
   app.register(routes.projectsRouter);
   app.register(routes.responsibilitiesRouter);
   app.register(routes.tasksRouter);
+  app.register(routes.routingRouter);
 
   // The web interface is its own app. Vite builds it into apps/web/dist, two folders up from
   // this file in both src/ and dist/.

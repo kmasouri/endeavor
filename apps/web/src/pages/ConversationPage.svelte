@@ -22,6 +22,7 @@
   import KnowledgeSources from './KnowledgeSources.svelte';
   import Spending from './Spending.svelte';
   import MessageList from './MessageList.svelte';
+  import RoutingDecisions from './RoutingDecisions.svelte';
   import Composer from './Composer.svelte';
   import Members from './Members.svelte';
   import ConversationAgents from './ConversationAgents.svelte';
@@ -404,6 +405,7 @@
           onInspectRun={inspectRun}
           selectedRunId={showDetails ? selectedRunId ?? undefined : undefined}
         />{/if}
+        <RoutingDecisions {conversationId} />
         {#each unattached as output (output.id)}<div class="orphan-artifact">
             <ArtifactCard
               {output}
