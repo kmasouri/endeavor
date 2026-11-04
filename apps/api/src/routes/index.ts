@@ -8,3 +8,5 @@ export * from './notes';
 export * from './projects';
 export * from './responsibilities';
 export * from './tasks';
+
+export * from './routing';

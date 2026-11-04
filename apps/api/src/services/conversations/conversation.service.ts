@@ -322,6 +322,7 @@ export class ConversationService {
       inReplyToMessageId: input.inReplyToMessageId ?? null,
       taskId: null,
       deliverToAgentIds,
+      routeRequest: mentions.length === 0 && !input.inReplyToMessageId,
       clientKey: input.clientKey ? `human:${human.id}:${conversation.id}:${input.clientKey}` : null
     });
     if (result.created) {

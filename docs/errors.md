@@ -115,3 +115,10 @@ Agents see these as tool results when a file tool call fails. They aren't return
 | 90002 | `workspaceFileNotFound` | 404  | No file or folder at that path in this task's workspace.              | Call `list_files` to see what's there.            |
 | 90003 | `workspaceFileTooLarge` | 422  | The file is over the 1 MB write limit.                                | Split it into smaller files.                      |
 | 90004 | `workspaceFileNotText`  | 422  | The file isn't text, so it can't be read as text.                     | Only read text files.                             |
+
+## Routing decisions (85xxx)
+
+| Code | Name | HTTP | Meaning |
+| --- | --- | --- | --- |
+| 85001 | `routingNotFound` | 404 | Routing decision not found or hidden by the member history boundary. |
+| 85002 | `routingConflict` | 409 | The decision changed or a worker is assigning delivery. Reload and retry. Updates to unrelated existing work must be stopped through the normal task controls. |

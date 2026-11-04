@@ -10,3 +10,5 @@ export * from './projects';
 export * from './request-logger';
 export * from './responsibilities';
 export * from './tasks';
+
+export * from './routing/routing.logger';

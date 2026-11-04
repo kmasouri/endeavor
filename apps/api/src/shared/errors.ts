@@ -180,6 +180,14 @@ export const ERRORS = {
   // 80xxx: saved notes and documents
   noteNotFound: { code: 80001, statusCode: 404, message: 'Note not found' },
   documentNotFound: { code: 80002, statusCode: 404, message: 'Document not found' },
+  // 85xxx: routing decisions
+  routingNotFound: { code: 85001, statusCode: 404, message: 'Routing decision not found' },
+  routingConflict: {
+    code: 85002,
+    statusCode: 409,
+    message:
+      'This decision changed or delivery is being assigned. Reload and try again. If it updated existing work, stop that work before sending a directed request.'
+  },
   // 90xxx: task workspaces (agents' files)
   workspacePathInvalid: {
     code: 90001,

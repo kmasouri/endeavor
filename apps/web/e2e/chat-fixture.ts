@@ -190,6 +190,7 @@ export async function fixture(
       });
     if (
       [
+        '/conversations/brief/routing',
         '/tasks',
         '/responsibilities',
         '/approvals',

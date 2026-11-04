@@ -55,6 +55,7 @@ export function starterQuestion(request: StarterRequest): RoutingQuestion<Starte
     options,
     choices,
     state: {
+      goal: request.goal,
       message: request.message,
       agents: request.agents.map(describe),
       ...recentMessages(request.recent)

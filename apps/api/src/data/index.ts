@@ -12,3 +12,5 @@ export * from './tasks';
 export * from './skills';
 export * from './connections';
 export * from './grants';
+
+export * from './routing';

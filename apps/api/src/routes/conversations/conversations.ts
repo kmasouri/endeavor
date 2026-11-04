@@ -131,7 +131,7 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     {
       schema: {
         description:
-          'Post a message. Mentioned agents, and the agent you reply to, are asked to respond. Others are not woken.',
+          'Post a message. Mentioned agents, and the agent you reply to, are asked to respond. Untagged human messages without a reply are routed asynchronously to one eligible member agent or wait for a person to choose.',
         tags: ['conversations'],
         headers: actorHeadersSchema,
         params: conversationParamsSchema,

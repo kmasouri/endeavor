@@ -12,6 +12,7 @@ export interface CreateMessageInput {
   deliverToAgentIds: string[];
   // Saving again with the same key returns the first message instead of a copy.
   clientKey: string | null;
+  routeRequest?: boolean;
 }
 
 export interface MessageRepository {
