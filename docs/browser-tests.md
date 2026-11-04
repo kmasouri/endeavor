@@ -112,3 +112,9 @@ Participant profile coverage in `chat.test.ts` checks author names and avatars, 
 opening and Escape/focus restoration, outside dismissal, directory details, deleted and
 unavailable authors, and member cards inside the native members dialog. Geometry and review
 screenshots cover dark/light themes at 320px, 390px and 1440px.
+
+CA-98 extends the existing responsive profile tests: Produces/Needs save, retry, discard,
+clear, and reload at 320px, 390px and desktop in both themes. Participant popovers show
+skill names, handoff fields and endeavor status with viewport bounds checked in both
+themes at phone and desktop widths. Model prompt and API privacy checks live beside
+the runner, conversation service, and agent routes.

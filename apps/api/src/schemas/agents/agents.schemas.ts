@@ -5,6 +5,11 @@ export const agentParamsSchema = z.object({
   agentId: z.uuid()
 });
 
+const profileFields = {
+  produces: z.string().trim().max(500).nullable().optional(),
+  needs: z.string().trim().max(500).nullable().optional()
+};
+
 const agentConfigFields = {
   instructions: z.string().trim().min(1),
   provider: z.enum(MODEL_PROVIDERS),
@@ -24,6 +29,7 @@ const agentConfigFields = {
 export const createAgentBodySchema = z.strictObject({
   name: z.string().trim().min(1).max(80),
   purpose: z.string().trim().min(1),
+  ...profileFields,
   ...agentConfigFields
 });
 
@@ -31,6 +37,7 @@ export const updateAgentProfileBodySchema = z
   .strictObject({
     name: z.string().trim().min(1).max(80).optional(),
     purpose: z.string().trim().min(1).optional(),
+    ...profileFields,
     avatarColor: z.enum(AGENT_AVATAR_COLORS).nullable().optional(),
     avatarIcon: z.enum(AGENT_AVATAR_ICONS).nullable().optional(),
     // US dollars per calendar month across all this agent's work. null removes the cap.

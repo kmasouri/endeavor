@@ -6,12 +6,20 @@ const researcher = {
   id: 'researcher',
   name: 'Researcher',
   purpose: 'Find evidence',
+  produces: 'A sourced brief',
+  needs: 'A question and source documents',
+  skillNames: ['Research', 'Writing'],
+  status: 'busy' as const,
   capabilities: { provider: 'openai', model: 'research-model', skillCount: 2, connectionCount: 1 }
 };
 const reviewer = {
   id: 'reviewer',
   name: 'Reviewer',
   purpose: 'Check evidence',
+  produces: null,
+  needs: null,
+  skillNames: [],
+  status: 'idle' as const,
   avatarColor: null,
   avatarIcon: null
 };
@@ -25,6 +33,7 @@ export async function fixture(
 ) {
   const shownResearcher = { ...researcher, ...appearance };
   const state = {
+    profileStatus: 'busy' as 'idle' | 'busy',
     extraMembers: [] as Member[],
     failSend: false,
     loseSendResponse: false,
@@ -139,6 +148,10 @@ export async function fixture(
               participant: { type: 'agent', id: a.id },
               name: a.name,
               purpose: a.purpose,
+              produces: a.produces,
+              needs: a.needs,
+              skillNames: a.skillNames,
+              status: a.id === 'researcher' ? state.profileStatus : a.status,
               avatarColor: a.avatarColor,
               avatarIcon: a.avatarIcon,
               historyFrom: null

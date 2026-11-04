@@ -63,6 +63,7 @@ export function mockAgentRepository(): jest.Mocked<AgentRepository> {
     getByName: jest.fn().mockResolvedValue(null),
     list: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
+    getProfiles: jest.fn().mockResolvedValue([]),
     listDirectory: jest.fn().mockResolvedValue([]),
     countDirectory: jest.fn().mockResolvedValue(0),
     update: jest.fn(),

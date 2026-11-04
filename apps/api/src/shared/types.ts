@@ -188,7 +188,22 @@ export interface AgentAppearance {
   avatarIcon?: (typeof AGENT_AVATAR_ICONS)[number] | null;
 }
 
-export interface Agent extends AgentAppearance {
+// Public descriptions only. Never include instructions, notes, or connection details.
+export interface AgentProfileFields {
+  produces?: string | null;
+  needs?: string | null;
+}
+
+export interface AgentProfile extends AgentProfileFields {
+  id: string;
+  name: string;
+  purpose: string;
+  skillNames: string[];
+  // null outside an endeavor. Busy means an open task, including waiting or paused work.
+  status: 'idle' | 'busy' | null;
+}
+
+export interface Agent extends AgentAppearance, AgentProfileFields {
   // Retained only for historical references. Deleted agents cannot be restored.
   deletedAt?: Date | null;
   id: string;
@@ -292,7 +307,8 @@ export interface MessageDelivery {
 
 // What the agent directory shows about an agent. Only what's needed to decide whom to ask:
 // never instructions, saved notes, credentials, or conversations.
-export interface DirectoryEntry extends AgentAppearance {
+export interface DirectoryEntry extends AgentAppearance, AgentProfileFields {
+  skillNames: string[];
   id: string;
   name: string;
   purpose: string;

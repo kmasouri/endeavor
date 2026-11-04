@@ -20,6 +20,9 @@
   let open = $state(false);
   let purpose = $derived(member?.purpose || directory?.purpose);
   let capabilities = $derived(agent ? directory?.capabilities : undefined);
+  let skillNames = $derived(member?.skillNames ?? directory?.skillNames ?? []);
+  let produces = $derived(member ? member.produces : directory?.produces);
+  let needs = $derived(member ? member.needs : directory?.needs);
   let available = $derived(!member?.deleted && Boolean(member || directory));
 
   const position = () => {
@@ -91,6 +94,14 @@
   <h2>{name}</h2>
   <p class="caption muted">{agent ? 'Agent' : 'Person'}{id === meId && !agent ? ' · You' : ''}{member?.deleted ? ' · Deleted' : ''}</p>
   {#if purpose}<p class="participant-purpose">{purpose}</p>{/if}
+  {#if agent && available}
+    <dl class="participant-capabilities">
+      <div><dt>Skills</dt><dd>{skillNames.join(', ') || 'None'}</dd></div>
+      <div><dt>Produces</dt><dd>{produces || 'Not specified'}</dd></div>
+      <div><dt>Needs</dt><dd>{needs || 'Not specified'}</dd></div>
+      {#if member?.status}<div><dt>Status</dt><dd>{member.status === 'busy' ? 'Busy in this endeavor' : 'Idle'}</dd></div>{/if}
+    </dl>
+  {/if}
   {#if capabilities && !member?.deleted}
     <dl class="participant-capabilities">
       <div><dt>Model</dt><dd>{capabilities.model}</dd></div>
