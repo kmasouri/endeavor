@@ -13,7 +13,8 @@
     "test:watch": "ENVIRONMENT=test LOGGER_LEVEL=silent NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "lint": "eslint \"src/**/*.ts\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "db:migrate": "ENVIRONMENT=local tsx src/migrate.ts"
+    "db:migrate": "ENVIRONMENT=local tsx src/migrate.ts",
+    "routing:eval": "ENVIRONMENT=local LOGGER_LEVEL=silent tsx --env-file-if-exists=../../.env src/routing-eval.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "4.0.87",
