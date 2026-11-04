@@ -67,6 +67,12 @@ export interface AgentRepository {
   count(input: { includeDisabled: boolean }): Promise<number>;
   // The directory: enabled agents with a configuration, minus excludeIds, by name.
   listDirectory(input: { excludeIds: string[]; limit: number; offset: number }): Promise<Agent[]>;
+  // Search public profiles across the full visible directory, before limiting results.
+  searchDirectory(input: {
+    excludeIds: string[];
+    terms: string[];
+    limit: number;
+  }): Promise<AgentProfile[]>;
   countDirectory(input: { excludeIds: string[] }): Promise<number>;
   // monthlyBudgetUsd: a number sets the cap, null removes it, undefined leaves it.
   update(
