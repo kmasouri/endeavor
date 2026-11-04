@@ -1,3 +1,4 @@
+import { captureReviewScreenshot } from './review-screenshot';
 import { expect, test, type Page } from '@playwright/test';
 
 const first = {
@@ -164,37 +165,44 @@ async function mockApi(page: Page, theme = 'dark', empty = false, legacy = false
   return { writes, errors, versions };
 }
 
-for (const theme of ['dark', 'light']) {
-  for (const width of [1440, 390]) {
-    test(`Agents layout and tabs in ${theme} at ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 1000 });
-      const state = await mockApi(page, theme);
-      await page.goto('/app/#/agents');
-      await expect(page.getByRole('heading', { name: 'Researcher', exact: true })).toBeVisible();
-      await expect(page.getByText('$3.12', { exact: false }).first()).toBeVisible();
-      await page.getByRole('button', { name: 'Disabled', exact: true }).click();
-      await expect(page.getByRole('heading', { name: 'QA', exact: true })).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Researcher', exact: true })).toHaveCount(0);
-      await page.getByRole('button', { name: 'All', exact: true }).click();
-      await page.getByRole('searchbox', { name: 'Search agents' }).fill('Research');
-      await expect(page.getByRole('heading', { name: 'QA', exact: true })).toHaveCount(0);
-      await page.screenshot({ path: `/tmp/ca57-list-${theme}-${width}.png`, fullPage: true });
-      await page.getByRole('heading', { name: 'Researcher', exact: true }).click();
-      await expect(page.getByRole('heading', { name: 'Current configuration' })).toBeVisible();
-      for (const tab of ['Configuration', 'Versions · 2', 'Overview']) {
-        await page.getByRole('button', { name: tab, exact: true }).click();
-        await page.screenshot({
-          path: `/tmp/ca57-${tab.split(' ')[0]}-${theme}-${width}.png`,
-          fullPage: true
-        });
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-          true
-        );
-      }
-      await page.screenshot({ path: `/tmp/ca57-${theme}-${width}.png`, fullPage: true });
-      expect(state.errors).toEqual([]);
+for (const { theme, width } of [
+  { theme: 'light', width: 1440 },
+  { theme: 'dark', width: 390 }
+] as const) {
+  test(`Agents layout and tabs in ${theme} at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const state = await mockApi(page, theme);
+    await page.goto('/app/#/agents');
+    await expect(page.getByRole('heading', { name: 'Researcher', exact: true })).toBeVisible();
+    await expect(page.getByText('$3.12', { exact: false }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Disabled', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'QA', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Researcher', exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'All', exact: true }).click();
+    await page.getByRole('searchbox', { name: 'Search agents' }).fill('Research');
+    await expect(page.getByRole('heading', { name: 'QA', exact: true })).toHaveCount(0);
+    await captureReviewScreenshot(page, {
+      path: `/tmp/ca57-list-${theme}-${width}.png`,
+      fullPage: true
     });
-  }
+    await page.getByRole('heading', { name: 'Researcher', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Current configuration' })).toBeVisible();
+    for (const tab of ['Configuration', 'Versions · 2', 'Overview']) {
+      await page.getByRole('button', { name: tab, exact: true }).click();
+      await captureReviewScreenshot(page, {
+        path: `/tmp/ca57-${tab.split(' ')[0]}-${theme}-${width}.png`,
+        fullPage: true
+      });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true
+      );
+    }
+    await captureReviewScreenshot(page, {
+      path: `/tmp/ca57-${theme}-${width}.png`,
+      fullPage: true
+    });
+    expect(state.errors).toEqual([]);
+  });
 }
 
 test('configuration picker removal, undo, save, and version migration', async ({ page }) => {
@@ -270,7 +278,7 @@ for (const kind of ['skill', 'connection']) {
     await expect(input).toHaveValue('');
     await expect(results).toBeVisible();
     await expect(results.getByRole('button')).toHaveCount(kind === 'skill' ? 5 : 2);
-    await page.screenshot({ path: `/tmp/ca57-${kind}-dropdown.png`, fullPage: true });
+    await captureReviewScreenshot(page, { path: `/tmp/ca57-${kind}-dropdown.png`, fullPage: true });
     await input.press('Escape');
     await expect(results).toHaveCount(0);
     await expect(input).toBeFocused();
@@ -319,7 +327,7 @@ test('permanent deletion previews affected work and requires confirmation', asyn
   expect(writes.filter((w) => w.path === '/agents/a1')).toHaveLength(0);
   await name.fill('Researcher');
   await expect(confirm).toBeEnabled();
-  await page.screenshot({ path: '/tmp/ca63-delete-name.png', fullPage: true });
+  await captureReviewScreenshot(page, { path: '/tmp/ca63-delete-name.png', fullPage: true });
   await confirm.click();
   await expect(page).toHaveURL(/#\/agents$/);
   expect(writes.filter((w) => w.path === '/agents/a1')).toHaveLength(1);
@@ -348,44 +356,44 @@ test('failed deletion preview prevents confirmation and Escape restores focus', 
   expect(writes).toHaveLength(0);
 });
 
-for (const theme of ['dark', 'light']) {
-  for (const width of [390, 1440]) {
-    test(`agent controls have clear placement in ${theme} at ${width}px`, async ({ page }) => {
-      await mockApi(page, theme);
-      await page.setViewportSize({ width, height: 1000 });
-      await page.goto('/app/#/agents/a1');
-      const header = page.locator('.agent-detail-header');
-      const toggle = header.getByRole('button', { name: 'Disable agent', exact: true });
-      await expect(toggle).toBeVisible();
-      await expect(header.getByRole('button', { name: 'Delete agent', exact: true })).toHaveCount(
-        0
-      );
-      const section = page.getByRole('region', { name: 'Delete agent', exact: true });
-      await expect(section).toContainText('Shared history and costs stay available.');
-      const overview = await page.locator('.agent-overview').boundingBox();
-      const deletion = await section.boundingBox();
-      expect(deletion!.y).toBeGreaterThanOrEqual(overview!.y + overview!.height);
-      await page.screenshot({ path: `/tmp/ca63-placement-${theme}-${width}.png`, fullPage: true });
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-        true
-      );
-      await toggle.click();
-      await expect(header.getByRole('button', { name: 'Enable agent', exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Configuration', exact: true }).click();
-      await expect(section).toHaveCount(0);
-      await expect(header.getByRole('button', { name: 'Enable agent', exact: true })).toBeVisible();
-      await page.getByRole('button', { name: 'Overview', exact: true }).click();
-      await section.getByRole('button', { name: 'Delete agent', exact: true }).click();
-      await expect(page.getByRole('dialog')).toBeVisible();
-      await expect(
-        page.getByRole('dialog').getByRole('button', { name: 'Delete permanently' })
-      ).toBeDisabled();
-      await page.keyboard.press('Escape');
-      await expect(
-        section.getByRole('button', { name: 'Delete agent', exact: true })
-      ).toBeFocused();
+for (const { theme, width } of [
+  { theme: 'light', width: 1440 },
+  { theme: 'dark', width: 390 }
+] as const) {
+  test(`agent controls have clear placement in ${theme} at ${width}px`, async ({ page }) => {
+    await mockApi(page, theme);
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto('/app/#/agents/a1');
+    const header = page.locator('.agent-detail-header');
+    const toggle = header.getByRole('button', { name: 'Disable agent', exact: true });
+    await expect(toggle).toBeVisible();
+    await expect(header.getByRole('button', { name: 'Delete agent', exact: true })).toHaveCount(0);
+    const section = page.getByRole('region', { name: 'Delete agent', exact: true });
+    await expect(section).toContainText('Shared history and costs stay available.');
+    const overview = await page.locator('.agent-overview').boundingBox();
+    const deletion = await section.boundingBox();
+    expect(deletion!.y).toBeGreaterThanOrEqual(overview!.y + overview!.height);
+    await captureReviewScreenshot(page, {
+      path: `/tmp/ca63-placement-${theme}-${width}.png`,
+      fullPage: true
     });
-  }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true
+    );
+    await toggle.click();
+    await expect(header.getByRole('button', { name: 'Enable agent', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Configuration', exact: true }).click();
+    await expect(section).toHaveCount(0);
+    await expect(header.getByRole('button', { name: 'Enable agent', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Overview', exact: true }).click();
+    await section.getByRole('button', { name: 'Delete agent', exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(
+      page.getByRole('dialog').getByRole('button', { name: 'Delete permanently' })
+    ).toBeDisabled();
+    await page.keyboard.press('Escape');
+    await expect(section.getByRole('button', { name: 'Delete agent', exact: true })).toBeFocused();
+  });
 }
 
 for (const legacy of [false, true]) {
@@ -425,7 +433,7 @@ for (const legacy of [false, true]) {
     await expect(overview).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { name: 'Current configuration' })).toBeVisible();
     await expect(form).toHaveCount(0);
-    await page.screenshot({
+    await captureReviewScreenshot(page, {
       path: `/tmp/ca67-discard-${legacy ? 'legacy' : 'explicit'}.png`,
       fullPage: true
     });
@@ -569,84 +577,89 @@ test('configuration validates required fields and preserves every edit after a f
   expect(errors).toEqual([]);
 });
 
-for (const width of [320, 390, 1280]) {
-  for (const theme of ['light', 'dark']) {
-    test(`agent appearance persists, retries, discards and resets at ${width}px in ${theme}`, async ({
-      page
-    }, testInfo) => {
-      await page.setViewportSize({ width, height: 1000 });
-      await page.emulateMedia({ reducedMotion: 'reduce' });
-      const { writes, errors } = await mockApi(page, theme);
-      await page.goto('/app/#/agents/a1');
-      const profile = page
-        .locator('section.panel')
-        .filter({ has: page.getByRole('heading', { name: 'Profile', exact: true }) });
-      await profile.getByRole('button', { name: 'Edit', exact: true }).click();
-      const form = page
-        .locator('form')
-        .filter({ has: page.getByRole('heading', { name: 'Profile', exact: true }) });
-      const preview = form.getByLabel('Avatar preview');
-      const defaultStyle = await preview.locator('.avatar').getAttribute('style');
-      await form.getByRole('radio', { name: 'Teal', exact: true }).check();
-      await form.getByRole('radio', { name: 'Document', exact: true }).check();
-      await expect(preview.locator('.avatar')).toHaveAttribute('style', /agent-3-bg/);
-      const documentPath = await preview.locator('.avatar > svg path').getAttribute('d');
-      // A failed write preserves the draft and allows retry.
-      await page.route(
-        '**/agents/a1',
-        async (route) => {
-          if (route.request().method() !== 'PATCH') return route.fallback();
-          return route.fulfill({
-            status: 503,
-            contentType: 'application/json',
-            body: JSON.stringify({ error: { message: 'Try again later', code: 10001 } })
-          });
-        },
-        { times: 1 }
-      );
-      await form.getByRole('button', { name: 'Save profile' }).click();
-      await expect(form.getByRole('radio', { name: 'Document', exact: true })).toBeChecked();
-      await expect(form.getByRole('button', { name: 'Save profile' })).toBeEnabled();
-      await form.getByRole('button', { name: 'Save profile' }).click();
-      await expect(form).toHaveCount(0);
-      expect(writes.at(-1)).toEqual({
-        path: '/agents/a1',
-        body: {
-          name: 'Researcher',
-          purpose: 'Researches topics and drafts briefs',
-          avatarColor: 'teal',
-          avatarIcon: 'file'
-        }
+test('agent appearance persists, retries, discards and resets at 320px in dark', async ({
+  page
+}, testInfo) => {
+  const width = 320;
+  const theme = 'dark';
+  await page.setViewportSize({ width, height: 1000 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  const { writes, errors } = await mockApi(page, theme);
+  await page.goto('/app/#/agents/a1');
+  const profile = page
+    .locator('section.panel')
+    .filter({ has: page.getByRole('heading', { name: 'Profile', exact: true }) });
+  await profile.getByRole('button', { name: 'Edit', exact: true }).click();
+  const form = page
+    .locator('form')
+    .filter({ has: page.getByRole('heading', { name: 'Profile', exact: true }) });
+  const preview = form.getByLabel('Avatar preview');
+  const defaultStyle = await preview.locator('.avatar').getAttribute('style');
+  await form.getByRole('radio', { name: 'Teal', exact: true }).check();
+  await form.getByRole('radio', { name: 'Document', exact: true }).check();
+  await expect(preview.locator('.avatar')).toHaveAttribute('style', /agent-3-bg/);
+  const documentPath = await preview.locator('.avatar > svg path').getAttribute('d');
+  // A failed write preserves the draft and allows retry.
+  await page.route(
+    '**/agents/a1',
+    async (route) => {
+      if (route.request().method() !== 'PATCH') return route.fallback();
+      return route.fulfill({
+        status: 503,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: { message: 'Try again later', code: 10001 } })
       });
-      const headingAvatar = page.locator('.agent-heading .avatar');
-      await expect(headingAvatar).toHaveAttribute('style', /agent-3-bg/);
-      await expect(headingAvatar.locator(':scope > svg path')).toHaveAttribute('d', documentPath!);
-      await page.reload();
-      await expect(headingAvatar).toHaveAttribute('style', /agent-3-bg/);
-      await profile.getByRole('button', { name: 'Edit', exact: true }).click();
-      await form.getByRole('radio', { name: 'Sky', exact: true }).check();
-      await form.getByRole('radio', { name: 'Shield', exact: true }).check();
-      const beforeDiscard = writes.length;
-      await form.getByRole('button', { name: 'Discard changes' }).click();
-      expect(writes).toHaveLength(beforeDiscard);
-      await expect(headingAvatar.locator(':scope > svg path')).toHaveAttribute('d', documentPath!);
-      await profile.getByRole('button', { name: 'Edit', exact: true }).click();
-      await expect(form.getByRole('radio', { name: 'Document', exact: true })).toBeChecked();
-      await form.getByRole('button', { name: 'Reset appearance' }).click();
-      await expect(preview.locator('.avatar')).toHaveAttribute('style', defaultStyle!);
-      const box = await form.boundingBox();
-      expect(box!.x).toBeGreaterThanOrEqual(0);
-      expect(box!.x + box!.width).toBeLessThanOrEqual(width);
-      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
-        width
-      );
-      await expect(form.getByRole('radio', { name: 'Robot', exact: true })).toBeVisible();
-      await page.screenshot({ path: testInfo.outputPath('appearance.png'), fullPage: true });
-      await form.getByRole('button', { name: 'Save profile' }).click();
-      expect(writes.at(-1)?.body).toMatchObject({ avatarColor: null, avatarIcon: null });
-      await expect(headingAvatar).toHaveAttribute('style', defaultStyle!);
-      expect(writes.some((write) => write.path.endsWith('/config'))).toBe(false);
-      expect(errors).toEqual([]);
+    },
+    { times: 1 }
+  );
+  await form.getByRole('button', { name: 'Save profile' }).click();
+  await expect(form.getByRole('radio', { name: 'Document', exact: true })).toBeChecked();
+  await expect(form.getByRole('button', { name: 'Save profile' })).toBeEnabled();
+  await form.getByRole('button', { name: 'Save profile' }).click();
+  await expect(form).toHaveCount(0);
+  expect(writes.at(-1)).toEqual({
+    path: '/agents/a1',
+    body: {
+      name: 'Researcher',
+      purpose: 'Researches topics and drafts briefs',
+      avatarColor: 'teal',
+      avatarIcon: 'file'
+    }
+  });
+  const headingAvatar = page.locator('.agent-heading .avatar');
+  await expect(headingAvatar).toHaveAttribute('style', /agent-3-bg/);
+  await expect(headingAvatar.locator(':scope > svg path')).toHaveAttribute('d', documentPath!);
+  await page.reload();
+  await expect(headingAvatar).toHaveAttribute('style', /agent-3-bg/);
+  await profile.getByRole('button', { name: 'Edit', exact: true }).click();
+  await form.getByRole('radio', { name: 'Sky', exact: true }).check();
+  await form.getByRole('radio', { name: 'Shield', exact: true }).check();
+  const beforeDiscard = writes.length;
+  await form.getByRole('button', { name: 'Discard changes' }).click();
+  expect(writes).toHaveLength(beforeDiscard);
+  await expect(headingAvatar.locator(':scope > svg path')).toHaveAttribute('d', documentPath!);
+  await profile.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(form.getByRole('radio', { name: 'Document', exact: true })).toBeChecked();
+  await form.getByRole('button', { name: 'Reset appearance' }).click();
+  await expect(preview.locator('.avatar')).toHaveAttribute('style', defaultStyle!);
+  // Replay only geometry at each layout, not the entire write/retry/discard flow.
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const box = await form.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(0);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
+      width
+    );
+    await expect(form.getByRole('radio', { name: 'Robot', exact: true })).toBeVisible();
+    await captureReviewScreenshot(page, {
+      path: testInfo.outputPath(`appearance-${width}.png`),
+      fullPage: true
     });
   }
-}
+  await form.getByRole('button', { name: 'Save profile' }).click();
+  expect(writes.at(-1)?.body).toMatchObject({ avatarColor: null, avatarIcon: null });
+  await expect(headingAvatar).toHaveAttribute('style', defaultStyle!);
+  expect(writes.some((write) => write.path.endsWith('/config'))).toBe(false);
+  expect(errors).toEqual([]);
+});

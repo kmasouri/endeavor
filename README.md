@@ -208,15 +208,20 @@ To redeploy an image that's already built, run the `deploy` workflow by hand. It
 
 ## Browser regression tests
 
-`npm run check` includes the committed Playwright suite in `apps/web/e2e/`. It launches Vite's
+`npm run check` runs lint, type checks, unit/pilot tests, and builds concurrently, then starts
+browser coverage as soon as the web build finishes. It prints per-phase runtimes and a temporary
+log directory. `npm run check:quality` omits browser coverage.
+
+The full check includes the committed Playwright suite in `apps/web/e2e/`. It launches Vite's
 preview server against the production build, so browser checks use the same bundled CSS order as
 the served app. The suite mocks the HTTP API; it needs no database, Docker app, provider keys, or
 model calls, and it never changes real schedules or runs.
 
-Run `npm run test:e2e` for browser tests alone. Chromium downloads on the first run. In CI the
-runner caches browser binaries and installs Chromium's system libraries on every run. Browser
-tests run alongside the other checks in a separate job; the final `check` job requires both to
-pass. Superseded runs for the same PR are canceled. Main pushes run independently. On a new Linux
+Run `npm run test:e2e` for browser tests alone. Chromium downloads on the first local run.
+CI browser tests use a pinned official Playwright image containing Node 26, browsers, and Linux
+libraries, and install only the web workspace dependencies. Browser tests are split across four shards in the same fail-fast matrix as lint, types, builds, and
+unit/pilot tests. A failed job cancels the remaining jobs in that run; the final `check` gate
+requires the complete matrix to pass. Each CI browser shard stops at its first failure. Superseded runs for the same PR are canceled. Main pushes run independently. On a new Linux
 workstation, install missing system libraries with `npx playwright install-deps chromium` from
 `apps/web/` if needed.
 
@@ -224,6 +229,7 @@ The suite covers conversation creation and chat, agent configuration/history, ap
 authentication setup, navigation, and Schedules. It checks failed saves and retry, keyboard/focus,
 and representative geometry in both themes at desktop/phone widths. See the
 [browser coverage matrix and review guide](docs/browser-tests.md) for cases and remaining gaps.
-Failed runs retain screenshots and traces under `apps/web/test-results/`, with an HTML report in
+Failed runs retain screenshots under `apps/web/test-results/`, with an HTML report in
 `apps/web/playwright-report/`. Both directories are ignored by git. To inspect a local report,
-run `npx playwright show-report` from `apps/web/`.
+run `npx playwright show-report` from `apps/web/`. For a focused debugging rerun, add
+`--trace=retain-on-failure`; full tracing and success screenshots (`E2E_SCREENSHOTS=1`) are opt-in.

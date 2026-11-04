@@ -7,7 +7,7 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: true,
   retries: 0,
-  workers: 2,
+  workers: process.env.CI ? 2 : 4,
   timeout: 30_000,
   globalTimeout: 300_000,
   reporter: [['list'], ['html', { open: 'never' }]],
@@ -16,7 +16,8 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:5190',
     timezoneId: 'America/New_York',
     locale: 'en-US',
-    trace: 'retain-on-failure',
+    // Record detailed traces only when requested with --trace=retain-on-failure.
+    trace: 'off',
     screenshot: 'only-on-failure'
   },
   webServer: {

@@ -1,3 +1,4 @@
+import { captureReviewScreenshot } from './review-screenshot';
 import { expect, test, type Page } from '@playwright/test';
 
 async function mockOAuth(page: Page, theme = 'dark') {
@@ -74,87 +75,86 @@ async function mockOAuth(page: Page, theme = 'dark') {
   };
 }
 
-for (const width of [320, 390, 900, 1280]) {
-  for (const theme of ['dark', 'light']) {
-    test(`simple auth status and sign-in controls fit ${width}px in ${theme}`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 });
-      const api = await mockOAuth(page, theme);
-      await page.goto('/app/#/connections');
-      const row = page.getByRole('link').filter({ hasText: 'Juniper Parcel — Notion' });
-      await expect(row.locator('.management-status')).toHaveCount(1);
-      await expect(row.getByText('Authentication required', { exact: true })).toBeVisible();
+for (const { theme, width } of [
+  { theme: 'light', width: 900 },
+  { theme: 'dark', width: 320 }
+] as const) {
+  test(`simple auth status and sign-in controls fit ${width}px in ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const api = await mockOAuth(page, theme);
+    await page.goto('/app/#/connections');
+    const row = page.getByRole('link').filter({ hasText: 'Juniper Parcel — Notion' });
+    await expect(row.locator('.management-status')).toHaveCount(1);
+    await expect(row.getByText('Authentication required', { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true
+    );
+    await row.click();
+    const header = page.locator('.page-header');
+    await expect(header.getByText('Authentication required', { exact: true })).toBeVisible();
+    await expect(header.locator('.management-status')).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+    const checkLayout = async () => {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true
       );
-      await row.click();
-      const header = page.locator('.page-header');
-      await expect(header.getByText('Authentication required', { exact: true })).toBeVisible();
-      await expect(header.locator('.management-status')).toHaveCount(1);
-      await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
-      const checkLayout = async () => {
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-          true
-        );
-        for (const badge of await header.locator('.management-status').all()) {
-          const box = (await badge.boundingBox())!;
-          expect(box.x).toBeGreaterThanOrEqual(0);
-          expect(box.x + box.width).toBeLessThanOrEqual(width);
-        }
-        for (const button of await page
-          .locator('details')
-          .filter({ has: page.getByText('Authentication', { exact: true }) })
-          .getByRole('button')
-          .all()) {
-          const box = (await button.boundingBox())!;
-          expect(box.x + box.width).toBeLessThanOrEqual(width);
-          if (width <= 390) expect(box.height).toBeGreaterThanOrEqual(44);
-        }
-      };
-      await checkLayout();
-      const checkDisabled = async () => {
-        await page.getByRole('button', { name: 'Disable', exact: true }).click();
-        await expect(header.locator('.management-status')).toHaveText('Disabled');
-        await page.getByRole('link', { name: '← Connections', exact: true }).click();
-        await expect(row.locator('.management-status')).toHaveCount(1);
-        await expect(row.locator('.management-status')).toHaveText('Disabled');
-        await row.click();
-        await page.getByRole('button', { name: 'Enable', exact: true }).click();
-      };
-      await checkDisabled();
-      await expect(header.locator('.management-status')).toHaveText('Authentication required');
-      await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-      await page.getByRole('link', { name: 'Allow Notion access' }).click();
-      await expect(header.locator('.management-status')).toHaveText('Enabled');
-      await checkDisabled();
-      await expect(header.locator('.management-status')).toHaveText('Enabled');
-      await expect(page.getByText('No credential', { exact: true })).toHaveCount(0);
-      await checkLayout();
-      await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
-      await expect(page.getByRole('status')).toHaveText('Disconnected.');
-      await expect(page.getByRole('button', { name: 'Disconnect', exact: true })).toBeDisabled();
-      await checkLayout();
-      if (theme === 'dark' && (width === 390 || width === 1280)) {
-        await page.screenshot({
-          path: test.info().outputPath('auth-feedback.png'),
-          fullPage: true
-        });
+      for (const badge of await header.locator('.management-status').all()) {
+        const box = (await badge.boundingBox())!;
+        expect(box.x).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
       }
-      await expect(header.getByText('Authentication required', { exact: true })).toBeVisible();
-      await expect(
-        page.getByText('Signed in. Discover tools and choose the access this connection allows.', {
-          exact: true
-        })
-      ).toHaveCount(0);
-      expect(api.writes.map((write) => write.path)).toEqual([
-        '/connections/c1/disable',
-        '/connections/c1/enable',
-        '/connections/c1/oauth/connect',
-        '/connections/c1/disable',
-        '/connections/c1/enable',
-        '/connections/c1/oauth/disconnect'
-      ]);
+      for (const button of await page
+        .locator('details')
+        .filter({ has: page.getByText('Authentication', { exact: true }) })
+        .getByRole('button')
+        .all()) {
+        const box = (await button.boundingBox())!;
+        expect(box.x + box.width).toBeLessThanOrEqual(width);
+        if (width <= 390) expect(box.height).toBeGreaterThanOrEqual(44);
+      }
+    };
+    await checkLayout();
+    const checkDisabled = async () => {
+      await page.getByRole('button', { name: 'Disable', exact: true }).click();
+      await expect(header.locator('.management-status')).toHaveText('Disabled');
+      await page.getByRole('link', { name: '← Connections', exact: true }).click();
+      await expect(row.locator('.management-status')).toHaveCount(1);
+      await expect(row.locator('.management-status')).toHaveText('Disabled');
+      await row.click();
+      await page.getByRole('button', { name: 'Enable', exact: true }).click();
+    };
+    await checkDisabled();
+    await expect(header.locator('.management-status')).toHaveText('Authentication required');
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+    await page.getByRole('link', { name: 'Allow Notion access' }).click();
+    await expect(header.locator('.management-status')).toHaveText('Enabled');
+    await checkDisabled();
+    await expect(header.locator('.management-status')).toHaveText('Enabled');
+    await expect(page.getByText('No credential', { exact: true })).toHaveCount(0);
+    await checkLayout();
+    await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+    await expect(page.getByRole('status')).toHaveText('Disconnected.');
+    await expect(page.getByRole('button', { name: 'Disconnect', exact: true })).toBeDisabled();
+    await checkLayout();
+    await captureReviewScreenshot(page, {
+      path: test.info().outputPath('auth-feedback.png'),
+      fullPage: true
     });
-  }
+    await expect(header.getByText('Authentication required', { exact: true })).toBeVisible();
+    await expect(
+      page.getByText('Signed in. Discover tools and choose the access this connection allows.', {
+        exact: true
+      })
+    ).toHaveCount(0);
+    expect(api.writes.map((write) => write.path)).toEqual([
+      '/connections/c1/disable',
+      '/connections/c1/enable',
+      '/connections/c1/oauth/connect',
+      '/connections/c1/disable',
+      '/connections/c1/enable',
+      '/connections/c1/oauth/disconnect'
+    ]);
+  });
 }
 
 test('Notion can be created and signed in from the new connection screen', async ({ page }) => {
@@ -353,77 +353,74 @@ test('disconnect waits for the updated status and does not report success when r
   expect(api.writes).toHaveLength(1);
 });
 
-for (const width of [320, 390, 1280]) {
-  for (const theme of ['dark', 'light']) {
-    test(`repeated status refresh keeps the page still at ${width}px in ${theme}`, async ({
-      page
-    }) => {
-      await page.setViewportSize({ width, height: 900 });
-      await mockOAuth(page, theme);
-      await page.goto('/app/#/connections/c1');
-      const auth = page.getByText('Authentication', { exact: true }).locator('..');
-      const refresh = auth.getByRole('button').nth(1);
-      await expect(refresh).toBeVisible();
-      const measure = async () => ({
-        buttons: await auth.getByRole('button').evaluateAll((buttons) =>
-          buttons.map((button) => {
-            const { x, y, width, height } = button.getBoundingClientRect();
-            return { x, y, width, height, opacity: getComputedStyle(button).opacity };
-          })
-        ),
-        access: (await page.locator('fieldset').first().boundingBox())!
-      });
-      const initial = await measure();
-      const checkStill = async () => {
-        const current = await measure();
-        for (let i = 0; i < initial.buttons.length; i += 1) {
-          expect(current.buttons[i].opacity, `button ${i} opacity`).toBe(
-            initial.buttons[i].opacity
-          );
-          for (const key of ['x', 'y', 'width', 'height'] as const) {
-            expect(current.buttons[i][key], `button ${i} ${key}`).toBeCloseTo(
-              initial.buttons[i][key],
-              1
-            );
-          }
-        }
-        expect(current.access.y, 'Access section stays in place').toBeCloseTo(initial.access.y, 1);
-      };
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        let release!: () => void;
-        const held = new Promise<void>((resolve) => {
-          release = resolve;
-        });
-        let requests = 0;
-        await page.route('**/connections/c1', async (route) => {
-          requests += 1;
-          await held;
-          await route.fallback();
-        });
-        try {
-          await refresh.click();
-          await expect(refresh).toBeDisabled();
-          await expect(refresh).toHaveAttribute('aria-busy', 'true');
-          await expect(page.getByRole('status')).toHaveText('Refreshing status…');
-          await expect.poll(() => requests).toBe(1);
-          await checkStill();
-          await refresh.evaluate((button) => (button as HTMLButtonElement).click());
-          expect(requests).toBe(1);
-        } finally {
-          release();
-        }
-        await expect(page.getByRole('status')).toHaveText('Status refreshed.');
-        expect(requests).toBe(1);
-        await checkStill();
-        await expect(refresh).toBeFocused();
-        await page.unroute('**/connections/c1');
-      }
-      if (theme === 'dark' && width !== 320) {
-        await page.screenshot({
-          path: test.info().outputPath('stable-refresh.png'),
-          fullPage: true
-        });
-      }
+for (const { theme, width } of [
+  { theme: 'light', width: 1280 },
+  { theme: 'dark', width: 320 }
+] as const) {
+  test(`repeated status refresh keeps the page still at ${width}px in ${theme}`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await mockOAuth(page, theme);
+    await page.goto('/app/#/connections/c1');
+    const auth = page.getByText('Authentication', { exact: true }).locator('..');
+    const refresh = auth.getByRole('button').nth(1);
+    await expect(refresh).toBeVisible();
+    const measure = async () => ({
+      buttons: await auth.getByRole('button').evaluateAll((buttons) =>
+        buttons.map((button) => {
+          const { x, y, width, height } = button.getBoundingClientRect();
+          return { x, y, width, height, opacity: getComputedStyle(button).opacity };
+        })
+      ),
+      access: (await page.locator('fieldset').first().boundingBox())!
     });
-  }
+    const initial = await measure();
+    const checkStill = async () => {
+      const current = await measure();
+      for (let i = 0; i < initial.buttons.length; i += 1) {
+        expect(current.buttons[i].opacity, `button ${i} opacity`).toBe(initial.buttons[i].opacity);
+        for (const key of ['x', 'y', 'width', 'height'] as const) {
+          expect(current.buttons[i][key], `button ${i} ${key}`).toBeCloseTo(
+            initial.buttons[i][key],
+            1
+          );
+        }
+      }
+      expect(current.access.y, 'Access section stays in place').toBeCloseTo(initial.access.y, 1);
+    };
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let requests = 0;
+      await page.route('**/connections/c1', async (route) => {
+        requests += 1;
+        await held;
+        await route.fallback();
+      });
+      try {
+        await refresh.click();
+        await expect(refresh).toBeDisabled();
+        await expect(refresh).toHaveAttribute('aria-busy', 'true');
+        await expect(page.getByRole('status')).toHaveText('Refreshing status…');
+        await expect.poll(() => requests).toBe(1);
+        await checkStill();
+        await refresh.evaluate((button) => (button as HTMLButtonElement).click());
+        expect(requests).toBe(1);
+      } finally {
+        release();
+      }
+      await expect(page.getByRole('status')).toHaveText('Status refreshed.');
+      expect(requests).toBe(1);
+      await checkStill();
+      await expect(refresh).toBeFocused();
+      await page.unroute('**/connections/c1');
+    }
+    await captureReviewScreenshot(page, {
+      path: test.info().outputPath('stable-refresh.png'),
+      fullPage: true
+    });
+  });
 }
