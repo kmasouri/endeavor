@@ -2,7 +2,8 @@ import {
   AgentRepository,
   ConversationRepository,
   HumanRepository,
-  NoteRepository
+  NoteRepository,
+  ProjectRepository
 } from '../../data';
 import { NoteLogger } from '../../observability';
 import { requireHuman, hasFullAccess } from '../access/access.rules';
@@ -13,12 +14,14 @@ import { AgentNote, Human, NoteScope } from '../../shared/types';
 // and delete them here. Notes are an agent's observations, not approved shared facts.
 //
 // Admins see and change every note. Members see and fix notes from conversations they belong
-// to, and can read notes an admin made agent-wide. Only admins change a note's scope.
+// to, and project notes from projects they belong to or have an endeavor in. They can read notes
+// an admin made agent-wide. Only admins change a note's scope.
 export class NoteService {
   constructor(
     private readonly noteRepository: NoteRepository,
     private readonly agentRepository: AgentRepository,
     private readonly conversationRepository: ConversationRepository,
+    private readonly projectRepository: ProjectRepository,
     private readonly humanRepository: HumanRepository,
     private readonly noteLogger: NoteLogger
   ) {}
@@ -52,11 +55,17 @@ export class NoteService {
       if (!hasFullAccess(human)) {
         throw new AppError('forbidden', "Only admins change a note's scope");
       }
-      // A conversation-scoped note needs a conversation, or nobody would ever see it.
+      // A narrower note needs a conversation or project, or nobody would ever see it.
       if (changes.scope === 'conversation' && !note.sourceConversationId) {
         throw new AppError(
           'validationError',
           'This note came from no conversation, so it must stay agent-wide'
+        );
+      }
+      if (changes.scope === 'project' && !note.projectId) {
+        throw new AppError(
+          'validationError',
+          'This note came from no project, so it must stay agent-wide'
         );
       }
     }
@@ -93,7 +102,10 @@ export class NoteService {
           (await this.conversationRepository.getMember(note.sourceConversationId, {
             type: 'human',
             id: human.id
-          })) !== null));
+          })) !== null) ||
+        (note.scope === 'project' &&
+          note.projectId !== null &&
+          (await this.projectRepository.hasHuman(note.projectId, human.id))));
     if (!note || !editable) {
       throw new AppError('noteNotFound', `Note ${noteId} was not found`);
     }

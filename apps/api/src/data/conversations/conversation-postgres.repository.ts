@@ -1,11 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
 import { Conversation, ConversationMember, ParticipantRef } from '../../shared/types';
-import { ConversationRepository } from './conversation.repository';
+import { ConversationFilter, ConversationRepository } from './conversation.repository';
 
 interface ConversationRow {
   id: string;
   title: string;
+  project_id: string;
+  goal: string | null;
+  goal_message_id: string | null;
+  done_criteria: string | null;
+  closed_at: Date | null;
+  closed_by_human_id: string | null;
   created_by_human_id: string;
   budget_usd: string | null;
   created_at: Date;
@@ -20,15 +26,53 @@ interface MemberRow {
   added_at: Date;
 }
 
+// $1 and $2: the participant, or null for everyone. $3: the project, or null for all. $4: 'open',
+// 'closed', or 'all'.
+const FILTER = `($1::text IS NULL
+    OR EXISTS (
+      SELECT 1
+      FROM endeavor.conversation_members m
+      WHERE m.conversation_id = c.id
+        AND m.participant_type = $1
+        AND m.participant_id = $2
+        AND m.removed_at IS NULL
+    ))
+  AND ($3::uuid IS NULL OR c.project_id = $3)
+  AND ($4 = 'all' OR (c.closed_at IS NULL) = ($4 = 'open'))`;
+
+function filterValues(input: ConversationFilter): unknown[] {
+  return [
+    input.participant?.type ?? null,
+    input.participant?.id ?? null,
+    input.projectId,
+    input.state
+  ];
+}
+
 export class ConversationPostgresRepository implements ConversationRepository {
   constructor(private readonly db: FastifyInstance['pg']) {}
 
-  async create(input: { title: string; createdByHumanId: string }): Promise<Conversation> {
+  async create(input: {
+    title: string;
+    projectId: string;
+    goal: string | null;
+    doneCriteria: string | null;
+    createdByHumanId: string;
+  }): Promise<Conversation> {
     const result = await this.db.query<ConversationRow>(
-      `INSERT INTO endeavor.conversations (id, title, created_by_human_id)
-       VALUES ($1, $2, $3)
+      `INSERT INTO endeavor.conversations (
+         id, title, project_id, goal, done_criteria, created_by_human_id
+       )
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING *`,
-      [randomUUID(), input.title, input.createdByHumanId]
+      [
+        randomUUID(),
+        input.title,
+        input.projectId,
+        input.goal,
+        input.doneCriteria,
+        input.createdByHumanId
+      ]
     );
 
     return toConversation(result.rows[0]);
@@ -36,20 +80,59 @@ export class ConversationPostgresRepository implements ConversationRepository {
 
   async update(
     conversationId: string,
-    changes: { title?: string; budgetUsd?: number | null }
+    changes: { title?: string; budgetUsd?: number | null; goal?: string; doneCriteria?: string }
   ): Promise<Conversation | null> {
     const result = await this.db.query<ConversationRow>(
       `UPDATE endeavor.conversations
        SET title = coalesce($2, title),
-           budget_usd = CASE WHEN $3 THEN $4 ELSE budget_usd END
+           budget_usd = CASE WHEN $3 THEN $4 ELSE budget_usd END,
+           goal = coalesce($5, goal),
+           done_criteria = coalesce($6, done_criteria)
        WHERE id = $1
        RETURNING *`,
       [
         conversationId,
         changes.title ?? null,
         changes.budgetUsd !== undefined,
-        changes.budgetUsd ?? null
+        changes.budgetUsd ?? null,
+        changes.goal ?? null,
+        changes.doneCriteria ?? null
       ]
+    );
+    return result.rows[0] ? toConversation(result.rows[0]) : null;
+  }
+
+  async setGoalIfEmpty(
+    conversationId: string,
+    input: { goal: string; goalMessageId: string; doneCriteria: string }
+  ): Promise<Conversation | null> {
+    const result = await this.db.query<ConversationRow>(
+      `UPDATE endeavor.conversations
+       SET goal = $2,
+           goal_message_id = $3,
+           done_criteria = coalesce(done_criteria, $4)
+       WHERE id = $1
+         AND goal IS NULL
+       RETURNING *`,
+      [conversationId, input.goal, input.goalMessageId, input.doneCriteria]
+    );
+    return result.rows[0] ? toConversation(result.rows[0]) : null;
+  }
+
+  async setClosed(
+    conversationId: string,
+    closedByHumanId: string | null
+  ): Promise<Conversation | null> {
+    const result = await this.db.query<ConversationRow>(
+      `UPDATE endeavor.conversations
+       SET closed_at = CASE WHEN $2::uuid IS NULL THEN NULL ELSE coalesce(closed_at, now()) END,
+           closed_by_human_id = CASE
+             WHEN $2::uuid IS NULL THEN NULL
+             ELSE coalesce(closed_by_human_id, $2)
+           END
+       WHERE id = $1
+       RETURNING *`,
+      [conversationId, closedByHumanId]
     );
     return result.rows[0] ? toConversation(result.rows[0]) : null;
   }
@@ -65,45 +148,27 @@ export class ConversationPostgresRepository implements ConversationRepository {
     return result.rows[0] ? toConversation(result.rows[0]) : null;
   }
 
-  async list(input: {
-    participant: ParticipantRef | null;
-    limit: number;
-    offset: number;
-  }): Promise<Conversation[]> {
+  async list(
+    input: ConversationFilter & { limit: number; offset: number }
+  ): Promise<Conversation[]> {
     const result = await this.db.query<ConversationRow>(
       `SELECT c.*
        FROM endeavor.conversations c
-       WHERE $1::text IS NULL
-          OR EXISTS (
-            SELECT 1
-            FROM endeavor.conversation_members m
-            WHERE m.conversation_id = c.id
-              AND m.participant_type = $1
-              AND m.participant_id = $2
-              AND m.removed_at IS NULL
-          )
+       WHERE ${FILTER}
        ORDER BY c.created_at DESC, c.id
-       LIMIT $3 OFFSET $4`,
-      [input.participant?.type ?? null, input.participant?.id ?? null, input.limit, input.offset]
+       LIMIT $5 OFFSET $6`,
+      [...filterValues(input), input.limit, input.offset]
     );
 
     return result.rows.map(toConversation);
   }
 
-  async count(input: { participant: ParticipantRef | null }): Promise<number> {
+  async count(input: ConversationFilter): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
        FROM endeavor.conversations c
-       WHERE $1::text IS NULL
-          OR EXISTS (
-            SELECT 1
-            FROM endeavor.conversation_members m
-            WHERE m.conversation_id = c.id
-              AND m.participant_type = $1
-              AND m.participant_id = $2
-              AND m.removed_at IS NULL
-          )`,
-      [input.participant?.type ?? null, input.participant?.id ?? null]
+       WHERE ${FILTER}`,
+      filterValues(input)
     );
 
     return result.rows[0].total;
@@ -232,6 +297,13 @@ function toConversation(row: ConversationRow): Conversation {
   return {
     id: row.id,
     title: row.title,
+    projectId: row.project_id,
+    goal: row.goal,
+    goalMessageId: row.goal_message_id,
+    doneCriteria: row.done_criteria,
+    state: row.closed_at ? 'closed' : 'open',
+    closedAt: row.closed_at,
+    closedByHumanId: row.closed_by_human_id,
     createdByHumanId: row.created_by_human_id,
     budgetUsd: row.budget_usd === null ? null : Number(row.budget_usd),
     createdAt: row.created_at

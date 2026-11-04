@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NOTE_SCOPES } from '../../shared/types';
 
 export const agentNotesParamsSchema = z.object({ agentId: z.uuid() });
 export const noteParamsSchema = z.object({ agentId: z.uuid(), noteId: z.uuid() });
@@ -11,8 +12,9 @@ export const listNotesQuerySchema = z.strictObject({
 export const updateNoteBodySchema = z
   .strictObject({
     body: z.string().trim().min(1).max(10_000).optional(),
-    // 'agent' shows the note in all the agent's tasks. Admins only.
-    scope: z.enum(['conversation', 'agent']).optional()
+    // 'agent' shows the note in all the agent's tasks, 'project' in every endeavor of its
+    // project, and 'conversation' only in its own endeavor. Admins only.
+    scope: z.enum(NOTE_SCOPES).optional()
   })
   .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
 

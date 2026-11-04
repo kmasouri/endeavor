@@ -1,20 +1,43 @@
-import { Conversation, ConversationMember, ParticipantRef } from '../../shared/types';
+import {
+  Conversation,
+  ConversationMember,
+  EndeavorState,
+  ParticipantRef
+} from '../../shared/types';
+
+// Which conversations a list returns. participant: only ones they belong to (null for all).
+// projectId: only that project's (null for all). state: open, closed, or both.
+export interface ConversationFilter {
+  participant: ParticipantRef | null;
+  projectId: string | null;
+  state: EndeavorState | 'all';
+}
 
 export interface ConversationRepository {
-  create(input: { title: string; createdByHumanId: string }): Promise<Conversation>;
+  create(input: {
+    title: string;
+    projectId: string;
+    goal: string | null;
+    doneCriteria: string | null;
+    createdByHumanId: string;
+  }): Promise<Conversation>;
   getById(conversationId: string): Promise<Conversation | null>;
   // budgetUsd: a number sets the cap, null removes it, undefined leaves it.
   update(
     conversationId: string,
-    changes: { title?: string; budgetUsd?: number | null }
+    changes: { title?: string; budgetUsd?: number | null; goal?: string; doneCriteria?: string }
   ): Promise<Conversation | null>;
-  // Conversations the participant belongs to, or all of them when participant is null.
-  list(input: {
-    participant: ParticipantRef | null;
-    limit: number;
-    offset: number;
-  }): Promise<Conversation[]>;
-  count(input: { participant: ParticipantRef | null }): Promise<number>;
+  // Sets the goal only if the conversation has none yet, and the done criteria only if they are
+  // empty. Returns null when a goal was already set, so two first messages can't both win.
+  setGoalIfEmpty(
+    conversationId: string,
+    input: { goal: string; goalMessageId: string; doneCriteria: string }
+  ): Promise<Conversation | null>;
+  // A person closes the conversation; null reopens it. Closing again keeps the first close.
+  setClosed(conversationId: string, closedByHumanId: string | null): Promise<Conversation | null>;
+  // Newest first.
+  list(input: ConversationFilter & { limit: number; offset: number }): Promise<Conversation[]>;
+  count(input: ConversationFilter): Promise<number>;
 
   // Adds the member, or returns the existing membership unchanged. A removed member is added
   // back as new.

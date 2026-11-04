@@ -2,7 +2,8 @@ import {
   mockAgentRepository,
   mockConversationRepository,
   mockHumanRepository,
-  mockNoteRepository
+  mockNoteRepository,
+  mockProjectRepository
 } from '../../data/repositories.test-helper';
 import { NoteLogger } from '../../observability';
 import { AgentNote, Human } from '../../shared/types';
@@ -11,6 +12,7 @@ import { NoteService } from './note.service';
 const MEMBER = '00000000-0000-4000-8000-000000000002';
 const AGENT = '00000000-0000-4000-8000-0000000000a1';
 const CONV = '00000000-0000-4000-8000-0000000000f1';
+const PROJECT = '00000000-0000-4000-8000-0000000000e1';
 
 const member: Human = {
   id: MEMBER,
@@ -25,6 +27,7 @@ const note: AgentNote = {
   body: 'The gateway was ruled out',
   sourceTaskId: 't1',
   sourceConversationId: CONV,
+  projectId: PROJECT,
   scope: 'conversation',
   createdBy: { type: 'agent', id: AGENT },
   updatedByHumanId: null,
@@ -36,6 +39,7 @@ function setup(human: Human = member) {
   const notes = mockNoteRepository();
   const agents = mockAgentRepository();
   const conversations = mockConversationRepository();
+  const projects = mockProjectRepository();
   const humans = mockHumanRepository();
   humans.getById.mockResolvedValue(human);
   agents.getById.mockResolvedValue({ id: AGENT } as never);
@@ -45,8 +49,8 @@ function setup(human: Human = member) {
     onNoteUpdated: jest.fn(),
     onNoteDeleted: jest.fn()
   } as unknown as jest.Mocked<NoteLogger>;
-  const service = new NoteService(notes, agents, conversations, humans, logger);
-  return { service, notes, conversations, logger };
+  const service = new NoteService(notes, agents, conversations, projects, humans, logger);
+  return { service, notes, conversations, projects, logger };
 }
 
 describe('NoteService', () => {
@@ -112,5 +116,28 @@ describe('NoteService', () => {
     await service.updateNote(MEMBER, AGENT, 'n1', { scope: 'agent' });
 
     expect(notes.update).toHaveBeenCalledWith('n1', { scope: 'agent' }, MEMBER);
+  });
+
+  it("widens a conversation note to its project's endeavors", async () => {
+    const { service, notes } = setup();
+
+    await service.updateNote(MEMBER, AGENT, 'n1', { scope: 'project' });
+
+    expect(notes.update).toHaveBeenCalledWith('n1', { scope: 'project' }, MEMBER);
+  });
+
+  it('keeps a note from no project agent-wide', async () => {
+    const { service, notes } = setup();
+    notes.getById.mockResolvedValue({
+      ...note,
+      sourceConversationId: null,
+      projectId: null,
+      scope: 'agent'
+    });
+
+    await expect(
+      service.updateNote(MEMBER, AGENT, 'n1', { scope: 'project' })
+    ).rejects.toMatchObject({ name: 'validationError' });
+    expect(notes.update).not.toHaveBeenCalled();
   });
 });

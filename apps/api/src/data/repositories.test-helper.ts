@@ -7,6 +7,7 @@ import {
   HumanRepository,
   MessageRepository,
   NoteRepository,
+  ProjectRepository,
   ResponsibilityRepository,
   TaskCapabilityRepository,
   TaskRepository
@@ -92,6 +93,8 @@ export function mockConversationRepository(): jest.Mocked<ConversationRepository
     create: jest.fn(),
     getById: jest.fn(),
     update: jest.fn(),
+    setGoalIfEmpty: jest.fn().mockResolvedValue(null),
+    setClosed: jest.fn(),
     list: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
     addMember: jest.fn(),
@@ -173,8 +176,24 @@ export function mockNoteRepository(): jest.Mocked<NoteRepository> {
     getById: jest.fn().mockResolvedValue(null),
     list: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
+    listForProject: jest.fn().mockResolvedValue([]),
+    countForProject: jest.fn().mockResolvedValue(0),
     update: jest.fn(),
     softDelete: jest.fn().mockResolvedValue(true)
+  };
+}
+
+export function mockProjectRepository(): jest.Mocked<ProjectRepository> {
+  return {
+    create: jest.fn(),
+    getById: jest.fn().mockResolvedValue(null),
+    getDefault: jest.fn().mockResolvedValue(null),
+    list: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0),
+    update: jest.fn(),
+    listMembers: jest.fn().mockResolvedValue([]),
+    setMembers: jest.fn().mockResolvedValue(undefined),
+    hasHuman: jest.fn().mockResolvedValue(false)
   };
 }
 

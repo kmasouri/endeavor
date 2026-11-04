@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import {
   addDocumentHandler,
   addMemberHandler,
+  closeConversationHandler,
   deleteDocumentHandler,
   listDocumentsHandler,
   createConversationHandler,
@@ -10,6 +11,7 @@ import {
   listMessagesHandler,
   markReadHandler,
   postMessageHandler,
+  reopenConversationHandler,
   updateConversationHandler
 } from '../../handlers';
 import {
@@ -32,7 +34,7 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     {
       schema: {
         description:
-          'Start a conversation. Names are stored as lowercase letters, numbers, and hyphens, with at most 64 characters after normalization. You become a member; agentIds and humanIds add chosen members.',
+          "Start an endeavor (a conversation) for one goal, in projectId or the default project. Names are stored as lowercase letters, numbers, and hyphens, with at most 64 characters after normalization. You become a member; agentIds and humanIds add chosen members, and the project's default members join too. Without goal, the first message a person posts becomes the goal. doneCriteria is filled in from the goal when left out.",
         tags: ['conversations'],
         headers: actorHeadersSchema,
         body: createConversationBodySchema
@@ -46,7 +48,7 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     {
       schema: {
         description:
-          'Conversations, newest first. In v1 every person sees all of them. Each has unreadCount: messages from others you have not seen yet (always 0 where you are not a member).',
+          'Conversations, newest first. In v1 every person sees all of them. Only open ones are listed unless state is closed or all; projectId keeps one project. Each has unreadCount: messages from others you have not seen yet (always 0 where you are not a member).',
         tags: ['conversations'],
         headers: actorHeadersSchema,
         querystring: listConversationsQuerySchema
@@ -60,7 +62,7 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     {
       schema: {
         description:
-          'Change a conversation: its channel name (at most 64 characters after normalization to lowercase letters, numbers, and hyphens), or its budget for all agent work in it (budgetUsd, null for none).',
+          'Change a conversation: its channel name (at most 64 characters after normalization to lowercase letters, numbers, and hyphens), its budget for all agent work in it (budgetUsd, null for none), its goal, or its done criteria.',
         tags: ['conversations'],
         headers: actorHeadersSchema,
         params: conversationParamsSchema,
@@ -81,6 +83,33 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
       }
     },
     getConversationHandler
+  );
+
+  fastifyInstance.post(
+    '/conversations/:conversationId/close',
+    {
+      schema: {
+        description:
+          'Close the endeavor: a person confirms its goal is done. It is archived and takes no new messages until reopened. Work already running is not stopped.',
+        tags: ['conversations'],
+        headers: actorHeadersSchema,
+        params: conversationParamsSchema
+      }
+    },
+    closeConversationHandler
+  );
+
+  fastifyInstance.post(
+    '/conversations/:conversationId/reopen',
+    {
+      schema: {
+        description: 'Reopen a closed endeavor for follow-ups.',
+        tags: ['conversations'],
+        headers: actorHeadersSchema,
+        params: conversationParamsSchema
+      }
+    },
+    reopenConversationHandler
   );
 
   fastifyInstance.post(
@@ -147,7 +176,7 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     {
       schema: {
         description:
-          "Attach a document as a knowledge source for this conversation's agents. Agents read it but can't change it. Members only.",
+          "Attach a document as a knowledge source for this conversation's agents only. Use /projects/:projectId/documents to share one with every endeavor in the project. Agents read it but can't change it. Members only.",
         tags: ['conversations'],
         headers: actorHeadersSchema,
         params: conversationParamsSchema,
@@ -161,7 +190,8 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     '/conversations/:conversationId/documents',
     {
       schema: {
-        description: 'Documents attached to this conversation.',
+        description:
+          "Documents this conversation's agents see: its project's shared documents and the ones limited to it.",
         tags: ['conversations'],
         headers: actorHeadersSchema,
         params: conversationParamsSchema

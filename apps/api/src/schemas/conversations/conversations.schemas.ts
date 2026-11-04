@@ -25,8 +25,17 @@ export const conversationParamsSchema = z.object({
   conversationId: z.uuid()
 });
 
+// The request the endeavor is for. People never have to write one: the first message becomes it.
+const goalSchema = z.string().trim().min(1).max(20_000);
+const doneCriteriaSchema = z.string().trim().min(1).max(5_000);
+
 export const createConversationBodySchema = z.strictObject({
   title: conversationTitleSchema,
+  // Without one, the endeavor goes into the default project.
+  projectId: z.uuid().optional(),
+  goal: goalSchema.optional(),
+  // Filled in from the goal when left out.
+  doneCriteria: doneCriteriaSchema.optional(),
   agentIds: z.array(z.uuid()).max(20).optional(),
   humanIds: z.array(z.uuid()).max(20).optional()
 });
@@ -35,7 +44,9 @@ export const updateConversationBodySchema = z
   .strictObject({
     title: conversationTitleSchema.optional(),
     // US dollars for all agent work in this conversation. null removes the cap.
-    budgetUsd: z.number().positive().max(100_000).nullable().optional()
+    budgetUsd: z.number().positive().max(100_000).nullable().optional(),
+    goal: goalSchema.optional(),
+    doneCriteria: doneCriteriaSchema.optional()
   })
   .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
 
@@ -61,7 +72,10 @@ export const markReadBodySchema = z.strictObject({
 
 export const listConversationsQuerySchema = z.strictObject({
   limit: z.coerce.number().int().min(1).max(100).default(50),
-  offset: z.coerce.number().int().min(0).default(0)
+  offset: z.coerce.number().int().min(0).default(0),
+  projectId: z.uuid().optional(),
+  // Closed endeavors are archived, so only open ones are listed unless asked.
+  state: z.enum(['open', 'closed', 'all']).default('open')
 });
 
 export const listMessagesQuerySchema = z

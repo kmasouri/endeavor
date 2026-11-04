@@ -8,7 +8,7 @@ interface ErrorDefinition {
 // The key is the error's name in responses. docs/errors.md documents each one.
 //
 // Codes are grouped by feature: 10xxx general, 20xxx items, 30xxx people and access, 40xxx tasks,
-// 50xxx agents, 60xxx conversations, 70xxx catalogs, 80xxx notes.
+// 50xxx agents, 60xxx conversations and projects, 70xxx catalogs, 80xxx notes.
 // Never change or reuse a code once it has shipped; clients may depend on it.
 export const ERRORS = {
   // 10xxx: general
@@ -117,6 +117,22 @@ export const ERRORS = {
     code: 60006,
     statusCode: 422,
     message: 'That agent is not in the directory outside this conversation'
+  },
+  projectNotFound: { code: 60008, statusCode: 404, message: 'Project not found' },
+  projectArchived: {
+    code: 60009,
+    statusCode: 409,
+    message: 'The project is archived. Restore it before starting endeavors in it'
+  },
+  defaultProjectArchive: {
+    code: 60010,
+    statusCode: 409,
+    message: "The default project can't be archived"
+  },
+  conversationClosed: {
+    code: 60011,
+    statusCode: 409,
+    message: 'This endeavor is closed. Reopen it to continue'
   },
 
   // 70xxx: catalogs (skills, connections, grants)

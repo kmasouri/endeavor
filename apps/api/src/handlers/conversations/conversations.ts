@@ -63,6 +63,28 @@ export async function getConversationHandler(
   );
 }
 
+export async function closeConversationHandler(
+  request: FastifyRequest<{ Params: ConversationParams; Headers: ActorHeaders }>
+): Promise<unknown> {
+  return success(
+    await request.server.conversationService.closeConversation(
+      request.headers['x-actor-id'],
+      request.params.conversationId
+    )
+  );
+}
+
+export async function reopenConversationHandler(
+  request: FastifyRequest<{ Params: ConversationParams; Headers: ActorHeaders }>
+): Promise<unknown> {
+  return success(
+    await request.server.conversationService.reopenConversation(
+      request.headers['x-actor-id'],
+      request.params.conversationId
+    )
+  );
+}
+
 export async function addMemberHandler(
   request: FastifyRequest<{
     Params: ConversationParams;

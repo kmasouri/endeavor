@@ -3,8 +3,8 @@ import {
   AgentNote,
   AgentVersion,
   Connection,
-  ConversationDocument,
   Message,
+  ProjectDocument,
   Skill,
   SkillVersion,
   Task
@@ -81,7 +81,7 @@ export function buildTaskPrompt(input: {
   // Agents in the directory that aren't in this conversation, for suggesting specialists.
   directory?: { name: string; purpose: string }[];
   notes?: AgentNote[];
-  documents?: ConversationDocument[];
+  documents?: ProjectDocument[];
   history: Message[];
   nameOf: (message: Message) => string;
 }): string {
@@ -121,7 +121,7 @@ export function buildTaskPrompt(input: {
     lines.push(
       '',
       '## Knowledge sources',
-      'Documents people attached to this conversation. Their owners keep the originals.'
+      'Documents people attached to this project or conversation. Their owners keep the originals.'
     );
     let left = MAX_DOCUMENT_CHARS;
     for (const document of input.documents) {
