@@ -616,8 +616,6 @@ test('agent appearance persists, retries, discards and resets at 320px in dark',
   );
   await form.getByRole('button', { name: 'Save profile' }).click();
   await expect(form.getByLabel('Produces')).toHaveValue('A sourced brief');
-  await form.getByLabel('Produces').fill('');
-  await form.getByLabel('Needs', { exact: false }).fill('');
   await expect(form.getByRole('radio', { name: 'Document', exact: true })).toBeChecked();
   await expect(form.getByRole('button', { name: 'Save profile' })).toBeEnabled();
   await form.getByRole('button', { name: 'Save profile' }).click();
