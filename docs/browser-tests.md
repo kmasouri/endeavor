@@ -2,7 +2,11 @@
 
 The Playwright suite runs Chromium against Vite's **production preview**, so it catches bundled
 CSS ordering problems as well as interaction failures. `npm run check` runs lint, type checks,
-builds, unit tests and this suite in CI. No database or model provider is needed.
+builds, unit tests and this suite locally. CI runs the same checks in parallel jobs: `quality`
+runs lint, type checks, all workspace builds, and unit/pilot tests; `browser` builds the web
+workspace and runs the full browser suite. The final `check` job requires both to succeed.
+Superseded runs for the same PR are canceled; main pushes run independently.
+No database or model provider is needed.
 
 ## Run and inspect
 
@@ -21,9 +25,11 @@ npx playwright show-trace apps/web/test-results/<case>/trace.zip
 ```
 
 Use Node 26 or newer, as required by the root package. Chromium downloads on the first run;
-CI also installs its system libraries. On Linux, `npx playwright install-deps chromium` installs
-missing libraries. The preview owns port 5190 with `strictPort` and refuses to reuse an existing
-server. Wait for another worktree's suite to finish before running; never reuse its build or stop
+CI caches the browser binaries by operating system, architecture, and pinned Playwright version,
+and still installs system libraries on cache hits. The browser job sets `PLAYWRIGHT_BROWSERS_PATH`
+and installs Chromium explicitly before running tests, so the test wrapper skips its install.
+On Linux, `npx playwright install-deps chromium` installs missing libraries. The preview owns
+port 5190 with `strictPort` and refuses to reuse an existing server. Wait for another worktree's suite to finish before running; never reuse its build or stop
 its server. The suite uses two workers, no automatic retries, and a five-minute total timeout.
 
 Each test gets an isolated browser context and intercepted API calls. API writes update only the
@@ -31,7 +37,11 @@ fixture in that context. Fixtures abort requests to other origins and serve loca
 none forwards API calls to a real service. New chat tests also fail on unexpected API paths.
 Keep fixture responses, dates, actor, timezone and locale explicit. The new chat tests fix the
 browser date, wait for fonts, and reduce motion before geometry assertions. Controlled pending
-responses exercise busy states without relying on a particular server speed.
+responses exercise busy states without relying on a particular server speed. For polling and
+elapsed-time tests, install `page.clock` before navigation and before a fixture fixes the date,
+then advance the clock after changing fixture state. Keep assertions after each advance so
+requests and rendering finish before the next transition. Do not replace polling with direct
+reload calls: the test must still prove that the app's timers trigger the update.
 
 Failures retain screenshots and traces in `apps/web/test-results/`; the HTML report is in
 `apps/web/playwright-report/`. These directories are ignored. Geometry cases also save named
