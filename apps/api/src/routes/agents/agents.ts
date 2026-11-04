@@ -68,7 +68,7 @@ export async function agentsRouter(fastifyInstance: FastifyInstance): Promise<vo
     {
       schema: {
         description:
-          'The agent directory: enabled agents you can ask to add to a conversation, with their purpose and capabilities. It never shows instructions, notes, credentials, or conversations.',
+          'The agent directory: enabled agents you can ask to add to a conversation, with purpose, produces, needs, skill names, and capabilities. It never shows instructions, notes, credentials, or conversations.',
         tags: ['agents'],
         headers: actorHeadersSchema,
         querystring: listDirectoryQuerySchema
@@ -82,7 +82,7 @@ export async function agentsRouter(fastifyInstance: FastifyInstance): Promise<vo
     {
       schema: {
         description:
-          'Create an agent with its first configuration (version 1). Roles like QA or research are just configurations. Admins only.',
+          'Create an agent with its first configuration (version 1) and optional produces/needs profile text (500 characters each). Roles like QA or research are just configurations. Admins only.',
         tags: ['agents'],
         headers: actorHeadersSchema,
         body: createAgentBodySchema

@@ -585,6 +585,8 @@ for (const width of [320, 390, 1280]) {
       const form = page
         .locator('form')
         .filter({ has: page.getByRole('heading', { name: 'Profile', exact: true }) });
+      await form.getByLabel('Produces').fill('A sourced brief');
+      await form.getByLabel('Needs', { exact: false }).fill('A question and source documents');
       const preview = form.getByLabel('Avatar preview');
       const defaultStyle = await preview.locator('.avatar').getAttribute('style');
       await form.getByRole('radio', { name: 'Teal', exact: true }).check();
@@ -615,7 +617,9 @@ for (const width of [320, 390, 1280]) {
           name: 'Researcher',
           purpose: 'Researches topics and drafts briefs',
           avatarColor: 'teal',
-          avatarIcon: 'file'
+          avatarIcon: 'file',
+          produces: 'A sourced brief',
+          needs: 'A question and source documents'
         }
       });
       const headingAvatar = page.locator('.agent-heading .avatar');
@@ -626,11 +630,15 @@ for (const width of [320, 390, 1280]) {
       await profile.getByRole('button', { name: 'Edit', exact: true }).click();
       await form.getByRole('radio', { name: 'Sky', exact: true }).check();
       await form.getByRole('radio', { name: 'Shield', exact: true }).check();
+      await form.getByLabel('Produces').fill('Discarded output');
       const beforeDiscard = writes.length;
       await form.getByRole('button', { name: 'Discard changes' }).click();
       expect(writes).toHaveLength(beforeDiscard);
       await expect(headingAvatar.locator(':scope > svg path')).toHaveAttribute('d', documentPath!);
       await profile.getByRole('button', { name: 'Edit', exact: true }).click();
+      await expect(form.getByLabel('Produces')).toHaveValue('A sourced brief');
+      await form.getByLabel('Produces').fill('');
+      await form.getByLabel('Needs', { exact: false }).fill('');
       await expect(form.getByRole('radio', { name: 'Document', exact: true })).toBeChecked();
       await form.getByRole('button', { name: 'Reset appearance' }).click();
       await expect(preview.locator('.avatar')).toHaveAttribute('style', defaultStyle!);
@@ -643,7 +651,12 @@ for (const width of [320, 390, 1280]) {
       await expect(form.getByRole('radio', { name: 'Robot', exact: true })).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath('appearance.png'), fullPage: true });
       await form.getByRole('button', { name: 'Save profile' }).click();
-      expect(writes.at(-1)?.body).toMatchObject({ avatarColor: null, avatarIcon: null });
+      expect(writes.at(-1)?.body).toMatchObject({
+        avatarColor: null,
+        avatarIcon: null,
+        produces: null,
+        needs: null
+      });
       await expect(headingAvatar).toHaveAttribute('style', defaultStyle!);
       expect(writes.some((write) => write.path.endsWith('/config'))).toBe(false);
       expect(errors).toEqual([]);

@@ -2513,7 +2513,9 @@ export class TaskRunnerService {
       task,
       endeavor,
       requesterName,
-      participants,
+      participants: participants.filter(
+        (participant) => participant.type !== 'agent' || participant.id !== agent.id
+      ),
       directory,
       notes,
       documents,
@@ -2535,6 +2537,16 @@ export class TaskRunnerService {
 
   private async loadParticipants(conversationId: string): Promise<ContextParticipant[]> {
     const members = await this.conversationRepository.listMembers(conversationId);
+    const profiles = new Map(
+      (
+        await this.agentRepository.getProfiles(
+          members
+            .filter((member) => member.participant.type === 'agent')
+            .map((member) => member.participant.id),
+          conversationId
+        )
+      ).map((profile) => [profile.id, profile])
+    );
     return Promise.all(
       members.map(async (member) => {
         if (member.participant.type === 'agent') {
@@ -2542,7 +2554,11 @@ export class TaskRunnerService {
           return {
             ...member.participant,
             name: agent?.name ?? 'Unknown agent',
-            purpose: agent?.purpose ?? null
+            purpose: agent?.deletedAt ? null : (agent?.purpose ?? null),
+            produces: profiles.get(member.participant.id)?.produces ?? null,
+            needs: profiles.get(member.participant.id)?.needs ?? null,
+            skillNames: profiles.get(member.participant.id)?.skillNames ?? [],
+            status: profiles.get(member.participant.id)?.status ?? null
           };
         }
         return {

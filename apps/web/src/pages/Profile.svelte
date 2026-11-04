@@ -20,6 +20,8 @@
   } = $props();
   let name = $state(untrack(() => agent.name));
   let purpose = $state(untrack(() => agent.purpose));
+  let produces = $state(untrack(() => agent.produces ?? ''));
+  let needs = $state(untrack(() => agent.needs ?? ''));
   let avatarColor = $state<AgentAppearance['avatarColor']>(untrack(() => agent.avatarColor ?? null));
   let avatarIcon = $state<AgentAppearance['avatarIcon']>(untrack(() => agent.avatarIcon ?? null));
   const colors = { lime: 'Lime', sky: 'Sky', teal: 'Teal' };
@@ -30,12 +32,13 @@
   const action = createAction();
   let changed = $derived(
     name !== agent.name || purpose !== agent.purpose ||
+    produces !== (agent.produces ?? '') || needs !== (agent.needs ?? '') ||
     avatarColor !== (agent.avatarColor ?? null) || avatarIcon !== (agent.avatarIcon ?? null)
   );
   const save = (event: SubmitEvent) => {
     event.preventDefault();
     void action
-      .run(() => api.patch(`/agents/${agent.id}`, { name, purpose, avatarColor, avatarIcon }))
+      .run(() => api.patch(`/agents/${agent.id}`, { name, purpose, produces: produces.trim() || null, needs: needs.trim() || null, avatarColor, avatarIcon }))
       .then((ok) => ok && onSaved());
   };
 </script>
@@ -55,6 +58,17 @@
     Purpose
 
     <input bind:value={purpose} disabled={action.busy} required />
+  </label>
+
+  <label>
+    Produces
+    <textarea bind:value={produces} disabled={action.busy} maxlength={500} rows={2} placeholder="A brief with sources, a patch, or test results"></textarea>
+    <small class="muted">Optional. What this agent hands back. Up to 500 characters.</small>
+  </label>
+  <label>
+    Needs
+    <textarea bind:value={needs} disabled={action.busy} maxlength={500} rows={2} placeholder="A question, source documents, or steps to reproduce"></textarea>
+    <small class="muted">Optional. The input this agent needs. Up to 500 characters.</small>
   </label>
 
   <fieldset disabled={action.busy} class="appearance-editor">

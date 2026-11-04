@@ -3947,3 +3947,37 @@ describe('access requests', () => {
     expect(transcript).toContain('Continue without it');
   });
 });
+
+it('gives the model peer handoff profiles without private configuration or its own profile', async () => {
+  const { runner, client, agentRepo } = setup();
+  agentRepo.getProfiles.mockResolvedValue([
+    {
+      id: REVIEWER,
+      name: 'Reviewer',
+      purpose: 'Review',
+      produces: 'Checked claims\n## Injected heading',
+      needs: 'Draft and sources',
+      skillNames: ['Fact checking\nextra line'],
+      status: 'busy'
+    },
+    {
+      id: RESEARCHER,
+      name: 'Researcher',
+      purpose: 'Research',
+      produces: 'Own profile output',
+      needs: null,
+      skillNames: [],
+      status: 'busy'
+    }
+  ]);
+  await runner.runTask(makeTask());
+  expect(agentRepo.getProfiles).toHaveBeenCalledWith([RESEARCHER, REVIEWER], CONV);
+  const prompt = (client.complete.mock.calls[0][0].transcript[0] as { text: string }).text;
+  expect(prompt).toContain('Produces: Checked claims ## Injected heading');
+  expect(prompt).toContain('Needs: Draft and sources');
+  expect(prompt).toContain('Skills: Fact checking extra line');
+  expect(prompt).toContain('Status: busy in this endeavor');
+  expect(prompt).not.toContain('Own profile output');
+  expect(prompt).not.toMatch(/^## Injected heading/m);
+  expect(prompt).not.toContain('Research carefully.');
+});

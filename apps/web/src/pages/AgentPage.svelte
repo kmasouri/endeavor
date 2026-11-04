@@ -206,6 +206,10 @@
                 <dd>{loadedAgent.name}</dd>
                 <dt>Purpose</dt>
                 <dd>{loadedAgent.purpose}</dd>
+                <dt>Produces</dt>
+                <dd>{loadedAgent.produces || 'Not specified'}</dd>
+                <dt>Needs</dt>
+                <dd>{loadedAgent.needs || 'Not specified'}</dd>
               </dl>
               <p class="caption muted">Not versioned. A change shows everywhere at once.</p>
             </section>{/if}

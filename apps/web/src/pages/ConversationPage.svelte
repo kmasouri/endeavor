@@ -107,7 +107,8 @@
   let replyTo = $state<Message | null>(null);
   const details = createLoad(
     () => api.get<ConversationDetails>(`/conversations/${conversationId}`),
-    () => [conversationId]
+    () => [conversationId],
+    4000
   );
   const messages = createMessageFeed(() => conversationId);
   let scroll = $state<HTMLDivElement | null>(null);

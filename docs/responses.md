@@ -231,3 +231,11 @@ Agent records, directory entries, and agent conversation members include nullabl
 and `avatarIcon` overrides. `null` uses the existing ID-derived color or profile icon.
 `PATCH /agents/:agentId` accepts either field independently; omission preserves the saved value,
 and explicit `null` resets it. See [agent appearance](agents.md#avatar-appearance-ca-92) for choices.
+
+## Agent public profiles
+
+Agent create, read, list, and profile-update responses include nullable `produces` and
+`needs`. Directory entries add those fields and `skillNames` (an array of names). Agent
+members in conversation details add the same fields plus `status`: `idle` or `busy` in
+that endeavor; null for deleted/unavailable profiles. These fields never include private
+instructions, saved notes, or credentials. See [agent profiles](agents.md#public-handoff-profiles-ca-98).
