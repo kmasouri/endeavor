@@ -425,6 +425,7 @@ pre {
   --sidebar-width: var(--sidebar-open-width);
   --sidebar-opacity: 1;
   --sidebar-visibility: visible;
+  --sidebar-projects-display: block;
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: var(--app-bar-height) minmax(0, 1fr);
@@ -435,17 +436,20 @@ pre {
   --sidebar-width: 68px;
   --sidebar-opacity: 0;
   --sidebar-visibility: hidden;
+  --sidebar-projects-display: none;
 }
 .shell.sidebar-collapsed:has(.sidebar :focus-visible) {
   --sidebar-width: var(--sidebar-open-width);
   --sidebar-opacity: 1;
   --sidebar-visibility: visible;
+  --sidebar-projects-display: block;
 }
 @media (hover: hover) and (pointer: fine) {
   .shell.sidebar-collapsed:has(.sidebar:hover) {
     --sidebar-width: var(--sidebar-open-width);
     --sidebar-opacity: 1;
     --sidebar-visibility: visible;
+    --sidebar-projects-display: block;
   }
 }
 .shell > main {

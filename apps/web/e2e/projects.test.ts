@@ -246,15 +246,19 @@ test('projects: shared context, members, scoped schedules, create and archive', 
   await page.getByRole('button', { name: 'Save name', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Delivery team', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Archive project', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'New request', exact: true })).toBeDisabled();
+  await expect(
+    page.locator('main').getByRole('button', { name: 'New request', exact: true })
+  ).toBeDisabled();
   await page.getByRole('button', { name: 'Restore project', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'New request', exact: true })).toBeEnabled();
+  await expect(
+    page.locator('main').getByRole('button', { name: 'New request', exact: true })
+  ).toBeEnabled();
   await page.goto('/app/#/projects/alpha');
-  await expect(page.getByRole('link', { name: /open-goal/ })).toBeVisible();
-  await expect(page.getByRole('link', { name: /other-project/ })).toHaveCount(0);
-  await expect(page.getByRole('link', { name: /old-goal/ })).toBeHidden();
+  await expect(page.locator('main').getByRole('link', { name: /open-goal/ })).toBeVisible();
+  await expect(page.locator('main').getByRole('link', { name: /other-project/ })).toHaveCount(0);
+  await expect(page.locator('main').getByRole('link', { name: /old-goal/ })).toBeHidden();
   await page.getByText('Archived endeavors · 1', { exact: true }).click();
-  await expect(page.getByRole('link', { name: /old-goal/ })).toBeVisible();
+  await expect(page.locator('main').getByRole('link', { name: /old-goal/ })).toBeVisible();
   await page.getByRole('button', { name: 'Knowledge sources', exact: true }).click();
   await page.getByText('Attach a document', { exact: true }).click();
   await page.getByLabel('Document title').fill('Reference');
@@ -279,7 +283,7 @@ test('projects: request retry creates one endeavor, reply stays there, goal edit
   const { state, errors } = await fixture(page);
   state.failMessage = true;
   await page.goto('/app/#/projects/beta');
-  await page.getByRole('button', { name: 'New request', exact: true }).click();
+  await page.locator('main').getByRole('button', { name: 'New request', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'New request', exact: true });
   await expect(dialog.getByRole('textbox')).toBeFocused();
   await dialog.getByRole('textbox').fill('Build the report');
@@ -349,12 +353,17 @@ for (const { theme, width } of [
       true
     );
     await captureReviewScreenshot(page, { path: `/tmp/ca102-project-${width}.png` });
-    await page.getByRole('button', { name: 'New request', exact: true }).click();
+    await page.locator('main').getByRole('button', { name: 'New request', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'New request', exact: true });
     expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('button', { name: 'New request', exact: true })).toBeFocused();
-    await page.getByRole('link', { name: /open-goal/ }).click();
+    await expect(
+      page.locator('main').getByRole('button', { name: 'New request', exact: true })
+    ).toBeFocused();
+    await page
+      .locator('main')
+      .getByRole('link', { name: /open-goal/ })
+      .click();
     await expect(page.getByRole('region', { name: 'Endeavor goal' })).toBeVisible();
     const stateBox = (await page
       .getByRole('region', { name: 'Endeavor goal' })
@@ -378,3 +387,96 @@ for (const { theme, width } of [
     expect(errors).toEqual([]);
   });
 }
+
+for (const width of [1440, 320]) {
+  test(`project sidebar: hierarchy, navigation and request context at ${width}px`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const { state, errors } = await fixture(page, 'dark');
+    state.conversations.find((c) => c.id === 'other')!.unreadCount = 7;
+    await page.goto('/app/#/conversations/open');
+    await expect(page.getByRole('heading', { name: 'open-goal', exact: true })).toBeVisible();
+    if (width < 700) await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+    const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
+    await expect.poll(() => sidebar.evaluate((el) => el.getBoundingClientRect().width)).toBe(264);
+    const tree = sidebar.getByRole('region', { name: 'Projects', exact: true });
+    await expect(sidebar.getByRole('link', { name: 'Endeavors', exact: true })).toHaveCount(0);
+    await expect(sidebar.getByText('Recent', { exact: true })).toHaveCount(0);
+    const alpha = tree
+      .locator('.sidebar-project')
+      .filter({ has: page.getByRole('link', { name: 'Alpha', exact: true }) });
+    const beta = tree
+      .locator('.sidebar-project')
+      .filter({ has: page.getByRole('link', { name: /Beta/, exact: false }) });
+    await expect(alpha.getByRole('link', { name: '#open-goal', exact: true })).toHaveAttribute(
+      'aria-current',
+      'page'
+    );
+    await expect(beta.getByRole('link', { name: /other-project/ })).toBeHidden();
+    await expect(beta.getByLabel('7 unread', { exact: true })).toBeVisible();
+    const projectBox = (await alpha.locator('.sidebar-project-link').boundingBox())!;
+    const endeavorBox = (await alpha
+      .getByRole('link', { name: '#open-goal', exact: true })
+      .boundingBox())!;
+    expect(endeavorBox.x).toBeGreaterThan(projectBox.x);
+    expect(endeavorBox.x + endeavorBox.width).toBeLessThanOrEqual(
+      (await sidebar.boundingBox())!.x + (await sidebar.boundingBox())!.width
+    );
+    await alpha.getByRole('button', { name: 'Collapse Alpha', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(alpha.getByRole('link', { name: '#open-goal', exact: true })).toBeHidden();
+    await page.keyboard.press('Enter');
+    await beta.getByRole('button', { name: 'Expand Beta', exact: true }).click();
+    await beta.getByRole('link', { name: /other-project/ }).click();
+    await expect(page).toHaveURL(/conversations\/other$/);
+    if (width < 700) await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+    await expect(beta.locator('.count-badge')).toHaveCount(0);
+    await sidebar.getByRole('button', { name: 'New request', exact: true }).click();
+    await expect(page.getByRole('dialog').getByText(/Start an endeavor in Beta/)).toBeVisible();
+    await page.keyboard.press('Escape');
+    await tree.getByRole('link', { name: 'Beta', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Beta', exact: true })).toBeVisible();
+    if (width < 700) await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+    await sidebar.getByRole('link', { name: 'Agents', exact: true }).click();
+    if (width < 700) await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+    await expect(tree).toBeVisible();
+    await expect(alpha.getByRole('link', { name: '#open-goal', exact: true })).toBeVisible();
+    await captureReviewScreenshot(page, { path: `/tmp/ca110-sidebar-${width}.png` });
+    await sidebar.getByRole('link', { name: 'Manage projects', exact: true }).click();
+    await expect(
+      page.locator('main').getByRole('button', { name: 'New project', exact: true })
+    ).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+}
+
+test('project sidebar: search expands its project and a project-list failure retains endeavor links', async ({
+  page
+}) => {
+  const { state, errors } = await fixture(page);
+  await page.goto('/app/#/conversations/open');
+  const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
+  await expect(sidebar.getByRole('button', { name: 'Expand Beta', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'false'
+  );
+  await page.getByRole('button', { name: 'Search endeavors', exact: true }).click();
+  const search = page.getByRole('dialog', { name: 'Find an endeavor' });
+  await search.getByLabel('Search endeavors', { exact: true }).fill('other-project');
+  await search.getByLabel('Search endeavors', { exact: true }).press('Enter');
+  await expect(sidebar.getByRole('link', { name: '#other-project', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
+  await expect(sidebar.getByRole('button', { name: 'Collapse Beta', exact: true })).toHaveAttribute(
+    'aria-expanded',
+    'true'
+  );
+  state.failProjects = true;
+  await page.reload();
+  await expect(sidebar.getByText('Projects unavailable', { exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('link', { name: '#other-project', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'New request', exact: true })).toBeDisabled();
+  expect(errors).toEqual([]);
+});

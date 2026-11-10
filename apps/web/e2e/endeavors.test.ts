@@ -163,15 +163,14 @@ async function mockApi(page: Page, options: Options = {}) {
 async function openNew(page: Page) {
   if (await page.getByRole('button', { name: 'Open sidebar', exact: true }).count())
     await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
-  const button = page
-    .locator('.sidebar')
-    .getByRole('button', { name: 'New endeavor', exact: true });
+  const button = page.locator('.sidebar').getByRole('button', { name: 'New request', exact: true });
   await button.hover();
   const geometry = await button.evaluate((element) => {
     const bounds = element.getBoundingClientRect();
     const icon = element.querySelector('svg')!.getBoundingClientRect();
     const label = [...element.childNodes].find(
-      (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()
+      (node) =>
+        node.nodeType === Node.ELEMENT_NODE && (node as Element).classList.contains('sidebar-label')
     )!;
     const range = document.createRange();
     range.selectNodeContents(label);
@@ -201,7 +200,7 @@ test('dark: collapsed sidebar keeps icons and expands on hover and keyboard focu
   const width = () => sidebar.evaluate((element) => element.getBoundingClientRect().width);
   await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
   await expect.poll(width).toBe(68);
-  const iconOffsets = await sidebar.locator('nav a').evaluateAll((links) =>
+  const iconOffsets = await sidebar.locator('nav > a').evaluateAll((links) =>
     links.map((link) => {
       const bounds = link.getBoundingClientRect();
       const icon = link.querySelector('svg')!.getBoundingClientRect();
@@ -214,7 +213,7 @@ test('dark: collapsed sidebar keeps icons and expands on hover and keyboard focu
   await expect(agents).toHaveAttribute('href', '#/agents');
   await agents.hover();
   await expect.poll(width).toBe(264);
-  await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'New request', exact: true })).toBeVisible();
   await agents.click();
   await expect(page).toHaveURL(/#\/agents$/);
   await expect(agents).toHaveAttribute('aria-current', 'page');
@@ -284,9 +283,9 @@ test.describe('touch sidebar', () => {
     await expect.poll(width).toBe(68);
     await page.getByRole('button', { name: 'Open sidebar', exact: true }).tap();
     await expect.poll(width).toBe(264);
-    await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toHaveCount(0);
-    await expect(sidebar.locator('.sidebar-conversations')).toHaveCount(0);
-    await sidebar.getByRole('link', { name: 'Endeavors', exact: true }).tap();
+    await expect(sidebar.getByRole('button', { name: 'New request', exact: true })).toBeVisible();
+    await expect(sidebar.locator('.sidebar-conversations')).toBeVisible();
+    await sidebar.getByRole('link', { name: '#heat-pump-brief', exact: true }).tap();
     await expect.poll(width).toBe(68);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
@@ -319,13 +318,13 @@ test('restores the last accessible selection, preserves links, and searches olde
       .getByRole('navigation', { name: 'Main', exact: true })
       .getByRole('link', { name: destination, exact: true })
       .click();
-    await expect(page.locator('.sidebar-conversations')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'New endeavor', exact: true })).toHaveCount(0);
+    await expect(page.locator('.sidebar-conversations')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New request', exact: true })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Main', exact: true })).toBeVisible();
   }
   await page.getByRole('button', { name: 'Profile and settings', exact: true }).click();
-  await expect(page.locator('.sidebar-conversations')).toHaveCount(0);
-  await page.getByRole('link', { name: 'Endeavors', exact: true }).click();
+  await expect(page.locator('.sidebar-conversations')).toBeVisible();
+  await page.getByRole('link', { name: '#heat-pump-brief', exact: true }).click();
   await expect(page.locator('.sidebar-conversations')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   await page.reload();
@@ -347,7 +346,7 @@ test('unavailable saved selection falls back, and switching people resets access
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Switch person', exact: true }).click();
   await page.getByRole('button', { name: 'Lee', exact: true }).click();
-  await page.getByRole('link', { name: 'Endeavors', exact: true }).click();
+  await page.getByRole('link', { name: '#website-reliability', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'website-reliability', exact: true })
   ).toBeVisible();
@@ -416,7 +415,9 @@ test('cancel, Close and Escape preserve the thread and draft, trap focus, and re
     if (dismissal === 'Escape') await page.keyboard.press('Escape');
     else await dialog.getByRole('button', { name: dismissal, exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'New endeavor', exact: true })).toBeFocused();
+    await expect(
+      page.locator('.sidebar').getByRole('button', { name: 'New request', exact: true })
+    ).toBeFocused();
     await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
       'Keep this draft'
     );

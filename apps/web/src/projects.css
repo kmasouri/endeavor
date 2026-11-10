@@ -66,23 +66,6 @@
   padding: 16px 24px;
   margin: 0;
 }
-.sidebar-projects {
-  padding: 12px 16px;
-  border-top: 1px solid var(--border-100);
-}
-.sidebar-projects .label {
-  display: block;
-  margin-bottom: 8px;
-}
-.sidebar-projects a {
-  display: block;
-  padding: 8px 0;
-  color: var(--text);
-  text-decoration: none;
-}
-.sidebar-projects a.active {
-  color: var(--accent);
-}
 @media (max-width: 700px) {
   .endeavor-goal {
     padding: 10px 16px;
@@ -100,12 +83,6 @@
 .projects-page .header-actions {
   flex-wrap: wrap;
 }
-.sidebar-projects {
-  width: calc(var(--sidebar-open-width) - 25px);
-  flex-shrink: 0;
-  opacity: var(--sidebar-opacity);
-  visibility: var(--sidebar-visibility);
-}
 @media (max-width: 700px) {
   .projects-page .page-header {
     align-items: stretch;
@@ -121,4 +98,84 @@
 
 .endeavor-goal .row > strong {
   flex: 1 0 140px;
+}
+
+.sidebar-new-request {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  width: calc(var(--sidebar-width) - 25px);
+  padding: 8px 12.5px;
+  min-height: 38px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-align: left;
+  flex-shrink: 0;
+}
+.sidebar-new-request > svg {
+  flex-shrink: 0;
+}
+.sidebar-projects {
+  display: var(--sidebar-projects-display);
+  width: calc(var(--sidebar-open-width) - 25px);
+  margin: 0 0 14px;
+  opacity: var(--sidebar-opacity);
+  visibility: var(--sidebar-visibility);
+  transition: opacity 160ms ease;
+}
+.sidebar nav .sidebar-projects-heading {
+  margin-top: 14px;
+  color: var(--text-300);
+  font-size: 12px;
+}
+.sidebar-project-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.project-disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 36px;
+  padding: 0;
+}
+.sidebar nav .sidebar-project-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  min-width: 0;
+  flex: 1;
+  padding: 8px 6px;
+}
+.sidebar-projects .sidebar-conversations {
+  width: auto;
+  margin-left: 48px;
+}
+.sidebar-projects .sidebar-conversations[hidden] {
+  display: none;
+}
+.sidebar-projects .sidebar-conversations > a {
+  width: 100%;
+  padding: 8px 10px;
+}
+.project-empty {
+  padding: 8px 10px;
+}
+@media (max-width: 700px) {
+  .sidebar-new-request,
+  .project-disclosure,
+  .sidebar nav .sidebar-project-link,
+  .sidebar-projects .sidebar-conversations > a {
+    min-height: 44px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-projects {
+    transition: none;
+  }
 }
