@@ -98,18 +98,20 @@ Delivering the same message twice finds the same task (its run key is `message:<
 The endeavor header’s member avatars open a compact People and agents dialog. It shows current members and a searchable people and agents list matching creation. People can select several additions and choose whether to hide earlier messages. Successful additions disappear from the choices; a failed addition keeps the remaining selection for retry. Details remains a separate panel for activity and artifacts.
 
 The web interface calls conversations **Endeavors**. Existing conversation URLs and APIs remain
-compatible. Endeavors opens the last accessible selection saved for the current person in this
-browser, falling back to another accessible endeavor or a first-endeavor prompt. Recent displays
+compatible. Opening the app restores the last accessible selection saved for the current person
+in this browser, falling back to another accessible endeavor or a first-endeavor prompt. The sidebar displays
 Discord/Slack-style names such as `#heat-pump-brief`, with lowercase words separated by hyphens.
 The name is canonical in storage and every view; the leading `#` is a navigation decoration.
 The app header and Cmd/Ctrl K open search across
 all accessible endeavors, including older API pages. The list is refreshed when the person changes.
 
-**+ New** opens a native modal with a required name and optional searchable people and agents.
+**New request** opens a modal for the request text in the selected project. The first message
+becomes the goal and can start agent work. The legacy creation dialog, used when no project is
+available, takes a required name and optional searchable people and agents.
 No agents are selected by default. Cancel, Close, and Escape restore the opener; saving disables
-those actions until the request finishes. Errors retain the form values. Success updates Recent,
-selects the new endeavor, and focuses its message box. Creating an endeavor never posts a message
-or starts agent work. The full chat, Details, member controls, and history remain available.
+those actions until the request finishes. Errors retain the form values. Success updates the sidebar,
+selects the new endeavor, and focuses its message box. The legacy creation dialog creates an empty
+endeavor without posting a message or starting agent work. The full chat, Details, member controls, and history remain available.
 
 `POST /conversations` accepts `title` (at most 200 input characters; nonempty after normalization), optional `agentIds`, and
 optional `humanIds` (up to 20 each). It validates every chosen participant before creating the
@@ -349,3 +351,10 @@ the dialog keeps the endeavor ID and retries that message with the same client k
 the existing endeavor composer. Edit goal changes the goal and done criteria; Confirm goal done
 asks for confirmation before closing. Closed endeavors show their history with a Reopen endeavor
 control instead of the composer. Global search includes open and closed endeavors.
+
+
+The sidebar shows projects with expandable endeavor lists throughout the app. New request is at
+the top and starts in the current endeavor's project, the open project, or General when browsing
+other sections. Project names open their overview, and the Projects heading opens project
+management. The selected project's list expands automatically on navigation. Collapsed project
+rows show the sum of unread messages in their endeavors; the open endeavor contributes zero.

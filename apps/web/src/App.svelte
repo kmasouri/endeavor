@@ -24,6 +24,7 @@
   import ConversationPage from './pages/ConversationPage.svelte';
   import NewRequest from './pages/NewRequest.svelte';
   import ProjectsPage from './pages/ProjectsPage.svelte';
+  import ProjectSidebar from './ProjectSidebar.svelte';
   import ProjectPage from './pages/ProjectPage.svelte';
   import { loadAll } from './pages/agent-data';
   import './projects.css';
@@ -39,7 +40,7 @@
   import Icon from './Icon.svelte';
   import SettingsPage from './pages/SettingsPage.svelte';
   import { timeDisplay } from './time-display.svelte';
-  import { applyTheme, conversationChannelName } from './appearance';
+  import { applyTheme } from './appearance';
   import { clampSidebarWidth, readSidebarWidth, sidebarWidth, writeSidebarWidth } from './sidebar-width';
 
   let guard = $state<() => boolean>(() => true);
@@ -82,7 +83,7 @@
   let switching = $state(false);
   let creating = $state(false);
   let searching = $state(false);
-  let currentProjectId = $state<string | null>(null);
+  let readyConversation = $state<Conversation | null>(null);
   let focusConversation = $state<string | null>(null);
   let additions = $state<Conversation[]>([]);
   let switchError = $state<string | null>(null);
@@ -101,7 +102,7 @@
     () => [actorId],
     15000
   );
-  const projects = createLoad(() => actorId ? loadAll<Project>('/projects') : Promise.resolve([]), () => [actorId], 10000);
+  const projects = createLoad(async () => actorId ? (await Promise.all([loadAll<Project>('/projects'), loadAll<Project>('/projects?archived=true')])).flat() : [], () => [actorId], 10000);
   const searchable = createLoad(() => actorId && searching ? loadEndeavors('all') : Promise.resolve([]), () => [actorId, searching]);
   const conversations = createLoad(
     () =>
@@ -133,7 +134,7 @@
       searching = false;
       additions = [];
       focusConversation = null;
-      currentProjectId = null;
+      readyConversation = null;
       savedPerson = person;
       setActorId(id);
       actorId = id;
@@ -174,15 +175,17 @@
     const selected = recent.find((conversation) => conversation.id === saved) ?? recent[0];
     if (selected) window.location.hash = `/conversations/${selected.id}`;
   });
-  // The open conversation is being read, so it shows no count even before the list refreshes.
-  const unreadIn = (conversation: Conversation) =>
-    section === 'conversations' && id === conversation.id ? 0 : (conversation.unreadCount ?? 0);
   const openConversation = (id: string) => {
     searching = false;
     window.location.hash = `/conversations/${id}`;
     if (window.innerWidth < 700) collapsed = true;
   };
-  const requestProject = $derived((projects.data ?? []).find((p) => p.id === (section === 'projects' ? id : currentProjectId)) ?? (!currentProjectId ? (projects.data ?? []).find((p) => p.isDefault) : undefined));
+  const selectedConversation = $derived(section === 'conversations' ? recent.find((conversation) => conversation.id === id)
+    ?? (readyConversation?.id === id ? readyConversation : null) : null);
+  const currentProjectId = $derived(section === 'projects' ? id : selectedConversation?.projectId);
+  const requestProject = $derived((projects.data ?? []).find((p) => p.id === currentProjectId)
+    ?? (!currentProjectId ? (projects.data ?? []).find((p) => p.isDefault) : undefined));
+  const requestDisabled = $derived(Boolean(requestProject?.archivedAt || (currentProjectId && !requestProject) || !projects.data || (section === 'conversations' && id && !selectedConversation)));
   const newEndeavor = () => { if (guard()) creating = true; };
   const searchEndeavors = () => {
     if (!creating && !picking && !searching && guard()) searching = true;
@@ -257,15 +260,15 @@
     </header>
     <aside class="sidebar" id="main-sidebar" aria-label="Sidebar">
       <nav aria-label="Main">
-        {#each [['projects', 'Projects', 'catalogs'], ['', 'Endeavors', 'conversations'], ['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['skills', 'Skills', 'file'], ['connections', 'Connections', 'connections'], ['setup', 'Setup', 'setup']] as [path, label, icon] (path)}
+        <button class="quiet sidebar-new-request" aria-label="New request" title="New request" disabled={requestDisabled} onclick={newEndeavor}><Icon name="plus" /><span class="sidebar-label">New request</span></button>
+        {#key actorId}<ProjectSidebar projects={projects.data ?? []} conversations={recent} selectedProjectId={currentProjectId ?? requestProject?.id} selectedConversationId={section === 'conversations' ? id : undefined} projectSelected={section === 'projects' && Boolean(id)} projectError={projects.error} conversationError={conversations.error} onNavigate={() => { if (window.innerWidth < 700) collapsed = true; }} />{/key}
+        {#each [['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['skills', 'Skills', 'file'], ['connections', 'Connections', 'connections'], ['setup', 'Setup', 'setup']] as [path, label, icon] (path)}
           <a
-            class:active={path === ''
-              ? !section || section === 'conversations'
-              : navigationSection === path}
+            class:active={navigationSection === path}
             href={`#/${path}`}
             aria-label={label}
             title={label}
-            aria-current={(path === '' ? !section || section === 'conversations' : navigationSection === path) ? 'page' : undefined}
+            aria-current={navigationSection === path ? 'page' : undefined}
             onclick={() => {
               if (window.innerWidth < 700) collapsed = true;
             }}
@@ -278,40 +281,6 @@
           </a>
         {/each}
       </nav>
-      {#if !section || section === 'conversations' || section === 'projects'}
-        <div class="sidebar-projects">
-          <span class="label">Projects</span>
-          <ErrorNote error={projects.error} />
-          {#each projects.data ?? [] as project (project.id)}<a class="ellipsis" class:active={section === 'projects' && id === project.id} href={`#/projects/${project.id}`} title={project.name} onclick={() => { if (window.innerWidth < 700) collapsed = true; }}>{project.name}</a>{/each}
-        </div>
-      {/if}
-      {#if !section || section === 'conversations'}
-        <div class="sidebar-conversations">
-          <div class="row">
-            <span class="label grow">Recent</span><button class="quiet new-endeavor" aria-label="New endeavor" disabled={Boolean(currentProjectId && projects.data && !requestProject)} onclick={newEndeavor}><Icon name="plus" size={14} /> New</button>
-          </div>
-          <ErrorNote error={conversations.error} />
-          {#each recent as conversation (conversation.id)}
-            <a
-              class:active={section === 'conversations' && id === conversation.id}
-              class:unread={unreadIn(conversation) > 0}
-              aria-label={unreadIn(conversation)
-                ? `${conversationChannelName(conversation.title)}, ${unreadIn(conversation)} unread`
-                : undefined}
-              href={`#/conversations/${conversation.id}`}
-              title={conversation.title}
-              aria-current={section === 'conversations' && id === conversation.id ? 'page' : undefined}
-              onclick={() => {
-                if (window.innerWidth < 700) collapsed = true;
-              }}
-              ><span class="ellipsis grow">{conversationChannelName(conversation.title)}</span
-              >{#if unreadIn(conversation)}<span class="count-badge" aria-hidden="true"
-                  >{unreadIn(conversation)}</span
-                >{/if}</a
-            >
-          {/each}
-        </div>
-      {/if}
       <div class="sidebar-footer">
         <div class="sidebar-profile">
           <button
@@ -406,7 +375,7 @@
         {:else if section === 'conversations' && id}
           <ConversationPage conversationId={id} initialRunId={new URLSearchParams(hash.split('?')[1]).get('run')} {me} onReady={(conversation) => {
             rememberEndeavor(actorId!, conversation.id);
-            currentProjectId = conversation.projectId ?? null;
+            readyConversation = conversation;
             const focus = focusConversation === conversation.id;
             if (focus) focusConversation = null;
             return focus;
@@ -421,7 +390,7 @@
             {:else}
               <h1>What do you want to accomplish?</h1>
               <p class="muted">Start your first endeavor. Bring in people and agents whenever you need them.</p>
-              <button aria-label="New endeavor" disabled={Boolean(currentProjectId && projects.data && !requestProject)} onclick={newEndeavor}><Icon name="plus" /> New endeavor</button>
+              <button aria-label="New endeavor" disabled={requestDisabled} onclick={newEndeavor}><Icon name="plus" /> New endeavor</button>
             {/if}
           </section>
         {/if}

@@ -66,7 +66,7 @@ hyphens, with a decorative `#` only in navigation. Creation input and API create
 normalize names; migration 034 upgrades existing names and adds a database constraint. IDs and all
 conversation relationships stay intact. Selection is remembered per person in browser storage and restored only from the current
 accessible list. Paginated lists are fully loaded for restoration and search; old requests cannot
-publish into another person's shell. A successful creation refreshes Recent and focuses the
+publish into another person's shell. A successful creation refreshes the project’s endeavors and focuses the
 composer. Optional initial human and agent members use the existing membership validation; no
 message or agent invocation occurs during creation. See [conversations](conversations.md).
 
@@ -74,9 +74,12 @@ The sidebar stays mounted when collapsed, with a compact rail of navigation icon
 with a mouse or focusing a control with the keyboard expands it temporarily. The header toggle
 pins it open. On narrow screens, the expanded sidebar overlays the page and navigation returns
 it to the rail. Width and label transitions respect the browser's reduced-motion setting.
-Recent endeavors and its New action appear only in the Endeavors view. Other sections retain
-main navigation and show their own page content. Returning to Endeavors restores the last
-accessible conversation for the selected person.
+The sidebar groups endeavors under expandable projects in every section. New request stays at the
+top and uses the current project, or General outside a project. Project names open their overview;
+the Projects heading opens project creation and archive management. Selecting an endeavor expands
+its project. Unread counts stay on endeavors and roll up onto collapsed projects. Search and direct
+conversation links remain available. Returning to the app restores the last accessible conversation
+for the selected person.
 
 Agents uses the centered page frame, a searchable list, a separate creation page, and Overview,
 Configuration, and Versions tabs. Configuration uses catalog search with chosen-item removal
