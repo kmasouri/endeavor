@@ -157,7 +157,7 @@ export type NoteScope = (typeof NOTE_SCOPES)[number];
 // one endeavor.
 export interface ProjectDocument {
   id: string;
-  projectId: string;
+  projectId: string | null;
   conversationId: string | null;
   title: string;
   content: string;
@@ -247,9 +247,37 @@ export interface AgentVersion {
   createdAt: Date;
 }
 
+export const PROJECT_COLORS = [
+  'slate',
+  'sand',
+  'coral',
+  'orange',
+  'yellow',
+  'green',
+  'teal',
+  'blue',
+  'violet',
+  'pink'
+] as const;
+export const PROJECT_ICONS = [
+  'folder',
+  'language',
+  'science',
+  'code',
+  'description',
+  'work_outline',
+  'build',
+  'lightbulb'
+] as const;
+
+export interface ProjectAppearance {
+  icon?: (typeof PROJECT_ICONS)[number] | null;
+  color?: (typeof PROJECT_COLORS)[number] | null;
+}
+
 // A long-lived group of endeavors. It holds knowledge sources, saved notes, and the people and
 // agents added to each new endeavor in it.
-export interface Project {
+export interface Project extends ProjectAppearance {
   id: string;
   name: string;
   // Human-supplied background included in every endeavor of this project.
@@ -275,7 +303,7 @@ export type EndeavorState = 'open' | 'closed';
 export interface Conversation {
   id: string;
   title: string;
-  projectId: string;
+  projectId: string | null;
   // The request that opened the endeavor. null until someone asks for something.
   goal: string | null;
   goalMessageId: string | null;

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PROJECT_COLORS, PROJECT_ICONS } from '../../shared/types';
 
 const projectNameSchema = z.string().trim().min(1).max(100);
 const projectAboutSchema = z.string().trim().max(5_000).nullable();
@@ -12,8 +13,14 @@ export const projectDocumentParamsSchema = z.object({
   documentId: z.uuid()
 });
 
+const appearance = {
+  icon: z.enum(PROJECT_ICONS).nullable().optional(),
+  color: z.enum(PROJECT_COLORS).nullable().optional()
+};
+
 export const createProjectBodySchema = z.strictObject({
   name: projectNameSchema,
+  ...appearance,
   about: projectAboutSchema.optional(),
   // Default people and agents, added to every new endeavor in the project.
   agentIds: z.array(z.uuid()).max(20).optional(),
@@ -23,6 +30,7 @@ export const createProjectBodySchema = z.strictObject({
 export const updateProjectBodySchema = z
   .strictObject({
     name: projectNameSchema.optional(),
+    ...appearance,
     about: projectAboutSchema.optional(),
     // Replace that kind of default member. The other kind is kept.
     agentIds: z.array(z.uuid()).max(20).optional(),

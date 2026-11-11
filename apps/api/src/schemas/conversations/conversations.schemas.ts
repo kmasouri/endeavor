@@ -32,7 +32,7 @@ const doneCriteriaSchema = z.string().trim().min(1).max(5_000);
 export const createConversationBodySchema = z.strictObject({
   title: conversationTitleSchema,
   // Without one, the endeavor goes into the default project.
-  projectId: z.uuid().optional(),
+  projectId: z.uuid().nullable().optional(),
   goal: goalSchema.optional(),
   // Filled in from the goal when left out.
   doneCriteria: doneCriteriaSchema.optional(),

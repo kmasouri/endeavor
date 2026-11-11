@@ -163,7 +163,9 @@ async function mockApi(page: Page, options: Options = {}) {
 async function openNew(page: Page) {
   if (await page.getByRole('button', { name: 'Open sidebar', exact: true }).count())
     await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
-  const button = page.locator('.sidebar').getByRole('button', { name: 'New request', exact: true });
+  const button = page
+    .locator('.sidebar')
+    .getByRole('button', { name: 'New endeavor', exact: true });
   await button.hover();
   const geometry = await button.evaluate((element) => {
     const bounds = element.getBoundingClientRect();
@@ -187,7 +189,7 @@ async function openNew(page: Page) {
   expect(geometry.sameLine).toBe(true);
   if (page.viewportSize()!.width <= 700) expect(geometry.height).toBeGreaterThanOrEqual(44);
   await button.click();
-  return page.getByRole('dialog', { name: 'What do you want to accomplish?' });
+  return page.getByRole('region', { name: 'New endeavor' });
 }
 
 test('dark: collapsed sidebar keeps icons and expands on hover and keyboard focus', async ({
@@ -213,7 +215,7 @@ test('dark: collapsed sidebar keeps icons and expands on hover and keyboard focu
   await expect(agents).toHaveAttribute('href', '#/agents');
   await agents.hover();
   await expect.poll(width).toBe(264);
-  await expect(sidebar.getByRole('button', { name: 'New request', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
   await agents.click();
   await expect(page).toHaveURL(/#\/agents$/);
   await expect(agents).toHaveAttribute('aria-current', 'page');
@@ -283,7 +285,7 @@ test.describe('touch sidebar', () => {
     await expect.poll(width).toBe(68);
     await page.getByRole('button', { name: 'Open sidebar', exact: true }).tap();
     await expect.poll(width).toBe(264);
-    await expect(sidebar.getByRole('button', { name: 'New request', exact: true })).toBeVisible();
+    await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
     await expect(sidebar.locator('.sidebar-conversations')).toBeVisible();
     await sidebar.getByRole('link', { name: '#heat-pump-brief', exact: true }).tap();
     await expect.poll(width).toBe(68);
@@ -319,7 +321,7 @@ test('restores the last accessible selection, preserves links, and searches olde
       .getByRole('link', { name: destination, exact: true })
       .click();
     await expect(page.locator('.sidebar-conversations')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'New request', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Main', exact: true })).toBeVisible();
   }
   await page.getByRole('button', { name: 'Profile and settings', exact: true }).click();
@@ -396,79 +398,42 @@ test('dark at 320px: search backdrop dismisses without losing the thread or draf
   expect(errors).toEqual([]);
 });
 
-test('cancel, Close and Escape preserve the thread and draft, trap focus, and restore the opener', async ({
-  page
-}) => {
+test('leaving a new endeavor asks before discarding its draft', async ({ page }) => {
   const { state, errors } = await mockApi(page);
   await page.goto('/app/#/conversations/site');
-  await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Keep this draft');
-  for (const dismissal of ['Cancel', 'Close', 'Escape']) {
-    const dialog = await openNew(page);
-    await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
-    await expect(dialog.locator('input[type=checkbox]:checked')).toHaveCount(0);
-    await dialog.getByRole('button', { name: 'Cancel', exact: true }).focus();
-    // Start is disabled: Cancel is the last enabled control.
-    await page.keyboard.press('Tab');
-    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
-    if (dismissal === 'Escape') await page.keyboard.press('Escape');
-    else await dialog.getByRole('button', { name: dismissal, exact: true }).click();
-    await expect(dialog).toHaveCount(0);
-    await expect(
-      page.locator('.sidebar').getByRole('button', { name: 'New request', exact: true })
-    ).toBeFocused();
-    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
-      'Keep this draft'
-    );
-    await expect(page).toHaveURL(/#\/conversations\/site$/);
-  }
+  const draft = await openNew(page);
+  const message = draft.getByRole('textbox', { name: 'First message' });
+  await expect(message).toBeFocused();
+  await message.fill('Keep this draft');
+  const existing = page.getByRole('link', { name: '#website-reliability', exact: true });
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await existing.click();
+  await expect(page).toHaveURL(/new-endeavor$/);
+  await expect(message).toHaveValue('Keep this draft');
+  page.once('dialog', (dialog) => dialog.accept());
+  await existing.click();
+  await expect(page).toHaveURL(/conversations\/site$/);
   expect(state.posts).toEqual([]);
   expect(errors).toEqual([]);
 });
 
-test('keeps failed values and membership, prevents duplicate saves, then selects and focuses the new chat', async ({
+test('standalone creation keeps a failed first draft and prevents duplicate sends', async ({
   page
 }) => {
   const { state, errors } = await mockApi(page, { fail: true, slow: true });
   await page.goto('/app/');
-  const dialog = await openNew(page);
-  const name = dialog.getByLabel('Name', { exact: true });
-  await name.fill('! @ 🧪');
-  await expect(dialog.getByRole('button', { name: 'Start', exact: true })).toBeDisabled();
-  await name.fill('Heat');
-  await name.press('Space');
-  await expect(name).toHaveValue('heat-');
-  await name.pressSequentially('Pumps @ Brief!!');
-  await expect(name).toHaveValue('heat-pumps-brief-');
-  await name.press('Tab');
-  await expect(name).toHaveValue('heat-pumps-brief');
-  await name.fill('  Explain heat pumps  ');
-  await dialog.getByLabel('Find people or agents').fill('research');
-  await dialog.getByRole('checkbox', { name: 'Add Researcher' }).check();
-  await expect(dialog.getByRole('img', { name: 'Researcher · agent', exact: true })).toBeVisible();
-  await expect(dialog.getByText('agent', { exact: true })).toHaveCount(0);
-  await expect(dialog.locator('.agent-badge')).toHaveCount(1);
-  const badge = dialog.locator('.agent-badge');
-  const avatar = badge.locator('..');
-  const badgeBox = await badge.boundingBox();
-  const avatarBox = await avatar.boundingBox();
-  expect(badgeBox!.width).toBeLessThan(avatarBox!.width);
-  expect(badgeBox!.x + badgeBox!.width / 2).toBeGreaterThan(avatarBox!.x + avatarBox!.width / 2);
-  expect(badgeBox!.y + badgeBox!.height / 2).toBeGreaterThan(avatarBox!.y + avatarBox!.height / 2);
-  await dialog.getByLabel('Find people or agents').fill('lee');
-  await dialog.getByRole('checkbox', { name: 'Add Lee' }).check();
-  await dialog.getByRole('button', { name: 'Start', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Starting…', exact: true })).toBeDisabled();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByText('Please try again.', { exact: true })).toBeVisible();
-  await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('explain-heat-pumps');
-  await expect(dialog.getByRole('checkbox', { name: 'Add Lee' })).toBeChecked();
+  const draft = await openNew(page);
+  const message = draft.getByRole('textbox', { name: 'First message' });
+  const send = draft.getByRole('button', { name: 'Send message' });
+  await expect(send).toBeDisabled();
+  await message.fill('Explain heat pumps');
+  await message.press('Enter');
+  await expect(send).toBeDisabled();
+  await expect(draft.getByText('Please try again.', { exact: true })).toBeVisible();
+  await expect(message).toHaveValue('Explain heat pumps');
   expect(state.posts).toHaveLength(1);
   state.fail = false;
-  await dialog.getByRole('button', { name: 'Start', exact: true }).click();
-  await expect(dialog).toHaveCount(0);
+  await send.click();
   await expect(
     page.getByRole('heading', { name: 'explain-heat-pumps', exact: true })
   ).toBeVisible();
@@ -476,17 +441,12 @@ test('keeps failed values and membership, prevents duplicate saves, then selects
   await expect(
     page.getByRole('link', { name: '#explain-heat-pumps', exact: true })
   ).toHaveAttribute('aria-current', 'page');
-  await page.getByRole('button', { name: 'Show details', exact: true }).click();
-  const details = page.getByRole('complementary', { name: 'Conversation details' });
-  await expect(details.getByText('Lee', { exact: true })).toBeVisible();
-  await details.getByRole('button', { name: /1 more agents/ }).click();
-  await expect(details.getByRole('button', { name: /Researcher.*Free/ })).toBeVisible();
-  expect(state.posts[1]).toEqual({
-    title: 'explain-heat-pumps',
-    agentIds: ['agent-1'],
-    humanIds: ['person-2']
-  });
-  expect(state.writes).toEqual(['POST /conversations', 'POST /conversations']);
+  expect(state.posts[1]).toEqual({ title: 'explain-heat-pumps', projectId: null });
+  expect(state.writes.filter((write) => write.startsWith('POST '))).toEqual([
+    'POST /conversations',
+    'POST /conversations',
+    'POST /conversations/created/messages'
+  ]);
   expect(errors).toEqual([]);
 });
 
@@ -502,14 +462,14 @@ for (const { theme, width } of [
       page.getByRole('heading', { name: 'What do you want to accomplish?' })
     ).toBeVisible();
     const dialog = await openNew(page);
-    await dialog.getByLabel('Name', { exact: true }).fill('A readable outcome ');
-    await expect(dialog.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
+    await dialog.getByRole('textbox', { name: 'First message' }).fill('A readable outcome ');
+    await expect(dialog.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
     await captureReviewScreenshot(page, { path: `/tmp/ca52-${theme}-${width}-dialog.png` });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
     expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-    await dialog.getByLabel('Name', { exact: true }).press('Enter');
+    await dialog.getByRole('textbox', { name: 'First message' }).press('Enter');
     await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeFocused();
     await page.getByRole('button', { name: 'Search endeavors', exact: true }).click();
     await page.getByRole('dialog').getByLabel('Search endeavors', { exact: true }).fill('missing');
@@ -520,7 +480,7 @@ for (const { theme, width } of [
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
-    expect(state.posts[0]).toEqual({ title: 'a-readable-outcome', agentIds: [], humanIds: [] });
+    expect(state.posts[0]).toEqual({ title: 'a-readable-outcome', projectId: null });
     expect(errors).toEqual([]);
   });
 }
@@ -669,7 +629,8 @@ test('finder is wider and keeps long names on one line at every width', async ({
   }
   await page.keyboard.press('Escape');
   const creation = await openNew(page);
-  await expect(creation.getByLabel('Name', { exact: true })).toHaveAttribute('maxlength', '64');
-  await creation.getByLabel('Name', { exact: true }).pressSequentially('a'.repeat(65));
-  await expect(creation.getByLabel('Name', { exact: true })).toHaveValue('a'.repeat(64));
+  const firstMessage = creation.getByRole('textbox', { name: 'First message' });
+  await firstMessage.fill('a'.repeat(65));
+  await firstMessage.press('Enter');
+  await expect.poll(() => state.posts[0]).toEqual({ title: 'a'.repeat(64), projectId: null });
 });

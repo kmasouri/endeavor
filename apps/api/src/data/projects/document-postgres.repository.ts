@@ -5,7 +5,7 @@ import { DocumentRepository, DocumentVisibility } from './document.repository';
 
 interface DocumentRow {
   id: string;
-  project_id: string;
+  project_id: string | null;
   conversation_id: string | null;
   title: string;
   content: string;
@@ -17,7 +17,7 @@ export class DocumentPostgresRepository implements DocumentRepository {
   constructor(private readonly db: FastifyInstance['pg']) {}
 
   async add(input: {
-    projectId: string;
+    projectId: string | null;
     conversationId: string | null;
     title: string;
     content: string;
@@ -48,8 +48,8 @@ export class DocumentPostgresRepository implements DocumentRepository {
     const where =
       'projectId' in visibility
         ? 'project_id = $1 AND conversation_id IS NULL'
-        : `project_id = (SELECT project_id FROM endeavor.conversations WHERE id = $1)
-           AND (conversation_id IS NULL OR conversation_id = $1)`;
+        : `project_id IS NOT DISTINCT FROM (SELECT project_id FROM endeavor.conversations WHERE id = $1)
+           AND (conversation_id = $1 OR (conversation_id IS NULL AND project_id IS NOT NULL))`;
     const result = await this.db.query<DocumentRow>(
       `SELECT id, project_id, conversation_id, title, added_by_human_id, created_at,
               CASE WHEN $3::int IS NULL THEN content ELSE left(content, $3::int) END AS content

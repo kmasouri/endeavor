@@ -1123,16 +1123,17 @@ export class TaskRunnerService {
     if (text.length > MAX_NOTE_CHARS) {
       throw new AppError('validationError', 'Keep notes under 2,000 characters.');
     }
-    // Saved for the conversation's project, so every endeavor in it sees the note, but no other
-    // project does. The tool call is the note's key, so a replay after a crash finds the first
-    // save.
+    // Standalone endeavors keep their notes within the conversation.
+    const conversation = task.conversationId
+      ? await this.conversationRepository.getById(task.conversationId)
+      : null;
     const note = await this.noteRepository.create({
       clientKey: `tool:${task.id}:${callId}`,
       agentId: agent.id,
       body: text,
       sourceTaskId: task.id,
       sourceConversationId: task.conversationId,
-      scope: task.conversationId ? 'project' : 'agent',
+      scope: conversation?.projectId ? 'project' : task.conversationId ? 'conversation' : 'agent',
       createdBy: agentActor
     });
     await this.taskRepository.addEvent(task.id, TASK_EVENTS.noteSaved, agentActor, {
