@@ -87,7 +87,7 @@ import { buildMcpToolName, isMcpToolName, parseMcpConnectionId } from './mcp-too
 import { callTaskModel, ModelCallStoppedError } from './model-call';
 import { calculateCostUsd, formatDollars, PriceTable, startOfMonth } from './pricing';
 import { planRun } from './schedule';
-import { startResponsibilityRun } from './scheduled-runs';
+import { responsibilityRunError, startResponsibilityRun } from './scheduled-runs';
 import { countEventsOfType, countEventsSinceLast, findBudgetOverrun } from './task-budget';
 import { TASK_EVENTS } from './task-events';
 import { ignoreStateConflict, ignoreWaitAlreadyResolved, TaskLifecycle } from './task-lifecycle';
@@ -264,12 +264,8 @@ export class TaskRunnerService {
     let started = false;
     if (plan.start) {
       const result = await startResponsibilityRun(
-        {
-          taskRepository: this.taskRepository,
-          agentRepository: this.agentRepository,
-          conversationRepository: this.conversationRepository,
-          lifecycle: this.lifecycle
-        },
+        this.taskRepository,
+        this.lifecycle,
         responsibility,
         {
           runKey: `schedule:${responsibility.id}:${plan.slot.toISOString()}`,
@@ -281,11 +277,12 @@ export class TaskRunnerService {
               : undefined
         }
       );
-      if ('skippedReason' in result) {
-        this.runnerLogger.onScheduledRunSkipped(responsibility.id, result.skippedReason);
+      if ('reason' in result) {
+        if (result.reason === 'changed') return;
+        this.runnerLogger.onScheduledRunSkipped(responsibility.id, responsibilityRunError(result.reason).message);
       } else {
         started = true;
-        this.runnerLogger.onScheduledRun(responsibility.id, result.task.id, plan.skipped);
+        this.runnerLogger.onScheduledRun(responsibility.id, result.run.taskId, plan.skipped);
       }
     } else if (plan.ask) {
       await this.askToCatchUp(responsibility, plan.slot, plan.skipped, plan.nextRunAt);
@@ -384,23 +381,25 @@ export class TaskRunnerService {
       });
       return null;
     }
-    const authorName = await this.lookupParticipantName(getAuthorRef(message));
+    const scheduled = await this.taskRepository.getScheduledStarter(message.id, agent.id);
+    const authorName = scheduled ? null : await this.lookupParticipantName(getAuthorRef(message));
     const { task, created } = await this.taskRepository.create({
       runKey: `message:${message.id}:${agent.id}`,
       conversationId: message.conversationId,
       ownerAgentId: agent.id,
       agentVersionId: agent.currentVersionId,
-      title: `Respond to ${authorName}: ${shortenForTitle(message.body)}`,
-      brief: message.body,
-      completionCriteria: DEFAULT_RESPONSE_CRITERIA,
+      title: scheduled?.title ?? `Respond to ${authorName}: ${shortenForTitle(message.body)}`,
+      brief: scheduled?.brief ?? message.body,
+      completionCriteria: scheduled?.completionCriteria ?? DEFAULT_RESPONSE_CRITERIA,
       reviewRequired: false,
-      requestedByType: message.authorType === 'system' ? 'schedule' : message.authorType,
-      requestedById: message.authorId,
+      requestedByType: scheduled?.requestedByType ?? (message.authorType === 'system' ? 'schedule' : message.authorType),
+      requestedById: scheduled ? scheduled.requestedById : message.authorId,
       requestMessageId: message.id,
       parentTaskId: message.authorType === 'agent' ? message.taskId : null,
       restartedFromTaskId: null,
-      responsibilityId: null
+      responsibilityId: scheduled?.responsibilityId ?? null
     });
+    if (task.conversationId !== message.conversationId) return null;
     if (!created && task.runKey !== `message:${message.id}:${agent.id}`) {
       return this.deliverUpdate(task, message, agent, author);
     }

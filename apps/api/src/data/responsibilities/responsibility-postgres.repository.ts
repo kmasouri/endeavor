@@ -15,7 +15,8 @@ import {
 
 interface ResponsibilityRow {
   id: string;
-  agent_id: string;
+  project_id: string;
+  agent_id: string | null;
   conversation_id: string | null;
   title: string;
   brief: string;
@@ -34,6 +35,7 @@ interface ResponsibilityRow {
 }
 
 const CHANGE_COLUMNS: Record<keyof ResponsibilityChanges, string> = {
+  agentId: 'agent_id',
   title: 'title',
   brief: 'brief',
   completionCriteria: 'completion_criteria',
@@ -51,9 +53,9 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
     const result = await this.db.query<ResponsibilityRow>(
       `INSERT INTO endeavor.responsibilities (
          id, agent_id, conversation_id, title, brief, completion_criteria, interval_minutes,
-         missed_run_policy, next_run_at, created_by_human_id, recurrence
+         missed_run_policy, next_run_at, created_by_human_id, recurrence, project_id
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
        RETURNING *`,
       [
         randomUUID(),
@@ -66,7 +68,8 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
         input.missedRunPolicy,
         input.nextRunAt,
         input.createdByHumanId,
-        input.recurrence
+        input.recurrence,
+        input.projectId
       ]
     );
     return toResponsibility(result.rows[0]);
@@ -82,6 +85,7 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
 
   async list(input: {
     agentId?: string;
+    projectId?: string;
     status?: ResponsibilityStatus;
     limit: number;
     offset: number;
@@ -91,20 +95,22 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
        FROM endeavor.responsibilities
        WHERE ($1::uuid IS NULL OR agent_id = $1)
          AND ($2::text IS NULL OR status = $2)
+         AND ($3::uuid IS NULL OR project_id = $3)
        ORDER BY created_at DESC, id
-       LIMIT $3 OFFSET $4`,
-      [input.agentId ?? null, input.status ?? null, input.limit, input.offset]
+       LIMIT $4 OFFSET $5`,
+      [input.agentId ?? null, input.status ?? null, input.projectId ?? null, input.limit, input.offset]
     );
     return result.rows.map(toResponsibility);
   }
 
-  async count(input: { agentId?: string; status?: ResponsibilityStatus }): Promise<number> {
+  async count(input: { agentId?: string; projectId?: string; status?: ResponsibilityStatus }): Promise<number> {
     const result = await this.db.query<{ total: number }>(
       `SELECT count(*)::int AS total
        FROM endeavor.responsibilities
        WHERE ($1::uuid IS NULL OR agent_id = $1)
-         AND ($2::text IS NULL OR status = $2)`,
-      [input.agentId ?? null, input.status ?? null]
+         AND ($2::text IS NULL OR status = $2)
+         AND ($3::uuid IS NULL OR project_id = $3)`,
+      [input.agentId ?? null, input.status ?? null, input.projectId ?? null]
     );
     return result.rows[0].total;
   }
@@ -187,8 +193,9 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
       slot: Date;
       decision: 'run' | 'wait';
       task_id: string | null;
+      run_key: string | null;
     }>(
-      `SELECT d.slot, d.decision, d.task_id FROM endeavor.catch_up_decisions d
+      `SELECT d.slot, d.decision, d.task_id, d.run_key FROM endeavor.catch_up_decisions d
        JOIN endeavor.responsibilities r ON r.id = d.responsibility_id
        WHERE r.id = $1 AND r.status = 'enabled' AND r.next_run_at > clock_timestamp()
          AND d.next_run_at = r.next_run_at AND ($2::timestamptz IS NULL OR d.slot = $2)
@@ -196,13 +203,14 @@ export class ResponsibilityPostgresRepository implements ResponsibilityRepositor
       [responsibilityId, slot ?? null]
     );
     const row = result.rows[0];
-    return row ? { slot: row.slot, decision: row.decision, taskId: row.task_id } : null;
+    return row ? { slot: row.slot, decision: row.decision, taskId: row.task_id, runKey: row.run_key } : null;
   }
 }
 
 function toResponsibility(row: ResponsibilityRow): Responsibility {
   return {
     id: row.id,
+    projectId: row.project_id,
     agentId: row.agent_id,
     conversationId: row.conversation_id,
     title: row.title,

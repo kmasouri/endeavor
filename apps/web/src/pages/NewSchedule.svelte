@@ -1,16 +1,17 @@
 <script lang="ts">
   import { loadAll } from './agent-data';
-  import { type Agent, api, type Conversation } from '../api';
+  import { type Agent, api, type Project } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import { createAction, createLoad } from '../state.svelte';
   import { getDeviceTimezone, timeDisplay } from '../time-display.svelte';
   import { policyLabels, summarizeRecurrence, formatTimezoneLabel, weekdays } from '../schedules';
 
-  let { onCreated, onDiscard, conversationIds }: { conversationIds?: string[]; onCreated: () => void; onDiscard: () => void } = $props();
-  const agents = createLoad(() => api.list<Agent>('/agents?limit=100'), () => []);
-  const conversations = createLoad(() => loadAll<Conversation>('/conversations'), () => []);
+  let { onCreated, onDiscard, projects, project }: { projects: Project[]; project?: Project; onCreated: () => void; onDiscard: () => void } = $props();
+  const agents = createLoad(() => loadAll<Agent>('/agents'), () => []);
   let agentId = $state('');
-  let conversationId = $state('');
+  let selectedProjectId = $state('');
+  const projectId = $derived(project?.id ?? selectedProjectId);
+  const openProjects = $derived(projects.filter((project) => !project.archivedAt));
   let title = $state('');
   let brief = $state('');
   let criteria = $state('');
@@ -28,9 +29,9 @@
   const action = createAction();
   async function create(event: SubmitEvent) {
     event.preventDefault();
-    if (invalid) return;
+    if (invalid || !projectId) return;
     const ok = await action.run(() => api.post('/responsibilities', {
-      agentId, ...(conversationId && { conversationId }), title, brief,
+      projectId, agentId: agentId || null, title, brief,
       completionCriteria: criteria,
       ...(recurrence ? { recurrence } : {
         intervalMinutes: minutes,
@@ -50,14 +51,18 @@
   <label>What to do each time <textarea bind:value={brief} rows={3} placeholder="Tell the agent what to do on every run" required></textarea></label>
   <label>Done when <input bind:value={criteria} placeholder="How the agent knows a run is finished" required /></label>
   <div class="grid2">
-    <label>Agent <select bind:value={agentId} required><option value="">Choose an agent…</option>
-      {#each agents.data?.data ?? [] as agent (agent.id)}<option value={agent.id}>{agent.name}</option>{/each}
+    <label>Project
+      {#if project}<input value={project.name} readonly />
+      {:else}<select bind:value={selectedProjectId} required><option value="">Choose a project…</option>
+      {#each openProjects as project (project.id)}<option value={project.id}>{project.name}</option>{/each}
+    </select>{/if}
+    </label>
+    <label>Starting agent <select bind:value={agentId}><option value="">Choose automatically</option>
+      {#each (agents.data ?? []).filter((agent) => !agent.disabledAt && agent.currentVersionId) as agent (agent.id)}<option value={agent.id}>{agent.name}</option>{/each}
     </select></label>
-    <label>Post results in <select bind:value={conversationId} required={Boolean(conversationIds)}><option value="">{conversationIds ? 'Choose an endeavor…' : 'Nowhere; see run history'}</option>
-      {#each (conversations.data ?? []).filter((c) => !conversationIds || conversationIds.includes(c.id)) as conversation (conversation.id)}<option value={conversation.id}>{conversation.title}</option>{/each}
-    </select><span class="muted small">The agent must already be in that conversation.</span></label>
   </div>
-  <ErrorNote error={agents.error ?? conversations.error} />
+  <p class="muted small">Each run opens a new endeavor in this project.</p>
+  <ErrorNote error={agents.error} />
   <fieldset class="schedule-when"><legend>When</legend>
     <label class="schedule-control">Repeat <select bind:value={frequency}>
       <option value="daily">Daily</option><option value="weekdays">Weekdays</option><option value="weekly">Weekly</option><option value="interval">At intervals</option>
@@ -82,6 +87,6 @@
     {#each Object.entries(policyLabels) as [value, label] (value)}<option {value}>{label}</option>{/each}
   </select></label>
   <p class="muted small">Schedules need this computer awake and the app running. Calendar runs keep the same source local time when the clocks change. A time skipped by a clock change is skipped; a repeated time runs once.</p>
-  <div class="schedule-footer row wrap"><button disabled={action.busy || invalid || !agentId}>Create schedule</button><button type="button" class="secondary" disabled={action.busy} onclick={onDiscard}>Discard</button></div>
+  <div class="schedule-footer row wrap"><button disabled={action.busy || invalid || !projectId}>Create schedule</button><button type="button" class="secondary" disabled={action.busy} onclick={onDiscard}>Discard</button></div>
   <ErrorNote error={action.error} />
 </form>

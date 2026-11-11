@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { CreateTaskInput } from './task.repository';
+import { CreateTaskInput, StartResponsibilityRunInput } from './task.repository';
 import { TaskPostgresRepository } from './task-postgres.repository';
 
 const slot = new Date('2026-10-29T12:00:00Z');
@@ -32,110 +32,100 @@ function setup() {
   return { repository, query, release, outsideQuery };
 }
 
-describe('scheduled task persistence', () => {
-  it('rejects an invalidated slot without inserting a task and releases its connection', async () => {
+const scheduled: StartResponsibilityRunInput = {
+  responsibilityId: 'r1',
+  projectId: 'p1',
+  agentId: null,
+  runKey: input.runKey,
+  endeavorTitle: 'check-service',
+  title: 'Check service',
+  goal: 'Check the service',
+  completionCriteria: 'Report',
+  startedBy: { type: 'system', id: null },
+  expectedNextRunAt: slot,
+  expectedUpdatedAt: slot
+};
+
+describe('schedule run persistence', () => {
+  it('rejects an invalidated slot without creating an endeavor', async () => {
     const { repository, query, release, outsideQuery } = setup();
-    expect(await repository.createScheduled(input, slot)).toBeNull();
-    expect(query.mock.calls[2]).toEqual([
-      expect.stringMatching(/status = 'enabled' AND next_run_at = \$3\s+FOR SHARE/),
-      ['r1', 'a1', slot]
-    ]);
+    expect(await repository.startResponsibilityRun(scheduled)).toEqual({ reason: 'changed' });
     expect(query.mock.calls.some(([sql]) => sql.includes('INSERT'))).toBe(false);
     expect(query).toHaveBeenLastCalledWith('COMMIT');
     expect(outsideQuery).not.toHaveBeenCalled();
     expect(release).toHaveBeenCalledTimes(1);
   });
 
-  it('recovers a conflicting run on the locked connection before committing', async () => {
-    const { repository, query, release, outsideQuery } = setup();
-    query.mockImplementation(async (sql: string) => {
-      if (sql.includes('FROM endeavor.responsibilities')) return { rows: [{ id: 'r1' }] };
-      if (sql.includes('WHERE run_key')) return { rows: [{ id: 't1', run_key: input.runKey }] };
-      return { rows: [] };
+  it('replays the existing endeavor without creating a new one', async () => {
+    const { repository, query } = setup();
+    query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({
+      rows: [{ run_key: scheduled.runKey, conversation_id: 'c1', created_at: slot,
+        task_id: null, state: 'waiting' }]
     });
-    expect(await repository.createScheduled(input, slot)).toMatchObject({
-      task: { id: 't1', runKey: input.runKey },
+    expect(await repository.startResponsibilityRun(scheduled)).toMatchObject({
+      run: { runKey: scheduled.runKey, conversationId: 'c1', state: 'waiting' },
       created: false
     });
-    expect(query).toHaveBeenLastCalledWith('COMMIT');
-    expect(outsideQuery).not.toHaveBeenCalled();
-    expect(release).toHaveBeenCalledTimes(1);
+    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT'))).toBe(false);
   });
 
-  it('rolls back a failed insert before releasing the schedule lock', async () => {
-    const { repository, query, release } = setup();
-    const failure = new Error('Insert failed');
+  function mockAvailableSchedule(query: jest.Mock) {
     query.mockImplementation(async (sql: string) => {
-      if (sql.includes('FROM endeavor.responsibilities')) return { rows: [{ id: 'r1' }] };
-      if (sql.includes('INSERT')) throw failure;
+      if (sql.includes('SELECT created_by_human_id')) return { rows: [{ created_by_human_id: 'h1' }] };
+      if (sql.includes('SELECT id FROM endeavor.responsibilities')) return { rowCount: 1 };
+      if (sql.includes('SELECT 1 FROM endeavor.responsibility_run_history')) return { rowCount: 0 };
+      if (sql.includes('FROM endeavor.projects')) return { rowCount: 1 };
+      if (sql.includes('RETURNING created_at')) return { rows: [{ created_at: slot }] };
       return { rows: [] };
     });
-    await expect(repository.createScheduled(input, slot)).rejects.toBe(failure);
-    expect(query).toHaveBeenLastCalledWith('ROLLBACK');
-    expect(release).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('atomic catch-up decisions', () => {
-  const resolution = { responsibilityId: 'r1', agentId: 'a1', slot, task: input };
-  function catchUpSetup() {
-    const state = setup();
-    state.query.mockImplementation(async (sql: string) => {
-      if (sql.includes('FROM endeavor.agents'))
-        return { rows: [{ disabled_at: null, deleted_at: null, current_version_id: 'v1' }] };
-      if (sql.includes('FROM endeavor.responsibilities')) return { rows: [{ id: 'r1' }] };
-      if (sql.includes('INSERT INTO endeavor.tasks'))
-        return { rows: [{ id: 't1', run_key: input.runKey }] };
-      if (sql.includes('INSERT INTO endeavor.catch_up_decisions'))
-        return { rows: [{ responsibility_id: 'r1' }] };
-      return { rows: [] };
-    });
-    return state;
   }
-  it.each([
-    'INSERT INTO endeavor.tasks',
-    'INSERT INTO endeavor.catch_up_decisions',
-    'UPDATE endeavor.responsibilities'
-  ])('rolls back both task and question when %s fails', async (failing) => {
-    const { repository, query, release } = catchUpSetup();
-    const original = query.getMockImplementation()!;
-    query.mockImplementation(async (sql: string, ...args: unknown[]) => {
-      if (sql.includes(failing)) throw new Error('Failure');
-      return original(sql, ...args);
-    });
-    await expect(repository.resolveCatchUp(resolution)).rejects.toThrow('Failure');
+
+  it('creates an endeavor and a durable decision before committing an unpinned run', async () => {
+    const { repository, query } = setup();
+    mockAvailableSchedule(query);
+    const result = await repository.startResponsibilityRun(scheduled);
+    expect(result).toMatchObject({ run: { taskId: null, state: 'routing' }, created: true });
+    const writes = query.mock.calls.filter(([sql]) => sql.includes('INSERT'));
+    expect(writes.map(([sql]) => sql.match(/INSERT INTO endeavor\.(\w+)/)?.[1])).toEqual([
+      'conversations', 'conversation_members', 'messages', 'responsibility_runs', 'routing_decisions'
+    ]);
+    expect(writes[0][1]).toEqual([
+      expect.any(String), scheduled.endeavorTitle, scheduled.projectId, scheduled.goal,
+      scheduled.completionCriteria, 'h1'
+    ]);
+    expect(query).toHaveBeenLastCalledWith('COMMIT');
+  });
+
+  it('rolls back the run if a catch-up slot expires before saving its answer', async () => {
+    const { repository, query, release } = setup();
+    mockAvailableSchedule(query);
+    expect(await repository.startResponsibilityRun({
+      ...scheduled, expectedNextRunAt: undefined, catchUpSlot: slot
+    })).toEqual({ reason: 'changed' });
     expect(query).toHaveBeenLastCalledWith('ROLLBACK');
     expect(release).toHaveBeenCalledTimes(1);
   });
-  it('does not consume a question when a competing open task won the insert', async () => {
-    const { repository, query } = catchUpSetup();
-    const original = query.getMockImplementation()!;
-    query.mockImplementation(async (sql: string, ...args: unknown[]) => {
-      if (sql.includes('INSERT INTO endeavor.tasks') || sql.includes('WHERE run_key'))
-        return { rows: [] };
-      if (sql.includes('SELECT * FROM endeavor.tasks WHERE responsibility_id'))
-        return { rows: [{ id: 'other', run_key: 'manual:other' }] };
-      return original(sql, ...args);
+
+  it('rolls back a failed catch-up answer before releasing its lock', async () => {
+    const { repository, query, release } = setup();
+    query.mockImplementation(async (sql: string) => {
+      if (sql.includes('INSERT INTO endeavor.catch_up_decisions')) throw new Error('Failure');
+      return { rows: [] };
     });
-    expect(await repository.resolveCatchUp(resolution)).toMatchObject({
-      task: { id: 'other' },
-      created: false
-    });
-    expect(
-      query.mock.calls.some(([sql]) => sql.includes('INSERT INTO endeavor.catch_up_decisions'))
-    ).toBe(false);
-    expect(query.mock.calls.some(([sql]) => sql.includes('UPDATE endeavor.responsibilities'))).toBe(
-      false
-    );
+    await expect(repository.waitForNextResponsibilityRun('r1', slot)).rejects.toThrow('Failure');
+    expect(query).toHaveBeenLastCalledWith('ROLLBACK');
+    expect(release).toHaveBeenCalledTimes(1);
   });
-  it('rechecks eligibility after acquiring the lock, before any insert', async () => {
-    const { repository, query } = catchUpSetup();
-    const original = query.getMockImplementation()!;
-    query.mockImplementation(async (sql: string, ...args: unknown[]) =>
-      sql.includes('clock_timestamp()') ? { rows: [] } : original(sql, ...args)
+
+  it('saves the wait decision and clears the question in one statement', async () => {
+    const { repository, query } = setup();
+    query.mockResolvedValue({ rowCount: 1 });
+    expect(await repository.waitForNextResponsibilityRun('r1', slot)).toBe(true);
+    expect(query).toHaveBeenCalledWith(
+      expect.stringMatching(/INSERT INTO endeavor.catch_up_decisions[\s\S]*UPDATE endeavor.responsibilities/),
+      ['r1', slot, 'wait', null]
     );
-    expect(await repository.resolveCatchUp(resolution)).toBeNull();
-    expect(query.mock.calls.some(([sql]) => sql.includes('INSERT'))).toBe(false);
+    expect(query).toHaveBeenLastCalledWith('COMMIT');
   });
 });
 

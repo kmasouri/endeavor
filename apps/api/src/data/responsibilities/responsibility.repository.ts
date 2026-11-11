@@ -6,7 +6,8 @@ import {
 } from '../../shared/types';
 
 export interface CreateResponsibilityInput {
-  agentId: string;
+  projectId: string;
+  agentId: string | null;
   conversationId: string | null;
   title: string;
   brief: string;
@@ -19,6 +20,7 @@ export interface CreateResponsibilityInput {
 }
 
 export interface ResponsibilityChanges {
+  agentId?: string | null;
   title?: string;
   brief?: string;
   completionCriteria?: string;
@@ -33,6 +35,7 @@ export interface CatchUpDecision {
   slot: Date;
   decision: 'run' | 'wait';
   taskId: string | null;
+  runKey: string | null;
 }
 
 export interface ResponsibilityRepository {
@@ -40,11 +43,12 @@ export interface ResponsibilityRepository {
   getById(responsibilityId: string): Promise<Responsibility | null>;
   list(input: {
     agentId?: string;
+    projectId?: string;
     status?: ResponsibilityStatus;
     limit: number;
     offset: number;
   }): Promise<Responsibility[]>;
-  count(input: { agentId?: string; status?: ResponsibilityStatus }): Promise<number>;
+  count(input: { agentId?: string; projectId?: string; status?: ResponsibilityStatus }): Promise<number>;
   // Cancelled is final: returns null without changing a cancelled responsibility.
   update(responsibilityId: string, changes: ResponsibilityChanges): Promise<Responsibility | null>;
   // Enabled responsibilities whose next run is due.

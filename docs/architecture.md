@@ -105,8 +105,10 @@ align their metadata and reflow based on the page width. It separates source cal
 from viewer-local next-run and history instants. Calendar recurrence stores a named source timezone,
 local time, frequency, and optional ISO weekdays alongside durable UTC slots. The task service
 computes source dates through clock changes, skipping gaps and choosing the earlier repeated instant.
-The existing scheduler and run keys retain restart recovery and missed-run handling; a partial
-unique index also prevents different starts from creating competing open runs for one responsibility.
+Projects own schedules. Each run opens a fresh endeavor and starts a pinned agent or queues a
+routing decision in the same transaction. The run key survives retries while routing waits for
+a person. Schedule locks serialize starts, and a partial unique index limits each schedule to
+one open starter task. Missed slots still follow the schedule’s catch-up policy.
 See `docs/scheduling.md` for API compatibility and migration steps. `profile-state.svelte.ts` keeps separate drafts for
 the two settings tabs, retains failed saves for retry, and guards navigation and person switching
 until edits are saved or discarded. `PATCH /humans/me` updates only the selected person's profile

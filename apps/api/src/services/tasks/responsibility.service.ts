@@ -3,6 +3,7 @@ import {
   AgentRepository,
   ConversationRepository,
   HumanRepository,
+  ProjectRepository,
   ResponsibilityRepository,
   TaskRepository
 } from '../../data';
@@ -14,14 +15,15 @@ import {
   MissedRunPolicy,
   Responsibility,
   ResponsibilityStatus,
-  Task
+  ResponsibilityRun
 } from '../../shared/types';
 import { findNextCalendarRun } from './calendar';
-import { startResponsibilityRun } from './scheduled-runs';
+import { responsibilityRunError, startResponsibilityRun } from './scheduled-runs';
 import { TaskLifecycle } from './task-lifecycle';
 
 export interface ResponsibilityInput {
-  agentId: string;
+  projectId?: string;
+  agentId?: string | null;
   conversationId?: string;
   title: string;
   brief: string;
@@ -49,35 +51,33 @@ export class ResponsibilityService {
     private readonly conversationRepository: ConversationRepository,
     private readonly humanRepository: HumanRepository,
     private readonly responsibilityLogger: ResponsibilityLogger,
-    taskLogger: TaskLogger
+    taskLogger: TaskLogger,
+    private readonly projectRepository: ProjectRepository
   ) {
     this.lifecycle = new TaskLifecycle(taskRepository, taskLogger);
   }
 
   async create(actorId: string, input: ResponsibilityInput): Promise<Responsibility> {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
-    const agent = await this.agentRepository.getById(input.agentId);
-    if (!agent) {
-      throw new AppError('agentNotFound', `Agent ${input.agentId} was not found`);
+    const conversation = input.conversationId
+      ? await this.conversationRepository.getById(input.conversationId)
+      : null;
+    if (input.conversationId && !conversation) throw new AppError('conversationNotFound');
+    if (conversation && input.projectId && input.projectId !== conversation.projectId) {
+      throw new AppError('validationError', 'The endeavor belongs to a different project.');
     }
-    if (agent.disabledAt || !agent.currentVersionId) {
-      throw new AppError('agentUnavailable', `${agent.name} can't run scheduled work now`);
-    }
-    if (input.conversationId) {
-      const member = await this.conversationRepository.getMember(input.conversationId, {
-        type: 'agent',
-        id: agent.id
-      });
-      if (!member) {
-        throw new AppError(
-          'agentNotInConversation',
-          `${agent.name} is not in that conversation. Add it first`
-        );
-      }
-    }
+    const projectId = input.projectId ?? conversation?.projectId;
+    const project = projectId
+      ? await this.projectRepository.getById(projectId)
+      : await this.projectRepository.getDefault();
+    if (!project) throw new AppError('projectNotFound');
+    if (project.archivedAt) throw new AppError('projectArchived');
 
+    const agentId = input.agentId ?? null;
+    await this.validatePinnedAgent(agentId);
     const responsibility = await this.responsibilityRepository.create({
-      agentId: agent.id,
+      projectId: project.id,
+      agentId,
       conversationId: input.conversationId ?? null,
       title: input.title,
       brief: input.brief,
@@ -90,13 +90,13 @@ export class ResponsibilityService {
         : (input.startAt ?? new Date()),
       createdByHumanId: admin.id
     });
-    this.responsibilityLogger.onResponsibilityCreated(responsibility.id, agent.id);
+    this.responsibilityLogger.onResponsibilityCreated(responsibility.id, agentId);
     return responsibility;
   }
 
   async list(
     actorId: string,
-    input: { agentId?: string; status?: ResponsibilityStatus; limit: number; offset: number }
+    input: { agentId?: string; projectId?: string; status?: ResponsibilityStatus; limit: number; offset: number }
   ): Promise<{ responsibilities: Responsibility[]; total: number }> {
     requireHuman(await this.humanRepository.getById(actorId));
     const [responsibilities, total] = await Promise.all([
@@ -111,19 +111,14 @@ export class ResponsibilityService {
     return this.requireResponsibility(responsibilityId);
   }
 
-  // Run history, newest first. Only admins see runs here; members see runs through /tasks.
   async listRuns(
     actorId: string,
     responsibilityId: string,
     input: { limit: number; offset: number }
-  ): Promise<{ tasks: Task[]; total: number }> {
+  ): Promise<{ runs: ResponsibilityRun[]; total: number }> {
     requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     await this.requireResponsibility(responsibilityId);
-    const [tasks, total] = await Promise.all([
-      this.taskRepository.list({ responsibilityId, ...input }),
-      this.taskRepository.count({ responsibilityId })
-    ]);
-    return { tasks, total };
+    return this.taskRepository.listResponsibilityRuns(responsibilityId, input.limit, input.offset);
   }
 
   // Changes apply to future runs. Runs already started keep what they started with.
@@ -131,6 +126,7 @@ export class ResponsibilityService {
     actorId: string,
     responsibilityId: string,
     changes: {
+      agentId?: string | null;
       title?: string;
       brief?: string;
       completionCriteria?: string;
@@ -142,6 +138,7 @@ export class ResponsibilityService {
   ): Promise<Responsibility> {
     requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     const responsibility = await this.requireResponsibility(responsibilityId);
+    if (changes.agentId !== undefined) await this.validatePinnedAgent(changes.agentId);
     // A shorter interval takes effect at once, not after the old, longer wait.
     let nextRunAt = changes.nextRunAt;
     const recurrence =
@@ -220,19 +217,15 @@ export class ResponsibilityService {
     actorId: string,
     responsibilityId: string,
     input: { runKey?: string; note?: string }
-  ): Promise<{ task: Task; created: boolean }> {
+  ): Promise<{ run: ResponsibilityRun; created: boolean }> {
     const human = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     const responsibility = await this.requireResponsibility(responsibilityId);
     if (responsibility.status === 'cancelled') {
       throw new AppError('responsibilityCancelled');
     }
     const result = await startResponsibilityRun(
-      {
-        taskRepository: this.taskRepository,
-        agentRepository: this.agentRepository,
-        conversationRepository: this.conversationRepository,
-        lifecycle: this.lifecycle
-      },
+      this.taskRepository,
+      this.lifecycle,
       responsibility,
       {
         runKey: input.runKey
@@ -242,13 +235,8 @@ export class ResponsibilityService {
         note: input.note
       }
     );
-    if ('skippedReason' in result) {
-      throw new AppError(
-        result.openRunId ? 'responsibilityRunOpen' : 'agentUnavailable',
-        result.skippedReason
-      );
-    }
-    return result;
+    if ('reason' in result) throw responsibilityRunError(result.reason);
+    return { run: result.run, created: result.created };
   }
 
   // Answers "missed runs: run now, or wait?". Only the first answer counts, and an answer after
@@ -257,30 +245,23 @@ export class ResponsibilityService {
     actorId: string,
     responsibilityId: string,
     decision: 'run' | 'wait'
-  ): Promise<{ responsibility: Responsibility; task: Task | null }> {
+  ): Promise<{ responsibility: Responsibility; run: ResponsibilityRun | null }> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const responsibility = await this.requireResponsibility(responsibilityId);
     const pending = responsibility.catchUp;
     if (!pending) return this.replayCatchUp(responsibility, decision);
     const cleared = { ...responsibility, catchUp: null };
     if (decision === 'wait') {
-      const result = await this.taskRepository.resolveCatchUp({
-        responsibilityId: responsibility.id,
-        agentId: responsibility.agentId,
-        slot: pending.slot,
-        task: null
-      });
+      const result = await this.taskRepository.waitForNextResponsibilityRun(
+        responsibility.id, pending.slot
+      );
       if (!result) return this.replayCatchUp(responsibility, decision, pending.slot);
       this.responsibilityLogger.onCatchUpResolved(responsibility.id, decision);
-      return { responsibility: cleared, task: null };
+      return { responsibility: cleared, run: null };
     }
     const result = await startResponsibilityRun(
-      {
-        taskRepository: this.taskRepository,
-        agentRepository: this.agentRepository,
-        conversationRepository: this.conversationRepository,
-        lifecycle: this.lifecycle
-      },
+      this.taskRepository,
+      this.lifecycle,
       responsibility,
       {
         runKey: `catchup:${responsibility.id}:${pending.slot.toISOString()}`,
@@ -289,28 +270,35 @@ export class ResponsibilityService {
         note: `(Catching up: ${pending.missed} scheduled run${pending.missed === 1 ? ' was' : 's were'} missed while the platform was off. ${human.name} asked to run now.)`
       }
     );
-    if ('skippedReason' in result) {
-      if (result.catchUpNotPending)
-        return this.replayCatchUp(responsibility, decision, pending.slot);
-      throw new AppError(
-        result.openRunId ? 'responsibilityRunOpen' : 'agentUnavailable',
-        result.skippedReason
-      );
+    if ('reason' in result) {
+      if (result.reason === 'changed') return this.replayCatchUp(responsibility, decision, pending.slot);
+      throw responsibilityRunError(result.reason);
     }
     this.responsibilityLogger.onCatchUpResolved(responsibility.id, decision);
-    return { responsibility: cleared, task: result.task };
+    return { responsibility: cleared, run: result.run };
   }
 
   private async replayCatchUp(
     responsibility: Responsibility,
     decision: 'run' | 'wait',
     slot?: Date
-  ): Promise<{ responsibility: Responsibility; task: Task | null }> {
+  ): Promise<{ responsibility: Responsibility; run: ResponsibilityRun | null }> {
     const saved = await this.responsibilityRepository.getCatchUpDecision(responsibility.id, slot);
     if (!saved || saved.decision !== decision) throw new AppError('catchUpNotPending');
-    const task = saved.taskId ? await this.taskRepository.getById(saved.taskId) : null;
-    if (saved.taskId && !task) throw new AppError('catchUpNotPending');
-    return { responsibility: { ...responsibility, catchUp: null }, task };
+    const legacyTask = saved.taskId ? await this.taskRepository.getById(saved.taskId) : null;
+    const runKey = saved.runKey ?? legacyTask?.runKey;
+    const run = runKey ? await this.taskRepository.getResponsibilityRun(runKey) : null;
+    if (decision === 'run' && !run) throw new AppError('catchUpNotPending');
+    return { responsibility: { ...responsibility, catchUp: null }, run };
+  }
+
+  private async validatePinnedAgent(agentId: string | null): Promise<void> {
+    if (!agentId) return;
+    const agent = await this.agentRepository.getById(agentId);
+    if (!agent) throw new AppError('agentNotFound', `Agent ${agentId} was not found`);
+    if (agent.disabledAt || !agent.currentVersionId) {
+      throw new AppError('agentUnavailable', `${agent.name} can't run scheduled work now`);
+    }
   }
 
   private async requireResponsibility(responsibilityId: string): Promise<Responsibility> {

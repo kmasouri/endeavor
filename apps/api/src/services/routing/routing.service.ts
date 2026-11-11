@@ -175,6 +175,7 @@ export class RoutingService {
     const candidates = await this.candidates(job.conversationId, job);
     let decision: RoutingDecision<StarterChoice | HandoffChoice> | null = null;
     let skipped = false;
+    let scheduled = false;
     let reason = '';
     try {
       const members = await this.conversations.listMembers(job.conversationId);
@@ -188,9 +189,10 @@ export class RoutingService {
       const signal = AbortSignal.any([this.shutdown.signal, AbortSignal.timeout(TIMEOUT_MS)]);
       if (job.kind === 'starter') {
         const message = job.messageId ? await this.messages.getById(job.messageId) : null;
+        scheduled = Boolean(message && await this.tasks.isScheduledStarter(message.id));
         if (
           !message ||
-          message.authorType !== 'human' ||
+          (!scheduled && message.authorType !== 'human') ||
           message.mentions.length ||
           message.inReplyToMessageId
         )
@@ -252,7 +254,7 @@ export class RoutingService {
     const selected = pick?.kind === 'agent' ? candidates.find((a) => a.id === pick.agentId) : null;
     const outcome = skipped
       ? 'skipped'
-      : confident && pick && (pick.kind !== 'agent' || selected)
+      : confident && pick && (!scheduled || pick.kind !== 'none') && (pick.kind !== 'agent' || selected)
         ? pick.kind
         : 'ask';
     const confidence =

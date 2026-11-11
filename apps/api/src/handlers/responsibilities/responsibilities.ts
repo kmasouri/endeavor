@@ -98,12 +98,12 @@ export async function listRunsHandler(
   }>
 ): Promise<unknown> {
   const { limit, offset } = request.query;
-  const { tasks, total } = await request.server.responsibilityService.listRuns(
+  const { runs, total } = await request.server.responsibilityService.listRuns(
     request.headers['x-actor-id'],
     request.params.responsibilityId,
     request.query
   );
-  return paged(tasks, { limit, offset, total });
+  return paged(runs, { limit, offset, total });
 }
 
 export async function resolveCatchUpHandler(
@@ -131,10 +131,10 @@ export async function startRunHandler(
   }>,
   reply: FastifyReply
 ): Promise<FastifyReply> {
-  const { task, created } = await request.server.responsibilityService.startRun(
+  const { run, created } = await request.server.responsibilityService.startRun(
     request.headers['x-actor-id'],
     request.params.responsibilityId,
     request.body ?? {}
   );
-  return reply.code(created ? 201 : 200).send(success(task));
+  return reply.code(created ? 201 : 200).send(success(run));
 }

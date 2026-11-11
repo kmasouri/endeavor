@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const baseSchedule = {
   agentId: 'agent-1',
-  conversationId: null,
+  projectId: 'project-1',
   brief: 'Check the test API.',
   completionCriteria: 'Report failures.',
   intervalMinutes: 10,
@@ -71,6 +71,11 @@ async function mockApi(
           }
         ])
       );
+    }
+    if (url.pathname === '/projects') {
+      return reply(paged(url.searchParams.get('archived') === 'true' ? [] : [
+        { id: 'project-1', name: 'General', isDefault: true, archivedAt: null }
+      ]));
     }
     if (url.pathname === '/responsibilities') {
       if (mode === 'error') return reply({ error: { message: 'Schedules unavailable' } }, 503);
@@ -238,7 +243,7 @@ test('catch-up failure survives reload and keeps Run once now available for a su
       if (fail) return reply({ error: { message: 'The agent is unavailable. Try again.' } }, 409);
       resolved = true;
       return reply({
-        data: { responsibility: { ...pending, catchUp: null }, task: { id: 'only-run' } }
+        data: { responsibility: { ...pending, catchUp: null }, run: { runKey: 'only-run', conversationId: 'run-1' } }
       });
     }
     return reply({
@@ -258,4 +263,49 @@ test('catch-up failure survives reload and keeps Run once now available for a su
   await expect(page.getByText('Catch-up run started.', { exact: true })).toBeVisible();
   await expect(page.locator('.schedule-catchup')).toHaveCount(0);
   expect(decisions).toEqual([{ decision: 'run' }, { decision: 'run' }]);
+});
+
+test('creates an unpinned project schedule and opens its waiting run from history', async ({ page }) => {
+  await mockApi(page, 'light', 'empty');
+  const title = 'Weekly status';
+  let submitted: unknown;
+  let created = false;
+  const schedule = { ...baseSchedule, id: 'project-schedule', title, status: 'enabled', agentId: null };
+  await page.route('**/responsibilities**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const data = path.endsWith('/runs')
+      ? [{ runKey: 'run-1', taskId: null, conversationId: 'run-endeavor', state: 'waiting',
+          createdAt: '2026-11-10T13:00:00Z' }]
+      : created ? [schedule] : [];
+    if (request.method() === 'POST') {
+      submitted = request.postDataJSON();
+      created = true;
+      return route.fulfill({ status: 201, json: { data: schedule } });
+    }
+    return route.fulfill({ json: { data, page: { limit: 100, offset: 0, total: data.length } } });
+  });
+  await page.goto('/app/#/schedules');
+  await page.getByRole('button', { name: 'Create schedule' }).click();
+  await page.getByLabel('Project', { exact: true }).selectOption('project-1');
+  await expect(page.getByLabel('Starting agent')).toHaveValue('');
+  await page.getByLabel('Title').fill(title);
+  await page.getByLabel('What to do each time').fill('Draft the weekly status');
+  await page.getByLabel('Done when').fill('Include three bullets');
+  await page.getByRole('button', { name: 'Create schedule' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Schedule created.' })).toBeVisible();
+  expect(submitted).toEqual({
+    projectId: 'project-1',
+    agentId: null,
+    title,
+    brief: 'Draft the weekly status',
+    completionCriteria: 'Include three bullets',
+    recurrence: { frequency: 'daily', time: '09:00', timeZone: expect.any(String) },
+    missedRunPolicy: 'ask'
+  });
+  await page.getByRole('button', { name: /Weekly status Automatic routing/ }).click();
+  await expect(page.locator('.schedule-runs')).toContainText('waiting');
+  await expect(page.getByRole('link', { name: 'Open endeavor' })).toHaveAttribute(
+    'href', '#/conversations/run-endeavor'
+  );
 });

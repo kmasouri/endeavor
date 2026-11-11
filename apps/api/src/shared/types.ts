@@ -498,10 +498,11 @@ export interface CalendarRecurrence {
   timeZone: string;
 }
 
-// A recurring piece of work for one agent. Each run is a task with this responsibilityId.
+// Recurring work owned by a project, optionally assigned to a pinned agent.
 export interface Responsibility {
   id: string;
-  agentId: string;
+  projectId: string;
+  agentId: string | null;
   conversationId: string | null;
   title: string;
   brief: string;
@@ -517,4 +518,13 @@ export interface Responsibility {
   createdByHumanId: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// A schedule run is visible before routing assigns a task. Older runs may have no endeavor.
+export interface ResponsibilityRun {
+  runKey: string;
+  conversationId: string | null;
+  createdAt: Date;
+  taskId: string | null;
+  state: TaskState | 'routing' | 'skipped';
 }

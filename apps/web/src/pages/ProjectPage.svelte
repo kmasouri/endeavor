@@ -56,8 +56,7 @@
     {:else if tab === 'Knowledge sources'}<KnowledgeSources {projectId} />
     {:else if tab === 'Members'}<ProjectMembers project={project.data} onChanged={project.reload} />
     {:else if tab === 'Schedules'}
-      <ErrorNote error={endeavors.error} />
-      {#if endeavors.data}<SchedulesPage conversationIds={endeavors.data.map((e) => e.id)} />{:else}<p class="muted">Loading endeavors for schedules…</p>{/if}
+      {#key projectId}<SchedulesPage project={project.data} />{/key}
     {/if}
     {#if requesting}<NewRequest project={project.data} {onCreated} onClose={() => (requesting = false)} />{/if}
     {#if renaming}<Modal title="Rename project" busy={action.busy} onClose={() => (renaming = false)}><form class="stack" onsubmit={(event) => { event.preventDefault(); void update({ name: name.trim() }); }}><label>Project name<input bind:value={name} maxlength="100" required disabled={action.busy} /></label><ErrorNote error={action.error} /><footer class="dialog-footer"><button type="button" class="secondary" disabled={action.busy} onclick={() => (renaming = false)}>Cancel</button><button disabled={action.busy || !name.trim()}>Save name</button></footer></form></Modal>{/if}
