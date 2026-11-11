@@ -2833,8 +2833,12 @@ describe('TaskRunnerService', () => {
   });
 
   describe('saved notes and documents', () => {
-    it("saves a note scoped to this conversation's project, keyed by its tool call", async () => {
-      const { runner, tasks, notes } = setup();
+    it.each([
+      ['project-1', 'project'],
+      [null, 'conversation']
+    ] as const)('saves a note for the project %s with %s scope', async (projectId, scope) => {
+      const { runner, tasks, notes, conversations } = setup();
+      conversations.getById.mockResolvedValue({ projectId } as Conversation);
       notes.create.mockResolvedValue({ id: 'n1' } as never);
       const call = { id: 'call-n', name: 'save_note', input: { note: 'Gateway ruled out' } };
       tasks.listEvents
@@ -2848,7 +2852,7 @@ describe('TaskRunnerService', () => {
         expect.objectContaining({
           body: 'Gateway ruled out',
           sourceConversationId: CONV,
-          scope: 'project',
+          scope,
           sourceTaskId: TASK
         })
       );

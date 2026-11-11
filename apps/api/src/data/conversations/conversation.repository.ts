@@ -16,7 +16,7 @@ export interface ConversationFilter {
 export interface ConversationRepository {
   create(input: {
     title: string;
-    projectId: string;
+    projectId: string | null;
     goal: string | null;
     doneCriteria: string | null;
     createdByHumanId: string;

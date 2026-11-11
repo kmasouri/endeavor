@@ -6,7 +6,7 @@ import { ConversationFilter, ConversationRepository } from './conversation.repos
 interface ConversationRow {
   id: string;
   title: string;
-  project_id: string;
+  project_id: string | null;
   goal: string | null;
   goal_message_id: string | null;
   done_criteria: string | null;
@@ -54,7 +54,7 @@ export class ConversationPostgresRepository implements ConversationRepository {
 
   async create(input: {
     title: string;
-    projectId: string;
+    projectId: string | null;
     goal: string | null;
     doneCriteria: string | null;
     createdByHumanId: string;

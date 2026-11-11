@@ -14,6 +14,7 @@ import {
   Human,
   ParticipantRef,
   Project,
+  ProjectAppearance,
   ProjectDocument,
   ProjectMember
 } from '../../shared/types';
@@ -48,7 +49,12 @@ export class ProjectService {
   // The creator becomes a default member, like the creator of an endeavor.
   async createProject(
     actorId: string,
-    input: { name: string; about?: string | null; agentIds?: string[]; humanIds?: string[] }
+    input: ProjectAppearance & {
+      name: string;
+      about?: string | null;
+      agentIds?: string[];
+      humanIds?: string[];
+    }
   ): Promise<ProjectDetails> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const participants = await this.requireParticipants([
@@ -58,6 +64,8 @@ export class ProjectService {
     ]);
     const project = await this.projectRepository.create({
       name: input.name,
+      icon: input.icon,
+      color: input.color,
       about: input.about?.trim() || null,
       createdByHumanId: human.id
     });
@@ -93,7 +101,7 @@ export class ProjectService {
   async updateProject(
     actorId: string,
     projectId: string,
-    changes: {
+    changes: ProjectAppearance & {
       name?: string;
       about?: string | null;
       agentIds?: string[];
@@ -126,9 +134,15 @@ export class ProjectService {
     }
 
     const updated =
-      changes.name !== undefined || changes.about !== undefined || changes.archived !== undefined
+      changes.name !== undefined ||
+      changes.about !== undefined ||
+      changes.archived !== undefined ||
+      changes.icon !== undefined ||
+      changes.color !== undefined
         ? await this.projectRepository.update(project.id, {
             name: changes.name,
+            icon: changes.icon,
+            color: changes.color,
             about: changes.about === undefined ? undefined : changes.about?.trim() || null,
             archived: changes.archived
           })

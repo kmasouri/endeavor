@@ -113,7 +113,7 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
   {
     name: AGENT_TOOLS.saveNote,
     description:
-      'Save a note for your later work, like "Yesterday\'s check ruled out the payment gateway." Notes are your own memory, not approved facts, and people can read, fix, or delete them. A note saved here is only shown to you in this conversation. Save only what will help later; don\'t copy whole messages.',
+      'Save a note for your later work, like "Yesterday\'s check ruled out the payment gateway." Notes are your own memory, not approved facts, and people can read, fix, or delete them. Notes are shared with your other endeavors in this project. In a standalone endeavor, the note stays in this conversation. Save only what will help later; don\'t copy whole messages.',
     inputSchema: {
       type: 'object',
       properties: { note: { type: 'string', description: 'The note, in a sentence or two.' } },

@@ -78,7 +78,7 @@ export class ConversationService {
     actorId: string,
     input: {
       title: string;
-      projectId?: string;
+      projectId?: string | null;
       goal?: string;
       doneCriteria?: string;
       agentIds?: string[];
@@ -86,7 +86,8 @@ export class ConversationService {
     }
   ): Promise<ConversationDetails> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
-    const project = await this.requireOpenProject(input.projectId);
+    const project =
+      input.projectId === null ? null : await this.requireOpenProject(input.projectId, human);
     const humanIds = [...new Set(input.humanIds ?? [])].filter((id) => id !== human.id);
     const agentIds = [...new Set(input.agentIds ?? [])];
     for (const humanId of humanIds) {
@@ -96,7 +97,7 @@ export class ConversationService {
       await this.requireParticipant({ type: 'agent', id: agentId });
     }
     // Project defaults that can't join now, like a disabled agent, are skipped, not an error.
-    for (const member of await this.projectRepository.listMembers(project.id)) {
+    for (const member of project ? await this.projectRepository.listMembers(project.id) : []) {
       const { type, id } = member.participant;
       const chosen = type === 'human' ? humanIds : agentIds;
       if (id === human.id || chosen.includes(id) || !(await this.canJoin(member.participant))) {
@@ -108,7 +109,7 @@ export class ConversationService {
     const goal = input.goal ?? null;
     const conversation = await this.conversationRepository.create({
       title: requireChannelName(input.title),
-      projectId: project.id,
+      projectId: project?.id ?? null,
       goal,
       doneCriteria: input.doneCriteria ?? (goal ? defaultDoneCriteria(goal) : null),
       createdByHumanId: human.id
@@ -445,11 +446,16 @@ export class ConversationService {
     return { conversation, human, member };
   }
 
-  private async requireOpenProject(projectId: string | undefined): Promise<Project> {
+  private async requireOpenProject(projectId: string | undefined, human: Human): Promise<Project> {
     const project = projectId
       ? await this.projectRepository.getById(projectId)
       : await this.projectRepository.getDefault();
-    if (!project) {
+    if (
+      !project ||
+      (projectId &&
+        !hasFullAccess(human) &&
+        !(await this.projectRepository.hasHuman(project.id, human.id)))
+    ) {
       throw new AppError('projectNotFound', `Project ${projectId ?? '(default)'} was not found`);
     }
     if (project.archivedAt) {

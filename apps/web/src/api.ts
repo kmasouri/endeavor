@@ -76,9 +76,36 @@ export interface ParticipantRef {
   id: string;
 }
 
+export const PROJECT_COLORS = [
+  'slate',
+  'sand',
+  'coral',
+  'orange',
+  'yellow',
+  'green',
+  'teal',
+  'blue',
+  'violet',
+  'pink'
+] as const;
+export const PROJECT_ICONS = [
+  'folder',
+  'language',
+  'science',
+  'code',
+  'description',
+  'work_outline',
+  'build',
+  'lightbulb'
+] as const;
+export type ProjectColor = (typeof PROJECT_COLORS)[number];
+export type ProjectIcon = (typeof PROJECT_ICONS)[number];
+
 export interface Project {
   id: string;
   name: string;
+  icon?: ProjectIcon | null;
+  color?: ProjectColor | null;
   isDefault: boolean;
   archivedAt: string | null;
   createdAt: string;
@@ -92,7 +119,7 @@ export interface Conversation {
   id: string;
   title: string;
   createdAt: string;
-  projectId?: string;
+  projectId?: string | null;
   goal?: string | null;
   doneCriteria?: string | null;
   state?: 'open' | 'closed';

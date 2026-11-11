@@ -116,6 +116,8 @@ async function fixture(page: Page, theme = 'light') {
       const project = projects.find((item) => item.id === p[1])!;
       if (method === 'PATCH') {
         if (body.name) project.name = body.name;
+        if ('icon' in body) project.icon = body.icon as ProjectDetails['icon'];
+        if ('color' in body) project.color = body.color as ProjectDetails['color'];
         if ('archived' in body) project.archivedAt = body.archived ? '2026-11-04T01:00:00Z' : null;
       }
       return reply({ data: project });
@@ -238,21 +240,21 @@ test('projects: shared context, members, scoped schedules, create and archive', 
   await expect(page.getByText('Projects unavailable', { exact: true }).first()).toBeVisible();
   state.failProjects = false;
   await page.getByRole('button', { name: 'Retry projects', exact: true }).click();
-  await page.getByRole('button', { name: 'New project', exact: true }).click();
+  await page.locator('main').getByRole('button', { name: 'New project', exact: true }).click();
   await page.getByLabel('Project name', { exact: true }).fill('Delivery');
   await page.getByRole('button', { name: 'Create project', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Delivery', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit project', exact: true }).click();
   await page.getByLabel('Project name', { exact: true }).fill('Delivery team');
-  await page.getByRole('button', { name: 'Save name', exact: true }).click();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Delivery team', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Archive project', exact: true }).click();
   await expect(
-    page.locator('main').getByRole('button', { name: 'New request', exact: true })
+    page.locator('main').getByRole('button', { name: 'New endeavor', exact: true })
   ).toBeDisabled();
   await page.getByRole('button', { name: 'Restore project', exact: true }).click();
   await expect(
-    page.locator('main').getByRole('button', { name: 'New request', exact: true })
+    page.locator('main').getByRole('button', { name: 'New endeavor', exact: true })
   ).toBeEnabled();
   await page.goto('/app/#/projects/alpha');
   await expect(page.locator('main').getByRole('link', { name: /open-goal/ })).toBeVisible();
@@ -284,18 +286,18 @@ test('projects: request retry creates one endeavor, reply stays there, goal edit
   const { state, errors } = await fixture(page);
   state.failMessage = true;
   await page.goto('/app/#/projects/beta');
-  await page.locator('main').getByRole('button', { name: 'New request', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'New request', exact: true });
-  await expect(dialog.getByRole('textbox')).toBeFocused();
-  await dialog.getByRole('textbox').fill('Build the report');
-  await dialog.getByRole('button', { name: 'Start endeavor', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Starting…', exact: true })).toBeDisabled();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByText('Send failed', { exact: true })).toBeVisible();
-  await expect(dialog.getByRole('textbox')).toHaveValue('Build the report');
+  await page.locator('main').getByRole('button', { name: 'New endeavor', exact: true }).click();
+  const draft = page.getByRole('region', { name: 'New endeavor' });
+  const input = draft.getByRole('textbox', { name: 'First message' });
+  await expect(input).toBeFocused();
+  await input.fill('Build the report');
+  await draft.getByRole('button', { name: 'Send message', exact: true }).click();
+  const retry = draft.getByRole('button', { name: 'Retry first message', exact: true });
+  await expect(retry).toBeDisabled();
+  await expect(draft.getByText('Send failed', { exact: true })).toBeVisible();
+  await expect(input).toHaveValue('Build the report');
   state.failMessage = false;
-  await dialog.getByRole('button', { name: 'Retry request', exact: true }).click();
+  await retry.click();
   await expect(page).toHaveURL(/conversations\/created$/);
   const creation = state.writes.filter((w) => w.path === '/conversations');
   expect(creation).toHaveLength(1);
@@ -354,13 +356,22 @@ for (const { theme, width } of [
       true
     );
     await captureReviewScreenshot(page, { path: `/tmp/ca102-project-${width}.png` });
-    await page.locator('main').getByRole('button', { name: 'New request', exact: true }).click();
-    const dialog = page.getByRole('dialog', { name: 'New request', exact: true });
-    expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+    await page.locator('main').getByRole('button', { name: 'New endeavor', exact: true }).click();
+    const draft = page.getByRole('region', { name: 'New endeavor' });
+    await expect(draft.getByRole('textbox', { name: 'First message' })).toBeFocused();
+    const selector = draft.getByRole('button', { name: 'Project: Alpha', exact: true });
+    const composerBox = (await draft.locator('.composer').boundingBox())!;
+    const selectorBox = (await selector.boundingBox())!;
+    expect(selectorBox.y).toBeGreaterThanOrEqual(composerBox.y + composerBox.height);
+    expect(selectorBox.x).toBeCloseTo(composerBox.x);
+    await selector.click();
+    const picker = page.getByRole('dialog', { name: 'Project: Alpha', exact: true });
+    await expect(picker.getByRole('searchbox')).toBeFocused();
+    const pickerBox = (await picker.boundingBox())!;
+    expect(pickerBox.y + pickerBox.height).toBeLessThan(selectorBox.y);
     await page.keyboard.press('Escape');
-    await expect(
-      page.locator('main').getByRole('button', { name: 'New request', exact: true })
-    ).toBeFocused();
+    await expect(selector).toBeFocused();
+    await page.goBack();
     await page
       .locator('main')
       .getByRole('link', { name: /open-goal/ })
@@ -406,17 +417,19 @@ for (const width of [1440, 320]) {
     await expect(sidebar.getByText('Recent', { exact: true })).toHaveCount(0);
     const alpha = tree
       .locator('.sidebar-project')
-      .filter({ has: page.getByRole('link', { name: 'Alpha', exact: true }) });
+      .filter({
+        has: page.getByRole('button', { name: 'Project options for Alpha', exact: true })
+      });
     const beta = tree
       .locator('.sidebar-project')
-      .filter({ has: page.getByRole('link', { name: /Beta/, exact: false }) });
+      .filter({ has: page.getByRole('button', { name: 'Project options for Beta', exact: true }) });
     await expect(alpha.getByRole('link', { name: '#open-goal', exact: true })).toHaveAttribute(
       'aria-current',
       'page'
     );
     await expect(beta.getByRole('link', { name: /other-project/ })).toBeHidden();
     await expect(beta.getByLabel('7 unread', { exact: true })).toBeVisible();
-    const projectBox = (await alpha.locator('.sidebar-project-link').boundingBox())!;
+    const projectBox = (await alpha.locator('.sidebar-project-toggle').boundingBox())!;
     const endeavorBox = (await alpha
       .getByRole('link', { name: '#open-goal', exact: true })
       .boundingBox())!;
@@ -433,10 +446,13 @@ for (const width of [1440, 320]) {
     await expect(page).toHaveURL(/conversations\/other$/);
     if (width < 700) await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
     await expect(beta.locator('.count-badge')).toHaveCount(0);
-    await sidebar.getByRole('button', { name: 'New request', exact: true }).click();
-    await expect(page.getByRole('dialog').getByText(/Start an endeavor in Beta/)).toBeVisible();
-    await page.keyboard.press('Escape');
-    await tree.getByRole('link', { name: 'Beta', exact: true }).click();
+    await beta.getByRole('button', { name: 'New endeavor in Beta', exact: true }).click();
+    await expect(
+      page.getByRole('heading', { name: 'What should we work on in Beta?' })
+    ).toBeVisible();
+    if (width < 700) await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+    await beta.getByRole('button', { name: 'Project options for Beta', exact: true }).click();
+    await page.getByRole('link', { name: 'Open project', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Beta', exact: true })).toBeVisible();
     if (width < 700) await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
     await sidebar.getByRole('link', { name: 'Agents', exact: true }).click();
@@ -478,6 +494,53 @@ test('project sidebar: search expands its project and a project-list failure ret
   await page.reload();
   await expect(sidebar.getByText('Projects unavailable', { exact: true })).toBeVisible();
   await expect(sidebar.getByRole('link', { name: '#other-project', exact: true })).toBeVisible();
-  await expect(sidebar.getByRole('button', { name: 'New request', exact: true })).toBeDisabled();
+  await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeEnabled();
+  expect(errors).toEqual([]);
+});
+
+test('project menu edits identity and the composer picker switches scope without losing the draft', async ({
+  page
+}) => {
+  const { state, errors } = await fixture(page);
+  await page.goto('/app/#/conversations/open');
+  const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
+  const menu = sidebar.getByRole('button', { name: 'Project options for Beta', exact: true });
+  await expect(menu.locator('..')).toHaveCSS('opacity', '0');
+  await menu.locator('..').locator('..').hover();
+  await expect(menu.locator('..')).toHaveCSS('opacity', '1');
+  await menu.click();
+  await page.getByRole('button', { name: 'Edit', exact: true }).click();
+  const editor = page.getByRole('dialog', { name: 'Edit project', exact: true });
+  await editor.getByLabel('Project name').fill('Web platform');
+  await editor.getByRole('button', { name: 'Code', exact: true }).click();
+  const colors = editor.getByRole('group', { name: 'Color', exact: true });
+  await expect(colors.getByRole('button')).toHaveCount(10);
+  await colors.getByRole('button', { name: 'Orange', exact: true }).click();
+  await editor.getByRole('button', { name: 'Save changes' }).click();
+  await expect(editor).toHaveCount(0);
+  expect(state.writes.find((write) => write.path === '/projects/beta')?.body).toEqual({
+    name: 'Web platform',
+    icon: 'code',
+    color: 'orange'
+  });
+
+  await sidebar.getByRole('button', { name: 'New endeavor', exact: true }).click();
+  const draft = page.getByRole('region', { name: 'New endeavor' });
+  const input = draft.getByRole('textbox', { name: 'First message' });
+  await input.fill('Review the homepage');
+  await draft.getByRole('button', { name: 'Project: Standalone' }).click();
+  const picker = page.getByRole('dialog', { name: 'Project: Standalone' });
+  await picker.getByRole('searchbox').fill('platform');
+  await picker.getByRole('button', { name: 'Web platform', exact: true }).click();
+  const context = draft.getByRole('button', { name: 'Project: Web platform' });
+  await expect(context.locator('.project-glyph')).toHaveAttribute('data-project-color', 'orange');
+  await expect(context.locator('.project-glyph')).toHaveText('code');
+  await expect(input).toHaveValue('Review the homepage');
+  await input.press('Enter');
+  await expect(page).toHaveURL(/conversations\/created$/);
+  expect(state.writes.find((write) => write.path === '/conversations')?.body).toEqual({
+    projectId: 'beta',
+    title: 'review-the-homepage'
+  });
   expect(errors).toEqual([]);
 });

@@ -28,7 +28,7 @@
   import ProjectPage from './pages/ProjectPage.svelte';
   import { loadAll } from './pages/agent-data';
   import './projects.css';
-  import NewEndeavor from './pages/NewEndeavor.svelte';
+  import ProjectEditor from './ProjectEditor.svelte';
   import SearchEndeavors from './pages/SearchEndeavors.svelte';
   import { loadEndeavors, readLastEndeavor, rememberEndeavor } from './endeavors';
   import SetupPage from './pages/SetupPage.svelte';
@@ -81,7 +81,8 @@
   };
   let picking = $state(false);
   let switching = $state(false);
-  let creating = $state(false);
+  let projectEditor = $state<{ project: Project | null } | null>(null);
+  let projectUpdates = $state.raw<Project[]>([]);
   let searching = $state(false);
   let readyConversation = $state<Conversation | null>(null);
   let focusConversation = $state<string | null>(null);
@@ -130,7 +131,8 @@
       if (!person) throw new Error('This person is no longer available. Reload and choose again.');
       dirty = false;
       guard = () => true;
-      creating = false;
+      projectEditor = null;
+      projectUpdates = [];
       searching = false;
       additions = [];
       focusConversation = null;
@@ -183,17 +185,29 @@
   const selectedConversation = $derived(section === 'conversations' ? recent.find((conversation) => conversation.id === id)
     ?? (readyConversation?.id === id ? readyConversation : null) : null);
   const currentProjectId = $derived(section === 'projects' ? id : selectedConversation?.projectId);
-  const requestProject = $derived((projects.data ?? []).find((p) => p.id === currentProjectId)
-    ?? (!currentProjectId ? (projects.data ?? []).find((p) => p.isDefault) : undefined));
-  const requestDisabled = $derived(Boolean(requestProject?.archivedAt || (currentProjectId && !requestProject) || !projects.data || (section === 'conversations' && id && !selectedConversation)));
-  const newEndeavor = () => { if (guard()) creating = true; };
-  const searchEndeavors = () => {
-    if (!creating && !picking && !searching && guard()) searching = true;
+  const visibleProjects = $derived([
+    ...projectUpdates,
+    ...(projects.data ?? []).filter((project) => !projectUpdates.some((update) => update.id === project.id))
+  ]);
+  const draftProjectId = $derived(new URLSearchParams(hash.split('?')[1]).get('project'));
+  const newEndeavor = (projectId?: string) => {
+    window.location.hash = projectId ? `/new-endeavor?project=${encodeURIComponent(projectId)}` : '/new-endeavor';
+    if (window.innerWidth < 700) collapsed = true;
   };
+  const searchEndeavors = () => {
+    if (!projectEditor && !picking && !searching) searching = true;
+  };
+  async function savedProject(project: Project) {
+    projectUpdates = [project, ...projectUpdates.filter((item) => item.id !== project.id)];
+    if (await projects.reload()) {
+      projectUpdates = projectUpdates.filter((item) => item !== project);
+    }
+  }
   const created = (conversation: Conversation) => {
     additions = [conversation, ...additions];
     focusConversation = conversation.id;
-    creating = false;
+    guard = () => true;
+    dirty = false;
     rememberEndeavor(actorId!, conversation.id);
     openConversation(conversation.id);
     conversations.reload();
@@ -260,8 +274,8 @@
     </header>
     <aside class="sidebar" id="main-sidebar" aria-label="Sidebar">
       <nav aria-label="Main">
-        <button class="quiet sidebar-new-request" aria-label="New request" title="New request" disabled={requestDisabled} onclick={newEndeavor}><Icon name="plus" /><span class="sidebar-label">New request</span></button>
-        {#key actorId}<ProjectSidebar projects={projects.data ?? []} conversations={recent} selectedProjectId={currentProjectId ?? requestProject?.id} selectedConversationId={section === 'conversations' ? id : undefined} projectSelected={section === 'projects' && Boolean(id)} projectError={projects.error} conversationError={conversations.error} onNavigate={() => { if (window.innerWidth < 700) collapsed = true; }} />{/key}
+        <button class="quiet sidebar-new-request" aria-label="New endeavor" title="New endeavor" onclick={() => newEndeavor()}><Icon name="edit" /><span class="sidebar-label">New endeavor</span></button>
+        {#key actorId}<ProjectSidebar projects={visibleProjects} conversations={recent} selectedProjectId={section === 'new-endeavor' ? draftProjectId ?? undefined : currentProjectId ?? undefined} selectedConversationId={section === 'conversations' ? id : undefined} projectSelected={section === 'projects' && Boolean(id)} projectError={projects.error} conversationError={conversations.error} onNewEndeavor={newEndeavor} onEditProject={(project) => (projectEditor = { project })} onNavigate={() => { if (window.innerWidth < 700) collapsed = true; }} />{/key}
         {#each [['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['skills', 'Skills', 'file'], ['connections', 'Connections', 'connections'], ['setup', 'Setup', 'setup']] as [path, label, icon] (path)}
           <a
             class:active={navigationSection === path}
@@ -334,7 +348,7 @@
       ></div>
     {/if}
 
-    <main class:conversation-main={section === 'conversations' && Boolean(id)}>
+    <main class:conversation-main={section === 'new-endeavor' || (section === 'conversations' && Boolean(id))}>
       {#key `${actorId}:${hash}`}
         {#if section === 'settings'}
           <SettingsPage
@@ -368,8 +382,10 @@
           <CatalogEntryPage kind={section} entryId={id} />
         {:else if catalogKind === 'skills' || catalogKind === 'connections'}
           <CatalogsPage kind={catalogKind} />
+        {:else if section === 'new-endeavor'}
+          <NewRequest initialProjectId={draftProjectId} projects={visibleProjects} projectError={projects.error} onProjectSaved={savedProject} onCreated={created} onGuard={(next) => (guard = next)} onDirty={(next) => (dirty = next)} />
         {:else if section === 'projects' && id}
-          <ProjectPage projectId={id} onChanged={projects.reload} onCreated={created} />
+          <ProjectPage projectId={id} onChanged={projects.reload} onNewEndeavor={newEndeavor} />
         {:else if section === 'projects'}
           <ProjectsPage onChanged={projects.reload} />
         {:else if section === 'conversations' && id}
@@ -390,14 +406,19 @@
             {:else}
               <h1>What do you want to accomplish?</h1>
               <p class="muted">Start your first endeavor. Bring in people and agents whenever you need them.</p>
-              <button aria-label="New endeavor" disabled={requestDisabled} onclick={newEndeavor}><Icon name="plus" /> New endeavor</button>
+              <button aria-label="New endeavor" onclick={() => newEndeavor()}><Icon name="plus" /> New endeavor</button>
             {/if}
           </section>
         {/if}
       {/key}
     </main>
     {#key actorId}
-      {#if creating}{#if requestProject}<NewRequest project={requestProject} onCreated={created} onClose={() => (creating = false)} />{:else}<NewEndeavor people={people.data} {me} onCreated={created} onClose={() => (creating = false)} />{/if}{/if}
+      {#if projectEditor}
+        <ProjectEditor project={projectEditor.project} onClose={() => (projectEditor = null)} onSaved={(project) => {
+          projectEditor = null;
+          void savedProject(project);
+        }} />
+      {/if}
       {#if searching}<SearchEndeavors conversations={searchable.data ?? recent} error={searchable.error} loading={!searchable.data} onPick={openConversation} onClose={() => (searching = false)} onRetry={searchable.reload} />{/if}
     {/key}
     {#if picking}

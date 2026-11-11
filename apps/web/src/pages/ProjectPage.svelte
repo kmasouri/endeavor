@@ -5,18 +5,15 @@
   import PageHeader from '../PageHeader.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import Icon from '../Icon.svelte';
-  import Modal from '../Modal.svelte';
-  import NewRequest from './NewRequest.svelte';
+  import ProjectEditor from '../ProjectEditor.svelte';
   import KnowledgeSources from './KnowledgeSources.svelte';
   import ProjectMembers from './ProjectMembers.svelte';
   import SchedulesPage from './SchedulesPage.svelte';
-  let { projectId, onChanged, onCreated }: { projectId: string; onChanged: () => void; onCreated: (conversation: Conversation) => void } = $props();
+  let { projectId, onChanged, onNewEndeavor }: { projectId: string; onChanged: () => void; onNewEndeavor: (projectId: string) => void } = $props();
   const project = createLoad(() => api.get<ProjectDetails>(`/projects/${projectId}`), () => [projectId], 10000);
   const endeavors = createLoad(() => loadAll<Conversation>(`/conversations?projectId=${projectId}&state=all`), () => [projectId], 10000);
   let tab = $state('Endeavors');
-  let requesting = $state(false);
   let renaming = $state(false);
-  let name = $state('');
   const action = createAction();
   const open = $derived((endeavors.data ?? []).filter((e) => e.state !== 'closed'));
   const closed = $derived((endeavors.data ?? []).filter((e) => e.state === 'closed'));
@@ -31,9 +28,9 @@
   {#if project.data}
     <PageHeader title={project.data.name} subtitle={project.data!.archivedAt ? 'Archived project' : 'One endeavor for each goal.'}>
       {#snippet actions()}
-        <button class="secondary" onclick={() => { name = project.data!.name; renaming = true; }}>Rename</button>
+        <button class="secondary" onclick={() => (renaming = true)}>Edit project</button>
         {#if !project.data!.isDefault}<button class="secondary" disabled={action.busy} onclick={() => update({ archived: !project.data!.archivedAt })}>{project.data!.archivedAt ? 'Restore project' : 'Archive project'}</button>{/if}
-        <button disabled={Boolean(project.data!.archivedAt)} onclick={() => (requesting = true)}><Icon name="plus" /> New request</button>
+        <button disabled={Boolean(project.data!.archivedAt)} onclick={() => onNewEndeavor(projectId)}><Icon name="plus" /> New endeavor</button>
       {/snippet}
     </PageHeader>
     <ErrorNote error={action.error} />
@@ -58,7 +55,12 @@
     {:else if tab === 'Schedules'}
       {#key projectId}<SchedulesPage project={project.data} />{/key}
     {/if}
-    {#if requesting}<NewRequest project={project.data} {onCreated} onClose={() => (requesting = false)} />{/if}
-    {#if renaming}<Modal title="Rename project" busy={action.busy} onClose={() => (renaming = false)}><form class="stack" onsubmit={(event) => { event.preventDefault(); void update({ name: name.trim() }); }}><label>Project name<input bind:value={name} maxlength="100" required disabled={action.busy} /></label><ErrorNote error={action.error} /><footer class="dialog-footer"><button type="button" class="secondary" disabled={action.busy} onclick={() => (renaming = false)}>Cancel</button><button disabled={action.busy || !name.trim()}>Save name</button></footer></form></Modal>{/if}
+    {#if renaming}
+      <ProjectEditor project={project.data} onClose={() => (renaming = false)} onSaved={() => {
+        renaming = false;
+        project.reload();
+        onChanged();
+      }} />
+    {/if}
   {:else if !project.error}<p class="muted">Loading project…</p>{/if}
 </div>
