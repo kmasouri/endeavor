@@ -287,8 +287,8 @@ test('creates an unpinned project schedule and opens its waiting run from histor
   });
   await page.goto('/app/#/schedules');
   await page.getByRole('button', { name: 'Create schedule' }).click();
-  await page.getByLabel('Project', { exact: true }).selectOption('project-1');
-  await expect(page.getByLabel('Starting agent')).toHaveValue('');
+  await page.getByRole('combobox', { name: 'Project', exact: true }).selectOption('project-1');
+  await expect(page.getByRole('combobox', { name: 'Starting agent' })).toHaveValue('');
   await page.getByLabel('Title').fill(title);
   await page.getByLabel('What to do each time').fill('Draft the weekly status');
   await page.getByLabel('Done when').fill('Include three bullets');
