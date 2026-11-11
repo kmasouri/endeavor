@@ -128,6 +128,14 @@ IANA timezone and the person's saved hour format, without changing stored instan
 
 ## Recurring schedules
 
+Schedules include `projectId` and nullable `agentId`. The latter identifies a pinned agent.
+Run creation returns `success(run)` with 201 for a new endeavor and 200 for a retry. Run
+history returns the same records, newest first. Each has `runKey`, `conversationId`,
+`taskId`, `state`, and `createdAt`. A run can be `routing` or `waiting` before it has a
+task. A run that ends without a task is `skipped`. Historical runs without an endeavor
+have a null `conversationId`. Catch-up answers return `success({ responsibility, run })`;
+choosing to wait returns `run: null`.
+
 Responsibility responses include `intervalMinutes` and `recurrence`. Existing interval schedules
 return their original interval and `recurrence: null`. Calendar schedules return
 `intervalMinutes: null` and `recurrence: { frequency, time, timeZone, days? }`. Only weekly rules

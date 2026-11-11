@@ -28,7 +28,7 @@ export async function responsibilitiesRouter(fastifyInstance: FastifyInstance): 
     {
       schema: {
         description:
-          'Set up interval or source-timezone calendar work for an agent. Each run is a task.',
+          'Set up recurring work in a project. Each run opens a new endeavor and can pin a starting agent.',
         tags: ['responsibilities'],
         headers: actorHeadersSchema,
         body: createResponsibilityBodySchema
@@ -41,7 +41,7 @@ export async function responsibilitiesRouter(fastifyInstance: FastifyInstance): 
     '/responsibilities',
     {
       schema: {
-        description: 'List recurring responsibilities, newest first.',
+        description: 'List recurring responsibilities, newest first. Filter by project, pinned agent, or status.',
         tags: ['responsibilities'],
         headers: actorHeadersSchema,
         querystring: listResponsibilitiesQuerySchema
@@ -123,7 +123,7 @@ export async function responsibilitiesRouter(fastifyInstance: FastifyInstance): 
     {
       schema: {
         description:
-          'Run history: the tasks this responsibility started, newest first. Admins only.',
+          'Run history, newest first, including runs waiting for a starting agent. Admins only.',
         tags: ['responsibilities'],
         headers: actorHeadersSchema,
         params: responsibilityParamsSchema,

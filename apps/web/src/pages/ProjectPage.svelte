@@ -53,8 +53,7 @@
     {:else if tab === 'Knowledge sources'}<KnowledgeSources {projectId} />
     {:else if tab === 'Members'}<ProjectMembers project={project.data} onChanged={project.reload} />
     {:else if tab === 'Schedules'}
-      <ErrorNote error={endeavors.error} />
-      {#if endeavors.data}<SchedulesPage conversationIds={endeavors.data.map((e) => e.id)} />{:else}<p class="muted">Loading endeavors for schedules…</p>{/if}
+      {#key projectId}<SchedulesPage project={project.data} />{/key}
     {/if}
     {#if renaming}
       <ProjectEditor project={project.data} onClose={() => (renaming = false)} onSaved={() => {

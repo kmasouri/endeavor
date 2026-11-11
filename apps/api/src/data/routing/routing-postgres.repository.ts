@@ -208,6 +208,29 @@ export class RoutingPostgresRepository implements RoutingRepository {
           return false;
         }
       }
+      if (input.selectedAgentId && row.kind === 'starter') {
+        const scheduled = await client.query<{ responsibility_id: string }>(
+          `SELECT r.responsibility_id FROM endeavor.responsibility_runs r
+           JOIN endeavor.responsibilities s ON s.id = r.responsibility_id
+           WHERE r.starter_message_id = $1 FOR NO KEY UPDATE OF s`,
+          [row.message_id]
+        );
+        if (scheduled.rows[0]) {
+          // A person can change a past routing choice. Serialize against new starts so a
+          // past run cannot be assigned an agent while a newer run is still open.
+          const other = await client.query(
+            `SELECT 1 FROM endeavor.responsibility_run_history
+             WHERE responsibility_id = $1 AND conversation_id IS DISTINCT FROM $2::uuid
+               AND state IN ('working', 'waiting', 'blocked', 'routing')
+             LIMIT 1`,
+            [scheduled.rows[0].responsibility_id, row.conversation_id]
+          );
+          if (other.rowCount) {
+            await client.query('ROLLBACK');
+            return false;
+          }
+        }
+      }
       let deliveryMessageId = options.deliveryMessageId;
       if (options.message) {
         const m = options.message;

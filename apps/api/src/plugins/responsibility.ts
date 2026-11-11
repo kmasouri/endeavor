@@ -4,6 +4,7 @@ import {
   AgentPostgresRepository,
   ConversationPostgresRepository,
   HumanPostgresRepository,
+  ProjectPostgresRepository,
   ResponsibilityPostgresRepository,
   TaskPostgresRepository
 } from '../data';
@@ -24,7 +25,8 @@ const responsibilityPlugin: FastifyPluginAsync = async (fastify) => {
     new ConversationPostgresRepository(fastify.pg),
     new HumanPostgresRepository(fastify.pg),
     new ResponsibilityLogger(fastify.log),
-    new TaskLogger(fastify.log)
+    new TaskLogger(fastify.log),
+    new ProjectPostgresRepository(fastify.pg)
   );
 
   fastify.decorate('responsibilityService', responsibilityService);

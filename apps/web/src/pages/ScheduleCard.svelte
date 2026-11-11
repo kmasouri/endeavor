@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { api, type AgentAppearance, type Responsibility, type Task, type Conversation } from '../api';
+  import { api, type AgentAppearance, type Responsibility, type ResponsibilityRun } from '../api';
   import Avatar from '../Avatar.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import StateBadge from '../StateBadge.svelte';
@@ -8,24 +8,18 @@
   import { timeDisplay } from '../time-display.svelte';
   import { createAction, createLoad } from '../state.svelte';
 
-  let { schedule: s, agentName, appearance, onChanged }: {
-    schedule: Responsibility; agentName: string; appearance?: AgentAppearance; onChanged: () => void;
+  let { schedule: s, agentName, projectName, appearance, onChanged }: {
+    schedule: Responsibility; agentName: string; projectName: string; appearance?: AgentAppearance; onChanged: () => void;
   } = $props();
   let offset = $state(0);
-  const runs = createLoad(() => api.list<Task>(`/responsibilities/${s.id}/runs?limit=20&offset=${offset}`), () => [s.id, offset], 10000);
-  const conversation = createLoad(() => s.conversationId
-    ? api.get<Conversation>(`/conversations/${s.conversationId}`) : Promise.resolve(null), () => [s.conversationId]);
+  const runs = createLoad(() => api.list<ResponsibilityRun>(`/responsibilities/${s.id}/runs?limit=20&offset=${offset}`), () => [s.id, offset], 10000);
   const action = createAction();
   let notice = $state('');
   const instant = (value: string) => scheduleInstant(value, undefined, timeDisplay.format === '12h');
   async function post(path: string, body: unknown = {}) {
-    let task: Task | undefined;
-    const ok = await action.run(async () => {
-      const result = await api.post<Task>(`/responsibilities/${s.id}${path}`, body);
-      if (path === '/runs') task = result;
-    });
+    const ok = await action.run(() => api.post(`/responsibilities/${s.id}${path}`, body));
     if (ok) {
-      notice = task ? 'Run started. It appears in recent runs below.'
+      notice = path === '/runs' ? 'Run started. It appears in recent runs below.'
         : path === '/pause' ? 'Schedule paused.' : path === '/resume' ? 'Schedule resumed.' : 'Schedule cancelled.';
       onChanged(); runs.reload();
     }
@@ -33,7 +27,7 @@
 </script>
 
 <div class="row wrap"><h2 class="grow" tabindex="-1">{s.title}</h2><ScheduleBadge status={s.status} /></div>
-<p class="schedule-meta"><Avatar name={agentName} id={s.agentId} {appearance} agent size="sm" /> {agentName} · {summarizeRecurrence(s, timeDisplay.format === '12h')}</p>
+<p class="schedule-meta">{#if s.agentId}<Avatar name={agentName} id={s.agentId} {appearance} agent size="sm" />{/if} {agentName} · {summarizeRecurrence(s, timeDisplay.format === '12h')}</p>
 {#if s.status !== 'cancelled'}
   <div class="row wrap schedule-actions">
     <button class="secondary" disabled={action.busy} onclick={() => post(s.status === 'enabled' ? '/pause' : '/resume')}>{s.status === 'enabled' ? 'Pause schedule' : 'Resume schedule'}</button>
@@ -48,7 +42,7 @@
   <div><h3>Done when</h3><p class="body">{s.completionCriteria}</p></div>
   <div class="grid2">
     <div><h3>Next run</h3><p>{s.status === 'enabled' ? instant(s.nextRunAt) : 'No new runs'}</p></div>
-    <div><h3>Post results in</h3><p>{#if s.conversationId}<a href={`#/conversations/${s.conversationId}`}># {conversation.data?.title ?? 'Result conversation'}</a>{:else}Run history only{/if}</p></div>
+    <div><h3>Project</h3><p><a href={`#/projects/${s.projectId}`}>{projectName}</a></p></div>
   </div>
   <div><h3>If runs are missed</h3><p>{policyLabels[s.missedRunPolicy]}.</p></div>
 </div>
@@ -57,8 +51,11 @@
 {#if !runs.data && !runs.error}<p class="muted">Loading runs…</p>{/if}
 <ul class="schedule-runs">
   {#if runs.data?.data.length === 0}<li class="muted">No runs yet.</li>{/if}
-  {#each runs.data?.data ?? [] as run (run.id)}
-    <li><time datetime={run.createdAt} class="grow">{instant(run.createdAt)}</time><StateBadge state={run.state} paused={Boolean(run.pausedAt)} /><a href={`#/tasks/${run.id}`}>See what it did</a></li>
+  {#each runs.data?.data ?? [] as run (run.runKey)}
+    <li><time datetime={run.createdAt} class="grow">{instant(run.createdAt)}</time><StateBadge state={run.state} />
+      {#if run.conversationId}<a href={`#/conversations/${run.conversationId}`}>Open endeavor</a>
+      {:else if run.taskId}<a href={`#/tasks/${run.taskId}`}>See what it did</a>{/if}
+    </li>
   {/each}
 </ul>
 {#if offset > 0 || (runs.data?.page.total ?? 0) > offset + 20}

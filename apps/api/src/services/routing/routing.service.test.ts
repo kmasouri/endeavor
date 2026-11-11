@@ -144,6 +144,22 @@ describe('RoutingService', () => {
       })
     );
   });
+  it.each([
+    [{ kind: 'agent', agentId: 'a' }, 'resolved', 'm'],
+    [{ kind: 'none' }, 'waiting', null]
+  ] as const)('routes a scheduled opening message with model choice %j', async (choice, status, deliveryMessageId) => {
+    const s = setup();
+    s.messages.getById.mockResolvedValue({ ...message, authorType: 'system', authorId: null });
+    s.tasks.isScheduledStarter.mockResolvedValue(true);
+    s.client.chooseStarter.mockResolvedValue(decision(choice));
+
+    await s.service.tick();
+
+    expect(s.client.chooseStarter).toHaveBeenCalledWith(expect.objectContaining({ message: message.body }));
+    expect(s.repo.save.mock.calls[0][2]).toMatchObject({ status });
+    expect(s.repo.save.mock.calls[0][3].deliveryMessageId).toBe(deliveryMessageId);
+  });
+
   it.each([0.59, 0, NaN])('waits without delivery when confidence is %s', async (confidence) => {
     const s = setup();
     s.client.chooseStarter.mockResolvedValue(decision({ kind: 'agent', agentId: 'a' }, confidence));

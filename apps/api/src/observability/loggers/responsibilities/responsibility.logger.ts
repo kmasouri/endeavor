@@ -4,7 +4,7 @@ import { getCurrentLogger } from '../request-logger';
 export class ResponsibilityLogger {
   constructor(private readonly logger: FastifyBaseLogger) {}
 
-  onResponsibilityCreated(responsibilityId: string, agentId: string): void {
+  onResponsibilityCreated(responsibilityId: string, agentId: string | null): void {
     getCurrentLogger(this.logger).info(
       { event: 'responsibility.created', responsibilityId, agentId },
       'responsibility created'

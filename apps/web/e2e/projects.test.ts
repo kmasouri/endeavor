@@ -197,7 +197,7 @@ async function fixture(page: Page, theme = 'light') {
         list([
           {
             id: 'alpha-schedule',
-            conversationId: 'open',
+            projectId: 'alpha',
             agentId: 'agent',
             title: 'Alpha check',
             status: 'paused',
@@ -208,7 +208,7 @@ async function fixture(page: Page, theme = 'light') {
           },
           {
             id: 'beta-schedule',
-            conversationId: 'other',
+            projectId: 'beta',
             agentId: 'agent',
             title: 'Beta check',
             status: 'paused',
@@ -217,7 +217,8 @@ async function fixture(page: Page, theme = 'light') {
             nextRunAt: '2026-11-04T01:00:00Z',
             catchUp: null
           }
-        ])
+        ].filter((schedule) => !u.searchParams.has('projectId')
+          || schedule.projectId === u.searchParams.get('projectId')))
       );
     if (
       ['/agents', '/approvals', '/tasks', '/skills', '/connections', '/providers'].includes(path) ||

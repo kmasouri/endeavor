@@ -1,6 +1,7 @@
 import {
   Actor,
   CriteriaCheck,
+  ResponsibilityRun,
   Task,
   TaskEvent,
   TaskOutput,
@@ -28,6 +29,26 @@ export interface CreateTaskInput {
   restartedFromTaskId: string | null;
   responsibilityId: string | null;
 }
+
+export interface StartResponsibilityRunInput {
+  responsibilityId: string;
+  agentId: string | null;
+  projectId: string;
+  runKey: string;
+  endeavorTitle: string;
+  title: string;
+  goal: string;
+  completionCriteria: string;
+  note?: string;
+  startedBy: Actor;
+  expectedUpdatedAt: Date;
+  expectedNextRunAt?: Date;
+  catchUpSlot?: Date;
+}
+
+export type ResponsibilityRunStart =
+  | { run: ResponsibilityRun; created: boolean; task: Task | null }
+  | { reason: 'open' | 'changed' | 'agent' | 'project' };
 
 export interface ListTasksInput {
   // Only tasks this person may see: in a conversation they belong to, or asked for by them.
@@ -103,22 +124,21 @@ export interface TaskRepository {
   // starts, or an agent already working in an endeavor, a competing open task can also be
   // returned; services check its key before using it as a new run.
   create(input: CreateTaskInput): Promise<{ task: Task; created: boolean }>;
-  // Scheduled starts lock and recheck the enabled schedule and expected slot through the
-  // insert. Null means pause, cancellation, retiming, or another runner invalidated the slot.
-  createScheduled(
-    input: CreateTaskInput,
-    expectedNextRunAt: Date
-  ): Promise<{ task: Task; created: boolean } | null>;
-  // Locks/revalidates a catch-up question, then saves its answer, optional task and question
-  // removal in one transaction. Null means the question is no longer pending. A competing
-  // open task is returned without consuming the question; the service checks its run key.
-  // For a run request, task:null means the agent changed before the transaction.
-  resolveCatchUp(input: {
+  startResponsibilityRun(input: StartResponsibilityRunInput): Promise<ResponsibilityRunStart>;
+  waitForNextResponsibilityRun(responsibilityId: string, slot: Date): Promise<boolean>;
+  getResponsibilityRun(runKey: string): Promise<ResponsibilityRun | null>;
+  listResponsibilityRuns(
+    responsibilityId: string, limit: number, offset: number
+  ): Promise<{ runs: ResponsibilityRun[]; total: number }>;
+  isScheduledStarter(messageId: string): Promise<boolean>;
+  getScheduledStarter(messageId: string, agentId: string): Promise<{
     responsibilityId: string;
-    agentId: string;
-    slot: Date;
-    task: CreateTaskInput | null;
-  }): Promise<{ task: Task | null; created: boolean } | null>;
+    title: string;
+    brief: string;
+    completionCriteria: string;
+    requestedByType: 'human' | 'schedule';
+    requestedById: string | null;
+  } | null>;
   getById(taskId: string): Promise<Task | null>;
   getByRunKey(runKey: string): Promise<Task | null>;
   list(input: ListTasksInput): Promise<Task[]>;
@@ -181,7 +201,6 @@ export interface TaskRepository {
   renewLease(taskId: string, workerId: string, leaseMs: number): Promise<boolean>;
 
   // A responsibility's open (working, waiting, or blocked) run, if it has one.
-  findOpenRun(responsibilityId: string): Promise<Task | null>;
   // The agent's open (working, waiting, or blocked) task in a conversation, if it has one.
   findOpenTask(conversationId: string, agentId: string): Promise<Task | null>;
   // Waiting tasks with no open waits. A crash between resolving a wait and waking the task

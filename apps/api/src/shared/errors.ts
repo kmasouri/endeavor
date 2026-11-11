@@ -60,6 +60,11 @@ export const ERRORS = {
     statusCode: 409,
     message: 'The last run of this responsibility is still going'
   },
+  responsibilityRunChanged: {
+    code: 40012,
+    statusCode: 409,
+    message: 'The schedule changed before the run could start. Try again.'
+  },
   catchUpNotPending: {
     code: 40010,
     statusCode: 409,

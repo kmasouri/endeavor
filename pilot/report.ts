@@ -56,8 +56,10 @@ interface LoggedRequest {
   path: string;
 }
 
+type ConversationTask = TaskLike & { conversationId: string | null };
+
 interface TaskReport {
-  task: TaskLike;
+  task: ConversationTask;
   usage: TaskUsage;
 }
 
@@ -207,12 +209,18 @@ async function reportBriefs(
 async function reportChecks(api: Api, state: PilotState): Promise<TaskReport[]> {
   out('## Pilot 2: scheduled API check');
   out();
-  const runs = await api.all<TaskLike>(`/responsibilities/${state.responsibilityId}/runs`);
-  const conversationTasks = await loadTasks(
-    api,
-    `/tasks?conversationId=${state.checkConversationId}`
+  const history = await api.all<{ conversationId: string | null; taskId: string | null }>(
+    `/responsibilities/${state.responsibilityId}/runs`
   );
-  const messages = await api.all<Message>(`/conversations/${state.checkConversationId}/messages`);
+  const conversations = [...new Set(history.map((run) => run.conversationId).filter(Boolean))];
+  const conversationTasks: TaskReport[] = [];
+  const messages: Message[] = [];
+  for (const conversationId of conversations) {
+    conversationTasks.push(...await loadTasks(api, `/tasks?conversationId=${conversationId}`));
+    messages.push(...await api.all<Message>(`/conversations/${conversationId}/messages`));
+  }
+  const runIds = new Set(history.map((run) => run.taskId));
+  const runs = conversationTasks.map(({ task }) => task).filter(({ id }) => runIds.has(id));
   const log = await fetch(`${state.targetAdminUrl}/_pilot/log`)
     .then((response) => response.json() as Promise<{ requests: LoggedRequest[] }>)
     .catch(() => null);
@@ -272,7 +280,8 @@ async function reportChecks(api: Api, state: PilotState): Promise<TaskReport[]> 
     falseAlarms += score?.falseAlarms.length ?? 0;
 
     const investigatorUsage = investigatorTasks
-      .filter((item) => item.task.createdAt >= run.createdAt && item.task.createdAt <= end)
+      .filter((item) => item.task.conversationId === run.conversationId
+        && item.task.createdAt >= run.createdAt && item.task.createdAt <= end)
       .reduce((sum, item) => addUsage(sum, item.usage), createEmptyUsage());
     const runUsage = byId.get(run.id)?.usage ?? createEmptyUsage();
     const cost = runUsage.costUsd + investigatorUsage.costUsd;
@@ -389,7 +398,7 @@ async function loadTasks(api: Api, path: string): Promise<TaskReport[]> {
   const tasks = await api.all<TaskLike>(path);
   return Promise.all(
     tasks.map(async (task) => {
-      const details = await api.get<TaskLike>(`/tasks/${task.id}`);
+      const details = await api.get<ConversationTask>(`/tasks/${task.id}`);
       return { task: details, usage: sumTaskUsage(await loadEvents(api, task.id)) };
     })
   );

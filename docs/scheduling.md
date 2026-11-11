@@ -1,8 +1,22 @@
 # Recurring responsibilities
 
-A **responsibility** is work an agent does on a schedule with nobody asking each time, such as "test the checkout flow every hour". People set them up with `POST /responsibilities`: agent, title, brief, completion criteria, `intervalMinutes` (5 or more) or a calendar `recurrence`, an optional `conversationId` for results, an optional `startAt`, and a `missedRunPolicy`.
+A **responsibility** is recurring work owned by a project. Create one with
+`POST /responsibilities` and send `projectId`, a title, a brief, completion criteria, and an
+interval or calendar rule. Optionally set `agentId` to pin the starting agent. Set it to
+`null` in a PATCH to return to automatic routing. `GET /responsibilities?projectId=<id>`
+lists a project's schedules.
 
-Each run is an ordinary task with `responsibilityId` set, so everything about tasks applies: it pins the agent's configuration version, can wait, can need approval, has limits, and can be paused or cancelled. If the responsibility has a conversation, the run's result is posted there. The agent must already be a member of that conversation.
+Each run opens a fresh endeavor in the project. The schedule's brief becomes its goal and
+the completion criteria become its done criteria. The project’s default members join the
+endeavor. A pinned agent starts immediately. Otherwise the decision model chooses a starting
+agent from the endeavor’s available members. An uncertain decision appears in the endeavor
+and waits for a person to choose an agent or end the run without assigning anyone.
+
+Existing schedules migrate to their endeavor's project and retain their pinned agent. A
+schedule with no earlier endeavor moves to the default project. Active legacy members join
+the new runs alongside the project defaults. Legacy callers may still send `conversationId`
+to select its project. When neither field is supplied, the schedule uses the default project.
+Past tasks and links remain readable.
 
 ## The schedule is separate from its runs
 
@@ -17,7 +31,7 @@ Each run is an ordinary task with `responsibilityId` set, so everything about ta
 
 The platform runs on this computer, so it can't run anything while the computer is asleep or the service is stopped. When it comes back, each responsibility follows its `missedRunPolicy`:
 
-- `ask` (the default): if only one run was missed and the next one isn't close, run it. If several were missed, or the next run is due within a quarter of the interval, don't run. Ask a person instead: the question is posted in the responsibility's conversation, mentioning its people, and shows on the Schedules page. `POST /responsibilities/:id/catch-up` with `{ "decision": "run" }` starts one run now; `"wait"` leaves it for the next scheduled run. Only the first answer counts. Starting the task, saving the answer, and removing the question commit together. A refused or failed start leaves the question available for retry. A same-answer retry after a lost response returns the original task (or wait outcome) while the enabled schedule still has the same future next run. An opposing answer is refused. Pausing, cancelling, retiming or reaching the next slot ends that replay window. If nobody answers, the question lapses when the next run comes due, and that run happens as usual (`catchUpNotPending` after that).
+- `ask` (the default): if only one run was missed and the next one isn't close, run it. If several were missed, or the next run is due within a quarter of the interval, don't run. Ask a person instead: the question appears on the Schedules page. A legacy schedule with a saved endeavor also posts the question there. `POST /responsibilities/:id/catch-up` with `{ "decision": "run" }` starts one run now; `"wait"` leaves it for the next scheduled run. Only the first answer counts. Opening the endeavor, saving the answer, and removing the question commit together. A refused or failed start leaves the question available for retry. A same-answer retry after a lost response returns the original run (or wait outcome) while the enabled schedule still has the same future next run. An opposing answer is refused. Pausing, cancelling, retiming or reaching the next slot ends that replay window. If nobody answers, the question lapses when the next run comes due, and that run happens as usual (`catchUpNotPending` after that).
 - `run_once`: always start one run for the latest missed slot.
 - `skip`: start no run, and wait for the next slot.
 
@@ -25,15 +39,15 @@ A run's brief says how many runs were missed. Either way, the next run is the fi
 
 Each run's key is its time slot (`schedule:<id>:<slot>`, or `catchup:<id>:<slot>` for a catch-up a person asked for). The scheduled insert locks the schedule and rechecks that it is enabled and still has the slot read by the runner. A pause, cancellation, or retiming that commits first prevents that stale start. If the insert commits first, the run already exists when the schedule changes and keeps going. The run is created first and the schedule moves on after, and only one runner can move a slot on. So a slot never runs twice, and a crash between the two steps doesn't lose it.
 
-Only one run of a responsibility is open at a time. A partial unique database index enforces this even when different scheduled slots or manual starts race. If the last run is still working, waiting, or blocked when the next slot comes, that slot is skipped and logged. `lastRunAt` only moves when a run really starts.
+Starts take a lock on the schedule and check for an open run, including one waiting for a routing decision or starter delivery. The next slot is skipped if the preceding run is still open. A partial unique database index also limits each responsibility to one open starter task. `lastRunAt` moves when a scheduled run opens its endeavor.
 
 Changing `intervalMinutes` to a shorter one takes effect at once: the next run moves to one new interval after the last run, if that is sooner.
 
 ## Starting a run by hand or from an event
 
-`POST /responsibilities/:id/runs` starts a run now without changing the schedule. Use it for outside events, such as "a deploy finished". `note` adds details to the run's brief, and sending the same `runKey` again returns the same run. If a different run is still going, it is refused with `responsibilityRunOpen`. This is the supported event trigger for now: watching connections for events on their own is future work (CA-22).
+`POST /responsibilities/:id/runs` starts a run now without changing the schedule. Use it for outside events, such as "a deploy finished". `note` adds details to the opening message and task brief, and sending the same `runKey` again returns the same run. If a different run is still going, it is refused with `responsibilityRunOpen`. This is the supported event trigger for now: watching connections for events on their own is future work (CA-22).
 
-`GET /responsibilities/:id/runs` is the run history.
+`GET /responsibilities/:id/runs` returns run history, including endeavors awaiting routing. Open a run using its `conversationId`; use `taskId` to inspect the assigned task when present.
 
 ## Calendar recurrence
 
@@ -41,10 +55,11 @@ Send either `intervalMinutes` or `recurrence` when creating a responsibility. Fo
 
 ```json
 {
-  "agentId": "00000000-0000-4000-8000-000000000001",
+  "projectId": "00000000-0000-4000-8000-000000000001",
+  "agentId": null,
   "title": "Review research",
   "brief": "Review the latest research and report findings.",
-  "completionCriteria": "Post findings in the result conversation.",
+  "completionCriteria": "Post findings in the run endeavor.",
   "recurrence": {
     "frequency": "weekly",
     "days": [1, 3, 5],
@@ -82,16 +97,14 @@ Manual runs of enabled or paused schedules leave recurrence and its next slot un
 Cancelled schedules cannot be resumed or started manually. None of these actions stop an active task.
 
 A schedule has either an interval or a calendar rule, never both; a database check enforces this.
-A unique index allows at most one open run per responsibility.
+A run key identifies the endeavor across retries and restarts.
 
 ## Web interface
 
 Schedules uses the approved list, detail, and full-width creation screens in `docs/design/schedules/`.
 The approved `docs/design/schedules-centered/` follow-up puts the heading, actions, list, and
 notices in one centered frame capped at 1,220px. Rows keep next-run and status columns aligned,
-then reflow to fit narrow page widths. With no enabled or paused schedules, the empty state
-shows Create schedule near its explanation; the duplicate header action stays hidden.
-Cancelled schedules are folded below this state. The form detects the creator's device timezone
+then reflow to fit narrow page widths. The form detects the creator's device timezone
 without a picker, previews the source rule, and keeps missed-run handling visible. The interval form sets
 its first slot one interval in the future; legacy API interval creation still defaults to now.
 The local computer must be awake and the service running.
@@ -107,7 +120,7 @@ rows, one-line badges in both themes at desktop and phone widths, alignment, and
 
 ## Managing schedules in the web interface
 
-The Schedules list follows the Agents page layout. Search titles, agent names, and recurrence
+The Schedules list follows the Agents page layout. Search titles, project names, agent names, and recurrence
 summaries, or filter by All, Active, Paused, and Cancelled. All includes cancelled schedules;
 they remain available for inspecting past runs. The count reflects the current search and
 status filter. Create schedule stays in the page header, including when no schedules exist.

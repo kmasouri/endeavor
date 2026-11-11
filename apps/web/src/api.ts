@@ -396,7 +396,8 @@ export interface TaskCapability {
 
 export interface Responsibility {
   id: string;
-  agentId: string;
+  projectId: string;
+  agentId: string | null;
   conversationId: string | null;
   title: string;
   brief: string;
@@ -413,6 +414,14 @@ export interface Responsibility {
   nextRunAt: string;
   lastRunAt: string | null;
   catchUp: { slot: string; missed: number } | null;
+}
+
+export interface ResponsibilityRun {
+  runKey: string;
+  conversationId: string | null;
+  taskId: string | null;
+  createdAt: string;
+  state: string;
 }
 
 export interface AgentNote {

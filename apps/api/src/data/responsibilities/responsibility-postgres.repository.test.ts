@@ -7,6 +7,7 @@ const oldQuestion = new Date('2026-10-24T10:00:00Z');
 const legacy = {
   id: 'r1',
   agent_id: 'a1',
+  project_id: 'p1',
   conversation_id: null,
   title: 'Legacy',
   brief: 'Test',
@@ -55,6 +56,7 @@ describe('responsibility persistence compatibility', () => {
     } as unknown as FastifyInstance['pg']);
     const result = await repository.create({
       agentId: 'a1',
+      projectId: 'p1',
       conversationId: null,
       title: 'Weekly',
       brief: 'Test',
@@ -76,7 +78,8 @@ describe('responsibility persistence compatibility', () => {
       'ask',
       slot,
       'h1',
-      recurrence
+      recurrence,
+      'p1'
     ]);
     expect(result).toMatchObject({ intervalMinutes: null, recurrence, nextRunAt: slot });
   });
