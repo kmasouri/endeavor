@@ -1,12 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
-import { ParticipantRef, Project, ProjectMember } from '../../shared/types';
+import { ParticipantRef, Project, ProjectAppearance, ProjectMember } from '../../shared/types';
 import { ProjectRepository } from './project.repository';
 
 interface ProjectRow {
   id: string;
   name: string;
   context: { about?: string };
+  icon: ProjectAppearance['icon'];
+  color: ProjectAppearance['color'];
   is_default: boolean;
   created_by_human_id: string | null;
   created_at: Date;
@@ -47,20 +49,24 @@ const VISIBLE_TO_HUMAN = `(
 export class ProjectPostgresRepository implements ProjectRepository {
   constructor(private readonly db: FastifyInstance['pg']) {}
 
-  async create(input: {
-    name: string;
-    about?: string | null;
-    createdByHumanId: string;
-  }): Promise<Project> {
+  async create(
+    input: ProjectAppearance & {
+      name: string;
+      about?: string | null;
+      createdByHumanId: string;
+    }
+  ): Promise<Project> {
     const result = await this.db.query<ProjectRow>(
-      `INSERT INTO endeavor.projects (id, name, created_by_human_id, context)
-       VALUES ($1, $2, $3, $4::jsonb)
+      `INSERT INTO endeavor.projects (id, name, created_by_human_id, context, icon, color)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6)
        RETURNING *`,
       [
         randomUUID(),
         input.name,
         input.createdByHumanId,
-        JSON.stringify(input.about ? { about: input.about } : {})
+        JSON.stringify(input.about ? { about: input.about } : {}),
+        input.icon ?? null,
+        input.color ?? null
       ]
     );
     return toProject(result.rows[0]);
@@ -112,7 +118,7 @@ export class ProjectPostgresRepository implements ProjectRepository {
 
   async update(
     projectId: string,
-    changes: { name?: string; about?: string | null; archived?: boolean }
+    changes: ProjectAppearance & { name?: string; about?: string | null; archived?: boolean }
   ): Promise<Project | null> {
     const result = await this.db.query<ProjectRow>(
       `UPDATE endeavor.projects
@@ -127,6 +133,8 @@ export class ProjectPostgresRepository implements ProjectRepository {
                THEN '{}'::jsonb ELSE jsonb_build_object('about', $5::text) END
              ELSE context
            END,
+           icon = CASE WHEN $6::boolean THEN $7::text ELSE icon END,
+           color = CASE WHEN $8::boolean THEN $9::text ELSE color END,
            updated_at = now()
        WHERE id = $1
        RETURNING *`,
@@ -135,7 +143,11 @@ export class ProjectPostgresRepository implements ProjectRepository {
         changes.name ?? null,
         changes.archived ?? null,
         changes.about !== undefined,
-        changes.about ?? null
+        changes.about ?? null,
+        changes.icon !== undefined,
+        changes.icon ?? null,
+        changes.color !== undefined,
+        changes.color ?? null
       ]
     );
     return result.rows[0] ? toProject(result.rows[0]) : null;
@@ -213,6 +225,8 @@ function toProject(row: ProjectRow): Project {
   return {
     id: row.id,
     name: row.name,
+    icon: row.icon ?? null,
+    color: row.color ?? null,
     about: row.context.about ?? null,
     isDefault: row.is_default,
     createdByHumanId: row.created_by_human_id,

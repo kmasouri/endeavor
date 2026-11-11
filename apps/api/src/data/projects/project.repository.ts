@@ -1,11 +1,13 @@
-import { ParticipantRef, Project, ProjectMember } from '../../shared/types';
+import { ParticipantRef, Project, ProjectAppearance, ProjectMember } from '../../shared/types';
 
 export interface ProjectRepository {
-  create(input: {
-    name: string;
-    about?: string | null;
-    createdByHumanId: string;
-  }): Promise<Project>;
+  create(
+    input: ProjectAppearance & {
+      name: string;
+      about?: string | null;
+      createdByHumanId: string;
+    }
+  ): Promise<Project>;
   getById(projectId: string): Promise<Project | null>;
   // The project new endeavors go into when none is named.
   getDefault(): Promise<Project | null>;
@@ -21,7 +23,7 @@ export interface ProjectRepository {
   // archived: true archives the project, false restores it, undefined leaves it.
   update(
     projectId: string,
-    changes: { name?: string; about?: string | null; archived?: boolean }
+    changes: ProjectAppearance & { name?: string; about?: string | null; archived?: boolean }
   ): Promise<Project | null>;
 
   listMembers(projectId: string): Promise<ProjectMember[]>;

@@ -8,7 +8,7 @@ export type DocumentVisibility = { projectId: string } | { conversationId: strin
 export interface DocumentRepository {
   // conversationId limits the document to that one endeavor; null shares it with the project.
   add(input: {
-    projectId: string;
+    projectId: string | null;
     conversationId: string | null;
     title: string;
     content: string;

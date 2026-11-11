@@ -74,12 +74,11 @@ The sidebar stays mounted when collapsed, with a compact rail of navigation icon
 with a mouse or focusing a control with the keyboard expands it temporarily. The header toggle
 pins it open. On narrow screens, the expanded sidebar overlays the page and navigation returns
 it to the rail. Width and label transitions respect the browser's reduced-motion setting.
-The sidebar groups endeavors under expandable projects in every section. New request stays at the
-top and uses the current project, or General outside a project. Project names open their overview;
-the Projects heading opens project creation and archive management. Selecting an endeavor expands
-its project. Unread counts stay on endeavors and roll up onto collapsed projects. Search and direct
-conversation links remain available. Returning to the app restores the last accessible conversation
-for the selected person.
+The sidebar groups endeavors under expandable projects and lists standalone endeavors separately.
+New endeavor opens a draft in the main pane. Its project picker opens below the message box and
+starts on Standalone unless the draft came from a project. A project row menu opens the overview
+or edits the name and appearance. The same Material icon and preset color appear in the sidebar
+and picker. Selecting an endeavor expands its project. Unread counts roll up on collapsed projects.
 
 Agents uses the centered page frame, a searchable list, a separate creation page, and Overview,
 Configuration, and Versions tabs. Configuration uses catalog search with chosen-item removal

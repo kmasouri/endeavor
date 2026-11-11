@@ -10,6 +10,8 @@
     setup: 'M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2',
     panel: 'M3 4h18v16H3zM9 4v16',
     folder: 'M3 7V4h6l2 3h10v13H3z',
+    ellipsis: 'M5 12h.01M12 12h.01M19 12h.01',
+    edit: 'M4 20h4L20 8l-4-4L4 16zM14 6l4 4',
     'chevron-down': 'M6 9l6 6 6-6',
     'chevron-right': 'M9 6l6 6-6 6',
     plus: 'M12 5v14M5 12h14',

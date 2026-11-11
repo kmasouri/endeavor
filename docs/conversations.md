@@ -4,11 +4,12 @@ People and agents work together in conversations. People post through the API. A
 
 ## Projects, endeavors, and goals
 
-A conversation is an **endeavor**: one goal. Endeavors are grouped into long-lived **projects**. A project holds knowledge sources, saved notes, and default people and agents. It has no chat of its own.
+A conversation is an **endeavor** with one goal. It can be standalone or belong to a long-lived **project**. A project holds knowledge sources, saved notes, and default people and agents. It has no chat of its own.
 
 - `POST /projects` creates a project with a `name` and optional default `agentIds` and `humanIds`. The creator becomes a default member. `GET /projects` lists active projects (`archived=true` for archived ones), and `GET /projects/:projectId` returns one with its members.
 - `PATCH /projects/:projectId` renames it, replaces its default agents or people, or archives it (`archived: true`) and restores it (`archived: false`). Member changes apply to endeavors started afterwards. No new endeavor starts in an archived project (`projectArchived`).
-- One project is the default. `POST /conversations` without `projectId` puts the endeavor there, so older clients keep working. The default can't be archived (`defaultProjectArchive`). All conversations that existed before projects were moved into it, named General, with their IDs unchanged.
+- Create and update accept an optional `icon` and `color`. Responses include both. `null` restores the default folder or neutral color, and omitted PATCH fields keep their values. Icons are `folder`, `language`, `science`, `code`, `description`, `work_outline`, `build`, and `lightbulb`. Colors are `slate`, `sand`, `coral`, `orange`, `yellow`, `green`, `teal`, `blue`, `violet`, and `pink`.
+- One project is the default. `POST /conversations` without `projectId` puts the endeavor there, so older clients keep working. Send `projectId: null` to create a standalone endeavor. A standalone endeavor has no project defaults or shared project knowledge. The default can't be archived (`defaultProjectArchive`). All conversations that existed before projects were moved into it, named General, with their IDs unchanged.
 - Creating an endeavor adds the project's default members along with the chosen ones. A default agent that can't join now, like a disabled one, is skipped.
 
 **The goal** is the request that opened the endeavor. People never have to write one. `POST /conversations` can take a `goal`; otherwise the first message a person posts becomes it (`goalMessageId` points to that message). Older conversations got the first message a person wrote in them.
@@ -105,13 +106,12 @@ The name is canonical in storage and every view; the leading `#` is a navigation
 The app header and Cmd/Ctrl K open search across
 all accessible endeavors, including older API pages. The list is refreshed when the person changes.
 
-**New request** opens a modal for the request text in the selected project. The first message
-becomes the goal and can start agent work. The legacy creation dialog, used when no project is
-available, takes a required name and optional searchable people and agents.
-No agents are selected by default. Cancel, Close, and Escape restore the opener; saving disables
-those actions until the request finishes. Errors retain the form values. Success updates the sidebar,
-selects the new endeavor, and focuses its message box. The legacy creation dialog creates an empty
-endeavor without posting a message or starting agent work. The full chat, Details, member controls, and history remain available.
+**New endeavor** opens a blank draft in the main pane. Its first message becomes the goal.
+The picker below the message box starts on Standalone for the global action. The plus on a
+project row preselects that project. Pick a different project, create one, or choose
+**Don’t work in a project** before sending. Leaving a draft with text asks before discarding it.
+If the endeavor was created but the message failed, Retry reuses its ID and the same message key.
+
 
 `POST /conversations` accepts `title` (at most 200 input characters; nonempty after normalization), optional `agentIds`, and
 optional `humanIds` (up to 20 each). It validates every chosen participant before creating the
@@ -353,8 +353,8 @@ asks for confirmation before closing. Closed endeavors show their history with a
 control instead of the composer. Global search includes open and closed endeavors.
 
 
-The sidebar shows projects with expandable endeavor lists throughout the app. New request is at
-the top and starts in the current endeavor's project, the open project, or General when browsing
-other sections. Project names open their overview, and the Projects heading opens project
-management. The selected project's list expands automatically on navigation. Collapsed project
-rows show the sum of unread messages in their endeavors; the open endeavor contributes zero.
+The sidebar groups endeavors under expandable project names and lists standalone endeavors
+separately. Project row actions appear on hover or focus and stay visible on touch screens.
+**Edit** in the project menu updates the name, icon, and color together. **Open project** opens the
+overview. The plus beside Projects opens the project editor. Collapsed projects show the sum of
+unread messages in their endeavors, excluding the selected endeavor.

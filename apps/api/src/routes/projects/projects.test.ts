@@ -21,6 +21,8 @@ describe('projects routes', () => {
     { name: '' },
     { name: 'a'.repeat(101) },
     { name: 'Billing', unknown: true },
+    { name: 'Billing', icon: 'arbitrary-icon' },
+    { name: 'Billing', color: '#ff0000' },
     { name: 'Billing', about: 5 },
     { name: 'Billing', about: 'a'.repeat(5001) }
   ])('rejects an invalid create: %j', async (payload) => {
@@ -74,6 +76,25 @@ describe('projects routes', () => {
       await app.close();
     }
   );
+
+  it('accepts a rename and appearance in one update, including a reset', async () => {
+    const app = setupApp();
+    await app.ready();
+    const update = jest.spyOn(app.projectService, 'updateProject').mockResolvedValue(details);
+    const response = await app.inject({
+      method: 'PATCH',
+      url: `/projects/${PROJECT}`,
+      headers: { 'x-actor-id': ACTOR },
+      payload: { name: ' New name ', icon: 'code', color: null }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(update).toHaveBeenCalledWith(ACTOR, PROJECT, {
+      name: 'New name',
+      icon: 'code',
+      color: null
+    });
+    await app.close();
+  });
 
   it.each(['Updated background', null, ''])(
     'sets or clears About through PATCH: %p',

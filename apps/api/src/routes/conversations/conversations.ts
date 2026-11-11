@@ -34,7 +34,7 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
     {
       schema: {
         description:
-          "Start an endeavor (a conversation) for one goal, in projectId or the default project. Names are stored as lowercase letters, numbers, and hyphens, with at most 64 characters after normalization. You become a member; agentIds and humanIds add chosen members, and the project's default members join too. Without goal, the first message a person posts becomes the goal. doneCriteria is filled in from the goal when left out.",
+          "Start an endeavor (a conversation) for one goal, in projectId. Pass projectId: null for standalone or omit it for the default project. Names are stored as lowercase letters, numbers, and hyphens, with at most 64 characters after normalization. You become a member; agentIds and humanIds add chosen members, and the project's default members join too. Without goal, the first message a person posts becomes the goal. doneCriteria is filled in from the goal when left out.",
         tags: ['conversations'],
         headers: actorHeadersSchema,
         body: createConversationBodySchema

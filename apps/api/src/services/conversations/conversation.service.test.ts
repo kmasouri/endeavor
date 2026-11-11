@@ -488,6 +488,14 @@ describe('ConversationService projects and goals', () => {
     });
   });
 
+  it('keeps an explicitly standalone endeavor separate from project defaults', async () => {
+    const { service, conversations, projects } = setup();
+    await service.createConversation(KIM, { title: 'Solo request', projectId: null });
+    expect(projects.getDefault).not.toHaveBeenCalled();
+    expect(projects.listMembers).not.toHaveBeenCalled();
+    expect(conversations.create).toHaveBeenCalledWith(expect.objectContaining({ projectId: null }));
+  });
+
   it('keeps done criteria a person wrote', async () => {
     const { service, conversations } = setup();
 
