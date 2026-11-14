@@ -289,6 +289,7 @@ export interface Project extends ProjectAppearance {
   name: string;
   // Human-supplied background included in every endeavor of this project.
   about: string | null;
+  routingConfidenceThreshold: number | null;
   // New endeavors go here when no project is named.
   isDefault: boolean;
   createdByHumanId: string | null;

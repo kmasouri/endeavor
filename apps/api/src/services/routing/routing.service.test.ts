@@ -3,6 +3,7 @@ import {
   mockConversationRepository,
   mockHumanRepository,
   mockMessageRepository,
+  mockProjectRepository,
   mockTaskRepository
 } from '../../data/repositories.test-helper';
 import { RoutingRepository } from '../../data';
@@ -10,14 +11,15 @@ import { RoutingClient, RoutingDecision, StarterChoice } from '../../integration
 import { RoutingLogger } from '../../observability';
 import { RoutingRecord } from '../../shared/routing';
 import { RoutingService } from './routing.service';
-import { Agent, Conversation, Human, Message, Task } from '../../shared/types';
+import { Agent, Conversation, Human, Message, Project, Task } from '../../shared/types';
 
 const now = new Date('2026-11-04T06:00:00Z');
 const conversation = {
   id: 'c',
   goal: 'Write and review a brief',
   doneCriteria: 'Reviewed brief',
-  state: 'open'
+  state: 'open',
+  projectId: null
 } as Conversation;
 const agent = {
   id: 'a',
@@ -74,6 +76,7 @@ function setup(overrides: Partial<RoutingRecord> = {}) {
   };
   const conversations = mockConversationRepository();
   const messages = mockMessageRepository();
+  const projects = mockProjectRepository();
   const agents = mockAgentRepository();
   const humans = mockHumanRepository();
   const tasks = mockTaskRepository();
@@ -113,6 +116,7 @@ function setup(overrides: Partial<RoutingRecord> = {}) {
   const service = new RoutingService(
     repo,
     conversations,
+    projects,
     messages,
     agents,
     humans,
@@ -120,7 +124,18 @@ function setup(overrides: Partial<RoutingRecord> = {}) {
     client,
     logger
   );
-  return { service, repo, conversations, messages, agents, humans, tasks, client };
+  return {
+    service,
+    repo,
+    conversations,
+    messages,
+    agents,
+    humans,
+    tasks,
+    client,
+    projects,
+    logger
+  };
 }
 
 describe('RoutingService', () => {
@@ -176,6 +191,31 @@ describe('RoutingService', () => {
     await s.service.tick();
     expect(s.repo.save.mock.calls[0][2].selectedAgentId).toBe('a');
   });
+  it('uses the latest project setting for each starter decision and logs it', async () => {
+    const s = setup();
+    s.conversations.getById.mockResolvedValue({ ...conversation, projectId: 'p' });
+    s.projects.getById.mockResolvedValueOnce({ routingConfidenceThreshold: 0 } as Project);
+    s.projects.getById.mockResolvedValueOnce({ routingConfidenceThreshold: 1 } as Project);
+    s.projects.getById.mockResolvedValueOnce({ routingConfidenceThreshold: null } as Project);
+    s.client.chooseStarter.mockResolvedValue(decision({ kind: 'agent', agentId: 'a' }, 0.6));
+
+    await s.service.tick();
+    s.repo.claim.mockResolvedValueOnce(job);
+    await s.service.tick();
+    s.repo.claim.mockResolvedValueOnce(job);
+    await s.service.tick();
+
+    expect(s.projects.getById).toHaveBeenCalledWith('p');
+    expect(s.repo.save.mock.calls.map(([, , input]) => input.status)).toEqual([
+      'resolved',
+      'waiting',
+      'resolved'
+    ]);
+    expect(s.logger.onDecision).toHaveBeenNthCalledWith(1, 'r', 'agent', 0.6, 'test', 0);
+    expect(s.logger.onDecision).toHaveBeenNthCalledWith(2, 'r', 'ask', 0.6, 'test', 1);
+    expect(s.logger.onDecision).toHaveBeenNthCalledWith(3, 'r', 'agent', 0.6, 'test', 0.6);
+  });
+
   it('does not start work for thanks', async () => {
     const s = setup();
     s.client.chooseStarter.mockResolvedValue(decision({ kind: 'none' }));
@@ -261,8 +301,10 @@ describe('RoutingService', () => {
     });
     expect(s.repo.save.mock.calls[0][3].message?.deliverToAgentIds).toEqual([]);
   });
-  it('posts a visible tagged handoff when a completed task needs the next member', async () => {
+  it.each([0.9, 0.95])('applies the project threshold of %s to a handoff', async (threshold) => {
     const s = setup({ kind: 'handoff', taskId: 't', messageId: null });
+    s.conversations.getById.mockResolvedValue({ ...conversation, projectId: 'p' });
+    s.projects.getById.mockResolvedValue({ routingConfidenceThreshold: threshold } as Project);
     s.tasks.getById.mockResolvedValue({
       id: 't',
       conversationId: 'c',
@@ -275,6 +317,11 @@ describe('RoutingService', () => {
     s.client.chooseAfterTask.mockResolvedValue({ ...decision({ kind: 'agent', agentId: 'a' }) });
     await s.service.tick();
     expect(s.client.chooseAfterTask).toHaveBeenCalled();
+    if (threshold > 0.9) {
+      expect(s.repo.save.mock.calls[0][2].status).toBe('waiting');
+      expect(s.repo.save.mock.calls[0][3].message?.deliverToAgentIds).toEqual([]);
+      return;
+    }
     expect(s.repo.save.mock.calls[0][3].message).toMatchObject({
       authorType: 'agent',
       authorId: 'finished',

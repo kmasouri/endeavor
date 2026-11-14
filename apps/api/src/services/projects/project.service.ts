@@ -52,6 +52,7 @@ export class ProjectService {
     input: ProjectAppearance & {
       name: string;
       about?: string | null;
+      routingConfidenceThreshold?: number | null;
       agentIds?: string[];
       humanIds?: string[];
     }
@@ -67,6 +68,7 @@ export class ProjectService {
       icon: input.icon,
       color: input.color,
       about: input.about?.trim() || null,
+      routingConfidenceThreshold: input.routingConfidenceThreshold,
       createdByHumanId: human.id
     });
     await this.projectRepository.setMembers({
@@ -104,6 +106,7 @@ export class ProjectService {
     changes: ProjectAppearance & {
       name?: string;
       about?: string | null;
+      routingConfidenceThreshold?: number | null;
       agentIds?: string[];
       humanIds?: string[];
       archived?: boolean;
@@ -136,6 +139,7 @@ export class ProjectService {
     const updated =
       changes.name !== undefined ||
       changes.about !== undefined ||
+      changes.routingConfidenceThreshold !== undefined ||
       changes.archived !== undefined ||
       changes.icon !== undefined ||
       changes.color !== undefined
@@ -144,6 +148,7 @@ export class ProjectService {
             icon: changes.icon,
             color: changes.color,
             about: changes.about === undefined ? undefined : changes.about?.trim() || null,
+            routingConfidenceThreshold: changes.routingConfidenceThreshold,
             archived: changes.archived
           })
         : project;

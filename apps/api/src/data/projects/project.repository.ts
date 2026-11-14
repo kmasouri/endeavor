@@ -5,6 +5,7 @@ export interface ProjectRepository {
     input: ProjectAppearance & {
       name: string;
       about?: string | null;
+      routingConfidenceThreshold?: number | null;
       createdByHumanId: string;
     }
   ): Promise<Project>;
@@ -23,7 +24,12 @@ export interface ProjectRepository {
   // archived: true archives the project, false restores it, undefined leaves it.
   update(
     projectId: string,
-    changes: ProjectAppearance & { name?: string; about?: string | null; archived?: boolean }
+    changes: ProjectAppearance & {
+      name?: string;
+      about?: string | null;
+      routingConfidenceThreshold?: number | null;
+      archived?: boolean;
+    }
   ): Promise<Project | null>;
 
   listMembers(projectId: string): Promise<ProjectMember[]>;

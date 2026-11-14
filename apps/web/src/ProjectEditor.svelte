@@ -15,13 +15,17 @@
   let name = $state(initial()?.name ?? '');
   let icon = $state<NonNullable<Project['icon']>>(initial()?.icon ?? 'folder');
   let color = $state<Project['color']>(initial()?.color ?? null);
+  let threshold = $state<number | undefined>(initial()?.routingConfidenceThreshold ?? undefined);
   const action = createAction();
   const iconNames = ['Folder', 'Globe', 'Science', 'Code', 'Document', 'Work', 'Tools', 'Idea'];
   const colorName = (value: string) => value[0].toUpperCase() + value.slice(1);
   const changes = $derived({
     ...(!project || name.trim() !== project.name ? { name: name.trim() } : {}),
     ...(icon !== (project?.icon ?? 'folder') ? { icon } : {}),
-    ...(color !== (project?.color ?? null) ? { color } : {})
+    ...(color !== (project?.color ?? null) ? { color } : {}),
+    ...((threshold ?? null) !== (project?.routingConfidenceThreshold ?? null)
+      ? { routingConfidenceThreshold: threshold ?? null }
+      : {})
   });
 
   function save(event: SubmitEvent) {
@@ -59,6 +63,11 @@
         {/each}
       </div>
     </fieldset>
+    <label>
+      Routing confidence threshold
+      <input type="number" min="0" max="1" step="any" placeholder="0.6" bind:value={threshold} disabled={action.busy} aria-describedby="routing-threshold-help" />
+      <span id="routing-threshold-help" class="caption muted">Leave blank to use 0.6. Higher values ask a person more often.</span>
+    </label>
     <ErrorNote error={action.error} />
     <footer class="dialog-footer">
       <button type="button" class="secondary" disabled={action.busy} onclick={onClose}>Cancel</button>
