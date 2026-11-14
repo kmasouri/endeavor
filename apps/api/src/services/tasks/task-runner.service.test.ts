@@ -3740,9 +3740,24 @@ describe('access requests', () => {
     expect(result.content).toContain('methods: GET; paths: /wiki');
     expect(result.content).toContain('Ask with request_access');
     expect(result.content).not.toContain('House style');
+    expect(result.content).not.toContain(wiki.baseUrl);
+    expect(result.content).not.toContain(wiki.authHeader);
     expect(ctx.catalogs.getConnectionCredential).not.toHaveBeenCalled();
     expect(ctx.catalogs.grant).not.toHaveBeenCalled();
     expect(ctx.approvals.create).not.toHaveBeenCalled();
+  });
+
+  it('shows skill metadata without exposing instructions or granting access', async () => {
+    const ctx = setupDiscovery();
+    const result = await runCall(ctx, {
+      id: 'call-find',
+      name: 'find_capabilities',
+      input: { query: 'house style' }
+    });
+    expect(result.isError).toBe(false);
+    expect(result.content).toContain('Skill "House style" (version 3): How briefs are written');
+    expect(result.content).not.toContain(styleVersion.instructions);
+    expect(ctx.catalogs.grant).not.toHaveBeenCalled();
   });
 
   it('asks a person for a connection with its exact scope and waits for the decision', async () => {

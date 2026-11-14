@@ -8,7 +8,7 @@ export interface CreateSkillVersionInput {
 export interface SkillRepository {
   // Saves the skill and its version 1 in one statement.
   createSkill(
-    input: { name: string; description: string; discoverable?: boolean },
+    input: { name: string; description: string; discoverable: boolean },
     firstVersion: CreateSkillVersionInput
   ): Promise<{ skill: Skill; version: SkillVersion }>;
   getSkill(skillId: string): Promise<Skill | null>;
