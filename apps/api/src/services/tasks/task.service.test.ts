@@ -53,6 +53,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     state: 'working',
     stateReason: null,
     pausedAt: null,
+    pausedByHumanId: null,
     requestedByType: 'human',
     requestedById: HUMAN_ID,
     requestMessageId: null,
@@ -398,10 +399,51 @@ describe('TaskService', () => {
 
       await service.pauseTask(HUMAN_ID, TASK_ID, 'Hold on');
 
-      const [, expected, changes] = tasks.update.mock.calls[0];
+      const [, expected, changes, event] = tasks.update.mock.calls[0];
       expect(expected).toEqual({ state: 'waiting', paused: false, agentVersionId: VERSION_ID });
       expect(changes).toEqual({ pausedAt: expect.any(Date) });
-      expect(eventTypes(tasks)).toEqual(['task.paused']);
+      expect(event).toEqual({
+        type: 'task.paused',
+        actor: { type: 'human', id: HUMAN_ID },
+        data: { reason: 'Hold on' }
+      });
+      expect(tasks.addEvent).not.toHaveBeenCalled();
+    });
+
+    it('attributes each pause to the person who paused it and clears it on resume', async () => {
+      const { service, tasks, humans } = setup();
+      const other = { ...human, id: '00000000-0000-4000-8000-000000000009', name: 'Sam' };
+      humans.getById.mockImplementation(async (id) => (id === other.id ? other : human));
+
+      let task = makeTask({ state: 'waiting' });
+      tasks.getById.mockImplementation(async () => task);
+      tasks.update.mockImplementation(async (_id, _expected, changes, event) => {
+        task = {
+          ...task,
+          ...changes,
+          pausedByHumanId: event?.actor.id ?? null
+        };
+        return task;
+      });
+
+      const first = await service.pauseTask(HUMAN_ID, TASK_ID);
+      expect(first).toMatchObject({ pausedAt: expect.any(Date), pausedByHumanId: HUMAN_ID });
+      await expect(service.getTask(other.id, TASK_ID)).resolves.toMatchObject({
+        pausedAt: first.pausedAt,
+        pausedByHumanId: HUMAN_ID
+      });
+      await expect(service.resumeTask(other.id, TASK_ID)).resolves.toMatchObject({
+        pausedAt: null,
+        pausedByHumanId: null
+      });
+
+      const second = await service.pauseTask(other.id, TASK_ID);
+      expect(second).toMatchObject({ pausedAt: expect.any(Date), pausedByHumanId: other.id });
+      tasks.list.mockResolvedValue([second]);
+      tasks.count.mockResolvedValue(1);
+      await expect(service.listTasks(HUMAN_ID, { limit: 10, offset: 0 })).resolves.toMatchObject({
+        tasks: [{ pausedAt: second.pausedAt, pausedByHumanId: other.id }]
+      });
     });
 
     it('does not pause a task that is already paused or finished', async () => {

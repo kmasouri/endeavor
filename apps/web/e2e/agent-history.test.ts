@@ -32,6 +32,7 @@ const makeTask = (
   stateReason: null,
   agentVersionId: 'v1',
   pausedAt: null as string | null,
+  pausedByHumanId: null as string | null,
   requestedByType: 'human',
   requestedById: 'person',
   parentTaskId: null,
@@ -99,8 +100,14 @@ async function fixture(page: Page, theme = 'dark') {
       const action = /^\/tasks\/([^/]+)\/(pause|resume|cancel)$/.exec(url.pathname);
       if (action) {
         const task = state.tasks.find((t) => t.id === action[1])!;
-        if (action[2] === 'pause') task.pausedAt = createdAt;
-        if (action[2] === 'resume') task.pausedAt = null;
+        if (action[2] === 'pause') {
+          task.pausedAt = createdAt;
+          task.pausedByHumanId = 'person';
+        }
+        if (action[2] === 'resume') {
+          task.pausedAt = null;
+          task.pausedByHumanId = null;
+        }
         if (action[2] === 'cancel') task.state = 'cancelled';
       }
       state.writes.push({ path: url.pathname, body: req.postData() ? req.postDataJSON() : {} });
@@ -563,6 +570,31 @@ test('live status shows independent steps, elapsed time and plain stopped states
   second.state = 'completed';
   await page.clock.fastForward(4001);
   await expect(live).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('shows the pause actor and time and clears both after resume', async ({ page }) => {
+  await page.clock.setFixedTime(new Date(createdAt));
+  const { state, errors } = await fixture(page);
+  const task = state.tasks[1];
+  task.state = 'working';
+  task.pausedAt = createdAt;
+  await page.goto('/app/#/conversations/heat');
+
+  const status = page
+    .locator('.task-status')
+    .filter({ has: page.getByRole('button', { name: 'Resume', exact: true }) });
+  const time = status.locator('time');
+  await expect(status).toContainText('Paused at');
+  await expect(time).toHaveAttribute('datetime', createdAt);
+
+  task.pausedByHumanId = 'person';
+  await expect(status).toContainText('Kayvan paused it at');
+  await status.getByRole('button', { name: 'Resume', exact: true }).click();
+  await expect(status).toHaveCount(0);
+  expect(state.writes.filter((write) => write.path.startsWith('/tasks/'))).toEqual([
+    { path: '/tasks/new/resume', body: {} }
+  ]);
   expect(errors).toEqual([]);
 });
 

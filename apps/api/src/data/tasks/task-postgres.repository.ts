@@ -24,6 +24,7 @@ import {
   CreateTaskWaitInput,
   ListTasksInput,
   TaskChanges,
+  TaskUpdateEvent,
   StoredHttpCall,
   ResponsibilityRunStart,
   StartResponsibilityRunInput,
@@ -43,6 +44,7 @@ interface TaskRow {
   state: TaskState;
   state_reason: string | null;
   paused_at: Date | null;
+  paused_by_human_id?: string | null;
   requested_by_type: TaskRequesterType;
   requested_by_id: string | null;
   request_message_id: string | null;
@@ -116,6 +118,14 @@ const CHANGE_COLUMNS: Record<keyof TaskChanges, string> = {
   finishedAt: 'finished_at',
   agentVersionId: 'agent_version_id'
 };
+
+// Ignore events from earlier pauses, including when a legacy task has no matching event.
+const PAUSE_ACTOR_COLUMN = `CASE WHEN tasks.paused_at IS NOT NULL THEN (
+  SELECT event.actor_id FROM endeavor.task_events event
+  WHERE event.task_id = tasks.id AND event.type = 'task.paused' AND event.actor_type = 'human'
+    AND event.created_at >= tasks.paused_at
+  ORDER BY event.id DESC LIMIT 1
+) END AS paused_by_human_id`;
 
 export class TaskPostgresRepository implements TaskRepository {
   constructor(private readonly db: FastifyInstance['pg']) {}
@@ -480,13 +490,14 @@ export class TaskPostgresRepository implements TaskRepository {
 
     // Use the same connection: a scheduled insert keeps its schedule lock through conflict
     // recovery too. Run-key matches take precedence over a competing open run.
-    const byKey = await db.query<TaskRow>('SELECT * FROM endeavor.tasks WHERE run_key = $1', [
-      input.runKey
-    ]);
+    const byKey = await db.query<TaskRow>(
+      `SELECT *, ${PAUSE_ACTOR_COLUMN} FROM endeavor.tasks WHERE run_key = $1`,
+      [input.runKey]
+    );
     const byEndeavor =
       !byKey.rows[0] && input.conversationId
         ? await db.query<TaskRow>(
-            `SELECT * FROM endeavor.tasks WHERE conversation_id = $1 AND owner_agent_id = $2
+            `SELECT *, ${PAUSE_ACTOR_COLUMN} FROM endeavor.tasks WHERE conversation_id = $1 AND owner_agent_id = $2
              AND state IN ('working', 'waiting', 'blocked') LIMIT 1`,
             [input.conversationId, input.ownerAgentId]
           )
@@ -497,7 +508,7 @@ export class TaskPostgresRepository implements TaskRepository {
       (input.responsibilityId
         ? (
             await db.query<TaskRow>(
-              `SELECT * FROM endeavor.tasks WHERE responsibility_id = $1
+              `SELECT *, ${PAUSE_ACTOR_COLUMN} FROM endeavor.tasks WHERE responsibility_id = $1
            AND state IN ('working', 'waiting', 'blocked') LIMIT 1`,
               [input.responsibilityId]
             )
@@ -511,7 +522,7 @@ export class TaskPostgresRepository implements TaskRepository {
 
   async getById(taskId: string): Promise<Task | null> {
     const result = await this.db.query<TaskRow>(
-      `SELECT *
+      `SELECT *, ${PAUSE_ACTOR_COLUMN}
        FROM endeavor.tasks
        WHERE id = $1`,
       [taskId]
@@ -522,7 +533,7 @@ export class TaskPostgresRepository implements TaskRepository {
 
   async getByRunKey(runKey: string): Promise<Task | null> {
     const result = await this.db.query<TaskRow>(
-      `SELECT *
+      `SELECT *, ${PAUSE_ACTOR_COLUMN}
        FROM endeavor.tasks
        WHERE run_key = $1`,
       [runKey]
@@ -534,7 +545,7 @@ export class TaskPostgresRepository implements TaskRepository {
   async list(input: ListTasksInput): Promise<Task[]> {
     const { where, values } = listFilters(input);
     const result = await this.db.query<TaskRow>(
-      `SELECT *
+      `SELECT *, ${PAUSE_ACTOR_COLUMN}
        FROM endeavor.tasks
        ${where}
        ORDER BY created_at DESC, id
@@ -560,7 +571,8 @@ export class TaskPostgresRepository implements TaskRepository {
   async update(
     taskId: string,
     expected: { state: TaskState; paused: boolean; agentVersionId?: string },
-    changes: TaskChanges
+    changes: TaskChanges,
+    event?: TaskUpdateEvent
   ): Promise<Task | null> {
     const values: unknown[] = [
       taskId,
@@ -583,16 +595,27 @@ export class TaskPostgresRepository implements TaskRepository {
       sets.push('lease_owner = NULL', 'lease_expires_at = NULL');
     }
 
-    const result = await this.db.query<TaskRow>(
-      `UPDATE endeavor.tasks
-       SET ${sets.join(', ')}
-       WHERE id = $1
-         AND state = $2
-         AND (paused_at IS NOT NULL) = $3
-         AND ($4::uuid IS NULL OR agent_version_id = $4)
-       RETURNING *`,
-      values
-    );
+    const update = `UPDATE endeavor.tasks
+      SET ${sets.join(', ')}
+      WHERE id = $1
+        AND state = $2
+        AND (paused_at IS NOT NULL) = $3
+        AND ($4::uuid IS NULL OR agent_version_id = $4)`;
+    let sql = `${update} RETURNING *, ${PAUSE_ACTOR_COLUMN}`;
+    if (event) {
+      const param = values.length + 1;
+      values.push(event.type, event.actor.type, event.actor.id, event.data);
+      // Record the pause with the state change so readers see both and retries cannot split them.
+      sql = `WITH changed AS (${update} RETURNING *),
+        recorded AS (
+          INSERT INTO endeavor.task_events (task_id, type, actor_type, actor_id, data)
+          SELECT id, $${param}, $${param + 1}, $${param + 2}, $${param + 3} FROM changed
+          RETURNING task_id, actor_id
+        )
+        SELECT changed.*, recorded.actor_id AS paused_by_human_id
+        FROM changed JOIN recorded ON recorded.task_id = changed.id`;
+    }
+    const result = await this.db.query<TaskRow>(sql, values);
 
     return result.rows[0] ? toTask(result.rows[0]) : null;
   }
@@ -1011,6 +1034,7 @@ function toTask(row: TaskRow): Task {
     state: row.state,
     stateReason: row.state_reason,
     pausedAt: row.paused_at,
+    pausedByHumanId: row.paused_at ? (row.paused_by_human_id ?? null) : null,
     requestedByType: row.requested_by_type,
     requestedById: row.requested_by_id,
     requestMessageId: row.request_message_id,

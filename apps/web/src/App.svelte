@@ -389,7 +389,7 @@
         {:else if section === 'projects'}
           <ProjectsPage onChanged={projects.reload} />
         {:else if section === 'conversations' && id}
-          <ConversationPage conversationId={id} initialRunId={new URLSearchParams(hash.split('?')[1]).get('run')} {me} onReady={(conversation) => {
+          <ConversationPage conversationId={id} initialRunId={new URLSearchParams(hash.split('?')[1]).get('run')} {me} people={people.data ?? []} onReady={(conversation) => {
             rememberEndeavor(actorId!, conversation.id);
             readyConversation = conversation;
             const focus = focusConversation === conversation.id;

@@ -94,6 +94,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     state: 'working',
     stateReason: null,
     pausedAt: null,
+    pausedByHumanId: null,
     requestedByType: 'human',
     requestedById: HUMAN,
     requestMessageId: 'm-request',
