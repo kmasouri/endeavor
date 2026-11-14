@@ -48,6 +48,19 @@ export async function fixture(
     holdSend: false,
     releaseSend: () => {},
     added: false,
+    costs: {
+      total: { costUsd: 0, tokens: 0, unpricedCalls: 0 },
+      thisMonth: { costUsd: 0, tokens: 0, unpricedCalls: 0 },
+      budgetUsd: null as number | null,
+      tasks: [] as { taskId: string; title: string; costUsd: number; tokens: number }[],
+      agents: [] as {
+        agentId: string;
+        name: string;
+        costUsd: number;
+        tokens: number;
+        unpricedCalls: number;
+      }[]
+    },
     posts: [] as Record<string, unknown>[],
     memberPosts: [] as Record<string, unknown>[],
     messages: empty
@@ -180,14 +193,7 @@ export async function fixture(
       return reply({ data: result });
     }
     if (path === '/conversations/brief/costs')
-      return reply({
-        data: {
-          total: { costUsd: 0, tokens: 0, unpricedCalls: 0 },
-          thisMonth: { costUsd: 0 },
-          budgetUsd: null,
-          tasks: []
-        }
-      });
+      return reply({ data: state.costs });
     if (
       [
         '/conversations/brief/routing',

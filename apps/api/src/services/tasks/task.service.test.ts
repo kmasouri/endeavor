@@ -994,6 +994,47 @@ describe('TaskService', () => {
     });
   });
 
+  describe('conversationCosts', () => {
+    it('reports totals for several agents across the conversation tasks', async () => {
+      const { service, tasks, conversations } = setup();
+      conversations.getById.mockResolvedValue({ id: 'conv-1', budgetUsd: 1 } as never);
+      conversations.getMember.mockResolvedValue({} as never);
+      tasks.sumCost
+        .mockResolvedValueOnce({ costUsd: 0.07, tokens: 7000, unpricedCalls: 1 })
+        .mockResolvedValueOnce({ costUsd: 0.07, tokens: 7000, unpricedCalls: 1 });
+      tasks.listTaskCosts.mockResolvedValue([
+        { taskId: 'review-1', title: 'Check claims', costUsd: 0.03, tokens: 3000 },
+        { taskId: 'research-2', title: 'Revise brief', costUsd: 0.025, tokens: 2500 },
+        { taskId: 'research-1', title: 'Draft brief', costUsd: 0.015, tokens: 1500 }
+      ]);
+      tasks.listAgentCosts.mockResolvedValue([
+        {
+          agentId: 'reviewer',
+          name: 'Reviewer',
+          costUsd: 0.03,
+          tokens: 3000,
+          unpricedCalls: 0
+        },
+        {
+          agentId: 'researcher',
+          name: 'Researcher',
+          costUsd: 0.04,
+          tokens: 4000,
+          unpricedCalls: 1
+        }
+      ]);
+
+      const report = await service.getConversationCosts(HUMAN_ID, 'conv-1');
+
+      expect(report.agents).toEqual([
+        expect.objectContaining({ agentId: 'reviewer', costUsd: 0.03 }),
+        expect.objectContaining({ agentId: 'researcher', costUsd: 0.04 })
+      ]);
+      expect(report.tasks).toHaveLength(3);
+      expect(tasks.listAgentCosts).toHaveBeenCalledWith({ conversationId: 'conv-1' });
+    });
+  });
+
   describe('access requests', () => {
     const accessRequest = {
       id: 'ap-access',

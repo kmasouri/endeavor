@@ -114,7 +114,7 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
     {
       schema: {
         description:
-          "What all agent work in a conversation spent in US dollars, and its costliest tasks, next to the conversation's budget.",
+          "What all agent work in a conversation spent in US dollars, split by agent and including its costliest tasks, next to the conversation's budget.",
         tags: ['tasks'],
         headers: actorHeadersSchema,
         params: conversationOutputsParamsSchema

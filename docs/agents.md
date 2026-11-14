@@ -17,7 +17,8 @@ Configuration is the place to manage access. Revoked skills, connections, and ac
 **Costs and budgets.** Each model call's cost is worked out from `MODEL_PRICES` (US dollars per million input and output tokens, per model) and saved with the call. A model with no price has an unknown cost: its tokens are still counted, and it shows up as `unpricedCalls`, but dollar budgets can't count it.
 
 - `GET /agents/:agentId/costs`: what the agent spent in total and this month (UTC), and its costliest tasks this month.
-- `GET /conversations/:conversationId/costs`: what all agent work in a conversation spent.
+- `GET /conversations/:conversationId/costs`: what all agent work in a conversation spent, with an
+  uncapped `agents` list containing each agent's ID, display name, cost, tokens, and unpriced calls.
 - An agent's **monthly budget** (`PATCH /agents/:agentId` with `monthlyBudgetUsd`) covers all its work in a calendar month. A conversation's **budget** (`PATCH /conversations/:conversationId` with `budgetUsd`) covers all agent work in it. `null` removes a budget. Neither is versioned.
 - Before each model call, the task's own cap, the agent's monthly budget, and the conversation's budget are all checked. The tightest wins. A task over any of them is blocked with the reason, and the person who asked is told. Raising the budget and resuming the task lets it go on. Budgets are checked before each call, so the last call can take spending a little over the budget.
 

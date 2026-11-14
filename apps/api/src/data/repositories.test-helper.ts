@@ -48,6 +48,7 @@ export function mockTaskRepository(): jest.Mocked<TaskRepository> {
     listConversationOutputs: jest.fn().mockResolvedValue([]),
     countConversationOutputs: jest.fn().mockResolvedValue(0),
     sumCost: jest.fn().mockResolvedValue({ costUsd: 0, tokens: 0, unpricedCalls: 0 }),
+    listAgentCosts: jest.fn().mockResolvedValue([]),
     listTaskCosts: jest.fn().mockResolvedValue([]),
     claimRunnable: jest.fn().mockResolvedValue([]),
     releaseLease: jest.fn(),
