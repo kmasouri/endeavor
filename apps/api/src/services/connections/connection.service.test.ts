@@ -152,17 +152,21 @@ describe('ConnectionService', () => {
     expect(catalogs.updateConnection).not.toHaveBeenCalled();
   });
 
-  it('keeps new entries private unless a person marks them discoverable', async () => {
+  it.each([
+    [undefined, true],
+    [false, false]
+  ])('creates connections with discovery %s as %s', async (discoverable, expected) => {
     const { service, catalogs } = setup();
     await service.createConnection(ADMIN, {
       name: 'Wikipedia',
       description: 'Read pages',
       baseUrl: 'https://wiki.test',
       allowedMethods: ['GET'],
-      allowedPathPrefixes: ['/wiki']
+      allowedPathPrefixes: ['/wiki'],
+      discoverable
     });
     expect(catalogs.createConnection).toHaveBeenCalledWith(
-      expect.objectContaining({ discoverable: false })
+      expect.objectContaining({ discoverable: expected })
     );
   });
 });

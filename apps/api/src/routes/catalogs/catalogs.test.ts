@@ -60,7 +60,7 @@ describe('instructions-only skill routes', () => {
       });
       expect(created.statusCode).toBe(201);
       expect(updated.statusCode).toBe(201);
-      expect(create).toHaveBeenCalledWith(ACTOR, input);
+      expect(create).toHaveBeenCalledWith(ACTOR, { ...input, discoverable: true });
       expect(version).toHaveBeenCalledWith(ACTOR, SKILL, { instructions: 'Cite invoices.' });
     } finally {
       await app.close();
@@ -83,7 +83,7 @@ describe('connection types', () => {
       };
       for (const input of [
         { ...shared, allowedMethods: ['GET'], allowedPathPrefixes: ['/'] },
-        { ...shared, kind: 'mcp', allowedTools: [], approvalTools: [] },
+        { ...shared, kind: 'mcp', allowedTools: [], approvalTools: [], discoverable: false },
         { ...shared, kind: 'mcp', allowedTools: ['lookup', 'create'] }
       ]) {
         const response = await app.inject({
@@ -94,7 +94,7 @@ describe('connection types', () => {
         });
         expect(response.statusCode).toBe(201);
       }
-      expect(create).toHaveBeenCalledTimes(3);
+      expect(create.mock.calls.map(([, input]) => input.discoverable)).toEqual([true, false, true]);
     } finally {
       await app.close();
     }

@@ -163,7 +163,7 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
   {
     name: AGENT_TOOLS.findCapabilities,
     description:
-      'List skills and connections that people made discoverable, with what each allows and whether you can use it now. Finding one gives you no access: use request_access to ask a person.',
+      'List enabled, discoverable skills and connections, with what each allows and whether you can use it now. Finding one gives you no access: use request_access to ask a person.',
     inputSchema: {
       type: 'object',
       properties: {

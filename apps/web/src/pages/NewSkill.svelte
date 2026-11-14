@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
+  import Hint from '../Hint.svelte';
   import PageHeader from '../PageHeader.svelte';
   import './creation.css';
   import { createAction, go } from '../state.svelte';
@@ -8,7 +9,7 @@
   let name = $state('');
   let description = $state('');
   let instructions = $state('');
-  let discoverable = $state(false);
+  let discoverable = $state(true);
   const action = createAction();
   const create = (event: SubmitEvent) => {
     event.preventDefault();
@@ -45,8 +46,9 @@
       </label>
       <label class="check">
         <input type="checkbox" bind:checked={discoverable} />
-        Agents can find this and ask for access. Finding it grants nothing.
+        Let agents find this and request access
       </label>
+      <Hint>Agents can see the name and description when discovery is on. Keep secrets out of both.</Hint>
     </fieldset>
     <fieldset class="stack">
       <legend>Instructions</legend>
