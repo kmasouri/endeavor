@@ -334,6 +334,7 @@ export interface TaskEvent {
 export interface TaskOutput {
   id: string;
   kind: string;
+  state: 'draft' | 'final';
   title: string;
   content: string | null;
   uri: string | null;

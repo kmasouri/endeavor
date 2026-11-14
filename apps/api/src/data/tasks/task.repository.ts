@@ -88,6 +88,11 @@ export interface CreateTaskOutputInput {
   metadata: Record<string, unknown>;
 }
 
+export interface ConversationTaskOutput {
+  output: TaskOutput;
+  taskState: TaskState;
+}
+
 export interface CostFilter {
   agentId?: string;
   conversationId?: string;
@@ -192,7 +197,7 @@ export interface TaskRepository {
   listConversationOutputs(
     conversationId: string,
     options: { limit: number; offset: number }
-  ): Promise<TaskOutput[]>;
+  ): Promise<ConversationTaskOutput[]>;
   countConversationOutputs(conversationId: string): Promise<number>;
   // What model calls cost, for an agent or a conversation, since a moment if given. costUsd only
   // counts calls with a known price; unpricedCalls says how many had none.

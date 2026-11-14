@@ -106,4 +106,32 @@ describe('task routes', () => {
     expect(migrate).toHaveBeenCalledWith(ACTOR, TASK, {});
     await app.close();
   });
+
+  it('returns the derived output state', async () => {
+    const app = setupApp();
+    await app.ready();
+    jest.spyOn(app.taskService, 'listOutputs').mockResolvedValue([
+      {
+        id: 'output-1',
+        taskId: TASK,
+        kind: 'text',
+        state: 'final',
+        title: 'Result',
+        content: 'Done',
+        uri: null,
+        metadata: {},
+        createdAt: new Date('2026-11-14T12:00:00Z')
+      }
+    ]);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: `/tasks/${TASK}/outputs`,
+      headers: { 'x-actor-id': ACTOR }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data[0]).toMatchObject({ id: 'output-1', state: 'final' });
+    await app.close();
+  });
 });

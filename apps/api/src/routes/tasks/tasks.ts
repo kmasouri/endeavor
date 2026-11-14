@@ -128,7 +128,7 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
     {
       schema: {
         description:
-          'Outputs and evidence from every task in a conversation, newest first: results, documents, links, files, and logs.',
+          'Outputs and evidence from every task in a conversation, newest first. Each is draft until its task completes, then final.',
         tags: ['tasks'],
         headers: actorHeadersSchema,
         params: conversationOutputsParamsSchema,
@@ -142,7 +142,8 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
     '/tasks/:taskId/outputs',
     {
       schema: {
-        description: "A task's outputs and evidence.",
+        description:
+          "A task's outputs and evidence. Each is draft until the task completes, then final.",
         tags: ['tasks'],
         headers: actorHeadersSchema,
         params: taskParamsSchema

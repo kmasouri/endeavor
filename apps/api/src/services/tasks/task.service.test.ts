@@ -957,17 +957,79 @@ describe('TaskService', () => {
     expect(task.stateReason).toBe('Needs access to the billing docs');
   });
 
+  describe('listOutputs', () => {
+    const output = {
+      id: 'o1',
+      taskId: TASK_ID,
+      kind: 'text' as const,
+      title: 'Result',
+      content: 'A useful result',
+      uri: null,
+      metadata: {},
+      createdAt: new Date()
+    };
+
+    it('returns draft outputs while the task is not completed', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      tasks.listOutputs.mockResolvedValue([output]);
+
+      await expect(service.listOutputs(HUMAN_ID, TASK_ID)).resolves.toEqual([
+        expect.objectContaining({ id: 'o1', state: 'draft' })
+      ]);
+    });
+
+    it('returns final outputs after the task completes', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed' }));
+      tasks.listOutputs.mockResolvedValue([output]);
+
+      await expect(service.listOutputs(HUMAN_ID, TASK_ID)).resolves.toEqual([
+        expect.objectContaining({ id: 'o1', state: 'final' })
+      ]);
+    });
+  });
+
   describe('listConversationOutputs', () => {
     it('lists outputs from every task in the conversation', async () => {
       const { service, tasks } = setup();
       tasks.countConversationOutputs.mockResolvedValue(2);
+      tasks.listConversationOutputs.mockResolvedValue([
+        {
+          output: {
+            id: 'draft-output',
+            taskId: TASK_ID,
+            kind: 'text',
+            title: 'Draft',
+            content: null,
+            uri: null,
+            metadata: {},
+            createdAt: new Date()
+          },
+          taskState: 'working'
+        },
+        {
+          output: {
+            id: 'final-output',
+            taskId: NEW_TASK_ID,
+            kind: 'text',
+            title: 'Final',
+            content: null,
+            uri: null,
+            metadata: {},
+            createdAt: new Date()
+          },
+          taskState: 'completed'
+        }
+      ]);
 
-      const { total } = await service.listConversationOutputs(HUMAN_ID, 'conv-1', {
+      const { outputs, total } = await service.listConversationOutputs(HUMAN_ID, 'conv-1', {
         limit: 10,
         offset: 0
       });
 
       expect(total).toBe(2);
+      expect(outputs.map((output) => output.state)).toEqual(['draft', 'final']);
       expect(tasks.listConversationOutputs).toHaveBeenCalledWith('conv-1', {
         limit: 10,
         offset: 0
