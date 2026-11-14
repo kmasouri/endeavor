@@ -10,7 +10,8 @@ import {
   ListConversationsQuery,
   ListMessagesQuery,
   MarkReadBody,
-  PostMessageBody
+  PostMessageBody,
+  UpdateTypingBody
 } from '../../schemas';
 import { paged, success } from '../../shared/response';
 
@@ -144,6 +145,22 @@ export async function markReadHandler(
 ): Promise<unknown> {
   return success(
     await request.server.conversationService.markRead(
+      request.headers['x-actor-id'],
+      request.params.conversationId,
+      request.body
+    )
+  );
+}
+
+export async function updateTypingHandler(
+  request: FastifyRequest<{
+    Params: ConversationParams;
+    Body: UpdateTypingBody;
+    Headers: ActorHeaders;
+  }>
+): Promise<unknown> {
+  return success(
+    await request.server.conversationService.updateTyping(
       request.headers['x-actor-id'],
       request.params.conversationId,
       request.body

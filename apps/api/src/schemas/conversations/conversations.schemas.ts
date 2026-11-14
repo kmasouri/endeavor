@@ -65,6 +65,13 @@ export const postMessageBodySchema = z.strictObject({
   clientKey: z.string().trim().min(1).max(200).optional()
 });
 
+export const updateTypingBodySchema = z.strictObject({
+  // A browser session sends heartbeats while its person is composing. The session ID keeps one
+  // tab from clearing another tab's presence for the same person.
+  clientId: z.uuid(),
+  typing: z.boolean()
+});
+
 export const markReadBodySchema = z.strictObject({
   // The newest message the person has seen.
   messageId: z.uuid()
@@ -114,6 +121,7 @@ export type CreateConversationBody = z.infer<typeof createConversationBodySchema
 export type AddMemberBody = z.infer<typeof addMemberBodySchema>;
 export type UpdateConversationBody = z.infer<typeof updateConversationBodySchema>;
 export type PostMessageBody = z.infer<typeof postMessageBodySchema>;
+export type UpdateTypingBody = z.infer<typeof updateTypingBodySchema>;
 export type MarkReadBody = z.infer<typeof markReadBodySchema>;
 export type ListConversationsQuery = z.infer<typeof listConversationsQuerySchema>;
 export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;

@@ -287,7 +287,11 @@ time. Workspace file actions, capability discovery, output writing, completion c
 connection calls have known labels. Arbitrary MCP tools are described as connection calls;
 the platform does not guess their purpose from tool names or use another model. Status events
 contain only a tool name and a short file path or output title, never request bodies or headers.
-Waiting, paused, approval, and stuck states keep plain words. Human typing is deferred in v1.
+Waiting, paused, approval, and stuck states keep plain words. Human members also appear in this
+line while they are composing. The browser sends only a short-lived presence heartbeat to
+`PUT /conversations/:conversationId/typing`; draft text stays in the browser. Presence clears on
+send, blur, or a short idle pause, and the API expires it after a disconnect. Each browser session
+has its own ID so one tab does not clear another tab that is still typing.
 
 ## Incremental chat history
 

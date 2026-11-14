@@ -48,6 +48,8 @@ export interface MemberDetails extends ConversationMember, AgentAppearance {
 
 export interface ConversationDetails extends Conversation {
   members: MemberDetails[];
+  // Active people other than the caller. Presence carries no draft text and expires quickly.
+  typingHumanIds: string[];
 }
 
 export interface ConversationSummary extends Conversation {
@@ -61,6 +63,12 @@ export interface ConversationSummary extends Conversation {
 // Posting a message only saves it and records which agents it is addressed to. The runner turns
 // those into work.
 export class ConversationService {
+  private readonly typingSessions = new Map<
+    string,
+    Map<string, { humanId: string; expiresAt: number }>
+  >();
+  private static readonly TYPING_TTL_MS = 6_000;
+
   constructor(
     private readonly conversationRepository: ConversationRepository,
     private readonly messageRepository: MessageRepository,
@@ -137,7 +145,7 @@ export class ConversationService {
       });
     }
     this.conversationLogger.onConversationCreated(conversation.id);
-    return this.loadDetails(conversation);
+    return this.loadDetails(conversation, human.id);
   }
 
   // Admins see every conversation. Members see the ones they belong to. Open endeavors are listed
@@ -202,7 +210,7 @@ export class ConversationService {
     conversationId: string,
     changes: { title?: string; budgetUsd?: number | null; goal?: string; doneCriteria?: string }
   ): Promise<ConversationDetails> {
-    const { conversation } = await this.requireAccess(actorId, conversationId);
+    const { conversation, human } = await this.requireAccess(actorId, conversationId);
     const doneCriteria =
       changes.doneCriteria ??
       (changes.goal !== undefined && conversation.doneCriteria === null
@@ -213,7 +221,7 @@ export class ConversationService {
       ...(changes.title !== undefined && { title: requireChannelName(changes.title) }),
       doneCriteria
     });
-    return this.loadDetails(updated ?? conversation);
+    return this.loadDetails(updated ?? conversation, human.id);
   }
 
   // A person confirms the goal is done. The endeavor is archived: it leaves the default list and
@@ -222,27 +230,51 @@ export class ConversationService {
   async closeConversation(actorId: string, conversationId: string): Promise<ConversationDetails> {
     const { conversation, human } = await this.requireAccess(actorId, conversationId);
     if (conversation.state === 'closed') {
-      return this.loadDetails(conversation);
+      return this.loadDetails(conversation, human.id);
     }
     const closed = await this.conversationRepository.setClosed(conversation.id, human.id);
+    this.typingSessions.delete(conversation.id);
     this.conversationLogger.onConversationClosed(conversation.id, human.id);
-    return this.loadDetails(closed ?? conversation);
+    return this.loadDetails(closed ?? conversation, human.id);
   }
 
   // Reopens a closed endeavor for follow-ups. Its goal, history, and work stay as they were.
   async reopenConversation(actorId: string, conversationId: string): Promise<ConversationDetails> {
     const { conversation, human } = await this.requireAccess(actorId, conversationId);
     if (conversation.state === 'open') {
-      return this.loadDetails(conversation);
+      return this.loadDetails(conversation, human.id);
     }
     const reopened = await this.conversationRepository.setClosed(conversation.id, null);
     this.conversationLogger.onConversationReopened(conversation.id, human.id);
-    return this.loadDetails(reopened ?? conversation);
+    return this.loadDetails(reopened ?? conversation, human.id);
   }
 
   async getConversation(actorId: string, conversationId: string): Promise<ConversationDetails> {
-    const { conversation } = await this.requireAccess(actorId, conversationId);
-    return this.loadDetails(conversation);
+    const { conversation, human } = await this.requireAccess(actorId, conversationId);
+    return this.loadDetails(conversation, human.id);
+  }
+
+  async updateTyping(
+    actorId: string,
+    conversationId: string,
+    input: { clientId: string; typing: boolean }
+  ): Promise<{ typingHumanIds: string[] }> {
+    const { conversation, human } = await this.requireAccess(actorId, conversationId, {
+      memberOnly: true
+    });
+    const sessions = this.activeTypingSessions(conversation.id);
+    const key = `${human.id}:${input.clientId}`;
+    if (input.typing && conversation.state === 'open') {
+      sessions.set(key, {
+        humanId: human.id,
+        expiresAt: Date.now() + ConversationService.TYPING_TTL_MS
+      });
+      this.typingSessions.set(conversation.id, sessions);
+    } else {
+      sessions.delete(key);
+    }
+    if (sessions.size === 0) this.typingSessions.delete(conversation.id);
+    return { typingHumanIds: this.typingHumanIds(conversation.id, human.id) };
   }
 
   // Only humans add members. An agent can suggest a specialist, but a person adds it.
@@ -265,7 +297,7 @@ export class ConversationService {
       input.participant.type,
       input.participant.id
     );
-    return this.loadDetails(conversation);
+    return this.loadDetails(conversation, human.id);
   }
 
   async postMessage(
@@ -281,6 +313,7 @@ export class ConversationService {
     const { conversation, human } = await this.requireAccess(actorId, conversationId, {
       memberOnly: true
     });
+    this.clearTypingHuman(conversation.id, human.id);
     if (conversation.state === 'closed') {
       throw new AppError('conversationClosed');
     }
@@ -492,7 +525,10 @@ export class ConversationService {
     }
   }
 
-  private async loadDetails(conversation: Conversation): Promise<ConversationDetails> {
+  private async loadDetails(
+    conversation: Conversation,
+    viewingHumanId?: string
+  ): Promise<ConversationDetails> {
     const members = await this.conversationRepository.listMembers(conversation.id);
     const profiles = new Map(
       (
@@ -525,7 +561,42 @@ export class ConversationService {
         return { ...member, name: human?.name ?? 'Unknown person', purpose: null };
       })
     );
-    return { ...conversation, members: details };
+    return {
+      ...conversation,
+      members: details,
+      typingHumanIds: this.typingHumanIds(conversation.id, viewingHumanId)
+    };
+  }
+
+  private activeTypingSessions(
+    conversationId: string
+  ): Map<string, { humanId: string; expiresAt: number }> {
+    const sessions = this.typingSessions.get(conversationId) ?? new Map();
+    const now = Date.now();
+    for (const [key, session] of sessions) {
+      if (session.expiresAt <= now) sessions.delete(key);
+    }
+    if (sessions.size > 0) this.typingSessions.set(conversationId, sessions);
+    else this.typingSessions.delete(conversationId);
+    return sessions;
+  }
+
+  private typingHumanIds(conversationId: string, excludeHumanId?: string): string[] {
+    return [
+      ...new Set(
+        [...this.activeTypingSessions(conversationId).values()]
+          .map((session) => session.humanId)
+          .filter((humanId) => humanId !== excludeHumanId)
+      )
+    ];
+  }
+
+  private clearTypingHuman(conversationId: string, humanId: string): void {
+    const sessions = this.activeTypingSessions(conversationId);
+    for (const [key, session] of sessions) {
+      if (session.humanId === humanId) sessions.delete(key);
+    }
+    if (sessions.size === 0) this.typingSessions.delete(conversationId);
   }
 }
 

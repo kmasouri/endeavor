@@ -63,6 +63,9 @@ export async function fixture(
     },
     posts: [] as Record<string, unknown>[],
     memberPosts: [] as Record<string, unknown>[],
+    typingHumanIds: [] as string[],
+    typingPosts: [] as { clientId: string; typing: boolean }[],
+    tasks: [] as Record<string, unknown>[],
     messages: empty
       ? []
       : ([
@@ -139,6 +142,11 @@ export async function fixture(
       if (state.failRead) return reply({ error: { message: 'Read marker unavailable' } }, 503);
       return reply({ data: {} });
     }
+    if (req.method() === 'PUT' && path === '/conversations/brief/typing') {
+      const body = req.postDataJSON() as { clientId: string; typing: boolean };
+      state.typingPosts.push(body);
+      return reply({ data: { typingHumanIds: state.typingHumanIds } });
+    }
     if (req.method() !== 'GET') {
       unexpected.push(`${req.method()} ${path}`);
       return reply({ error: { message: 'Unexpected write' } }, 500);
@@ -154,6 +162,7 @@ export async function fixture(
           id: 'brief',
           title: 'source-brief',
           createdAt,
+          typingHumanIds: state.typingHumanIds,
           members: [
             { participant: { type: 'human', id: 'person' }, name: 'Kayvan', historyFrom: null },
             ...state.extraMembers,
@@ -194,11 +203,11 @@ export async function fixture(
     }
     if (path === '/conversations/brief/costs')
       return reply({ data: state.costs });
+    if (path === '/tasks') return list(state.tasks);
     if (
       [
         '/conversations/brief/routing',
         '/projects',
-        '/tasks',
         '/responsibilities',
         '/approvals',
         '/conversations/brief/outputs',

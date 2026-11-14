@@ -100,6 +100,61 @@ test('keyboard mentions, multiline messages and replies send exact references an
   expect(api.unexpected).toEqual([]);
 });
 
+test('human typing presence shares no draft, coexists with agents, and clears on send and stop', async ({
+  page
+}, info) => {
+  const api = await fixture(page);
+  await page.setViewportSize({ width: 390, height: 900 });
+  api.state.extraMembers.push(
+    {
+      participant: { type: 'human', id: 'sam' },
+      name: 'Sam',
+      purpose: null,
+      historyFrom: null
+    },
+    {
+      participant: { type: 'human', id: 'lee' },
+      name: 'Lee',
+      purpose: null,
+      historyFrom: null
+    }
+  );
+  api.state.typingHumanIds = ['sam', 'lee'];
+  api.state.tasks.push({
+    id: 'research-1',
+    conversationId: 'brief',
+    ownerAgentId: 'researcher',
+    title: 'Draft brief',
+    state: 'working',
+    pausedAt: null,
+    activity: { kind: 'writing', detail: 'drafting the brief', startedAt: createdAt }
+  });
+  await page.goto('/app/#/conversations/brief');
+  const status = page.locator('.live-status');
+  const input = page.getByRole('textbox', { name: 'Message', exact: true });
+  await expect(status).toContainText('Sam is typing…');
+  await expect(status).toContainText('Lee is typing…');
+  await expect(status).toContainText('Researcher');
+  await expect(status).toContainText('drafting the brief');
+  expect(
+    await status.evaluate((element) => element.scrollWidth <= element.clientWidth)
+  ).toBe(true);
+  await captureReviewScreenshot(status, { path: info.outputPath('human-typing-status.png') });
+
+  await input.fill('Private draft text');
+  await expect.poll(() => api.state.typingPosts.length).toBeGreaterThan(0);
+  expect(api.state.typingPosts.at(-1)).toMatchObject({ typing: true });
+  expect(JSON.stringify(api.state.typingPosts)).not.toContain('Private draft text');
+
+  await input.press('Enter');
+  await expect.poll(() => api.state.typingPosts.at(-1)?.typing).toBe(false);
+  await input.fill('Another draft');
+  await input.blur();
+  await expect.poll(() => api.state.typingPosts.at(-1)?.typing).toBe(false);
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
 test('failed reply retains draft and reference, blocks duplicate submissions and retries', async ({
   page
 }) => {
