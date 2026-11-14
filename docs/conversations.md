@@ -47,7 +47,17 @@ Each addressed agent must respond, or say why it can't. Explicit tags and replie
 
 The client only sees what the caller passes in: the message or result, the goal, the member agents' names and purposes, and recent messages the members can already see. It can only pick from the agents it was given, so it can't add members or reach private context. Tags that people or agents make never go through it.
 
-Each decision comes with a confidence from 0 to 1 and every option ranked. The caller acts alone only when the pick is an agent (or none, or done) and the confidence is at or above its threshold (0.6 for `gpt-6-luna`, from the CA-11 evaluation). Otherwise it saves a Decision Engine message in reply to the request. The message explains the reason, keeps a low-confidence agent pick as the recommendation, and offers Assign, Choose another agent, and Leave unassigned. No delivery is created until a person chooses. Without an OpenAI key, or when a model call fails, it asks a person. Scheduled completions use the same waiting behavior.
+Each decision comes with a confidence from 0 to 1 and every option ranked. The caller acts
+alone only when the pick is an agent (or none, or done) and the confidence meets the project’s
+threshold. Otherwise it saves a Decision Engine message in reply to the request. The message
+explains the reason, keeps a low-confidence agent pick as the recommendation, and offers Assign,
+Choose another agent, and Leave unassigned. No delivery is created until a person chooses.
+Without an OpenAI key, or when a model call fails, it asks a person. Scheduled completions use
+the same waiting behavior.
+
+Projects can set a threshold from 0 to 1 in **Edit project**. Leaving it blank uses 0.6
+(from the CA-11 evaluation). Standalone endeavors also use 0.6. The service reads the setting
+at the start of each routing decision.
 
 Decisions have leases and revisions. A restart reclaims unfinished decisions; saving a decision,
 its visible message and its delivery is atomic. Old tasks from before migration 024 are not
@@ -67,7 +77,8 @@ The model sees only public member profiles, the shared goal, and recent messages
 member's history boundary. Agents whose history excludes the source are not candidates.
 It sees no private instructions, saved notes, connection credentials, or tool access. Membership
 and enabled state are checked again when the decision is saved. Model, token usage, confidence,
-and outcome are stored with the decision, and decisions are logged as `routing.decided`.
+and outcome are stored with the decision. The `routing.decided` log records the threshold used.
+Human choices log a null threshold.
 `ROUTING_MODEL` defaults to `gpt-6-luna`; calls have a 30-second deadline and do not retry.
 The conversation keeps the reason and controls on the same Decision Engine message. The chosen outcome and person replace the waiting controls. Choosing an agent outside the recommendation requires confirmation; revision checks reject simultaneous or stale choices.
 
@@ -355,6 +366,7 @@ control instead of the composer. Global search includes open and closed endeavor
 
 The sidebar groups endeavors under expandable project names and lists standalone endeavors
 separately. Project row actions appear on hover or focus and stay visible on touch screens.
-**Edit** in the project menu updates the name, icon, and color together. **Open project** opens the
-overview. The plus beside Projects opens the project editor. Collapsed projects show the sum of
-unread messages in their endeavors, excluding the selected endeavor.
+**Edit** in the project menu updates the name, icon, color, and routing confidence threshold.
+**Open project** opens the overview. The plus beside Projects opens the project editor.
+Collapsed projects show the sum of unread messages in their endeavors, excluding the selected
+endeavor.

@@ -4,6 +4,7 @@ import {
   ConversationRepository,
   HumanRepository,
   MessageRepository,
+  ProjectRepository,
   RoutingRepository,
   RoutingSave,
   TaskRepository
@@ -21,7 +22,7 @@ import { AppError } from '../../shared/errors';
 import { Conversation, ConversationMember } from '../../shared/types';
 import { hasFullAccess, requireHuman } from '../access/access.rules';
 
-const THRESHOLD = 0.6;
+const DEFAULT_THRESHOLD = 0.6;
 const TIMEOUT_MS = 30_000;
 const MAX_HANDOFFS = 8;
 
@@ -31,6 +32,7 @@ export class RoutingService {
   constructor(
     private readonly repository: RoutingRepository,
     private readonly conversations: ConversationRepository,
+    private readonly projects: ProjectRepository,
     private readonly messages: MessageRepository,
     private readonly agents: AgentRepository,
     private readonly humans: HumanRepository,
@@ -198,6 +200,10 @@ export class RoutingService {
     const conversation = await this.conversations.getById(job.conversationId);
     // Closed endeavors stay dormant; reopening lets their pending decisions continue.
     if (!conversation || conversation.state === 'closed') return;
+    const project = conversation.projectId
+      ? await this.projects.getById(conversation.projectId)
+      : null;
+    const threshold = project?.routingConfidenceThreshold ?? DEFAULT_THRESHOLD;
     const candidates = await this.candidates(job.conversationId, job);
     let decision: RoutingDecision<StarterChoice | HandoffChoice> | null = null;
     let skipped = false;
@@ -275,7 +281,7 @@ export class RoutingService {
     const confident =
       decision &&
       Number.isFinite(decision.confidence) &&
-      decision.confidence >= THRESHOLD &&
+      decision.confidence >= threshold &&
       decision.confidence <= 1;
     const selected = pick?.kind === 'agent' ? candidates.find((a) => a.id === pick.agentId) : null;
     const outcome = skipped
@@ -311,7 +317,7 @@ export class RoutingService {
         model: decision?.servedModel ?? null,
         usage: decision?.usage ?? null
       },
-      { token }
+      { token, threshold }
     );
   }
 
@@ -319,7 +325,7 @@ export class RoutingService {
     job: RoutingRecord,
     conversation: Conversation,
     input: RoutingSave,
-    options: { token?: string; actorId?: string }
+    { threshold, ...options }: { token?: string; actorId?: string; threshold?: number }
   ): Promise<boolean> {
     const selected = input.selectedAgentId;
     const task = job.taskId ? await this.tasks.getById(job.taskId) : null;
@@ -375,7 +381,14 @@ export class RoutingService {
             }
           : null
     });
-    if (saved) this.logger.onDecision(job.id, input.outcome, input.confidence, input.model);
+    if (saved)
+      this.logger.onDecision(
+        job.id,
+        input.outcome,
+        input.confidence,
+        input.model,
+        threshold ?? null
+      );
     return saved;
   }
 }

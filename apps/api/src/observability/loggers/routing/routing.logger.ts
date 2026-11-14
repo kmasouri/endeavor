@@ -1,9 +1,15 @@
 import { FastifyBaseLogger } from 'fastify';
 export class RoutingLogger {
   constructor(private readonly logger: FastifyBaseLogger) {}
-  onDecision(id: string, outcome: string, confidence: number, model: string | null): void {
+  onDecision(
+    id: string,
+    outcome: string,
+    confidence: number,
+    model: string | null,
+    threshold: number | null
+  ): void {
     this.logger.info(
-      { event: 'routing.decided', id, outcome, confidence, model },
+      { event: 'routing.decided', id, outcome, confidence, model, threshold },
       'routing decided'
     );
   }

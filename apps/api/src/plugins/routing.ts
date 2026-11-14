@@ -6,6 +6,7 @@ import {
   ConversationPostgresRepository,
   HumanPostgresRepository,
   MessagePostgresRepository,
+  ProjectPostgresRepository,
   RoutingPostgresRepository,
   TaskPostgresRepository
 } from '../data';
@@ -23,6 +24,7 @@ const routingPlugin: FastifyPluginAsync = async (fastify) => {
   const service = new RoutingService(
     new RoutingPostgresRepository(fastify.pg),
     new ConversationPostgresRepository(fastify.pg),
+    new ProjectPostgresRepository(fastify.pg),
     new MessagePostgresRepository(fastify.pg),
     new AgentPostgresRepository(fastify.pg),
     new HumanPostgresRepository(fastify.pg),
