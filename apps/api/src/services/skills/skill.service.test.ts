@@ -74,7 +74,7 @@ describe('SkillService', () => {
 
     expect(created.currentVersion?.version).toBe(1);
     expect(catalogs.createSkill).toHaveBeenCalledWith(
-      { name: 'Citations', description: 'Cite sources' },
+      { name: 'Citations', description: 'Cite sources', discoverable: true },
       { instructions: 'Cite every claim.', createdByHumanId: ADMIN }
     );
   });
@@ -93,14 +93,19 @@ describe('SkillService', () => {
     expect(updated.currentVersion?.version).toBe(2);
   });
 
-  it('never checks connections or grants access when creating or versioning instructions', async () => {
+  it('honors opt-out without checking connections or granting access', async () => {
     const { service, catalogs } = setup();
     await service.createSkill(ADMIN, {
       name: 'Billing',
       description: 'Billing',
-      instructions: 'Use Billing API.'
+      instructions: 'Use Billing API.',
+      discoverable: false
     });
     await service.addSkillVersion(ADMIN, 's1', { instructions: 'Use another API.' });
+    expect(catalogs.createSkill).toHaveBeenCalledWith(
+      expect.objectContaining({ discoverable: false }),
+      expect.anything()
+    );
     expect(catalogs.getConnections).not.toHaveBeenCalled();
     expect(catalogs.grant).not.toHaveBeenCalled();
   });

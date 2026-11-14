@@ -23,7 +23,11 @@ export class SkillService {
     const admin = requireHuman(await this.humanRepository.getById(actorId), ADMIN_ONLY);
     const { skill, version } = await this.skillRepository
       .createSkill(
-        { name: input.name, description: input.description, discoverable: input.discoverable },
+        {
+          name: input.name,
+          description: input.description,
+          discoverable: input.discoverable ?? true
+        },
         {
           instructions: input.instructions,
           createdByHumanId: admin.id

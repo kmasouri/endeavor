@@ -15,7 +15,7 @@ export interface ConnectionInput {
   allowedMethods: HttpMethod[];
   allowedPathPrefixes: string[];
   approvalMethods: HttpMethod[];
-  discoverable?: boolean;
+  discoverable: boolean;
   createdByHumanId: string | null;
 }
 

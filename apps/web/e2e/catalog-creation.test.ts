@@ -104,6 +104,9 @@ test('skill creation keeps values after failure and returns to Skills after retr
   await page.goto('/app/#/catalogs');
   await page.getByRole('button', { name: '+ Create skill', exact: true }).click();
   await expect(page).toHaveURL(/skills\/new$/);
+  await expect(
+    page.getByRole('checkbox', { name: 'Let agents find this and request access' })
+  ).toBeChecked();
   await page.getByLabel('Name', { exact: true }).fill('Citations');
   await page.getByLabel('Description', { exact: true }).fill('Cite each source');
   await page.getByLabel('Instructions', { exact: true }).fill('Include a source for each claim.');
@@ -123,7 +126,7 @@ test('skill creation keeps values after failure and returns to Skills after retr
       name: 'Citations',
       description: 'Cite each source',
       instructions: 'Include a source for each claim.',
-      discoverable: false
+      discoverable: true
     }
   });
 });
@@ -136,6 +139,11 @@ test('HTTP connection preserves access settings after failure and returns to Con
   await page.getByRole('link', { name: 'Connections', exact: true }).click();
   await page.getByRole('button', { name: '+ Create connection', exact: true }).click();
   await expect(page).toHaveURL(/connections\/new$/);
+  const discoverable = page.getByRole('checkbox', {
+    name: 'Let agents find this and request access'
+  });
+  await expect(discoverable).toBeChecked();
+  await discoverable.uncheck();
   await page.getByLabel('Name', { exact: true }).fill('Records');
   await page.getByLabel('Description', { exact: true }).fill('Read and write records');
   await page.getByLabel('Base URL', { exact: true }).fill('https://records.test');
@@ -149,6 +157,7 @@ test('HTTP connection preserves access settings after failure and returns to Con
   await page.getByRole('button', { name: 'Create connection', exact: true }).click();
   await expect(page.getByText('Please try again.', { exact: true })).toBeVisible();
   await expect(page.getByLabel('Credential', { exact: true })).toHaveValue('Bearer secret');
+  await expect(discoverable).not.toBeChecked();
   api.fail(false);
   await page.getByRole('button', { name: 'Create connection', exact: true }).click();
   await expect(page).toHaveURL(/connections$/);
@@ -196,6 +205,7 @@ test('GitHub and execution setup preserve explicit access at 390px', async ({ pa
     await expect(page).toHaveURL(/connections$/);
     const saved = api.writes.at(-1)!.body;
     expect(saved.kind).toBe('mcp');
+    expect(saved.discoverable).toBe(true);
     expect(saved.allowedTools).toEqual([]);
     expect(saved.approvalTools).toEqual([]);
     expect(saved.credential).toBe('Bearer test-secret');

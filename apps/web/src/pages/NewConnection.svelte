@@ -22,7 +22,7 @@
     text.split(/[\n,]/).map((name) => name.trim()).filter(Boolean);
   let name = $state(notion ? 'Notion' : github ? 'GitHub' : executor ? 'Isolated execution' : '');
   let description = $state(notion ? 'Search and read Notion documentation.' : github ? 'Read repositories and collaborate on pull requests.' : executor ? 'Edit task checkouts and run builds and tests in isolated containers.' : '');
-  let discoverable = $state(false);
+  let discoverable = $state(true);
   let baseUrl = $state(notion ? 'https://mcp.notion.com/mcp' : github ? 'https://api.githubcopilot.com/mcp/' : executor ? 'http://executor:3200/mcp' : '');
   let authHeader = $state('Authorization');
   let credential = $state('');
@@ -102,8 +102,9 @@
       </label>
       <label class="check">
         <input type="checkbox" bind:checked={discoverable} />
-        Agents can find this and ask for access. Finding it grants nothing.
+        Let agents find this and request access
       </label>
+      <Hint>Agents can see the name and description when discovery is on. Keep secrets out of both.</Hint>
     </fieldset>
     <fieldset class="stack">
       <legend>Authentication</legend>

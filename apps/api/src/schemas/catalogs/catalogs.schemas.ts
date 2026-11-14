@@ -11,7 +11,7 @@ export const createSkillBodySchema = z.strictObject({
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().min(1),
   instructions: z.string().trim().min(1),
-  discoverable: discoverable.optional()
+  discoverable: discoverable.default(true)
 });
 
 export const updateSkillBodySchema = z.strictObject({ discoverable });
@@ -52,7 +52,7 @@ export const createConnectionBodySchema = z.union([
     authHeader: connectionFields.authHeader.optional(),
     credential: connectionFields.credential.optional(),
     approvalMethods: connectionFields.approvalMethods.optional(),
-    discoverable: discoverable.optional()
+    discoverable: discoverable.default(true)
   }),
   z.strictObject({
     name: connectionFields.name,
@@ -64,7 +64,7 @@ export const createConnectionBodySchema = z.union([
     credential: connectionFields.credential.optional(),
     allowedTools: toolNames,
     approvalTools: toolNames.optional(),
-    discoverable: discoverable.optional()
+    discoverable: discoverable.default(true)
   })
 ]);
 
