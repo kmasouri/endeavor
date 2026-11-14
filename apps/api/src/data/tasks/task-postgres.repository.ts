@@ -23,6 +23,7 @@ import {
   CreateTaskInput,
   CreateTaskOutputInput,
   CreateTaskWaitInput,
+  ConversationTaskOutput,
   ListTasksInput,
   TaskChanges,
   TaskUpdateEvent,
@@ -107,6 +108,10 @@ interface TaskOutputRow {
   uri: string | null;
   metadata: Record<string, unknown>;
   created_at: Date;
+}
+
+interface ConversationTaskOutputRow extends TaskOutputRow {
+  task_state: TaskState;
 }
 
 // Maps TaskChanges fields to their columns. Only these columns can be changed by update().
@@ -782,9 +787,9 @@ export class TaskPostgresRepository implements TaskRepository {
   async listConversationOutputs(
     conversationId: string,
     options: { limit: number; offset: number }
-  ): Promise<TaskOutput[]> {
-    const result = await this.db.query<TaskOutputRow>(
-      `SELECT o.*
+  ): Promise<ConversationTaskOutput[]> {
+    const result = await this.db.query<ConversationTaskOutputRow>(
+      `SELECT o.*, t.state AS task_state
        FROM endeavor.task_outputs o
        JOIN endeavor.tasks t ON t.id = o.task_id
        WHERE t.conversation_id = $1
@@ -793,7 +798,7 @@ export class TaskPostgresRepository implements TaskRepository {
       [conversationId, options.limit, options.offset]
     );
 
-    return result.rows.map(toTaskOutput);
+    return result.rows.map((row) => ({ output: toTaskOutput(row), taskState: row.task_state }));
   }
 
   async countConversationOutputs(conversationId: string): Promise<number> {

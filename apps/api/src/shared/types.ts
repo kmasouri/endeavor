@@ -120,6 +120,8 @@ export interface TaskEvent {
 
 export const TASK_OUTPUT_KINDS = ['text', 'link', 'file', 'data', 'log'] as const;
 export type TaskOutputKind = (typeof TASK_OUTPUT_KINDS)[number];
+export const TASK_OUTPUT_STATES = ['draft', 'final'] as const;
+export type TaskOutputState = (typeof TASK_OUTPUT_STATES)[number];
 
 export interface TaskOutput {
   id: string;
@@ -130,6 +132,10 @@ export interface TaskOutput {
   uri: string | null;
   metadata: Record<string, unknown>;
   createdAt: Date;
+}
+
+export interface TaskOutputView extends TaskOutput {
+  state: TaskOutputState;
 }
 
 // Saved notes (agent memory): what an agent wrote down for later work. Not instructions, and

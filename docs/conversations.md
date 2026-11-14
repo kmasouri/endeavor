@@ -202,7 +202,7 @@ Agents act only through these tools. The runner carries out each call:
 
 ## Outputs, evidence, and finishing
 
-Agents attach outputs with `save_output`: text, links, data, logs, or a file from their workspace (`path`). A file is copied into the output, so it stays inspectable even if the workspace changes. `GET /tasks/:taskId/outputs` lists one task's outputs, and `GET /conversations/:conversationId/outputs` lists every task's outputs in a conversation, newest first.
+Agents attach outputs with `save_output`: text, links, data, logs, or a file from their workspace (`path`). A file is copied into the output, so it stays inspectable even if the workspace changes. `GET /tasks/:taskId/outputs` lists one task's outputs, and `GET /conversations/:conversationId/outputs` lists every task's outputs in a conversation, newest first. Each API output has `state: "draft"` while its task is active, waiting, blocked, or cancelled. It becomes `state: "final"` when the task completes. The state is derived from the task, so older outputs follow the same rule without a migration.
 
 When an agent calls `complete_task`:
 

@@ -46,6 +46,42 @@ const scheduled: StartResponsibilityRunInput = {
   expectedUpdatedAt: slot
 };
 
+describe('conversation outputs', () => {
+  it('returns each output with the state of its task', async () => {
+    const { repository, outsideQuery } = setup();
+    const createdAt = new Date('2026-11-14T12:00:00Z');
+    outsideQuery.mockResolvedValue({
+      rows: [
+        {
+          id: 'o1',
+          task_id: 't1',
+          kind: 'text',
+          title: 'Result',
+          content: 'Done',
+          uri: null,
+          metadata: {},
+          created_at: createdAt,
+          task_state: 'completed'
+        }
+      ]
+    });
+
+    await expect(
+      repository.listConversationOutputs('c1', { limit: 10, offset: 0 })
+    ).resolves.toEqual([
+      {
+        output: expect.objectContaining({ id: 'o1', taskId: 't1', createdAt }),
+        taskState: 'completed'
+      }
+    ]);
+    expect(outsideQuery).toHaveBeenCalledWith(expect.stringContaining('t.state AS task_state'), [
+      'c1',
+      10,
+      0
+    ]);
+  });
+});
+
 describe('schedule run persistence', () => {
   it('rejects an invalidated slot without creating an endeavor', async () => {
     const { repository, query, release, outsideQuery } = setup();

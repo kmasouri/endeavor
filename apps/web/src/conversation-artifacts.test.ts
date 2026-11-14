@@ -7,6 +7,7 @@ const output: ConversationOutput = {
   id: 'o1',
   taskId: 't1',
   kind: 'text',
+  state: 'draft',
   title: 'Result',
   content: 'Hey Kayvan! What can I help you with?',
   uri: null,

@@ -29,7 +29,8 @@ import {
   Human,
   Task,
   TaskEvent,
-  TaskOutput
+  TaskOutput,
+  TaskOutputView
 } from '../../shared/types';
 import { startOfMonth } from './pricing';
 import {
@@ -41,6 +42,7 @@ import {
 import { isFinished } from './task-state';
 import { TASK_EVENTS } from './task-events';
 import { ACTIVITY_EVENTS, ActiveTask, deriveTaskActivity } from './task-activity';
+import { describeOutputState } from './output.rules';
 
 export interface CreateTaskRequest {
   ownerAgentId: string;
@@ -161,9 +163,10 @@ export class TaskService {
     return this.taskRepository.listEvents(taskId, options);
   }
 
-  async listOutputs(actorId: string, taskId: string): Promise<TaskOutput[]> {
-    await this.requireVisibleTask(actorId, taskId);
-    return this.taskRepository.listOutputs(taskId);
+  async listOutputs(actorId: string, taskId: string): Promise<TaskOutputView[]> {
+    const task = await this.requireVisibleTask(actorId, taskId);
+    const outputs = await this.taskRepository.listOutputs(taskId);
+    return outputs.map((output) => describeOutputState(output, task.state));
   }
 
   // Everything agents attached in one conversation, so people can inspect results and evidence
@@ -172,7 +175,7 @@ export class TaskService {
     actorId: string,
     conversationId: string,
     input: { limit: number; offset: number }
-  ): Promise<{ outputs: TaskOutput[]; total: number }> {
+  ): Promise<{ outputs: TaskOutputView[]; total: number }> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const member = await this.conversationRepository.getMember(conversationId, {
       type: 'human',
@@ -185,7 +188,10 @@ export class TaskService {
       this.taskRepository.listConversationOutputs(conversationId, input),
       this.taskRepository.countConversationOutputs(conversationId)
     ]);
-    return { outputs, total };
+    return {
+      outputs: outputs.map(({ output, taskState }) => describeOutputState(output, taskState)),
+      total
+    };
   }
 
   // What an agent spent: in total, this month (UTC), and its costliest tasks, next to its
