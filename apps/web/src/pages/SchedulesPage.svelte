@@ -26,17 +26,11 @@
   }, () => [project]);
   const projectName = (id: string) => projects.data?.find((project) => project.id === id)?.name ?? 'Project';
 
-  // Load every page so cancelled schedules cannot hide older active schedules.
-  async function loadSchedules(): Promise<Responsibility[]> {
-    const all: Responsibility[] = [];
-    for (let offset = 0; ; offset += 100) {
-      const scope = project ? `&projectId=${project.id}` : '';
-      const page = await api.list<Responsibility>(`/responsibilities?limit=100&offset=${offset}${scope}`);
-      all.push(...page.data);
-      if (all.length >= page.page.total || !page.data.length) return all;
-    }
-  }
-  const schedules = createLoad(loadSchedules, () => [project?.id], 10000);
+  const schedules = createLoad(
+    () => loadAll<Responsibility>(project ? `/responsibilities?projectId=${project.id}` : '/responsibilities'),
+    () => [project?.id],
+    10000
+  );
   const name = createNames();
   const starterName = (schedule: Responsibility) => schedule.agentId
     ? name({ type: 'agent', id: schedule.agentId })

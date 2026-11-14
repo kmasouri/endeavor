@@ -12,7 +12,6 @@
   import ErrorNote from '../ErrorNote.svelte';
   import { loadAll } from './agent-data';
   import Hint from '../Hint.svelte';
-  import { toLimit } from '../components';
   import { createLoad } from '../state.svelte';
   import { type ConfigValues } from './AgentConfig';
 
@@ -58,6 +57,7 @@
   );
   let chosenSkills = $derived(skillIds ?? originalSkills);
   let chosenConnections = $derived(connectionIds ?? current?.connectionIds ?? []);
+  const optionalNumber = (value: string) => value === '' ? undefined : Number(value);
   const report = () => {
     props.onChange({
       instructions,
@@ -66,10 +66,10 @@
       ...(skillIds && { skillIds }),
       ...(connectionIds && { connectionIds }),
       limits: {
-        maxModelTurns: toLimit(turns),
-        maxTokens: toLimit(tokens),
-        maxWorkingMinutes: toLimit(minutes),
-        maxCostUsd: Number(cost) > 0 ? Number(cost) : undefined
+        maxModelTurns: optionalNumber(turns),
+        maxTokens: optionalNumber(tokens),
+        maxWorkingMinutes: optionalNumber(minutes),
+        maxCostUsd: optionalNumber(cost)
       }
     });
   };
@@ -187,6 +187,8 @@
       Model turns
 
       <input
+        type="number"
+        min="1" max="1000" step="1"
         inputmode="numeric"
         value={turns}
         oninput={(event) => ((turns = event.currentTarget.value), report())}
@@ -197,6 +199,8 @@
       Tokens
 
       <input
+        type="number"
+        min="1000" step="1"
         inputmode="numeric"
         value={tokens}
         oninput={(event) => ((tokens = event.currentTarget.value), report())}
@@ -207,10 +211,16 @@
       Cost, $
 
       <input
+        type="number"
+        min="0" max="1000" step="any"
         inputmode="decimal"
         value={cost}
         placeholder="1.00"
-        oninput={(event) => ((cost = event.currentTarget.value), report())}
+        oninput={(event) => {
+          cost = event.currentTarget.value;
+          event.currentTarget.setCustomValidity(cost !== '' && Number(cost) <= 0 ? 'Use an amount greater than zero.' : '');
+          report();
+        }}
       />
     </label>
 
@@ -218,6 +228,8 @@
       Working minutes
 
       <input
+        type="number"
+        min="1" max="10080" step="1"
         inputmode="numeric"
         value={minutes}
         oninput={(event) => ((minutes = event.currentTarget.value), report())}

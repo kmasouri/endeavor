@@ -65,19 +65,6 @@ main.narrow {
   text-decoration: none;
 }
 
-.columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: 1.5rem;
-  align-items: start;
-}
-
-@media (max-width: 800px) {
-  .columns {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
@@ -112,18 +99,10 @@ label {
   gap: 0.25rem;
 }
 
-label.check,
-label.chip {
+label.check {
   flex-direction: row;
   align-items: flex-start;
   gap: 0.4rem;
-}
-
-label.chip {
-  align-items: center;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 0.15rem 0.6rem;
 }
 
 fieldset {
@@ -293,11 +272,6 @@ code {
   color: var(--muted);
 }
 
-.badge.warn {
-  color: var(--error);
-  border-color: var(--error);
-}
-
 textarea.tall {
   min-height: 9rem;
 }
@@ -343,16 +317,6 @@ pre {
   font-size: 0.85rem;
   max-height: 20rem;
   overflow: auto;
-}
-
-.callout {
-  border: 1px solid var(--waiting-border);
-  border-radius: 6px;
-  padding: 0.6rem 0.75rem;
-  margin: 0.5rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
 }
 
 /* Shared shell and controls. Color values come from the exported style guide. */
@@ -830,9 +794,6 @@ details summary {
   select,
   input {
     min-height: var(--touch);
-  }
-  .columns {
-    grid-template-columns: minmax(0, 1fr);
   }
   .page-header {
     gap: 8px;
@@ -1401,7 +1362,6 @@ progress::-webkit-progress-value {
   background: var(--success-bg);
   border-color: transparent;
 }
-.columns > *,
 .panel {
   min-width: 0;
 }
@@ -1644,24 +1604,6 @@ progress::-webkit-progress-value {
   .endeavor-form input {
     font-size: 16px;
   }
-}
-
-.channel-name-field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.channel-name-field > span {
-  color: var(--text-300);
-  flex-shrink: 0;
-}
-.channel-name-field input {
-  flex: 1;
-}
-
-.channel-name {
-  display: grid;
-  gap: 4px;
 }
 
 /* Run inspection stays beside the conversation and uses its existing detail surface. */

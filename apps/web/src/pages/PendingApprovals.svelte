@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { api, type Approval } from '../api';
+  import { type Approval } from '../api';
   import { createNames } from '../names.svelte';
   import { createLoad } from '../state.svelte';
+  import ErrorNote from '../ErrorNote.svelte';
+  import { loadAll } from './agent-data';
   import ApprovalCard from './ApprovalCard.svelte';
 
   let {
@@ -12,18 +14,21 @@
     onDone: () => void;
   } = $props();
   const approvals = createLoad(
-    () => api.list<Approval>('/approvals?status=pending&limit=100'),
+    () => loadAll<Approval>('/approvals?status=pending'),
     () => [],
     4000
   );
   const name = createNames();
-  let taskApprovals = $derived((approvals.data?.data ?? []).filter((approval) => approval.taskId === taskId));
+  let taskApprovals = $derived((approvals.data ?? []).filter((approval) => approval.taskId === taskId));
 </script>
+
+<ErrorNote error={approvals.error} />
+{#if approvals.error}<button class="secondary" onclick={approvals.reload}>Retry approvals</button>{/if}
 
 {#if taskApprovals.length > 0}
   <h3>Needs your approval</h3>
 
-  {#each taskApprovals ?? [] as approval (approval.id)}
+  {#each taskApprovals as approval (approval.id)}
     <ApprovalCard
       {approval}
       agentName={name({ type: 'agent', id: approval.agentId })}

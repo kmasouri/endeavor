@@ -272,7 +272,6 @@ export interface Grant {
 }
 
 export type TaskState = 'working' | 'waiting' | 'completed' | 'blocked' | 'cancelled';
-export const TASK_STATES: TaskState[] = ['working', 'waiting', 'completed', 'blocked', 'cancelled'];
 
 export interface Actor {
   type: 'human' | 'agent' | 'system';

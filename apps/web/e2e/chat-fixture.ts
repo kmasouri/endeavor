@@ -132,7 +132,7 @@ export async function fixture(
     }
     if (path === '/humans')
       return reply({ data: [{ id: 'person', name: 'Kayvan', preferences: { theme } }] });
-    if (path === '/directory') return reply({ data: [shownResearcher, reviewer] });
+    if (path === '/directory') return list([shownResearcher, reviewer]);
     if (path === '/agents') return list([shownResearcher, reviewer]);
     if (path === '/conversations') return list([{ id: 'brief', title: 'source-brief', createdAt }]);
     if (path === '/conversations/brief')

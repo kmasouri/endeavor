@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { loadAll } from './agent-data';
   import { api, type DirectoryEntry, type Human, type ProjectDetails } from '../api';
   import { createAction, createLoad } from '../state.svelte';
   import Avatar from '../Avatar.svelte';
@@ -8,7 +9,7 @@
   let editing = $state(false);
   let selected = $state<string[]>([]);
   let query = $state('');
-  const directory = createLoad(() => api.get<DirectoryEntry[]>('/directory'), () => []);
+  const directory = createLoad(() => loadAll<DirectoryEntry>('/directory'), () => []);
   const people = createLoad(() => api.get<Human[]>('/humans'), () => []);
   const choices = $derived([...new Map([
     ...project.members.map((m) => ({ ...m, id: m.participant.id, type: m.participant.type })),

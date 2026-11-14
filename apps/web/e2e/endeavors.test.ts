@@ -88,7 +88,7 @@ async function mockApi(page: Page, options: Options = {}) {
           preferences: { ...p.preferences, theme: options.theme ?? p.preferences.theme }
         }))
       });
-    if (url.pathname === '/directory') return reply({ data: agents });
+    if (url.pathname === '/directory') return reply(paged(agents));
     if (url.pathname === '/conversations' && request.method() === 'POST') {
       const input = request.postDataJSON();
       state.posts.push(input);

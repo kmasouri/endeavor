@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { AppError } from '../../shared/errors';
 import {
   WorkspaceClient,
@@ -101,8 +101,15 @@ export class WorkspaceFsClient implements WorkspaceClient {
         `Files can be at most ${this.limits.maxWriteBytes} bytes; this one is ${bytes}.`
       );
     }
-    await mkdir(dirname(full), { recursive: true });
-    await this.ensureRealPathInside(root, dirname(full));
+    await mkdir(root, { recursive: true });
+    let parent = root;
+    await this.ensureRealPathInside(root, parent);
+    // Validate each existing parent before mkdir can follow it into another workspace.
+    for (const part of relative(root, dirname(full)).split(sep).filter(Boolean)) {
+      parent = join(parent, part);
+      await mkdir(parent, { recursive: true });
+      await this.ensureRealPathInside(root, parent);
+    }
     try {
       await this.ensureRealPathInside(root, full);
     } catch (error) {
@@ -151,8 +158,15 @@ export class WorkspaceFsClient implements WorkspaceClient {
 
   // A link inside the folder could point outside it. Follow links and check again.
   private async ensureRealPathInside(root: string, full: string): Promise<void> {
-    const [realRoot, realFull] = await Promise.all([realpath(root), realpath(full)]);
-    if (realFull !== realRoot && !realFull.startsWith(realRoot + sep)) {
+    const [realBase, realRoot, realFull] = await Promise.all([
+      realpath(this.rootDir),
+      realpath(root),
+      realpath(full)
+    ]);
+    if (
+      realRoot !== join(realBase, basename(root)) ||
+      (realFull !== realRoot && !realFull.startsWith(realRoot + sep))
+    ) {
       throw new AppError('workspacePathInvalid', 'Paths must stay inside your workspace.');
     }
   }

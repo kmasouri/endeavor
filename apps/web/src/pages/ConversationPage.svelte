@@ -216,7 +216,7 @@
     });
   });
   const directory = createLoad(
-    () => api.get<DirectoryEntry[]>('/directory'),
+    () => loadAll<DirectoryEntry>('/directory'),
     () => []
   );
   const tasks = createLoad(
@@ -226,8 +226,8 @@
   );
   const outputs = createLoad(
     () =>
-      api.list<TaskOutput & { taskId: string }>(
-        `/conversations/${conversationId}/outputs?limit=100`
+      loadAll<TaskOutput & { taskId: string }>(
+        `/conversations/${conversationId}/outputs`
       ),
     () => [conversationId],
     5000
@@ -238,7 +238,7 @@
     15000
   );
   const approvals = createLoad(
-    () => api.list<Approval>('/approvals?status=pending&limit=100'),
+    () => loadAll<Approval>('/approvals?status=pending'),
     () => [],
     4000
   );
@@ -253,11 +253,11 @@
   let taskList = $derived(tasks.data ?? []);
   let taskIds = $derived(new Set(taskList.map((task) => task.id)));
   let conversationApprovals = $derived(
-    (approvals.data?.data ?? []).filter((approval) => taskIds.has(approval.taskId))
+    (approvals.data ?? []).filter((approval) => taskIds.has(approval.taskId))
   );
   let busy = $derived(taskList.filter((task) => !['completed', 'cancelled'].includes(task.state)));
   let artifacts = $derived(
-    collectConversationArtifacts(outputs.data?.data ?? [], messages.data?.data ?? [], taskList)
+    collectConversationArtifacts(outputs.data ?? [], messages.data?.data ?? [], taskList)
   );
   let unattached = $derived(
     artifacts.filter(
@@ -399,7 +399,7 @@
           directory={directory.data ?? []}
           meId={me.id}
           tasks={taskList}
-          outputs={outputs.data?.data ?? []}
+          outputs={outputs.data ?? []}
           costs={costs.data}
           {onAdd}
           onReply={reply}

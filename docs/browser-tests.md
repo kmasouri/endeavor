@@ -183,3 +183,9 @@ build and full checks.
 The prepared CI browser image is also used for the phone checks. Tall participant profiles can
 cover the composer, so their outside-dismissal test clicks empty app-bar padding. Goal-state and
 edit controls must not overlap with the CI image's fonts.
+
+CA-111 adds regressions for directory and contextual approval pages beyond 100 records, saved
+notes beyond 200 records, later conversation outputs and sidebar catch-up counts, invalid task
+limits, cancelled note corrections, failed-save retry, and note line breaks at phone width.
+Directory fixtures return the same paging metadata as the API. The runes unit tests share one
+in-memory compiler helper; their state and profile behavior assertions remain intact.

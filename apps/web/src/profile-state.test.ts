@@ -1,29 +1,14 @@
 /// <reference types="node" />
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { compileModule } from 'svelte/compiler';
-import ts from 'typescript';
+import { loadRunes } from './runes.test-helper.ts';
 import type { Human } from './api.ts';
 
-async function loadRunes(file: string) {
-  const javascript = ts.transpileModule(readFileSync(new URL(file, import.meta.url), 'utf8'), {
-    compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext }
-  }).outputText;
-  const code = compileModule(javascript, {
-    filename: file.replace('.ts', '.js'),
-    generate: 'client'
-  }).js.code.replace(
-    /from (['"])(svelte[^'"]*)\1/g,
-    (_, _quote, name: string) => `from ${JSON.stringify(import.meta.resolve(name))}`
-  );
-  return import(`data:text/javascript;base64,${Buffer.from(code).toString('base64')}`);
-}
 const { createProfileEditor } = (await loadRunes(
-  './profile-state.svelte.ts'
+  new URL('./profile-state.svelte.ts', import.meta.url)
 )) as typeof import('./profile-state.svelte');
 const { timeDisplay, formatShortTime, formatDateTime } = (await loadRunes(
-  './time-display.svelte.ts'
+  new URL('./time-display.svelte.ts', import.meta.url)
 )) as typeof import('./time-display.svelte');
 const person: Human = {
   id: 'person-1',

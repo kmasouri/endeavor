@@ -98,7 +98,7 @@
   const schedules = createLoad(
     () =>
       actorId
-        ? api.list<Responsibility>('/responsibilities?status=enabled&limit=100')
+        ? loadAll<Responsibility>('/responsibilities?status=enabled')
         : Promise.resolve(undefined),
     () => [actorId],
     15000
@@ -111,7 +111,7 @@
     () => [actorId],
     10000
   );
-  let catchUps = $derived((schedules.data?.data ?? []).filter((schedule) => schedule.catchUp).length);
+  let catchUps = $derived((schedules.data ?? []).filter((schedule) => schedule.catchUp).length);
   const pending = createLoad(
     () =>
       actorId

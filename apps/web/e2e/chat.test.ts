@@ -406,3 +406,73 @@ test('member profile status refreshes while the endeavor stays open', async ({ p
   expect(errors).toEqual([]);
   expect(unexpected).toEqual([]);
 });
+
+test('the composer can find specialists beyond the first directory page', async ({ page }) => {
+  const api = await fixture(page);
+  const entries = Array.from({ length: 101 }, (_, i) => ({
+    id: `specialist-${i}`,
+    name: `Specialist ${i}`,
+    purpose: 'Find sources',
+    skillNames: [],
+    produces: null,
+    needs: null
+  }));
+  await page.route('**/directory*', (route) => {
+    const url = new URL(route.request().url());
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    const limit = Number(url.searchParams.get('limit') ?? 50);
+    return route.fulfill({
+      json: {
+        data: entries.slice(offset, offset + limit),
+        page: { offset, limit, total: entries.length }
+      }
+    });
+  });
+  await page.goto('/app/#/conversations/brief');
+  await page.getByRole('textbox', { name: 'Message', exact: true }).fill('@Specialist 100');
+  await expect(page.getByRole('option', { name: /Specialist 100/ })).toBeVisible();
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('later output pages and schedule catch-ups remain visible', async ({ page }) => {
+  const api = await fixture(page);
+  const outputs = Array.from({ length: 101 }, (_, i) => ({
+    id: `output-${i}`,
+    taskId: 'old-task',
+    kind: 'document',
+    title: `Evidence ${i}`,
+    content: 'Saved evidence',
+    createdAt
+  }));
+  const schedules = Array.from({ length: 101 }, (_, i) => ({
+    id: `schedule-${i}`,
+    status: 'enabled',
+    catchUp: i === 100 ? { missed: 2 } : null
+  }));
+  await page.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    const items =
+      url.pathname === '/responsibilities'
+        ? schedules
+        : url.pathname === '/conversations/brief/outputs'
+          ? outputs
+          : null;
+    if (!items) return route.fallback();
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    const limit = Number(url.searchParams.get('limit') ?? 100);
+    return route.fulfill({
+      json: {
+        data: items.slice(offset, offset + limit),
+        page: { offset, limit, total: items.length }
+      }
+    });
+  });
+  await page.goto('/app/#/conversations/brief');
+  await expect(page.getByRole('heading', { name: 'Evidence 100', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Schedules', exact: true }).locator('.count-badge')
+  ).toHaveText('1');
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});

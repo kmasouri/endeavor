@@ -117,7 +117,7 @@ async function fixture(page: Page, theme = 'dark') {
         ]
       });
     if (url.pathname === '/agents') return list(agents);
-    if (url.pathname === '/directory') return reply({ data: agents });
+    if (url.pathname === '/directory') return list(agents);
     if (url.pathname.endsWith('/versions')) return reply({ data: [{ id: 'v1', version: 1 }] });
     if (url.pathname === '/conversations') return list(conversations);
     if (url.pathname === '/conversations/heat' || url.pathname === '/conversations/site') {
@@ -580,4 +580,43 @@ test('an older active run still shows after more than 100 newer completed runs',
   await page.goto('/app/#/conversations/heat');
   await expect(page.locator('.live-status')).toContainText('writing brief.md');
   expect(state.queries.some((query) => query.includes('offset=100'))).toBe(true);
+});
+
+test('run approval failures are visible and retry includes later pending requests', async ({
+  page
+}) => {
+  const { state, errors } = await fixture(page);
+  state.tasks.find((task) => task.id === 'old')!.state = 'waiting';
+  let fail = true;
+  const approvals = Array.from({ length: 101 }, (_, i) => ({
+    id: `approval-${i}`,
+    agentId: 'researcher',
+    taskId: i === 100 ? 'old' : 'other',
+    status: 'pending',
+    createdAt,
+    request: { kind: 'http', method: 'POST', path: '/final-request', connectionName: 'Records' }
+  }));
+  await page.route('**/approvals?**', (route) => {
+    if (fail)
+      return route.fulfill({ status: 503, json: { error: { message: 'Approvals unavailable' } } });
+    const url = new URL(route.request().url());
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    const limit = Number(url.searchParams.get('limit') ?? 100);
+    return route.fulfill({
+      json: {
+        data: approvals.slice(offset, offset + limit),
+        page: { offset, limit, total: approvals.length }
+      }
+    });
+  });
+  await page.goto('/app/#/conversations/heat?run=old');
+  const controls = page
+    .locator('.panel')
+    .filter({ has: page.getByRole('heading', { name: 'Run controls', exact: true }) });
+  await expect(controls.getByText('Approvals unavailable', { exact: true })).toBeVisible();
+  fail = false;
+  await controls.getByRole('button', { name: 'Retry approvals' }).click();
+  await expect(controls.getByText('POST /final-request', { exact: true })).toBeVisible();
+  await expect(controls.getByRole('button', { name: 'Allow once' })).toHaveCount(1);
+  expect(errors).toEqual([]);
 });

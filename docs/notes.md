@@ -27,6 +27,10 @@
 
 ## Saved notes
 
+The agent overview loads every page of saved notes. Note text keeps its line breaks. Starting a
+correction uses the latest saved text; Cancel discards the draft. A failed save keeps the draft
+for retry, and the editor stays locked while saving.
+
 - Agents save notes only with the `save_note` tool. What people say never becomes a note on its own.
 - **Scope keeps contexts apart.** A note saved in a project endeavor gets `scope: "project"`: it shows up in that agent's tasks in every endeavor of the same project, and never in another project. A note saved in a standalone endeavor stays in that conversation. A note saved outside any conversation, or one a person widens to `scope: "agent"`, shows up in all of the agent's tasks.
 - Notes saved before projects existed keep `scope: "conversation"`: only their own endeavor sees them. Every existing conversation moved into one General project, so widening them all would have mixed their details together. A person can widen one to `project` or `agent`.
