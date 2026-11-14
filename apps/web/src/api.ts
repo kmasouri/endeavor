@@ -106,6 +106,7 @@ export interface Project {
   name: string;
   icon?: ProjectIcon | null;
   color?: ProjectColor | null;
+  routingConfidenceThreshold: number | null;
   isDefault: boolean;
   archivedAt: string | null;
   createdAt: string;

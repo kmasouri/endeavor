@@ -100,7 +100,7 @@ export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<
     {
       schema: {
         description:
-          'Add an instructions-only skill with version 1. Skills never select connections or grant API access. Admins only.',
+          'Add an instructions-only skill with version 1. Agents can discover it by default and ask for access. Set discoverable to false to hide it. Admins only.',
         tags,
         headers,
         body: createSkillBodySchema
@@ -208,7 +208,7 @@ export async function catalogsRouter(fastifyInstance: FastifyInstance): Promise<
     {
       schema: {
         description:
-          'Add an HTTP API or remote MCP connection. The credential is stored encrypted and never returned. Admins only.',
+          'Add an HTTP API or remote MCP connection. Agents can discover it by default and ask for access. Set discoverable to false to hide it. Credentials are encrypted and never returned. Admins only.',
         tags,
         headers,
         body: createConnectionBodySchema

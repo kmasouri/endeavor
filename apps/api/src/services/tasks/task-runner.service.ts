@@ -1921,8 +1921,7 @@ export class TaskRunnerService {
 
   // Access requests
 
-  // Lists what people made discoverable. It shows names, descriptions, and scope only, and
-  // grants nothing.
+  // Lists enabled, discoverable catalog entries with their requestable scope.
   private async runFindCapabilitiesTool(
     task: Task,
     agent: Agent,

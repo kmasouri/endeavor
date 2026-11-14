@@ -35,6 +35,7 @@ const project: Project = {
   id: PROJECT,
   name: 'General',
   about: null,
+  routingConfidenceThreshold: null,
   isDefault: true,
   createdByHumanId: null,
   createdAt: new Date(),

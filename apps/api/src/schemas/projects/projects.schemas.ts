@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { PROJECT_COLORS, PROJECT_ICONS } from '../../shared/types';
 
 const projectNameSchema = z.string().trim().min(1).max(100);
+const routingConfidenceThresholdSchema = z.number().min(0).max(1).nullable().optional();
 const projectAboutSchema = z.string().trim().max(5_000).nullable();
 
 export const projectParamsSchema = z.object({
@@ -22,6 +23,7 @@ export const createProjectBodySchema = z.strictObject({
   name: projectNameSchema,
   ...appearance,
   about: projectAboutSchema.optional(),
+  routingConfidenceThreshold: routingConfidenceThresholdSchema,
   // Default people and agents, added to every new endeavor in the project.
   agentIds: z.array(z.uuid()).max(20).optional(),
   humanIds: z.array(z.uuid()).max(20).optional()
@@ -32,6 +34,7 @@ export const updateProjectBodySchema = z
     name: projectNameSchema.optional(),
     ...appearance,
     about: projectAboutSchema.optional(),
+    routingConfidenceThreshold: routingConfidenceThresholdSchema,
     // Replace that kind of default member. The other kind is kept.
     agentIds: z.array(z.uuid()).max(20).optional(),
     humanIds: z.array(z.uuid()).max(20).optional(),

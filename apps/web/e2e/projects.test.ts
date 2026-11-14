@@ -19,6 +19,7 @@ async function fixture(page: Page, theme = 'light') {
     {
       id: 'alpha',
       name: 'Alpha',
+      routingConfidenceThreshold: null,
       isDefault: true,
       archivedAt: null,
       createdAt: '2026-11-04T01:00:00Z',
@@ -27,6 +28,7 @@ async function fixture(page: Page, theme = 'light') {
     {
       id: 'beta',
       name: 'Beta',
+      routingConfidenceThreshold: null,
       isDefault: false,
       archivedAt: null,
       createdAt: '2026-11-04T01:00:00Z',
@@ -124,6 +126,9 @@ async function fixture(page: Page, theme = 'light') {
         if (body.name) project.name = body.name;
         if ('icon' in body) project.icon = body.icon as ProjectDetails['icon'];
         if ('color' in body) project.color = body.color as ProjectDetails['color'];
+        if ('routingConfidenceThreshold' in body) {
+          project.routingConfidenceThreshold = body.routingConfidenceThreshold as number | null;
+        }
         if ('archived' in body) project.archivedAt = body.archived ? '2026-11-04T01:00:00Z' : null;
       }
       return reply({ data: project });
@@ -284,6 +289,31 @@ test('projects: shared context, members, scoped schedules, create and archive', 
   await expect(page.getByRole('button', { name: /Alpha check/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Beta check/ })).toHaveCount(0);
   expect(errors).toEqual([]);
+});
+
+test('projects: changes and clears the routing confidence threshold', async ({ page }) => {
+  await fixture(page);
+  await page.goto('/app/#/projects/alpha');
+  const edit = page.getByRole('button', { name: 'Edit project', exact: true });
+  const dialog = page.getByRole('dialog', { name: 'Edit project' });
+  const field = dialog.getByRole('spinbutton', { name: 'Routing confidence threshold' });
+  const save = dialog.getByRole('button', { name: 'Save changes' });
+
+  await edit.click();
+  await expect(field).toHaveValue('');
+  await field.fill('0');
+  await save.click();
+  await expect(dialog).toBeHidden();
+  await page.reload();
+  await edit.click();
+  await expect(field).toHaveValue('0');
+  await field.fill('');
+  await save.click();
+  await expect(dialog).toBeHidden();
+  await page.reload();
+  await edit.click();
+  await expect(field).toHaveValue('');
+  await expect(save).toBeDisabled();
 });
 
 test('projects: request retry creates one endeavor, reply stays there, goal edits and close/reopen persist', async ({

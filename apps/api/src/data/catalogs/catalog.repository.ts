@@ -12,6 +12,6 @@ export class CatalogNameConflictError extends Error {
 // Cross-catalog access used by agent configuration and task execution.
 // Management services receive only their feature's repository interface.
 export interface CatalogRepository extends SkillRepository, ConnectionRepository, GrantRepository {
-  // Enabled skills and connections a person marked discoverable, by name.
+  // Enabled, discoverable skills and connections, by name.
   listDiscoverable(limit: number): Promise<{ skills: Skill[]; connections: Connection[] }>;
 }

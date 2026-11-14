@@ -9,6 +9,7 @@ interface ProjectRow {
   context: { about?: string };
   icon: ProjectAppearance['icon'];
   color: ProjectAppearance['color'];
+  routing_confidence_threshold: number | null;
   is_default: boolean;
   created_by_human_id: string | null;
   created_at: Date;
@@ -53,12 +54,13 @@ export class ProjectPostgresRepository implements ProjectRepository {
     input: ProjectAppearance & {
       name: string;
       about?: string | null;
+      routingConfidenceThreshold?: number | null;
       createdByHumanId: string;
     }
   ): Promise<Project> {
     const result = await this.db.query<ProjectRow>(
-      `INSERT INTO endeavor.projects (id, name, created_by_human_id, context, icon, color)
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6)
+      `INSERT INTO endeavor.projects (id, name, created_by_human_id, context, icon, color, routing_confidence_threshold)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7)
        RETURNING *`,
       [
         randomUUID(),
@@ -66,7 +68,8 @@ export class ProjectPostgresRepository implements ProjectRepository {
         input.createdByHumanId,
         JSON.stringify(input.about ? { about: input.about } : {}),
         input.icon ?? null,
-        input.color ?? null
+        input.color ?? null,
+        input.routingConfidenceThreshold ?? null
       ]
     );
     return toProject(result.rows[0]);
@@ -118,7 +121,12 @@ export class ProjectPostgresRepository implements ProjectRepository {
 
   async update(
     projectId: string,
-    changes: ProjectAppearance & { name?: string; about?: string | null; archived?: boolean }
+    changes: ProjectAppearance & {
+      name?: string;
+      about?: string | null;
+      routingConfidenceThreshold?: number | null;
+      archived?: boolean;
+    }
   ): Promise<Project | null> {
     const result = await this.db.query<ProjectRow>(
       `UPDATE endeavor.projects
@@ -135,6 +143,8 @@ export class ProjectPostgresRepository implements ProjectRepository {
            END,
            icon = CASE WHEN $6::boolean THEN $7::text ELSE icon END,
            color = CASE WHEN $8::boolean THEN $9::text ELSE color END,
+           routing_confidence_threshold = CASE WHEN $10::boolean THEN $11::double precision
+             ELSE routing_confidence_threshold END,
            updated_at = now()
        WHERE id = $1
        RETURNING *`,
@@ -147,7 +157,9 @@ export class ProjectPostgresRepository implements ProjectRepository {
         changes.icon !== undefined,
         changes.icon ?? null,
         changes.color !== undefined,
-        changes.color ?? null
+        changes.color ?? null,
+        changes.routingConfidenceThreshold !== undefined,
+        changes.routingConfidenceThreshold ?? null
       ]
     );
     return result.rows[0] ? toProject(result.rows[0]) : null;
@@ -228,6 +240,7 @@ function toProject(row: ProjectRow): Project {
     icon: row.icon ?? null,
     color: row.color ?? null,
     about: row.context.about ?? null,
+    routingConfidenceThreshold: row.routing_confidence_threshold,
     isDefault: row.is_default,
     createdByHumanId: row.created_by_human_id,
     createdAt: row.created_at,

@@ -36,6 +36,7 @@ const project: Project = {
   id: PROJECT,
   name: 'Billing',
   about: null,
+  routingConfidenceThreshold: null,
   isDefault: false,
   createdByHumanId: KIM,
   createdAt: new Date(),

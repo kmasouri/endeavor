@@ -84,7 +84,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
   ) {}
 
   async createSkill(
-    input: { name: string; description: string; discoverable?: boolean },
+    input: { name: string; description: string; discoverable: boolean },
     firstVersion: CreateSkillVersionInput
   ): Promise<{ skill: Skill; version: SkillVersion }> {
     const skillId = randomUUID();
@@ -112,7 +112,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
           versionId,
           firstVersion.instructions,
           firstVersion.createdByHumanId,
-          input.discoverable ?? false
+          input.discoverable
         ]
       )
       .catch((error) => rethrowNameConflict(error, input.name));
@@ -248,7 +248,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
           input.kind ?? 'http',
           input.allowedTools ?? [],
           input.approvalTools ?? [],
-          input.discoverable ?? false,
+          input.discoverable,
           input.authMethod ?? (input.credential ? 'header' : 'none')
         ]
       )
