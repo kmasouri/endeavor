@@ -221,6 +221,12 @@ header credential preserves the selected method and makes authentication require
 a header credential selects header authentication. Existing OAuth must be disconnected
 before switching methods, as for endpoint or credential changes.
 
+### Task pause attribution
+
+Task responses include `pausedAt` and `pausedByHumanId`. Both are null when the task
+is unpaused. An older pause without a matching event still returns its timestamp,
+with `pausedByHumanId` set to null. Resuming clears both fields.
+
 ### Current task activity
 
 `GET /tasks` items and `GET /tasks/:taskId` include `activity`. It is null when paused,

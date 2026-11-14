@@ -235,10 +235,15 @@ export class TaskService {
       throw new AppError('taskStateConflict', `Task ${task.id} is ${describeState(task)}`);
     }
 
-    const paused = await this.lifecycle.applyChanges(task, { pausedAt: new Date() });
-    await this.taskRepository.addEvent(task.id, TASK_EVENTS.paused, toHumanActor(human.id), {
-      reason: reason ?? null
-    });
+    const paused = await this.lifecycle.applyChanges(
+      task,
+      { pausedAt: new Date() },
+      {
+        type: TASK_EVENTS.paused,
+        actor: toHumanActor(human.id),
+        data: { reason: reason ?? null }
+      }
+    );
     this.taskLogger.onTaskPaused(task.id);
     return paused;
   }
