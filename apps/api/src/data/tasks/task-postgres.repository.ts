@@ -16,6 +16,7 @@ import {
   TaskWaitKind
 } from '../../shared/types';
 import {
+  AgentCost,
   CostFilter,
   CostSummary,
   TaskCost,
@@ -829,6 +830,38 @@ export class TaskPostgresRepository implements TaskRepository {
       tokens: Number(row?.tokens ?? 0),
       unpricedCalls: row?.unpriced ?? 0
     };
+  }
+
+  async listAgentCosts(filter: CostFilter): Promise<AgentCost[]> {
+    const { where, values } = buildCostWhereClause(filter);
+    const result = await this.db.query<{
+      agent_id: string;
+      name: string;
+      cost: string | null;
+      tokens: string | null;
+      unpriced: number;
+    }>(
+      `SELECT t.owner_agent_id AS agent_id,
+              CASE WHEN a.deleted_at IS NULL THEN a.name ELSE 'Deleted agent' END AS name,
+              sum((e.data->>'costUsd')::numeric) AS cost,
+              sum(coalesce((e.data->'usage'->>'inputTokens')::bigint, 0)
+                + coalesce((e.data->'usage'->>'outputTokens')::bigint, 0)) AS tokens,
+              count(*) FILTER (WHERE e.data->>'costUsd' IS NULL)::int AS unpriced
+       FROM endeavor.task_events e
+       JOIN endeavor.tasks t ON t.id = e.task_id
+       JOIN endeavor.agents a ON a.id = t.owner_agent_id
+       WHERE ${where}
+       GROUP BY t.owner_agent_id, a.name, a.deleted_at
+       ORDER BY cost DESC NULLS LAST, tokens DESC, name, agent_id`,
+      values
+    );
+    return result.rows.map((row) => ({
+      agentId: row.agent_id,
+      name: row.name,
+      costUsd: Number(row.cost ?? 0),
+      tokens: Number(row.tokens ?? 0),
+      unpricedCalls: row.unpriced
+    }));
   }
 
   async listTaskCosts(filter: CostFilter, limit: number): Promise<TaskCost[]> {

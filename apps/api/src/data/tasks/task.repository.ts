@@ -100,6 +100,11 @@ export interface CostSummary {
   unpricedCalls: number;
 }
 
+export interface AgentCost extends CostSummary {
+  agentId: string;
+  name: string;
+}
+
 export interface TaskCost {
   taskId: string;
   title: string;
@@ -192,6 +197,8 @@ export interface TaskRepository {
   // What model calls cost, for an agent or a conversation, since a moment if given. costUsd only
   // counts calls with a known price; unpricedCalls says how many had none.
   sumCost(filter: CostFilter): Promise<CostSummary>;
+  // Every agent's total for the same filters, without a display limit.
+  listAgentCosts(filter: CostFilter): Promise<AgentCost[]>;
   // The costliest tasks, for the same filters.
   listTaskCosts(filter: CostFilter, limit: number): Promise<TaskCost[]>;
 

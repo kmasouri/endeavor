@@ -2,6 +2,47 @@ import { captureReviewScreenshot } from './review-screenshot';
 import { expect, test } from '@playwright/test';
 import { fixture, createdAt } from './chat-fixture';
 
+test('conversation details split spending across agents and their tasks', async ({ page }) => {
+  const api = await fixture(page);
+  api.state.costs.total = { costUsd: 0.07, tokens: 7000, unpricedCalls: 0 };
+  api.state.costs.budgetUsd = 1;
+  api.state.costs.tasks = [
+    { taskId: 'review-1', title: 'Check claims', costUsd: 0.03, tokens: 3000 },
+    { taskId: 'research-2', title: 'Revise brief', costUsd: 0.025, tokens: 2500 },
+    { taskId: 'research-1', title: 'Draft brief', costUsd: 0.015, tokens: 1500 }
+  ];
+  api.state.costs.agents = [
+    { agentId: 'reviewer', name: 'Reviewer', costUsd: 0.03, tokens: 3000, unpricedCalls: 0 },
+    {
+      agentId: 'researcher',
+      name: 'Researcher',
+      costUsd: 0.04,
+      tokens: 4000,
+      unpricedCalls: 0
+    }
+  ];
+
+  await page.goto('/app/#/conversations/brief');
+  await page.getByRole('button', { name: 'Show details' }).click();
+  const spending = page.getByRole('heading', { name: 'Spending' }).locator('..');
+  await expect(spending).toContainText('$0.07');
+  await expect(spending).toContainText('of a $1.00 budget');
+  await expect(spending.locator('.agent-costs li')).toHaveText(['Reviewer$0.03', 'Researcher$0.04']);
+  const geometry = await spending.locator('.agent-costs').evaluate((list) => {
+    const bounds = list.getBoundingClientRect();
+    const rows = [...list.querySelectorAll('li')].map((row) => row.getBoundingClientRect());
+    return {
+      noOverflow: list.scrollWidth <= list.clientWidth,
+      rowsInside: rows.every((row) => row.left >= bounds.left && row.right <= bounds.right),
+      valuesAligned: new Set(rows.map((row) => Math.round(row.right))).size === 1
+    };
+  });
+  expect(geometry).toEqual({ noOverflow: true, rowsInside: true, valuesAligned: true });
+  await captureReviewScreenshot(spending, { path: 'conversation-spending.png' });
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
 test('keyboard mentions, multiline messages and replies send exact references and appear in chat', async ({
   page
 }) => {

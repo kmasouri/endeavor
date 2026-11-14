@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   AgentRepository,
+  AgentCost,
   CostSummary,
   TaskCost,
   ApprovalRepository,
@@ -59,6 +60,7 @@ export interface CostReport {
   thisMonth: CostSummary;
   budgetUsd: number | null;
   tasks: TaskCost[];
+  agents?: AgentCost[];
 }
 
 export class TaskService {
@@ -218,12 +220,13 @@ export class TaskService {
       throw new AppError('conversationNotFound', `Conversation ${conversationId} was not found`);
     }
     const month = startOfMonth(new Date());
-    const [total, thisMonth, tasks] = await Promise.all([
+    const [total, thisMonth, tasks, agents] = await Promise.all([
       this.taskRepository.sumCost({ conversationId }),
       this.taskRepository.sumCost({ conversationId, since: month }),
-      this.taskRepository.listTaskCosts({ conversationId }, 10)
+      this.taskRepository.listTaskCosts({ conversationId }, 10),
+      this.taskRepository.listAgentCosts({ conversationId })
     ]);
-    return { total, thisMonth, budgetUsd: conversation.budgetUsd, tasks };
+    return { total, thisMonth, budgetUsd: conversation.budgetUsd, tasks, agents };
   }
 
   // Human actions

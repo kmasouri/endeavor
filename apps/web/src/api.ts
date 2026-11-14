@@ -455,5 +455,6 @@ export interface CostReport {
   total: CostSummary;
   thisMonth: CostSummary;
   budgetUsd: number | null;
+  agents?: (CostSummary & { agentId: string; name: string })[];
   tasks: { taskId: string; title: string; costUsd: number; tokens: number }[];
 }

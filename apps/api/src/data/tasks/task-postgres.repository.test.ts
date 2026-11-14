@@ -160,3 +160,37 @@ describe('one open task per agent and endeavor', () => {
     );
   });
 });
+
+describe('conversation agent costs', () => {
+  it('maps every grouped agent total without limiting the result', async () => {
+    const { repository, outsideQuery } = setup();
+    outsideQuery.mockResolvedValue({
+      rows: [
+        { agent_id: 'a1', name: 'Researcher', cost: '0.04', tokens: '4000', unpriced: 1 },
+        { agent_id: 'a2', name: 'Reviewer', cost: '0.03', tokens: '3000', unpriced: 0 }
+      ]
+    });
+
+    await expect(repository.listAgentCosts({ conversationId: 'c1' })).resolves.toEqual([
+      {
+        agentId: 'a1',
+        name: 'Researcher',
+        costUsd: 0.04,
+        tokens: 4000,
+        unpricedCalls: 1
+      },
+      {
+        agentId: 'a2',
+        name: 'Reviewer',
+        costUsd: 0.03,
+        tokens: 3000,
+        unpricedCalls: 0
+      }
+    ]);
+    expect(outsideQuery).toHaveBeenCalledWith(
+      expect.stringMatching(/GROUP BY t\.owner_agent_id[\s\S]*ORDER BY cost DESC/),
+      ['c1']
+    );
+    expect(outsideQuery.mock.calls[0][0]).not.toContain('LIMIT');
+  });
+});
