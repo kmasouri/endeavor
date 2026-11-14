@@ -167,7 +167,7 @@ representative theme/width pairs above. Model prompt and API privacy checks rema
 runner, conversation service, and agent routes. Integrating CA-98 adds one distinct browser case,
 so the current suite contains 110 cases; the 171-to-109 figures describe the original local audit.
 
-CA-105 routing choices are covered by `routing.test.ts`: member buttons and No one, conflict feedback, retry, exact revision payloads, and desktop/phone rendering. Real model choices and database delivery are verified separately.
+CA-105 and CA-112 routing choices are covered by `routing.test.ts`: the recommendation, five-suggestion limit, full eligible-agent specialty search, explicit alternate confirmation, no-recommendation state, conflict feedback, retry, exact revision payloads, and desktop/phone rendering. Real model choices and database delivery are verified separately.
 
 CA-102 projects coverage (`projects.test.ts`) checks project creation, rename, archive/restore,
 list error recovery, shared documents, default membership, and schedules filtered by the project's

@@ -4,6 +4,7 @@
     type DirectoryEntry,
     type Member,
     type Message,
+    type RoutingDecision,
     type Task,
     type TaskOutput
   } from '../api';
@@ -17,8 +18,10 @@
   import Suggestion from './Suggestion.svelte';
   import TaskStatus from './TaskStatus.svelte';
   import RunSteps from './RunSteps.svelte';
+  import RoutingDecisions from './RoutingDecisions.svelte';
   import ArtifactCard from './ArtifactCard.svelte';
   let props: {
+    conversationId: string;
     messages: Message[];
     nameOf: (ref: { type: string; id: string | null }) => string;
     humanName: (id: string | null) => string | undefined;
@@ -36,6 +39,8 @@
     onInspect: (message: Message) => void;
     onInspectRun: (id: string) => void;
     selectedRunId?: string;
+    routingDecisions: RoutingDecision[];
+    onRoutingChanged: () => Promise<unknown> | void;
   } = $props();
   let copied = $state('');
   let copyError = $state('');
@@ -104,7 +109,8 @@
       new Date(previous.createdAt).toDateString() === new Date(message.createdAt).toDateString() &&
       Date.parse(message.createdAt) - Date.parse(previous.createdAt) < 300000}
     {@const replyTo = message.inReplyToMessageId ? byId.get(message.inReplyToMessageId) : null}
-    {@const name = props.nameOf({ type: message.authorType, id: message.authorId })}
+    {@const routingDecision = props.routingDecisions.find((decision) => decision.decisionMessageId === message.id)}
+    {@const name = routingDecision ? 'Decision Engine' : props.nameOf({ type: message.authorType, id: message.authorId })}
     {@const missingTags = tagsFor(message)}
     {@const you = message.mentions.some((mention) => mention.id === props.meId && mention.type === 'human')}
     {#if !previous || new Date(previous.createdAt).toDateString() !== new Date(message.createdAt).toDateString()}<li
@@ -197,6 +203,16 @@
             </p>
           {/if}
         </div>
+        {#if routingDecision}
+          <RoutingDecisions
+            conversationId={props.conversationId}
+            decision={routingDecision}
+            directory={props.directory}
+            humanName={props.humanName}
+            onChanged={props.onRoutingChanged}
+            embedded
+          />
+        {/if}
         {#if message.taskId && lastForTask.get(message.taskId) === message.id}
           {#if !props.outputs.some((output) => output.taskId === message.taskId) || artifacts.some((output) => output.taskId === message.taskId)}<RunSteps
               taskId={message.taskId}

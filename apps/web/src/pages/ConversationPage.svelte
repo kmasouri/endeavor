@@ -9,6 +9,7 @@
     type DirectoryEntry,
     type Human,
     type Message,
+    type RoutingDecision,
     type Task,
     type TaskOutput
   } from '../api';
@@ -117,6 +118,11 @@
     4000
   );
   const messages = createMessageFeed(() => conversationId);
+  const routing = createLoad(
+    () => api.list<RoutingDecision>(`/conversations/${conversationId}/routing`),
+    () => [conversationId],
+    2000
+  );
   let scroll = $state<HTMLDivElement | null>(null);
   let newMessages = $state(0);
   let follow = true;
@@ -307,6 +313,7 @@
     outputs.reload();
     approvals.reload();
     costs.reload();
+    routing.reload();
   };
   const reply = (message: Message) => {
     revision = null;
@@ -396,6 +403,7 @@
           <ErrorNote error={messages.historyError} />
         </div>{/if}
         {#if messages.ready}<MessageList
+          {conversationId}
           messages={messages.data?.data ?? []}
           {nameOf}
           {humanName}
@@ -413,8 +421,22 @@
           onInspect={inspectMessage}
           onInspectRun={inspectRun}
           selectedRunId={showDetails ? selectedRunId ?? undefined : undefined}
+          routingDecisions={routing.data?.data ?? []}
+          onRoutingChanged={routing.reload}
         />{/if}
-        <RoutingDecisions {conversationId} />
+        {#each (routing.data?.data ?? []).filter((decision) =>
+          !decision.decisionMessageId || !(messages.data?.data ?? []).some((message) => message.id === decision.decisionMessageId)
+        ) as decision (decision.id)}
+          <div class="legacy-routing-decision">
+            <RoutingDecisions
+              {conversationId}
+              {decision}
+              directory={directory.data ?? []}
+              {humanName}
+              onChanged={routing.reload}
+            />
+          </div>
+        {/each}
         {#each unattached as output (output.id)}<div class="orphan-artifact">
             <ArtifactCard
               {output}

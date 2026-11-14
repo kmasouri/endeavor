@@ -50,6 +50,8 @@ const job: RoutingRecord = {
   candidates: [],
   revision: 0,
   deliveryMessageId: null,
+  decisionMessageId: null,
+  decidedByHumanId: null,
   createdAt: now
 };
 function decision<C extends StarterChoice>(choice: C, confidence = 0.9): RoutingDecision<C> {
@@ -140,7 +142,8 @@ describe('RoutingService', () => {
       expect.objectContaining({ status: 'resolved', selectedAgentId: 'a', confidence: 0.9 }),
       expect.objectContaining({
         deliveryMessageId: 'm',
-        message: expect.objectContaining({ authorType: 'system', deliverToAgentIds: [] })
+        decisionMessage: expect.objectContaining({ authorType: 'system', deliverToAgentIds: [] }),
+        deliveryMessage: null
       })
     );
   });
@@ -166,7 +169,8 @@ describe('RoutingService', () => {
     await s.service.tick();
     expect(s.repo.save.mock.calls[0][2]).toMatchObject({
       status: 'waiting',
-      selectedAgentId: null
+      selectedAgentId: null,
+      candidates: [expect.objectContaining({ id: 'a', purpose: 'Writes briefs', recommended: true })]
     });
     expect(s.repo.save.mock.calls[0][3].deliveryMessageId).toBeNull();
   });
@@ -237,6 +241,22 @@ describe('RoutingService', () => {
     expect(s.client.chooseStarter).not.toHaveBeenCalled();
     expect(s.repo.save).not.toHaveBeenCalled();
   });
+  it('lists every currently eligible agent with specialties and preserves the recommendation', async () => {
+    const s = setup({
+      status: 'waiting',
+      candidates: [{ id: 'a', name: 'Writer', recommended: true }]
+    });
+    s.repo.list.mockResolvedValue([
+      { ...job, status: 'waiting', candidates: [{ id: 'a', name: 'Writer', recommended: true }] }
+    ]);
+    s.repo.count.mockResolvedValue(1);
+
+    const result = await s.service.list('h', 'c', { limit: 50, offset: 0 });
+
+    expect(result.decisions[0].candidates).toEqual([
+      { id: 'a', name: 'Writer', purpose: 'Writes briefs', recommended: true }
+    ]);
+  });
   it('never cancels or delivers work from a stale human choice', async () => {
     const s = setup({ status: 'waiting', revision: 2 });
     await expect(
@@ -259,7 +279,10 @@ describe('RoutingService', () => {
       outcome: 'none',
       selectedAgentId: null
     });
-    expect(s.repo.save.mock.calls[0][3].message?.deliverToAgentIds).toEqual([]);
+    expect(s.repo.save.mock.calls[0][3]).toMatchObject({
+      decisionMessage: null,
+      deliveryMessage: null
+    });
   });
   it('posts a visible tagged handoff when a completed task needs the next member', async () => {
     const s = setup({ kind: 'handoff', taskId: 't', messageId: null });
@@ -275,7 +298,7 @@ describe('RoutingService', () => {
     s.client.chooseAfterTask.mockResolvedValue({ ...decision({ kind: 'agent', agentId: 'a' }) });
     await s.service.tick();
     expect(s.client.chooseAfterTask).toHaveBeenCalled();
-    expect(s.repo.save.mock.calls[0][3].message).toMatchObject({
+    expect(s.repo.save.mock.calls[0][3].deliveryMessage).toMatchObject({
       authorType: 'agent',
       authorId: 'finished',
       taskId: 't',
@@ -334,7 +357,7 @@ describe('RoutingService', () => {
         outcome: kind,
         selectedAgentId: null
       });
-      expect(s.repo.save.mock.calls[0][3].message?.deliverToAgentIds).toEqual([]);
+      expect(s.repo.save.mock.calls[0][3].deliveryMessage).toBeNull();
     }
   );
   it('bounds automatic handoff chains before another model call', async () => {

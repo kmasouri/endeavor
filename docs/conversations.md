@@ -47,7 +47,7 @@ Each addressed agent must respond, or say why it can't. Explicit tags and replie
 
 The client only sees what the caller passes in: the message or result, the goal, the member agents' names and purposes, and recent messages the members can already see. It can only pick from the agents it was given, so it can't add members or reach private context. Tags that people or agents make never go through it.
 
-Each decision comes with a confidence from 0 to 1 and every option ranked. The caller acts alone only when the pick is an agent (or none, or done) and the confidence is at or above its threshold (0.6 for `gpt-6-luna`, from the CA-11 evaluation). Otherwise it saves a question and offers eligible member agents and No one. No delivery is created until a person chooses. Without an OpenAI key, or when a model call fails, it asks a person. Scheduled completions use the same waiting behavior.
+Each decision comes with a confidence from 0 to 1 and every option ranked. The caller acts alone only when the pick is an agent (or none, or done) and the confidence is at or above its threshold (0.6 for `gpt-6-luna`, from the CA-11 evaluation). Otherwise it saves a Decision Engine message in reply to the request. The message explains the reason, keeps a low-confidence agent pick as the recommendation, and offers Assign, Choose another agent, and Leave unassigned. No delivery is created until a person chooses. Without an OpenAI key, or when a model call fails, it asks a person. Scheduled completions use the same waiting behavior.
 
 Decisions have leases and revisions. A restart reclaims unfinished decisions; saving a decision,
 its visible message and its delivery is atomic. Old tasks from before migration 024 are not
@@ -55,7 +55,7 @@ routed retroactively. Completed tasks with explicit outgoing agent deliveries by
 Automatic handoff chains stop after eight parents and ask a person. A done decision never closes
 the endeavor; a person still confirms completion.
 
-`GET /conversations/:conversationId/routing` returns visible decisions, newest first, with limit/offset pagination (50 by default).
+`GET /conversations/:conversationId/routing` returns visible decisions, newest first, with limit/offset pagination (50 by default). Each waiting decision includes every currently eligible agent's name and public specialty text, the recommendation when there is one, the linked Decision Engine message, and the person who decided after resolution. Callers may show five suggestions while searching the full eligible list.
 `POST /conversations/:conversationId/routing/:decisionId/choice` takes `agentId` (null means
 No one) and `revision`. Only members choose. Changing an automatic pick withdraws its pending
 delivery or cancels the active task it created before delivering the replacement. Completed work
@@ -69,7 +69,7 @@ It sees no private instructions, saved notes, connection credentials, or tool ac
 and enabled state are checked again when the decision is saved. Model, token usage, confidence,
 and outcome are stored with the decision, and decisions are logged as `routing.decided`.
 `ROUTING_MODEL` defaults to `gpt-6-luna`; calls have a 30-second deadline and do not retry.
-The conversation shows the reason and a Change agent control, or choice buttons while waiting.
+The conversation keeps the reason and controls on the same Decision Engine message. The chosen outcome and person replace the waiting controls. Choosing an agent outside the recommendation requires confirmation; revision checks reject simultaneous or stale choices.
 
 Two engines implement it:
 
