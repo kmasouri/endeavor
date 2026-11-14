@@ -263,3 +263,8 @@ Project create, list, get, and update responses include `about`: the optional
 of up to 5,000 characters or `null`. Whitespace at either end is trimmed; blank text
 clears it. An omitted `about` on PATCH preserves the current value. The response
 helpers and list pagination stay the same.
+
+Project create, list, get, and update responses also include
+`routingConfidenceThreshold`, a number from 0 to 1 or `null`. Create and PATCH
+accept the same field. Send `null` to use the default of 0.6. An omitted field
+on PATCH preserves the current value.
