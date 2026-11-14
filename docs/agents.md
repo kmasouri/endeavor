@@ -171,10 +171,19 @@ content, reconciles archived references, and distinguishes documented policy fro
 health. These instructions guide behavior; connection policies and provider permissions
 enforce access. See [catalog grants and tools](catalogs.md#remote-mcp-tools-ca-64).
 
+The example also asks the specialist to preserve conditions that affect its advice: scope,
+time windows, required inputs, exceptions, and failure or escalation steps. Evaluate those
+conditions against the source, not just whether the answer has citations. Use a fresh
+Endeavor with the original question and no answer-key excerpts when checking a correction.
+Keep the existing task and conversation limits; record incomplete answers without silently
+raising budgets or retrying them.
+
 Juniper Parcel is synthetic. Its historical incidents and example log queries cannot prove
-current production health. The separate CloudWatch slice still needs a real read-only
-connection scoped to one log group, enforced time ranges and result caps, query evidence,
-and a real on-call pilot. Docs-only evaluation does not complete CA-73.
+current production health. CA-73 covers the Notion docs specialist; CloudWatch and a real
+on-call pilot are outside its current scope. The recorded pilot has explicit approval for
+broader read-only provider-account visibility. Its Juniper focus is an instruction, not an
+enforced page boundary. That exception does not change the restricted-identity setup above
+for new deployments. The ticket's linked evaluation records the approved scope and results.
 
 ## Avatar appearance (CA-92)
 
