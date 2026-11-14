@@ -39,6 +39,7 @@
     conversationId,
     initialRunId = null,
     me,
+    people,
     onReady,
     onRead,
     onChanged
@@ -46,6 +47,7 @@
     conversationId: string;
     initialRunId?: string | null;
     me: Human;
+    people: Human[];
     onReady?: (conversation: ConversationDetails) => boolean;
     // Called after the conversation is marked read, so the sidebar can refresh its counts.
     onRead?: () => void;
@@ -272,6 +274,7 @@
       ? 'Platform'
       : (directory.data?.find((agent) => agent.id === ref.id)?.name ??
         (ref.type === 'agent' ? 'Deleted agent' : 'Someone')));
+  const humanName = (id: string | null) => people.find((person) => person.id === id)?.name;
   const appearanceOf = (id: string | null) =>
     details.data?.members.find((member) => member.participant.type === 'agent' && member.participant.id === id)
       ?? directory.data?.find((agent) => agent.id === id);
@@ -395,6 +398,7 @@
         {#if messages.ready}<MessageList
           messages={messages.data?.data ?? []}
           {nameOf}
+          {humanName}
           members={conversation.members}
           directory={directory.data ?? []}
           meId={me.id}
@@ -450,7 +454,7 @@
                 agent
               /><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
             </div>
-            <TaskStatus {task} costs={costs.data} onChanged={reload} />
+            <TaskStatus {task} pausedByName={humanName(task.pausedByHumanId)} costs={costs.data} onChanged={reload} />
           </div>{/each}
       </div>
       <div class="conversation-bottom">

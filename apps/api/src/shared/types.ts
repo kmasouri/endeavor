@@ -81,6 +81,7 @@ export interface Task {
   state: TaskState;
   stateReason: string | null;
   pausedAt: Date | null;
+  pausedByHumanId: string | null;
   requestedByType: TaskRequesterType;
   requestedById: string | null;
   requestMessageId: string | null;

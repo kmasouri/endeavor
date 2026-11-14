@@ -24,6 +24,7 @@ function setup() {
     agentVersionId: 'version',
     state: 'working',
     pausedAt: null,
+    pausedByHumanId: null,
     createdAt: new Date()
   } as Task;
   const version = { id: 'version', provider: 'scripted', limits: {} } as AgentVersion;

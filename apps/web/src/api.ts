@@ -306,6 +306,7 @@ export interface Task {
   state: TaskState;
   stateReason: string | null;
   pausedAt: string | null;
+  pausedByHumanId: string | null;
   requestedByType: 'human' | 'agent' | 'schedule';
   requestedById: string | null;
   parentTaskId: string | null;

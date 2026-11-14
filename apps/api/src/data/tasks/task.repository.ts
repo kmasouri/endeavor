@@ -72,6 +72,8 @@ export interface TaskChanges {
   agentVersionId?: string;
 }
 
+export type TaskUpdateEvent = Pick<TaskEvent, 'type' | 'actor' | 'data'>;
+
 export interface CreateTaskWaitInput {
   kind: TaskWaitKind;
   targetId: string | null;
@@ -149,7 +151,8 @@ export interface TaskRepository {
   update(
     taskId: string,
     expected: { state: TaskState; paused: boolean; agentVersionId?: string },
-    changes: TaskChanges
+    changes: TaskChanges,
+    event?: TaskUpdateEvent
   ): Promise<Task | null>;
 
   addWaits(taskId: string, waits: CreateTaskWaitInput[]): Promise<TaskWait[]>;

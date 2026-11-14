@@ -21,6 +21,7 @@
   let props: {
     messages: Message[];
     nameOf: (ref: { type: string; id: string | null }) => string;
+    humanName: (id: string | null) => string | undefined;
     members: Member[];
     directory: DirectoryEntry[];
     meId: string;
@@ -214,6 +215,7 @@
           {#each props.tasks.filter((task) => task.ownerAgentId === message.authorId && !['completed', 'cancelled'].includes(task.state)) as task (task.id)}<TaskStatus
               {task}
               costs={props.costs}
+              pausedByName={props.humanName(task.pausedByHumanId)}
               onChanged={props.onChanged}
             />{/each}
         {/if}
