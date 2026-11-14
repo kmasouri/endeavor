@@ -95,7 +95,7 @@ async function fixture(page: Page, theme = 'light') {
     const body = method === 'GET' ? {} : (r.postDataJSON() ?? {});
     if (method !== 'GET') state.writes.push({ path, method, body });
     if (path === '/humans') return reply({ data: [person] });
-    if (path === '/directory') return reply({ data: [] });
+    if (path === '/directory') return reply(list([]));
     if (path === '/projects' && method === 'POST') {
       const p = { ...projects[1], id: 'new-project', name: body.name, members: [member] };
       projects.push(p);

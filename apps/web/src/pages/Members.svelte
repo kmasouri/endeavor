@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { loadAll } from './agent-data';
   import { api, type DirectoryEntry, type Human, type Member } from '../api';
   import Avatar from '../Avatar.svelte';
   import ParticipantProfile from '../ParticipantProfile.svelte';
@@ -15,7 +16,7 @@
     onClose: () => void;
   } = $props();
   const people = createLoad(() => api.get<Human[]>('/humans'), () => []);
-  const directory = createLoad(() => api.get<DirectoryEntry[]>('/directory'), () => []);
+  const directory = createLoad(() => loadAll<DirectoryEntry>('/directory'), () => []);
   const action = createAction();
   let query = $state('');
   let selected = $state<string[]>([]);

@@ -427,7 +427,7 @@ for (const legacy of [false, true]) {
     }
     await form.getByText('Limits per task', { exact: false }).click();
     for (const label of limits) {
-      await form.getByRole('textbox', { name: label, exact: true }).fill('99');
+      await form.getByLabel(label, { exact: true }).fill('99');
     }
     await form.getByRole('button', { name: 'Discard changes', exact: true }).click();
     await expect(overview).toHaveAttribute('aria-current', 'page');
@@ -464,7 +464,7 @@ for (const legacy of [false, true]) {
         }
       }
       for (const [i, label] of limits.entries()) {
-        await expect(form.getByRole('textbox', { name: label, exact: true })).toHaveValue(
+        await expect(form.getByLabel(label, { exact: true })).toHaveValue(
           legacy ? ['12', '1000', '0.5', '10'][i] : ''
         );
       }
@@ -522,9 +522,7 @@ test('configuration validates required fields and preserves every edit after a f
   await form.getByText('Limits per task', { exact: false }).click();
   const limits = ['Model turns', 'Tokens', 'Cost, $', 'Working minutes'];
   for (const [i, label] of limits.entries()) {
-    await form
-      .getByRole('textbox', { name: label, exact: true })
-      .fill(['12', '2000', '0.75', '15'][i]);
+    await form.getByLabel(label, { exact: true }).fill(['12', '2000', '0.75', '15'][i]);
   }
   await save.focus();
   await page.keyboard.press('Enter');
@@ -545,7 +543,7 @@ test('configuration validates required fields and preserves every edit after a f
   await expect(form.getByRole('button', { name: 'Undo removal of Web search' })).toBeVisible();
   await expect(form.getByRole('button', { name: 'Undo removal of Cite sources' })).toBeVisible();
   for (const [i, label] of limits.entries()) {
-    await expect(form.getByRole('textbox', { name: label, exact: true })).toHaveValue(
+    await expect(form.getByLabel(label, { exact: true })).toHaveValue(
       ['12', '2000', '0.75', '15'][i]
     );
   }
@@ -676,4 +674,135 @@ test('agent appearance persists, retries, discards and resets at 320px in dark',
   await expect(headingAvatar).toHaveAttribute('style', defaultStyle!);
   expect(writes.some((write) => write.path.endsWith('/config'))).toBe(false);
   expect(errors).toEqual([]);
+});
+
+test('task limits reject invalid values instead of silently changing the saved limits', async ({
+  page
+}) => {
+  const { writes } = await mockApi(page);
+  await page.goto('/app/#/agents/a1');
+  await page.getByRole('button', { name: 'Configuration', exact: true }).click();
+  await page.getByText('Limits per task', { exact: false }).click();
+  const save = page.getByRole('button', { name: 'Save new version' });
+  for (const [label, invalid] of [
+    ['Model turns', '1.5'],
+    ['Model turns', '1001'],
+    ['Tokens', '999'],
+    ['Working minutes', '-1'],
+    ['Working minutes', '10081'],
+    ['Cost, $', '0'],
+    ['Cost, $', '1001']
+  ]) {
+    const input = page.getByLabel(label, { exact: true });
+    await input.fill(invalid);
+    await save.click();
+    await expect(input).toBeFocused();
+    expect(await input.evaluate((element: HTMLInputElement) => element.validity.valid)).toBe(false);
+    expect(writes).toEqual([]);
+    await input.fill('');
+  }
+  await page.getByLabel('Model turns', { exact: true }).fill('12');
+  await page.getByLabel('Cost, $', { exact: true }).fill('0.125');
+  await save.click();
+  await expect.poll(() => writes.length).toBe(1);
+  expect(writes[0].body.limits).toEqual({ maxModelTurns: 12, maxCostUsd: 0.125 });
+});
+
+test('saved notes load every page and discard cancelled corrections', async ({ page }) => {
+  const { errors } = await mockApi(page);
+  const notes = Array.from({ length: 201 }, (_, i) => ({
+    id: `note-${i}`,
+    agentId: 'a1',
+    body: `Saved note ${i}`,
+    scope: 'agent',
+    sourceConversationId: null,
+    sourceTaskId: null,
+    projectId: null,
+    createdBy: { type: 'agent', id: 'a1' },
+    createdAt: '2026-11-14T12:00:00Z'
+  }));
+  const writes: unknown[] = [];
+  let releaseSave!: () => void;
+  await page.route('**/agents/a1/notes**', async (route) => {
+    const url = new URL(route.request().url());
+    if (route.request().method() !== 'GET') {
+      const body = route.request().postDataJSON();
+      writes.push(body);
+      if (writes.length === 1) {
+        await new Promise<void>((resolve) => {
+          releaseSave = resolve;
+        });
+        return route.fulfill({
+          status: 503,
+          json: { error: { message: 'Correction unavailable' } }
+        });
+      }
+      notes[200].body = body.body;
+      return route.fulfill({ json: { data: notes[200] } });
+    }
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    const limit = Number(url.searchParams.get('limit') ?? 50);
+    await route.fulfill({
+      json: {
+        data: notes.slice(offset, offset + limit),
+        page: { offset, limit, total: notes.length }
+      }
+    });
+  });
+  await page.goto('/app/#/agents/a1');
+  const last = page
+    .locator('.panel')
+    .filter({ has: page.getByRole('heading', { name: 'Saved notes (agent memory)', exact: true }) })
+    .locator('li')
+    .last();
+  await expect(last).toContainText('Saved note 200');
+  await last.getByRole('button', { name: 'Correct', exact: true }).click();
+  await last.locator('textarea').fill('Discard this correction');
+  await last.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await last.getByRole('button', { name: 'Correct', exact: true }).click();
+  await expect(last.locator('textarea')).toHaveValue('Saved note 200');
+  expect(writes).toEqual([]);
+  await last.getByLabel('Note text').fill('Corrected note');
+  await last.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect.poll(() => writes.length).toBe(1);
+  await expect(last.getByRole('button', { name: 'Cancel', exact: true })).toBeDisabled();
+  await expect(last.getByLabel('Note text')).toBeDisabled();
+  releaseSave();
+  await expect(last.getByText('Correction unavailable', { exact: true })).toBeVisible();
+  await expect(last.getByLabel('Note text')).toHaveValue('Corrected note');
+  await last.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(last.locator('.body')).toHaveText('Corrected note');
+  expect(writes).toEqual([{ body: 'Corrected note' }, { body: 'Corrected note' }]);
+  expect(errors).toEqual([]);
+});
+
+test('saved note paragraphs preserve line breaks and fit a phone', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 900 });
+  await mockApi(page);
+  await page.route('**/agents/a1/notes**', (route) =>
+    route.fulfill({
+      json: {
+        data: [
+          {
+            id: 'note',
+            body: `First paragraph\nSecond paragraph\n${'long-source-'.repeat(30)}`,
+            scope: 'agent',
+            createdBy: { type: 'agent', id: 'a1' },
+            createdAt: '2026-11-14T12:00:00Z'
+          }
+        ],
+        page: { offset: 0, limit: 100, total: 1 }
+      }
+    })
+  );
+  await page.goto('/app/#/agents/a1');
+  const body = page.locator('li .body');
+  await expect(body).toBeVisible();
+  await expect(body).toHaveCSS('white-space', 'pre-wrap');
+  await expect(page.getByRole('button', { name: 'Use only in its conversation' })).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await captureReviewScreenshot(page, {
+    path: testInfo.outputPath('saved-note-phone.png'),
+    fullPage: true
+  });
 });
