@@ -291,7 +291,7 @@ export class ConnectionService {
         approvalMethods:
           input.approvalMethods ??
           (input.allowedMethods ?? []).filter((method) => method !== 'GET'),
-        discoverable: input.discoverable ?? false,
+        discoverable: input.discoverable ?? true,
         createdByHumanId: admin.id
       })
       .catch(toNameTaken);

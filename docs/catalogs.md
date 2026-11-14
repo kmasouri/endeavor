@@ -92,13 +92,18 @@ executed request reuses its saved response or error. Relaxing the policy never a
 existing request or repeats an executed one. The connection, method, path and body must match
 the saved request, and live grants and connection limits are still checked before recovery.
 
-## Discovery and access requests (CA-38)
+## Discovery and access requests (CA-38, CA-114)
 
-A person can mark a skill or connection **discoverable** (`discoverable: true` on create,
-`PATCH /skills/:skillId`, or `PATCH /connections/:connectionId`; the catalog shows a checkbox).
-Entries are private by default. Discovery shows agents only the name, description, skill
-version, and connection scope. It never shows credentials or connected content, and it grants
-nothing.
+New skills and connections are **discoverable** by default. To hide an entry, clear the
+discovery checkbox in the catalog or send `discoverable: false` on create or in
+`PATCH /skills/:skillId` or `PATCH /connections/:connectionId`. Set it back to `true` to
+show it again. The upgrade preserves saved settings for existing entries because the old
+default and an explicit hide both stored `false`. Disabling an entry removes it from
+discovery until it is enabled again.
+
+Use agent-safe names, descriptions, and scope settings. Discovery shows those details and
+whether the agent already has access. Agents can use discovery to ask for access. Skill
+instructions, credentials, and connected content require their normal access checks.
 
 1. An agent calls `find_capabilities` to list enabled, discoverable entries and see whether it
    can already use each one.
