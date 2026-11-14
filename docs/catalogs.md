@@ -92,7 +92,7 @@ executed request reuses its saved response or error. Relaxing the policy never a
 existing request or repeats an executed one. The connection, method, path and body must match
 the saved request, and live grants and connection limits are still checked before recovery.
 
-## Discovery and access requests (CA-38, CA-114)
+## Discovery and access requests (CA-38)
 
 New skills and connections are **discoverable** by default. To hide an entry, clear the
 discovery checkbox in the catalog or send `discoverable: false` on create or in
