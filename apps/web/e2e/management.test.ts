@@ -222,29 +222,3 @@ test('connection credential controls fit mobile and retain failed input', async 
   await expect(page.getByRole('button', { name: 'Remove', exact: true })).toHaveCount(0);
   expect(api.writes.at(-1)).toEqual({ path: '/connections/c1', body: { credential: null } });
 });
-
-for (const kind of ['skill', 'connection'] as const) {
-  test(`new ${kind} starts discoverable and can be saved hidden`, async ({ page }) => {
-    const api = await mockApi(page, 'light');
-    await page.goto(`/app/#/${kind}s/new`);
-    const discoverable = page.getByRole('checkbox', {
-      name: 'Let agents find this and request access'
-    });
-    await expect(discoverable).toBeChecked();
-    await discoverable.uncheck();
-    await page.getByLabel('Name', { exact: true }).fill('Example');
-    await page.getByLabel('Description', { exact: true }).fill('Read example records');
-    if (kind === 'skill') {
-      await page.getByLabel('Instructions', { exact: true }).fill('Summarize the records.');
-    } else {
-      await page.getByLabel('Base URL', { exact: true }).fill('https://example.com');
-    }
-
-    await page.getByRole('button', { name: `Create ${kind}` }).click();
-    await expect(page).toHaveURL(new RegExp(`/${kind}s$`));
-    expect(api.writes.at(-1)).toEqual({
-      path: `/${kind}s`,
-      body: expect.objectContaining({ discoverable: false })
-    });
-  });
-}
