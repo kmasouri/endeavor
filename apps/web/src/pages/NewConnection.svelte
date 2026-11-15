@@ -1,29 +1,36 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { api, HTTP_METHODS, type Connection, type HttpMethod } from '../api';
   import CheckGroup from '../CheckGroup.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
   import PageHeader from '../PageHeader.svelte';
   import './creation.css';
+  import { type PluginServer } from '../plugin-package';
   import { createAction, go } from '../state.svelte';
 
+  let { imported, onCreated, onCancel }: {
+    imported?: PluginServer;
+    onCreated?: (connection: Connection) => void;
+    onCancel?: () => void;
+  } = $props();
+  const source = untrack(() => imported);
   const methodOptions = HTTP_METHODS.map((method) => ({ value: method, label: method }));
 
-  const example = new URLSearchParams(window.location.hash.split('?')[1]).get('example');
+  const example = source ? null : new URLSearchParams(window.location.hash.split('?')[1]).get('example');
   const notion = example === 'notion';
   const github = example === 'github';
   const executor = example === 'executor';
-  let kind = $state<'http' | 'mcp'>(notion || github || executor ? 'mcp' : 'http');
-  let authMethod = $state<'none' | 'header' | 'oauth'>(notion ? 'oauth' : 'header');
+  let kind = $state<'http' | 'mcp'>(source || notion || github || executor ? 'mcp' : 'http');
+  let authMethod = $state<'none' | 'header' | 'oauth'>(source ? 'none' : notion ? 'oauth' : 'header');
   let tools = $state('');
   let freeTools = $state('');
   const names = (text: string) =>
     text.split(/[\n,]/).map((name) => name.trim()).filter(Boolean);
-  let name = $state(notion ? 'Notion' : github ? 'GitHub' : executor ? 'Isolated execution' : '');
-  let description = $state(notion ? 'Search and read Notion documentation.' : github ? 'Read repositories and collaborate on pull requests.' : executor ? 'Edit task checkouts and run builds and tests in isolated containers.' : '');
+  let name = $state(source?.name ?? (notion ? 'Notion' : github ? 'GitHub' : executor ? 'Isolated execution' : ''));
+  let description = $state(source ? `MCP server declared by the plugin: ${source.name}.` : notion ? 'Search and read Notion documentation.' : github ? 'Read repositories and collaborate on pull requests.' : executor ? 'Edit task checkouts and run builds and tests in isolated containers.' : '');
   let discoverable = $state(true);
-  let baseUrl = $state(notion ? 'https://mcp.notion.com/mcp' : github ? 'https://api.githubcopilot.com/mcp/' : executor ? 'http://executor:3200/mcp' : '');
+  let baseUrl = $state(source?.url ?? (notion ? 'https://mcp.notion.com/mcp' : github ? 'https://api.githubcopilot.com/mcp/' : executor ? 'http://executor:3200/mcp' : ''));
   let authHeader = $state('Authorization');
   let credential = $state('');
   let allowedMethods = $state<HttpMethod[]>(['GET']);
@@ -57,30 +64,27 @@
               })
         });
         if (!active) return;
-        if (useOAuth) go(`/connections/${connection.id}?signIn=1`);
+        if (onCreated) onCreated(connection);
+        else if (useOAuth) go(`/connections/${connection.id}?signIn=1`);
         else go('/connections');
       });
   };
 </script>
 
-<div class="creation-page">
-  <a class="creation-back" href="#/connections">← Connections</a>
-  <PageHeader
-    title="New connection"
-    subtitle="Connect an HTTP API or MCP server and choose what agents can call."
-  />
-
+{#snippet form()}
   <form onsubmit={create} class="creation-form">
     <fieldset class="stack">
       <legend>Profile</legend>
-      <p class="caption">Examples: <a href="#/connections/new?example=notion">Notion</a> · <a href="#/catalogs/connections/new?example=github">GitHub MCP</a> · <a href="#/catalogs/connections/new?example=executor">Isolated execution</a></p>
-      <label>
-        Connection type
-        <select bind:value={kind} onchange={(event) => { if (event.currentTarget.value === 'http' && authMethod === 'oauth') authMethod = 'none'; }}>
-          <option value="http">HTTP API</option>
-          <option value="mcp">MCP server</option>
-        </select>
-      </label>
+      {#if !source}
+        <p class="caption">Examples: <a href="#/connections/new?example=notion">Notion</a> · <a href="#/catalogs/connections/new?example=github">GitHub MCP</a> · <a href="#/catalogs/connections/new?example=executor">Isolated execution</a></p>
+        <label>
+          Connection type
+          <select bind:value={kind} onchange={(event) => { if (event.currentTarget.value === 'http' && authMethod === 'oauth') authMethod = 'none'; }}>
+            <option value="http">HTTP API</option>
+            <option value="mcp">MCP server</option>
+          </select>
+        </label>
+      {/if}
       <div class="grid2">
         <label>
           Name
@@ -185,8 +189,26 @@
     </fieldset>
     <ErrorNote error={action.error} />
     <div class="savebar">
-      <a href="#/connections">Cancel</a>
-      <button disabled={action.busy || !name.trim() || !description.trim() || !baseUrl.trim()}>{kind === 'mcp' && authMethod === 'oauth' ? 'Create and sign in' : 'Create connection'}</button>
+      {#if onCancel}
+        <button type="button" class="secondary" disabled={action.busy} onclick={onCancel}>Cancel</button>
+      {:else}
+        <a href="#/connections">Cancel</a>
+      {/if}
+      <button disabled={action.busy || !name.trim() || !description.trim() || !baseUrl.trim()}>{!source && kind === 'mcp' && authMethod === 'oauth' ? 'Create and sign in' : 'Create connection'}</button>
     </div>
   </form>
-</div>
+{/snippet}
+
+{#if source}
+  {@render form()}
+{:else}
+  <div class="creation-page">
+    <a class="creation-back" href="#/connections">← Connections</a>
+    <PageHeader
+      title="New connection"
+      subtitle="Connect an HTTP API or MCP server and choose what agents can call."
+    />
+
+    {@render form()}
+  </div>
+{/if}

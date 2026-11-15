@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import DeleteAgent from './DeleteAgent.svelte';
   import Avatar from '../Avatar.svelte';
   import {
@@ -20,7 +21,7 @@
   import AgentStatus from './AgentStatus.svelte';
   import { loadAll, listVersionChanges } from './agent-data';
   import './agents.css';
-  let { agentId }: { agentId: string } = $props();
+  let { agentId, initialConfiguration }: { agentId: string; initialConfiguration: boolean } = $props();
   const agent = createLoad(
     () => api.get<Agent>(`/agents/${agentId}`),
     () => [agentId]
@@ -43,7 +44,7 @@
     () => []
   );
   let deleting = $state(false);
-  let tab = $state('Overview');
+  let tab = $state(untrack(() => initialConfiguration ? 'Configuration' : 'Overview'));
   let editingProfile = $state(false);
   const action = createAction();
   const reloadAll = () => {

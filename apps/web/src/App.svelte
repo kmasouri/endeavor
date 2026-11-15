@@ -18,6 +18,7 @@
   import AgentsPage from './pages/AgentsPage.svelte';
   import NewAgentPage from './pages/NewAgentPage.svelte';
   import CatalogEntryPage from './pages/CatalogEntryPage.svelte';
+  import PluginsPage from './pages/PluginsPage.svelte';
   import CatalogsPage from './pages/CatalogsPage.svelte';
   import NewSkill from './pages/NewSkill.svelte';
   import NewConnection from './pages/NewConnection.svelte';
@@ -276,7 +277,7 @@
       <nav aria-label="Main">
         <button class="quiet sidebar-new-request" aria-label="New endeavor" title="New endeavor" onclick={() => newEndeavor()}><Icon name="edit" /><span class="sidebar-label">New endeavor</span></button>
         {#key actorId}<ProjectSidebar projects={visibleProjects} conversations={recent} selectedProjectId={section === 'new-endeavor' ? draftProjectId ?? undefined : currentProjectId ?? undefined} selectedConversationId={section === 'conversations' ? id : undefined} projectSelected={section === 'projects' && Boolean(id)} projectError={projects.error} conversationError={conversations.error} onNewEndeavor={newEndeavor} onEditProject={(project) => (projectEditor = { project })} onNavigate={() => { if (window.innerWidth < 700) collapsed = true; }} />{/key}
-        {#each [['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['skills', 'Skills', 'file'], ['connections', 'Connections', 'connections'], ['setup', 'Setup', 'setup']] as [path, label, icon] (path)}
+        {#each [['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['plugins', 'Plugins', 'catalogs'], ['skills', 'Skills', 'file'], ['connections', 'Connections', 'connections'], ['setup', 'Setup', 'setup']] as [path, label, icon] (path)}
           <a
             class:active={navigationSection === path}
             href={`#/${path}`}
@@ -373,9 +374,11 @@
         {:else if section === 'agents' && id === 'new'}
           <NewAgentPage />
         {:else if section === 'agents' && id}
-          <AgentPage agentId={id} />
+          {#key id}<AgentPage agentId={id} initialConfiguration={new URLSearchParams(hash.split('?')[1]).get('tab') === 'configuration'} />{/key}
         {:else if section === 'agents'}
           <AgentsPage />
+        {:else if section === 'plugins'}
+          {#key actorId}<PluginsPage />{/key}
         {:else if (catalogKind === 'skills' || catalogKind === 'connections') && (id === 'new' || (section === 'catalogs' && route[2] === 'new'))}
           {#if catalogKind === 'skills'}<NewSkill />{:else}<NewConnection />{/if}
         {:else if (section === 'skills' || section === 'connections') && id}
