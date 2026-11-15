@@ -96,6 +96,9 @@ async function fixture(page: Page, theme = 'dark') {
         data,
         page: { total, offset: Number(url.searchParams.get('offset') ?? 0), limit: 1 }
       });
+    if (req.method() === 'PUT' && url.pathname.endsWith('/typing')) {
+      return reply({ data: { typingHumanIds: [] } });
+    }
     if (req.method() !== 'GET') {
       const action = /^\/tasks\/([^/]+)\/(pause|resume|cancel)$/.exec(url.pathname);
       if (action) {

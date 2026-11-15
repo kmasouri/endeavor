@@ -80,6 +80,9 @@ async function mockApi(page: Page, options: Options = {}) {
       data,
       page: { limit: 100, offset: Number(url.searchParams.get('offset') ?? 0), total }
     });
+    if (request.method() === 'PUT' && url.pathname.endsWith('/typing')) {
+      return reply({ data: { typingHumanIds: [] } });
+    }
     if (request.method() !== 'GET') state.writes.push(`${request.method()} ${url.pathname}`);
     if (url.pathname === '/humans')
       return reply({

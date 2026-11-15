@@ -145,6 +145,7 @@ export interface Member extends AgentAppearance, AgentProfileFields {
 
 export interface ConversationDetails extends Conversation {
   members: Member[];
+  typingHumanIds: string[];
 }
 
 export interface Message {

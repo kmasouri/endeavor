@@ -120,6 +120,67 @@ function setup() {
 }
 
 describe('ConversationService', () => {
+  it('allows only human members to publish typing presence', async () => {
+    const { service, humans } = setup();
+    humans.getById.mockImplementation(async (id) =>
+      id === KIM ? kim : id === LEE ? { ...kim, id: LEE, name: 'Lee' } : null
+    );
+    await expect(
+      service.updateTyping(LEE, CONV, {
+        clientId: '00000000-0000-4000-8000-0000000000c1',
+        typing: true
+      })
+    ).rejects.toMatchObject({ name: 'notConversationMember' });
+  });
+
+  it('isolates typing by conversation, keeps other sessions, clears on send, and expires disconnects', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-14T17:00:00-05:00') });
+    try {
+      const { service, conversations, humans } = setup();
+      const otherConversation = { ...conversation, id: '00000000-0000-4000-8000-0000000000f2' };
+      humans.getById.mockImplementation(async (id) =>
+        id === KIM ? kim : id === LEE ? { ...kim, id: LEE, name: 'Lee' } : null
+      );
+      conversations.getById.mockImplementation(async (id) =>
+        id === otherConversation.id ? otherConversation : conversation
+      );
+      conversations.getMember.mockImplementation(async (conversationId, ref) =>
+        [KIM, LEE].includes(ref.id) ? { ...member('human', ref.id), conversationId } : null
+      );
+      conversations.listMembers.mockResolvedValue([
+        member('human', KIM),
+        member('human', LEE),
+        member('agent', AGENT)
+      ]);
+
+      await service.updateTyping(KIM, CONV, { clientId: 'session-1', typing: true });
+      await service.updateTyping(KIM, CONV, { clientId: 'session-2', typing: true });
+      expect((await service.getConversation(LEE, CONV)).typingHumanIds).toEqual([KIM]);
+      expect((await service.getConversation(KIM, CONV)).typingHumanIds).toEqual([]);
+
+      await service.updateTyping(KIM, CONV, { clientId: 'session-1', typing: false });
+      expect((await service.getConversation(LEE, CONV)).typingHumanIds).toEqual([KIM]);
+      await service.updateTyping(KIM, otherConversation.id, {
+        clientId: 'other-session',
+        typing: true
+      });
+      await service.updateTyping(KIM, CONV, { clientId: 'session-2', typing: false });
+      expect((await service.getConversation(LEE, CONV)).typingHumanIds).toEqual([]);
+      expect((await service.getConversation(LEE, otherConversation.id)).typingHumanIds).toEqual([
+        KIM
+      ]);
+
+      await jest.advanceTimersByTimeAsync(6_001);
+      expect((await service.getConversation(LEE, otherConversation.id)).typingHumanIds).toEqual([]);
+
+      await service.updateTyping(KIM, CONV, { clientId: 'send-session', typing: true });
+      await service.postMessage(KIM, CONV, { body: 'Sent' });
+      expect((await service.getConversation(LEE, CONV)).typingHumanIds).toEqual([]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('retains deleted-agent membership for attribution while flagging it unavailable for mentions', async () => {
     const { service, agents } = setup();
     agents.getById.mockResolvedValue({

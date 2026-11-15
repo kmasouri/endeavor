@@ -115,7 +115,7 @@
   const details = createLoad(
     () => api.get<ConversationDetails>(`/conversations/${conversationId}`),
     () => [conversationId],
-    4000
+    2000
   );
   const messages = createMessageFeed(() => conversationId);
   const routing = createLoad(
@@ -264,6 +264,11 @@
     (approvals.data ?? []).filter((approval) => taskIds.has(approval.taskId))
   );
   let busy = $derived(taskList.filter((task) => !['completed', 'cancelled'].includes(task.state)));
+  let typingPeople = $derived(
+    (conversation.typingHumanIds ?? [])
+      .map((id) => conversation.members.find((member) => member.participant.type === 'human' && member.participant.id === id))
+      .filter((member) => member !== undefined)
+  );
   let artifacts = $derived(
     collectConversationArtifacts(outputs.data ?? [], messages.data?.data ?? [], taskList)
   );
@@ -483,7 +488,10 @@
         {#if newMessages > 0}<button class="secondary new-messages" onclick={scrollToLatest}>
           {newMessages} new {newMessages === 1 ? 'message' : 'messages'} ↓
         </button>{/if}
-        {#if busy.length}<div class="live-status caption" aria-live="polite">
+        {#if busy.length || typingPeople.length}<div class="live-status caption" aria-live="polite">
+            {#each typingPeople as person (person.participant.id)}<span
+                ><span aria-hidden="true"><Avatar name={person.name} id={person.participant.id} appearance={person} size="sm" /></span><span><strong>{person.name}</strong> is typing…</span></span
+              >{/each}
             {#each busy as task (task.id)}<span
                 ><span aria-hidden="true"><Avatar name={nameOf({ type: 'agent', id: task.ownerAgentId })} id={task.ownerAgentId} appearance={appearanceOf(task.ownerAgentId)} agent size="sm" /></span><span><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
                 {#if waitingApproval(task)}is <span class="waiting-ok">waiting for your OK</span>

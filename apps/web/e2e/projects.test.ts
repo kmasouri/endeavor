@@ -43,6 +43,7 @@ async function fixture(page: Page, theme = 'light') {
       goal: 'Build a report',
       doneCriteria: 'The report is checked',
       state: 'open',
+      typingHumanIds: [],
       members: [member],
       createdAt: '2026-11-04T01:00:00Z'
     },
@@ -53,6 +54,7 @@ async function fixture(page: Page, theme = 'light') {
       goal: 'Old request',
       doneCriteria: 'Finished',
       state: 'closed',
+      typingHumanIds: [],
       members: [member],
       createdAt: '2026-11-04T01:00:00Z'
     },
@@ -63,6 +65,7 @@ async function fixture(page: Page, theme = 'light') {
       goal: 'Beta request',
       doneCriteria: 'Finished',
       state: 'open',
+      typingHumanIds: [],
       members: [member],
       createdAt: '2026-11-04T01:00:00Z'
     }
@@ -95,6 +98,9 @@ async function fixture(page: Page, theme = 'light') {
       page: { limit: 100, offset: 0, total: data.length }
     });
     const body = method === 'GET' ? {} : (r.postDataJSON() ?? {});
+    if (method === 'PUT' && path.endsWith('/typing')) {
+      return reply({ data: { typingHumanIds: [] } });
+    }
     if (method !== 'GET') state.writes.push({ path, method, body });
     if (path === '/humans') return reply({ data: [person] });
     if (path === '/directory') return reply(list([]));

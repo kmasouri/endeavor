@@ -37,7 +37,8 @@ describe('conversation creation', () => {
       createdByHumanId: ACTOR,
       budgetUsd: null,
       createdAt: new Date(),
-      members: []
+      members: [],
+      typingHumanIds: []
     });
     const response = await app.inject({
       method: 'POST',
@@ -110,7 +111,8 @@ describe('conversation creation', () => {
         createdByHumanId: ACTOR,
         budgetUsd: null,
         createdAt: new Date(),
-        members: []
+        members: [],
+        typingHumanIds: []
       };
       const create = jest
         .spyOn(app.conversationService, 'createConversation')
@@ -184,6 +186,50 @@ describe('marking a conversation read', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().data).toEqual({ conversationId: CONVERSATION, unreadCount: 0 });
     expect(markRead).toHaveBeenCalledWith(ACTOR, CONVERSATION, { messageId: MESSAGE });
+    await app.close();
+  });
+});
+
+describe('human typing presence', () => {
+  const CONVERSATION = '00000000-0000-4000-8000-0000000000f1';
+  const CLIENT = '00000000-0000-4000-8000-0000000000c1';
+
+  it.each([{}, { clientId: 'bad', typing: true }, { clientId: CLIENT }, { clientId: CLIENT, typing: true, draft: 'private' }])(
+    'rejects an invalid typing heartbeat: %j',
+    async (payload) => {
+      const app = setupApp();
+      await app.ready();
+      const updateTyping = jest.spyOn(app.conversationService, 'updateTyping');
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/conversations/${CONVERSATION}/typing`,
+        headers: { 'x-actor-id': ACTOR },
+        payload
+      });
+      expect(response.statusCode).toBe(400);
+      expect(updateTyping).not.toHaveBeenCalled();
+      await app.close();
+    }
+  );
+
+  it('passes presence only to the service', async () => {
+    const app = setupApp();
+    await app.ready();
+    const updateTyping = jest
+      .spyOn(app.conversationService, 'updateTyping')
+      .mockResolvedValue({ typingHumanIds: [PERSON] });
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/conversations/${CONVERSATION}/typing`,
+      headers: { 'x-actor-id': ACTOR },
+      payload: { clientId: CLIENT, typing: true }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual({ typingHumanIds: [PERSON] });
+    expect(updateTyping).toHaveBeenCalledWith(ACTOR, CONVERSATION, {
+      clientId: CLIENT,
+      typing: true
+    });
     await app.close();
   });
 });

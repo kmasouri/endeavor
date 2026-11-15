@@ -246,6 +246,13 @@ and `avatarIcon` overrides. `null` uses the existing ID-derived color or profile
 `PATCH /agents/:agentId` accepts either field independently; omission preserves the saved value,
 and explicit `null` resets it. See [agent appearance](agents.md#avatar-appearance-ca-92) for choices.
 
+### Human typing presence
+
+`GET /conversations/:conversationId` includes `typingHumanIds`, the IDs of other human members
+with an active short-lived browser heartbeat. The caller is omitted. The array contains no draft
+text and drops expired sessions. `PUT /conversations/:conversationId/typing` returns the same
+shape in `data` after setting the caller's browser session active or inactive.
+
 ## Agent public profiles
 
 Agent create, read, list, and profile-update responses include nullable `produces` and

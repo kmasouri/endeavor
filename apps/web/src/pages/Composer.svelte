@@ -41,6 +41,11 @@
     onAttach: () => void;
   } = $props();
   let revisionSent = $state('');
+  const typingClientId = crypto.randomUUID();
+  let typing = false;
+  let lastTypingHeartbeat = 0;
+  let typingIdleTimer: ReturnType<typeof setTimeout> | undefined;
+  let typingRequest: Promise<unknown> = Promise.resolve();
   let mentions = $state<ParticipantRef[]>([]);
   let input = $state<HTMLTextAreaElement>();
   let caret = $state(0);
@@ -94,8 +99,36 @@
     input?.focus();
     input?.setSelectionRange(caret, caret);
   };
+  const publishTyping = (next: boolean) => {
+    if (typing === next && (!next || Date.now() - lastTypingHeartbeat < 2_000)) return;
+    typing = next;
+    if (next) lastTypingHeartbeat = Date.now();
+    // Keep start/stop writes ordered when a blur or send follows the first heartbeat quickly.
+    typingRequest = typingRequest
+      .then(() =>
+        api.put(`/conversations/${conversationId}/typing`, {
+          clientId: typingClientId,
+          typing: next
+        })
+      )
+      .catch(() => undefined);
+  };
+  const stopTyping = () => {
+    clearTimeout(typingIdleTimer);
+    if (typing) publishTyping(false);
+  };
+  const noteTyping = (value: string) => {
+    clearTimeout(typingIdleTimer);
+    if (!value.trim()) {
+      stopTyping();
+      return;
+    }
+    publishTyping(true);
+    typingIdleTimer = setTimeout(stopTyping, 2_500);
+  };
   let active = true;
   onDestroy(() => {
+    stopTyping();
     active = false;
   });
   let pendingMessage: {
@@ -109,6 +142,7 @@
   } | null = null;
   const send = () => {
     if (!body.trim() || action.busy) return;
+    stopTyping();
     // Text pasted or typed in full works just like selecting a member in the picker.
     const selectedMembers = directory
       .filter(
@@ -269,7 +303,9 @@
         caret = event.currentTarget.selectionStart;
         selected = 0;
         dismissed = false;
+        noteTyping(event.currentTarget.value);
       }}
+      onblur={stopTyping}
       onclick={(event) => {
         caret = event.currentTarget.selectionStart;
         dismissed = false;

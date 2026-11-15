@@ -12,6 +12,7 @@ import {
   markReadHandler,
   postMessageHandler,
   reopenConversationHandler,
+  updateTypingHandler,
   updateConversationHandler
 } from '../../handlers';
 import {
@@ -25,6 +26,7 @@ import {
   listMessagesQuerySchema,
   markReadBodySchema,
   postMessageBodySchema,
+  updateTypingBodySchema,
   updateConversationBodySchema
 } from '../../schemas';
 
@@ -169,6 +171,21 @@ export async function conversationsRouter(fastifyInstance: FastifyInstance): Pro
       }
     },
     markReadHandler
+  );
+
+  fastifyInstance.put(
+    '/conversations/:conversationId/typing',
+    {
+      schema: {
+        description:
+          "Set this browser session's short-lived human typing presence. Send typing: true as a heartbeat while composing and typing: false on send, blur, or stop. Draft text is never sent. Presence expires automatically if the browser disconnects. Members only.",
+        tags: ['conversations'],
+        headers: actorHeadersSchema,
+        params: conversationParamsSchema,
+        body: updateTypingBodySchema
+      }
+    },
+    updateTypingHandler
   );
 
   fastifyInstance.post(
