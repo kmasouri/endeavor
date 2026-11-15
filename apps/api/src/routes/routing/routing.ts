@@ -13,7 +13,7 @@ export async function routingRouter(app: FastifyInstance): Promise<void> {
     {
       schema: {
         description:
-          'Routing decisions and unanswered choices visible to the acting person, newest first, with limit/offset pagination.',
+          'Routing decisions and unanswered choices visible to the acting person, newest first, with limit/offset pagination. Waiting decisions include every currently eligible agent with public specialty text, the recommendation when available, the linked Decision Engine message, and the deciding human after resolution.',
         tags: ['routing'],
         headers: actorHeadersSchema,
         params: conversationParamsSchema,

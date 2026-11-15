@@ -34,7 +34,8 @@ export interface RoutingRepository {
       token?: string;
       actorId?: string;
       cancelTask?: { id: string; state: string };
-      message: RoutingMessageInput | null;
+      decisionMessage: RoutingMessageInput | null;
+      deliveryMessage: RoutingMessageInput | null;
       deliveryMessageId: string | null;
     }
   ): Promise<boolean>;

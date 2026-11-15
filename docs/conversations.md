@@ -49,9 +49,11 @@ The client only sees what the caller passes in: the message or result, the goal,
 
 Each decision comes with a confidence from 0 to 1 and every option ranked. The caller acts
 alone only when the pick is an agent (or none, or done) and the confidence meets the project’s
-threshold. Otherwise it saves a question and offers eligible member agents and No one. No
-delivery is created until a person chooses. Without an OpenAI key, or when a model call fails,
-it asks a person. Scheduled completions use the same waiting behavior.
+threshold. Otherwise it saves a Decision Engine message in reply to the request. The message
+explains the reason, keeps a low-confidence agent pick as the recommendation, and offers Assign,
+Choose another agent, and Leave unassigned. No delivery is created until a person chooses.
+Without an OpenAI key, or when a model call fails, it asks a person. Scheduled completions use
+the same waiting behavior.
 
 Projects can set a threshold from 0 to 1 in **Edit project**. Leaving it blank uses 0.6
 (from the CA-11 evaluation). Standalone endeavors also use 0.6. The service reads the setting
@@ -63,7 +65,7 @@ routed retroactively. Completed tasks with explicit outgoing agent deliveries by
 Automatic handoff chains stop after eight parents and ask a person. A done decision never closes
 the endeavor; a person still confirms completion.
 
-`GET /conversations/:conversationId/routing` returns visible decisions, newest first, with limit/offset pagination (50 by default).
+`GET /conversations/:conversationId/routing` returns visible decisions, newest first, with limit/offset pagination (50 by default). Each waiting decision includes every currently eligible agent's name and public specialty text, the recommendation when there is one, the linked Decision Engine message, and the person who decided after resolution. Callers may show five suggestions while searching the full eligible list.
 `POST /conversations/:conversationId/routing/:decisionId/choice` takes `agentId` (null means
 No one) and `revision`. Only members choose. Changing an automatic pick withdraws its pending
 delivery or cancels the active task it created before delivering the replacement. Completed work
@@ -78,7 +80,7 @@ and enabled state are checked again when the decision is saved. Model, token usa
 and outcome are stored with the decision. The `routing.decided` log records the threshold used.
 Human choices log a null threshold.
 `ROUTING_MODEL` defaults to `gpt-6-luna`; calls have a 30-second deadline and do not retry.
-The conversation shows the reason and a Change agent control, or choice buttons while waiting.
+The conversation keeps the reason and controls on the same Decision Engine message. The chosen outcome and person replace the waiting controls. Choosing an agent outside the recommendation requires confirmation; revision checks reject simultaneous or stale choices.
 
 Two engines implement it:
 

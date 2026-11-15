@@ -158,6 +158,25 @@ export interface Message {
   createdAt: string;
 }
 
+export interface RoutingDecision {
+  id: string;
+  messageId: string | null;
+  decisionMessageId: string | null;
+  kind: 'starter' | 'handoff';
+  status: 'waiting' | 'resolved';
+  selectedAgentId: string | null;
+  decidedByHumanId: string | null;
+  outcome: string | null;
+  reason: string;
+  revision: number;
+  candidates: {
+    id: string;
+    name: string;
+    purpose?: string;
+    recommended?: boolean;
+  }[];
+}
+
 export interface DirectoryEntry extends AgentAppearance, AgentProfileFields {
   skillNames?: string[];
   id: string;

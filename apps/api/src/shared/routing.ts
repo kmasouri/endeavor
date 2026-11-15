@@ -10,9 +10,11 @@ export interface RoutingRecord {
   outcome: string | null;
   reason: string;
   confidence: number;
-  candidates: { id: string; name: string }[];
+  candidates: { id: string; name: string; purpose?: string; recommended?: boolean }[];
   revision: number;
   deliveryMessageId: string | null;
+  decisionMessageId: string | null;
+  decidedByHumanId: string | null;
   createdAt: Date;
 }
 

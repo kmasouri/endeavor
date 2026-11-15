@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { FastifyInstance } from 'fastify';
-import { RoutingRecord } from '../../shared/routing';
+import { RoutingMessageInput, RoutingRecord } from '../../shared/routing';
 import { RoutingRepository, RoutingSave } from './routing.repository';
 
 function record(row: Record<string, unknown>): RoutingRecord {
@@ -18,6 +18,8 @@ function record(row: Record<string, unknown>): RoutingRecord {
     candidates: row.candidates as RoutingRecord['candidates'],
     revision: row.revision as number,
     deliveryMessageId: row.delivery_message_id as string | null,
+    decisionMessageId: row.decision_message_id as string | null,
+    decidedByHumanId: row.decided_by_human_id as string | null,
     createdAt: row.created_at as Date
   };
 }
@@ -231,9 +233,7 @@ export class RoutingPostgresRepository implements RoutingRepository {
           }
         }
       }
-      let deliveryMessageId = options.deliveryMessageId;
-      if (options.message) {
-        const m = options.message;
+      const insertMessage = async (m: RoutingMessageInput): Promise<string> => {
         const saved = await client.query(
           `INSERT INTO endeavor.messages
           (id, conversation_id, author_type, author_id, body, mentions, in_reply_to_message_id, task_id, client_key)
@@ -250,8 +250,13 @@ export class RoutingPostgresRepository implements RoutingRepository {
             m.clientKey
           ]
         );
-        if (m.deliverToAgentIds.length) deliveryMessageId = saved.rows[0].id;
-      }
+        return saved.rows[0].id;
+      };
+      const decisionMessageId = options.decisionMessage
+        ? await insertMessage(options.decisionMessage)
+        : null;
+      let deliveryMessageId = options.deliveryMessageId;
+      if (options.deliveryMessage) deliveryMessageId = await insertMessage(options.deliveryMessage);
       if (input.selectedAgentId && deliveryMessageId) {
         await client.query(
           `INSERT INTO endeavor.message_deliveries(message_id, agent_id)
@@ -263,7 +268,8 @@ export class RoutingPostgresRepository implements RoutingRepository {
         `UPDATE endeavor.routing_decisions SET status=$2, selected_agent_id=$3,
         outcome=$4, reason=$5, confidence=$6, candidates=$7, model=$8, usage=$9,
         revision=revision+1, lease_token=NULL, claimed_until=NULL, delivery_message_id=$10,
-        decided_by_human_id=$11, updated_at=now() WHERE id=$1`,
+        decision_message_id=COALESCE(decision_message_id,$11),
+        decided_by_human_id=$12, updated_at=now() WHERE id=$1`,
         [
           id,
           input.status,
@@ -275,6 +281,7 @@ export class RoutingPostgresRepository implements RoutingRepository {
           input.model,
           JSON.stringify(input.usage),
           deliveryMessageId,
+          decisionMessageId,
           options.actorId ?? null
         ]
       );

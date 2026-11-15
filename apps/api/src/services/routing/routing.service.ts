@@ -73,7 +73,18 @@ export class RoutingService {
       this.repository.list(conversationId, since, input.limit, input.offset),
       this.repository.count(conversationId, since)
     ]);
-    return { decisions, total };
+    const current = await Promise.all(
+      decisions.map(async (decision) => {
+        if (decision.status !== 'waiting') return decision;
+        const recommendedAgentId = decision.candidates.find((candidate) => candidate.recommended)?.id;
+        const candidates = await this.candidates(conversationId, decision);
+        return {
+          ...decision,
+          candidates: this.visibleCandidates(candidates, recommendedAgentId)
+        };
+      })
+    );
+    return { decisions: current, total };
   }
 
   async choose(
@@ -110,7 +121,10 @@ export class RoutingService {
         outcome,
         reason,
         confidence: job.confidence,
-        candidates,
+        candidates: this.visibleCandidates(
+          candidates,
+          job.candidates.find((candidate) => candidate.recommended)?.id
+        ),
         model: null,
         usage: null
       },
@@ -168,6 +182,18 @@ export class RoutingService {
       });
     }
     return candidates;
+  }
+
+  private visibleCandidates(
+    candidates: RoutingAgent[],
+    recommendedAgentId?: string
+  ): RoutingRecord['candidates'] {
+    return candidates.map(({ id, name, purpose }) => ({
+      id,
+      name,
+      purpose,
+      ...(id === recommendedAgentId && { recommended: true })
+    }));
   }
 
   private async decide(job: RoutingRecord, token: string): Promise<void> {
@@ -284,7 +310,10 @@ export class RoutingService {
         outcome,
         reason,
         confidence,
-        candidates: candidates.map(({ id, name }) => ({ id, name })),
+        candidates: this.visibleCandidates(
+          candidates,
+          outcome === 'ask' && selected ? selected.id : undefined
+        ),
         model: decision?.servedModel ?? null,
         usage: decision?.usage ?? null
       },
@@ -303,7 +332,7 @@ export class RoutingService {
     const handoff = job.kind === 'handoff' && selected && task;
     const source = job.messageId ? await this.messages.getById(job.messageId) : null;
     const manualStarter = options.actorId && selected && job.kind === 'starter';
-    const body = manualStarter
+    const deliveryBody = manualStarter
       ? `@${input.candidates.find((a) => a.id === selected)?.name}: ${source?.body ?? conversation.goal ?? ''}`
       : handoff
         ? `@${input.candidates.find((a) => a.id === selected)?.name}: Continue toward this endeavor's goal: ${conversation.goal ?? task.brief}\n\n${input.reason}`
@@ -323,20 +352,34 @@ export class RoutingService {
       cancelTask,
       deliveryMessageId:
         selected && job.kind === 'starter' && !manualStarter ? job.messageId : null,
-      message:
-        input.status === 'skipped'
+      decisionMessage:
+        input.status === 'skipped' || options.actorId
           ? null
           : {
               conversationId: job.conversationId,
-              authorType: manualStarter ? 'human' : handoff ? 'agent' : 'system',
-              authorId: manualStarter ? options.actorId! : handoff ? task.ownerAgentId : null,
-              body,
-              mentions: handoff || manualStarter ? [{ type: 'agent', id: selected }] : [],
+              authorType: 'system',
+              authorId: null,
+              body: input.reason,
+              mentions: [],
               inReplyToMessageId: job.messageId,
-              taskId: handoff ? task.id : null,
-              deliverToAgentIds: handoff || manualStarter ? [selected] : [],
-              clientKey: `routing:${job.id}:${job.revision}`
+              taskId: null,
+              deliverToAgentIds: [],
+              clientKey: `routing-decision:${job.id}`
+            },
+      deliveryMessage:
+        selected && (handoff || manualStarter)
+          ? {
+              conversationId: job.conversationId,
+              authorType: manualStarter ? 'human' : 'agent',
+              authorId: manualStarter ? options.actorId! : task!.ownerAgentId,
+              body: deliveryBody,
+              mentions: [{ type: 'agent', id: selected }],
+              inReplyToMessageId: job.messageId,
+              taskId: handoff ? task!.id : null,
+              deliverToAgentIds: [selected],
+              clientKey: `routing-delivery:${job.id}:${job.revision}`
             }
+          : null
     });
     if (saved)
       this.logger.onDecision(
