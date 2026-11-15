@@ -1,4 +1,5 @@
 <script lang="ts">
+  import CatalogNavigation from './CatalogNavigation.svelte';
   import ConnectionStatus from '../ConnectionStatus.svelte';
   import { authenticationLabel } from '../connection-auth';
   import PageHeader from '../PageHeader.svelte';
@@ -24,6 +25,7 @@
   <PageHeader {title} subtitle={kind === 'skills' ? 'Reusable instructions for your agents.' : 'HTTP APIs and MCP servers your agents can use.'}>
     {#snippet actions()}<button onclick={() => go(`/${kind}/new`)}>+ Create {singular}</button>{/snippet}
   </PageHeader>
+  <CatalogNavigation current={kind} />
   <ErrorNote error={entries.error} />
   {#if !entries.data && !entries.error}<p class="muted">Loading {kind}…</p>{/if}
   {#if entries.data}

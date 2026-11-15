@@ -15,6 +15,39 @@ Cancel and successful saves return to the matching catalog list. Failed saves ke
 entered values and show the error on the form. Connection creation includes Profile,
 Authentication, and Access sections for both HTTP APIs and MCP servers.
 
+## Importing plugin packages (CA-115)
+
+Open **Plugins** in the catalog and select the extracted package folder. Endeavor
+reads the manifest and displays the package contents in the browser. Reviewing a
+package does not upload the folder, run its contents, or call its endpoints.
+
+- [Agent Plugins 1.0](https://agent-plugins.org/specification) uses a root
+  `plugin.json` with the 1.0 schema, `skills/<name>/SKILL.md`, and optional
+  `mcp.json` with the matching schema.
+- [Codex](https://developers.openai.com/plugins/build/plugins) and
+  [Claude Code](https://code.claude.com/docs/en/plugins-reference) packages can
+  use their respective hidden manifest directories, `skills/`, and `.mcp.json`.
+  The adapters also read local skill directories and local MCP JSON paths or
+  inline maps declared in the manifest. The portable manifest takes precedence
+  when present.
+- Only the skill name, description, and Markdown instructions are imported.
+  Support files, hooks, apps, subprocess commands, package variables, and bundled
+  headers are skipped. URLs containing a username or password are skipped. Remote servers must use Streamable HTTP with a literal
+  HTTP or HTTPS endpoint.
+
+Review a skill's instructions and import it as a regular catalog entry. Map each
+remote server you want to an existing enabled MCP connection, or create one with
+Endeavor's standard form. Turn off discovery before saving an entry if you want
+to hide it from agents. New connections start with an empty tool list. Tools you add require approval
+unless you explicitly exempt them. Select the authentication method in the form
+and complete OAuth sign-in from the saved connection when needed.
+
+After saving or mapping an entry, choose an agent and open its configuration.
+Select the individual skills and connections, then save a version to grant
+access. The preview is temporary. Catalog entries and agent grants are saved
+through the same APIs as individual setup. Import works with folders you already
+have on disk. Marketplace browsing and package updates are outside this flow.
+
 ## Skills
 
 A skill is a named piece of guidance for a kind of work, such as "Billing lookup: use the Billing connection for invoice counts". Each skill has versions that never change once saved. A version contains instructions only. Mentioning an outside service in those instructions grants no access.
