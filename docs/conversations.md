@@ -215,6 +215,10 @@ Agents act only through these tools. The runner carries out each call:
 
 Agents attach outputs with `save_output`: text, links, data, logs, or a file from their workspace (`path`). A file is copied into the output, so it stays inspectable even if the workspace changes. `GET /tasks/:taskId/outputs` lists one task's outputs, and `GET /conversations/:conversationId/outputs` lists every task's outputs in a conversation, newest first. Each API output has `state: "draft"` while its task is active, waiting, blocked, or cancelled. It becomes `state: "final"` when the task completes. The state is derived from the task, so older outputs follow the same rule without a migration.
 
+Every agent receives platform conversation instructions alongside its configured instructions. Agents respond to questions, work requests, review feedback, corrections, and information needed to continue. They finish acknowledgement-only exchanges silently.
+
+`complete_task` accepts optional `post_result` (default `true`). With `false`, the runner saves the result in task outputs and completes without posting a chat message or starting a routing handoff. This also works after review approval or restart. An answer to an agent’s outstanding reply wait is posted even when `post_result` is false. Agents that already sent their answer can finish silently.
+
 When an agent calls `complete_task`:
 
 1. It must say the criteria are met, and explain how (`criteria_check`).
