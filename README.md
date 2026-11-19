@@ -32,7 +32,7 @@ The web interface uses Svelte 5 and Vite in `apps/web/`. It calls the API over H
 - **Tests** with Jest that don't need a database.
 - **Dockerfile** that builds a small image and doesn't run as root.
 - **Terraform** for a throwaway AWS test setup: network, load balancer, image registry, and containers on ECS Fargate.
-- **GitHub Actions** that run checks, publish release images, and optionally deploy to AWS.
+- **GitHub Actions** that run checks and publish release images. AWS deployment is paused.
 
 Clone [kmasouri/endeavor](https://github.com/kmasouri/endeavor):
 
@@ -221,7 +221,14 @@ docker compose up -d --no-build
 The app image contains the API and web interface. Postgres is a separate service in Compose.
 The optional coding executor still uses the setup in [docs/coding.md](docs/coding.md).
 
-### Enable AWS deployment
+### AWS deployment is paused
+
+The AWS job in `release.yml` is commented out. The manual deployment workflow is also
+commented out in `.github/workflows/deploy.yml.disabled`, which GitHub does not run.
+
+To restore AWS deployment, uncomment the AWS job and its publish outputs. For manual deployments,
+also rename `deploy.yml.disabled` to `deploy.yml` and uncomment its workflow contents. Then configure the settings
+below before enabling deployment.
 
 Set the repository variable `AWS_DEPLOY_ENABLED` to `true` to enable the AWS job. With this
 variable unset or false, releases publish to GHCR and skip AWS. Configure the following in the
@@ -240,7 +247,8 @@ its version tag and `latest`. It uses Skopeo to copy the image without rebuildin
 starts a new deployment using the existing task definition's `latest` tag. An enabled AWS job
 with missing configuration fails clearly; the GHCR publication is already complete.
 
-To redeploy an image already in ECR, run the `deploy` workflow by hand with its version tag.
+After restoring the manual workflow, redeploy an image already in ECR by running `deploy`
+with its version tag.
 This explicit AWS operation uses the sandbox configuration and does not create a new release.
 
 ## Browser regression tests

@@ -22,11 +22,12 @@ jobs:
     permissions:
       contents: read
       packages: write
-    outputs:
-      image: ${{ steps.release.outputs.image }}
-      version: ${{ steps.release.outputs.version }}
-      stable: ${{ steps.release.outputs.stable }}
-      digest: ${{ steps.build.outputs.digest }}
+    # AWS promotion outputs are paused with the deployment job.
+    # outputs:
+    #   image: ${{ steps.release.outputs.image }}
+    #   version: ${{ steps.release.outputs.version }}
+    #   stable: ${{ steps.release.outputs.stable }}
+    #   digest: ${{ steps.build.outputs.digest }}
 
     steps:
       - name: Checkout release tag
@@ -87,68 +88,69 @@ jobs:
           cache-from: type=gha,scope=release-image
           cache-to: type=gha,mode=max,scope=release-image
 
-  deploy-aws:
-    needs: publish
-    if: ${{ vars.AWS_DEPLOY_ENABLED == 'true' && needs.publish.outputs.stable == 'true' }}
-    runs-on: ubuntu-latest
-    environment: sandbox
-    permissions:
-      contents: read
-      packages: read
-      id-token: write
-    env:
-      AWS_REGION: ${{ vars.AWS_REGION }}
-      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-      ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-      ECS_SERVICE: ${{ vars.ECS_SERVICE }}
+  # AWS deployment is paused. Uncomment this job when AWS is configured.
+  # deploy-aws:
+  #   needs: publish
+  #   if: ${{ vars.AWS_DEPLOY_ENABLED == 'true' && needs.publish.outputs.stable == 'true' }}
+  #   runs-on: ubuntu-latest
+  #   environment: sandbox
+  #   permissions:
+  #     contents: read
+  #     packages: read
+  #     id-token: write
+  #   env:
+  #     AWS_REGION: ${{ vars.AWS_REGION }}
+  #     ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  #     ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+  #     ECS_SERVICE: ${{ vars.ECS_SERVICE }}
 
-    steps:
-      - name: Check AWS configuration
-        env:
-          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-        run: |
-          : "${AWS_ROLE_TO_ASSUME:?Set AWS_ROLE_TO_ASSUME in the sandbox environment}"
-          : "${AWS_REGION:?Set AWS_REGION in the sandbox environment}"
-          : "${ECR_REPOSITORY:?Set ECR_REPOSITORY in the sandbox environment}"
-          : "${ECS_CLUSTER:?Set ECS_CLUSTER in the sandbox environment}"
-          : "${ECS_SERVICE:?Set ECS_SERVICE in the sandbox environment}"
+  #   steps:
+  #     - name: Check AWS configuration
+  #       env:
+  #         AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+  #       run: |
+  #         : "${AWS_ROLE_TO_ASSUME:?Set AWS_ROLE_TO_ASSUME in the sandbox environment}"
+  #         : "${AWS_REGION:?Set AWS_REGION in the sandbox environment}"
+  #         : "${ECR_REPOSITORY:?Set ECR_REPOSITORY in the sandbox environment}"
+  #         : "${ECS_CLUSTER:?Set ECS_CLUSTER in the sandbox environment}"
+  #         : "${ECS_SERVICE:?Set ECS_SERVICE in the sandbox environment}"
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
-          aws-region: ${{ vars.AWS_REGION }}
+  #     - name: Configure AWS credentials
+  #       uses: aws-actions/configure-aws-credentials@v6
+  #       with:
+  #         role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+  #         aws-region: ${{ vars.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: ecr
-        uses: aws-actions/amazon-ecr-login@v2
+  #     - name: Login to Amazon ECR
+  #       id: ecr
+  #       uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: Login to GitHub Container Registry
+  #       uses: docker/login-action@v4
+  #       with:
+  #         registry: ghcr.io
+  #         username: ${{ github.actor }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Install image copy tool
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y skopeo
+  #     - name: Install image copy tool
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y skopeo
 
-      - name: Copy the published image to ECR
-        env:
-          SOURCE_IMAGE: ${{ needs.publish.outputs.image }}@${{ needs.publish.outputs.digest }}
-          DESTINATION_IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
-          VERSION: ${{ needs.publish.outputs.version }}
-        run: |
-          skopeo copy --all --preserve-digests --authfile "$HOME/.docker/config.json" \
-            "docker://$SOURCE_IMAGE" "docker://$DESTINATION_IMAGE:$VERSION"
-          skopeo copy --all --preserve-digests --authfile "$HOME/.docker/config.json" \
-            "docker://$SOURCE_IMAGE" "docker://$DESTINATION_IMAGE:latest"
+  #     - name: Copy the published image to ECR
+  #       env:
+  #         SOURCE_IMAGE: ${{ needs.publish.outputs.image }}@${{ needs.publish.outputs.digest }}
+  #         DESTINATION_IMAGE: ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}
+  #         VERSION: ${{ needs.publish.outputs.version }}
+  #       run: |
+  #         skopeo copy --all --preserve-digests --authfile "$HOME/.docker/config.json" \
+  #           "docker://$SOURCE_IMAGE" "docker://$DESTINATION_IMAGE:$VERSION"
+  #         skopeo copy --all --preserve-digests --authfile "$HOME/.docker/config.json" \
+  #           "docker://$SOURCE_IMAGE" "docker://$DESTINATION_IMAGE:latest"
 
-      - name: Redeploy ECS service
-        run: |
-          aws ecs update-service \
-            --cluster "$ECS_CLUSTER" \
-            --service "$ECS_SERVICE" \
-            --force-new-deployment
+  #     - name: Redeploy ECS service
+  #       run: |
+  #         aws ecs update-service \
+  #           --cluster "$ECS_CLUSTER" \
+  #           --service "$ECS_SERVICE" \
+  #           --force-new-deployment
