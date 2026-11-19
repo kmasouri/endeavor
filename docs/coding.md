@@ -6,10 +6,11 @@ agent's connections and add participants to an endeavor.
 
 ## Start work in an endeavor
 
-Open an endeavor and add Coding agent and Code reviewer as participants. Explicitly
-@mention the agent you want to start work. Messages, approvals, run steps, and outputs
-then stay with that endeavor. Standalone Work tasks do not appear as runs inside an
-endeavor.
+Start a new endeavor and describe the change; the first message becomes its goal. Put it
+in a project whose default agents include Coding agent and Code reviewer, or add them as
+participants. @mention the agent to start it directly. An untagged message is routed to
+an agent, or a Decision Engine message asks you to pick one. Messages, approvals, run
+steps, and outputs stay with that endeavor.
 
 ## Connect GitHub
 
