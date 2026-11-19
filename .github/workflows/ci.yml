@@ -18,6 +18,8 @@ jobs:
   validation:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
     strategy:
       # One failed check cancels the queued/running checks in this workflow run.
       fail-fast: true
@@ -50,10 +52,9 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node
-        if: ${{ !matrix.browser }}
         uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
@@ -63,21 +64,26 @@ jobs:
         if: ${{ !matrix.browser }}
         run: npm ci
 
-      - name: Cache browser npm downloads
+      - name: Install browser test dependencies
         if: matrix.browser
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/endeavor-ci-browser-npm
-          key: browser-npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', '.nvmrc') }}
+        run: npm ci --workspace=apps/web --include-workspace-root=false --no-audit --no-fund
 
-      - name: Run browser shard in the prepared image
+      - name: Install Chromium and system libraries
+        if: matrix.browser
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Build web workspace
+        if: matrix.browser
+        run: npm run build --workspace=apps/web
+
+      - name: Run browser shard
         if: matrix.browser
         env:
           CHECK_COMMAND: ${{ matrix.command }}
         run: |
-          # Commands in browser matrix rows supply only the Playwright shard options.
           read -r -a options <<< "$CHECK_COMMAND"
-          bash scripts/ci-browser.sh "$GITHUB_WORKSPACE" "${options[@]}"
+          npm run test:e2e --workspace=apps/web -- "${options[@]}"
 
       - name: Run quality check
         if: ${{ !matrix.browser }}
