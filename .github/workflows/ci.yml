@@ -51,7 +51,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node
         if: ${{ !matrix.browser }}
@@ -66,7 +66,7 @@ jobs:
 
       - name: Cache browser npm downloads
         if: matrix.browser
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/endeavor-ci-browser-npm
           key: browser-npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', '.nvmrc') }}
