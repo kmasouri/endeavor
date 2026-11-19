@@ -112,10 +112,10 @@ a hosted-workflow check; the local probes do not establish GitHub cancellation b
 
 ## Container-based browser jobs
 
-The browser matrix rows now run `scripts/ci-browser.sh` using the public Microsoft image in
-`.github/ci-browser-image.txt`, pinned by version and immutable multi-platform manifest digest.
+The browser matrix rows run Docker commands directly in `.github/workflows/ci.yml`. The public
+Microsoft image is pinned there by version and immutable multi-platform manifest digest.
 The image already provides Node 26.13.0, Playwright browsers, and Linux libraries. Quality jobs
-continue to use `.nvmrc`'s Node 26.10.0 on the host. The wrapper checks that the image Node major
+continue to use `.nvmrc`'s Node 26.10.0 on the host. The workflow checks that the image Node major
 matches `.nvmrc` and that the pinned Playwright version matches the web package before installing
 anything. A Node-major or Playwright mismatch was deliberately tested and rejected.
 
@@ -139,7 +139,7 @@ local measurements, not hosted CI timing. A fresh GitHub runner still pays the i
 the 24.5-second shard figure must not be presented as its total cold runtime. The downloaded
 ARM64 image occupies about 2.50 GB uncompressed and includes browsers beyond Chromium.
 
-The wrapper propagates a failing container exit status and removes its container on normal
+The workflow propagates a failing container exit status and removes its container on normal
 completion or interruption. Cancellation uses an interruptible background-process wait so the
 shell can run cleanup promptly. Controlled Docker-client probes verified success, preservation
 of exit code 37, and SIGTERM exit 143 with cleanup and no surviving client. Matrix/YAML checks

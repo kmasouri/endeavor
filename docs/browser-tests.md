@@ -38,10 +38,10 @@ npx playwright show-trace apps/web/test-results/<case>/trace.zip
 
 Use Node 26 or newer, as required by the root package. Chromium downloads on the first local run.
 On Linux, `npx playwright install-deps chromium` installs missing libraries. CI browser shards
-instead run through `scripts/ci-browser.sh` in the official Playwright image pinned by version
-and manifest digest in `.github/ci-browser-image.txt`. It contains Node 26, browsers, and Linux
+instead run Docker commands directly in `.github/workflows/ci.yml`, using the official Playwright
+image pinned there by version and manifest digest. It contains Node 26, browsers, and Linux
 libraries; no browser/system-library installation or separate image cache is used in CI.
-The image currently provides Node 26.13.0; quality checks keep `.nvmrc`'s Node 26.10.0. The wrapper
+The image currently provides Node 26.13.0; quality checks keep `.nvmrc`'s Node 26.10.0. The workflow
 checks the Node major and pinned Playwright version before installing dependencies.
 
 Each browser container installs only the web workspace with `npm ci --workspace=apps/web
@@ -50,8 +50,9 @@ caching is retained in a mounted cache directory. Container cancellation removes
 container, and nonzero exit status fails the matrix job. Quality checks still run on the host.
 The image is already published by Microsoft; this repository does not build or publish a CI
 image. Update the pinned digest when changing Playwright versions and verify the new runtime.
-For local reproduction, pass a disposable checkout to the wrapper: `bash scripts/ci-browser.sh
-/path/to/disposable-checkout --shard=1/4 --max-failures=1`. It replaces that checkout's
+For local reproduction, copy the browser step from `.github/workflows/ci.yml` into Bash,
+set `GITHUB_WORKSPACE` to a disposable checkout, and set `CI_BROWSER_IMAGE` and `CHECK_COMMAND`
+to the values from that step and the desired matrix row. The install replaces that checkout's
 `node_modules`; `CI_BROWSER_NPM_CACHE` can select a separate npm download cache directory.
 
 The preview owns port 5190 with `strictPort` and refuses to reuse an existing server. Wait for

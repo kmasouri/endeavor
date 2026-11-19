@@ -74,10 +74,58 @@ jobs:
         if: matrix.browser
         env:
           CHECK_COMMAND: ${{ matrix.command }}
+          CI_BROWSER_IMAGE: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
+        shell: bash
         run: |
-          # Commands in browser matrix rows supply only the Playwright shard options.
+          set -euo pipefail
           read -r -a options <<< "$CHECK_COMMAND"
-          bash scripts/ci-browser.sh "$GITHUB_WORKSPACE" "${options[@]}"
+          workspace="$GITHUB_WORKSPACE"
+          image="$CI_BROWSER_IMAGE"
+          cache="${CI_BROWSER_NPM_CACHE:-${RUNNER_TEMP:-/tmp}/endeavor-ci-browser-npm}"
+          mkdir -p -- "$cache"
+          cache="$(cd -- "$cache" && pwd)"
+          container="endeavor-ci-browser-${BASHPID}-${RANDOM}"
+
+          cleanup() {
+            docker rm --force "$container" >/dev/null 2>&1 || true
+            if [[ -n "${docker_pid:-}" ]]; then wait "$docker_pid" 2>/dev/null || true; fi
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+
+          docker pull "$image"
+          docker run --rm --init --ipc=host --pull=never --name "$container" \
+            --mount "type=bind,source=$workspace,target=/work" \
+            --mount "type=bind,source=$cache,target=/root/.npm" \
+            --workdir /work \
+            --env CI=true --env "CI_BROWSER_IMAGE=$image" \
+            "$image" bash -euo pipefail -c '
+              node <<"NODE"
+          const fs = require("node:fs");
+          const expectedNodeMajor = fs.readFileSync(".nvmrc", "utf8").trim().replace(/^v/, "").split(".")[0];
+          if (process.versions.node.split(".")[0] !== expectedNodeMajor) {
+            throw new Error(`CI browser image must provide Node ${expectedNodeMajor}; found ${process.version}`);
+          }
+          const expectedPlaywright = JSON.parse(fs.readFileSync("apps/web/package.json", "utf8")).devDependencies["@playwright/test"];
+          if (!process.env.CI_BROWSER_IMAGE.startsWith(`mcr.microsoft.com/playwright:v${expectedPlaywright}-noble@sha256:`)) {
+            throw new Error("Update .github/workflows/ci.yml to match the pinned Playwright version");
+          }
+          console.log(`CI browser runtime: Node ${process.version}, Playwright ${expectedPlaywright}`);
+          NODE
+              phase() {
+                local name="$1" start=$SECONDS
+                shift
+                "$@"
+                printf "CI phase %s: %ss\n" "$name" "$((SECONDS - start))"
+              }
+              phase dependencies npm ci --workspace=apps/web --include-workspace-root=false --no-audit --no-fund
+              phase build npm run build --workspace=apps/web
+              phase browser npm run test:e2e --workspace=apps/web -- "$@"
+            ' ci-browser "${options[@]}" &
+          docker_pid=$!
+          # A signal interrupts wait immediately, so cancellation can remove the container promptly.
+          wait "$docker_pid"
 
       - name: Run quality check
         if: ${{ !matrix.browser }}
