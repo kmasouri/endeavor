@@ -40,7 +40,7 @@ export class RoutingPostgresRepository implements RoutingRepository {
       SELECT gen_random_uuid(), t.conversation_id, t.id, 'handoff' FROM endeavor.tasks t
       WHERE t.state = 'completed' AND t.conversation_id IS NOT NULL
         AND t.finished_at >= (SELECT started_at FROM endeavor.routing_epoch LIMIT 1)
-        AND EXISTS (SELECT 1 FROM endeavor.task_events e WHERE e.task_id = t.id AND e.type = 'result.posted')
+        AND EXISTS (SELECT 1 FROM endeavor.task_events e WHERE e.task_id = t.id AND e.type = 'result.posted' AND e.data->>'silent' IS DISTINCT FROM 'true')
         AND NOT EXISTS (SELECT 1 FROM endeavor.routing_decisions d WHERE d.task_id=t.id AND d.kind='handoff')
       ORDER BY t.finished_at LIMIT 50
       ON CONFLICT DO NOTHING`);

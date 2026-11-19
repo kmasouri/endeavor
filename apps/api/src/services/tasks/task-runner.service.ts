@@ -474,11 +474,12 @@ export class TaskRunnerService {
       const result = (await this.taskRepository.listOutputs(task.id))
         .filter((output) => output.title === 'Result')
         .pop();
-      if (agent && result?.content) {
+      if (agent && result?.content && result.metadata.postResult !== false) {
         await this.answerRequester(task, agent, 'result', result.content);
       }
       await this.taskRepository.addEvent(task.id, TASK_EVENTS.resultPosted, SYSTEM_ACTOR, {
-        outputId: result?.id ?? null
+        outputId: result?.id ?? null,
+        ...(result?.metadata.postResult === false ? { silent: true } : {})
       });
     }
   }
@@ -993,11 +994,36 @@ export class TaskRunnerService {
     if (verdict) {
       criteriaCheck.summary = `${criteriaCheck.summary}\nIndependent check: ${verdict.summary}`;
     }
-    await this.saveOutputOnce(task, agentActor, callId, {
+    const savedResult = (await this.taskRepository.listOutputs(task.id)).find(
+      (output) => output.metadata.toolCallId === callId
+    );
+    let postResult = savedResult
+      ? savedResult.metadata.postResult !== false
+      : input.post_result !== false;
+    if (
+      !savedResult &&
+      !postResult &&
+      task.conversationId &&
+      task.requestedByType === 'agent' &&
+      task.requestedById
+    ) {
+      const requesterTask = await this.taskRepository.findOpenTask(
+        task.conversationId,
+        task.requestedById
+      );
+      const waits = requesterTask
+        ? await this.taskRepository.listWaits(requesterTask.id, { openOnly: true })
+        : [];
+      postResult = waits.some(
+        (wait) => wait.kind === 'reply' && wait.targetId === task.requestMessageId
+      );
+    }
+    const outputId = await this.saveOutputOnce(task, agentActor, callId, {
       title: 'Result',
       content: result,
       kind: 'text',
-      uri: null
+      uri: null,
+      metadata: { postResult }
     });
     const updatedTask = await this.lifecycle.completeTask(task.id, agentActor, criteriaCheck);
     if (updatedTask.state !== 'completed') {
@@ -1005,9 +1031,14 @@ export class TaskRunnerService {
       await this.answerRequester(task, agent, `${callId}:review`, 'My result is ready for review.');
       return 'Result submitted. A person will review it before the task completes.';
     }
-    await this.answerRequester(task, agent, `${callId}:answer`, result);
-    await this.taskRepository.addEvent(task.id, TASK_EVENTS.resultPosted, agentActor, {});
-    return 'Task completed. Your result was posted.';
+    if (postResult) await this.answerRequester(task, agent, 'result', result);
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.resultPosted, agentActor, {
+      outputId,
+      ...(!postResult ? { silent: true } : {})
+    });
+    return postResult
+      ? 'Task completed. Your result was posted.'
+      : 'Task completed. Your result was saved without a chat message.';
   }
 
   private async runReportBlockedTool(
@@ -2448,6 +2479,7 @@ export class TaskRunnerService {
       content: string;
       kind: 'text' | 'link' | 'data' | 'log' | 'file';
       uri: string | null;
+      metadata?: Record<string, unknown>;
     }
   ): Promise<string> {
     const existing = (await this.taskRepository.listOutputs(task.id)).find(
@@ -2458,7 +2490,7 @@ export class TaskRunnerService {
     }
     const output = await this.lifecycle.addOutput(task.id, actor, {
       ...input,
-      metadata: { toolCallId: callId }
+      metadata: { ...input.metadata, toolCallId: callId }
     });
     return output.id;
   }

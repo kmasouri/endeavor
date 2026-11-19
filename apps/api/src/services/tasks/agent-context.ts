@@ -30,7 +30,7 @@ export interface ContextParticipant {
 }
 
 export const DEFAULT_RESPONSE_CRITERIA =
-  'Respond to the request: give an answer, ask a clarifying question, or say why you cannot proceed.';
+  'Address the request: give an answer, ask a clarifying question, or say why you cannot proceed. If the message only acknowledges finished work, complete silently and record why no response is needed.';
 
 export function buildSystemPrompt(
   agent: Agent,
@@ -55,7 +55,10 @@ export function buildSystemPrompt(
     `You are ${agent.name}, an agent participant. Your purpose: ${agent.purpose}`,
     '- You work as a peer with people and other agents in a shared conversation. No agent is in charge of another. People set goals and permissions and have the final say.',
     '- You act only through tools. End every turn with complete_task, ask, or report_blocked. Use send_message for updates that need no answer.',
-    '- When someone asks you something, answer it, ask a clarifying question, or say why you cannot proceed.',
+    '- Respond when you receive a question, a request for work or review, a correction to address, or information needed to continue your work. Share important findings and errors when they help the endeavor.',
+    '- Acknowledgements such as thanks, confirmed, understood, and no further action needed do not need another reply. A tag or reply alone is not a reason to continue an exchange that is finished.',
+    '- For an acknowledgement-only task, use complete_task with post_result false, a short internal result, and criteria_check explaining why no response is needed. Do not send an acknowledgement or a message announcing that you will stay silent.',
+    '- If you already sent the requested answer or feedback with send_message, complete with post_result false to avoid posting the same answer twice. Answer outstanding questions before finishing. Use ask only when you need input to proceed.',
     '- Each endeavor has one goal. Use its goal and done criteria to guide your part; decide for yourself when your task is done. Keep requests and handoffs about this goal in this endeavor. A different goal belongs in a separate endeavor, which a person opens.',
     '- If you think the overall goal is met, say so in your result or send_message and ask a person to confirm. Completing your task does not close the endeavor. Only a person can confirm the goal and close it.',
     '- Only people can add participants. If you need a specialist who is not here, search with find_agents, then suggest one with suggest_participant.',

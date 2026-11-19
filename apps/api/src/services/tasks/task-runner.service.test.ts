@@ -1359,6 +1359,157 @@ describe('TaskRunnerService', () => {
       );
     });
 
+    it('saves an acknowledgement result without posting another message', async () => {
+      const { runner, tasks, messages, current } = setup();
+      const call = {
+        id: 'silent-complete',
+        name: 'complete_task',
+        input: {
+          result: 'No further work requested.',
+          criteria_check: 'Acknowledgement only',
+          criteria_met: true,
+          post_result: false
+        }
+      };
+      tasks.listEvents.mockResolvedValue([event(1, 'model.turn', { raw: {}, toolCalls: [call] })]);
+
+      await runner.runTask(makeTask());
+
+      expect(current().state).toBe('completed');
+      expect(messages.create).not.toHaveBeenCalled();
+      expect(tasks.addOutput).toHaveBeenCalledWith(
+        TASK,
+        expect.objectContaining({
+          content: 'No further work requested.',
+          metadata: { toolCallId: 'silent-complete', postResult: false }
+        })
+      );
+      expect(tasks.addEvent).toHaveBeenCalledWith(TASK, 'result.posted', expect.anything(), {
+        outputId: 'o1',
+        silent: true
+      });
+    });
+
+    it('posts an answer when its agent requester still has an outstanding reply wait', async () => {
+      const { runner, tasks, messages, setCurrent } = setup();
+      setCurrent(makeTask({ requestedByType: 'agent', requestedById: REVIEWER }));
+      const requesterTask = makeTask({
+        id: 'requester-task',
+        ownerAgentId: REVIEWER,
+        state: 'waiting'
+      });
+      tasks.findOpenTask.mockResolvedValue(requesterTask);
+      tasks.listWaits.mockImplementation(async (taskId) =>
+        taskId === 'requester-task'
+          ? [
+              {
+                id: 'reply-wait',
+                taskId,
+                kind: 'reply',
+                targetId: 'm-request',
+                description: 'Waiting for Researcher',
+                createdAt: new Date(),
+                resolvedAt: null,
+                resolution: null
+              }
+            ]
+          : []
+      );
+      messages.getById.mockImplementation(async (id) =>
+        makeMessage({ id, authorType: 'agent', authorId: REVIEWER })
+      );
+      const call = {
+        id: 'silent-answer',
+        name: 'complete_task',
+        input: {
+          result: 'The stock count is negative.',
+          criteria_check: 'Diagnosis supplied',
+          criteria_met: true,
+          post_result: false
+        }
+      };
+      tasks.listEvents.mockResolvedValue([event(1, 'model.turn', { raw: {}, toolCalls: [call] })]);
+
+      await runner.runTask(makeTask({ requestedByType: 'agent', requestedById: REVIEWER }));
+
+      expect(messages.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: 'The stock count is negative.',
+          deliverToAgentIds: [REVIEWER]
+        })
+      );
+      expect(tasks.addOutput).toHaveBeenCalledWith(
+        TASK,
+        expect.objectContaining({ metadata: { toolCallId: 'silent-answer', postResult: true } })
+      );
+    });
+
+    it('reuses the saved publication choice when a completion call is retried', async () => {
+      const { runner, tasks, messages, current } = setup();
+      tasks.listOutputs.mockResolvedValue([
+        {
+          id: 'saved-result',
+          taskId: TASK,
+          kind: 'text',
+          title: 'Result',
+          content: 'Already handled',
+          uri: null,
+          metadata: { toolCallId: 'retry-complete', postResult: false },
+          createdAt: new Date()
+        }
+      ]);
+      const call = {
+        id: 'retry-complete',
+        name: 'complete_task',
+        input: {
+          result: 'Already handled',
+          criteria_check: 'No further action',
+          criteria_met: true
+        }
+      };
+      tasks.listEvents.mockResolvedValue([event(1, 'model.turn', { raw: {}, toolCalls: [call] })]);
+
+      await runner.runTask(makeTask());
+
+      expect(current().state).toBe('completed');
+      expect(tasks.addOutput).not.toHaveBeenCalled();
+      expect(messages.create).not.toHaveBeenCalled();
+      expect(tasks.addEvent).toHaveBeenCalledWith(TASK, 'result.posted', expect.anything(), {
+        outputId: 'saved-result',
+        silent: true
+      });
+    });
+
+    it.each([false, true])(
+      'preserves a silent result after recovery or review (review required %s)',
+      async (reviewRequired) => {
+        const { runner, tasks, messages } = setup();
+        tasks.listFinishedWithoutEvent.mockResolvedValue([
+          makeTask({ state: 'completed', reviewRequired })
+        ]);
+        tasks.listOutputs.mockResolvedValue([
+          {
+            id: 'silent-output',
+            taskId: TASK,
+            kind: 'text',
+            title: 'Result',
+            content: 'Acknowledged internally',
+            uri: null,
+            metadata: { postResult: false },
+            createdAt: new Date()
+          }
+        ]);
+
+        await runner.tick();
+
+        expect(messages.create).not.toHaveBeenCalled();
+        expect(tasks.addEvent).toHaveBeenCalledWith(TASK, 'result.posted', expect.anything(), {
+          outputId: 'silent-output',
+          silent: true
+        });
+      }
+    );
+
     it('does not address an agent requester that has no open work, so agents never ping-pong', async () => {
       const { runner, tasks, messages } = setup();
       messages.getById.mockImplementation(async (id) =>
