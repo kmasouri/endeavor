@@ -37,23 +37,17 @@ npx playwright show-trace apps/web/test-results/<case>/trace.zip
 ```
 
 Use Node 26 or newer, as required by the root package. Chromium downloads on the first local run.
-On Linux, `npx playwright install-deps chromium` installs missing libraries. CI browser shards
-instead run Docker commands directly in `.github/workflows/ci.yml`, using the official Playwright
-image pinned there by version and manifest digest. It contains Node 26, browsers, and Linux
-libraries; no browser/system-library installation or separate image cache is used in CI.
-The image currently provides Node 26.13.0; quality checks keep `.nvmrc`'s Node 26.10.0. The workflow
-checks the Node major and pinned Playwright version before installing dependencies.
+On Linux, `npx playwright install-deps chromium` installs missing libraries. CI uses
+`actions/setup-node` for every validation job and its built-in npm download cache. Browser jobs
+install only the web workspace dependencies, then run `npx playwright install --with-deps chromium`
+from `apps/web` to install the matching Chromium version and Linux libraries on the GitHub runner.
+They build the web bundle and run their selected shard. The shared `PLAYWRIGHT_BROWSERS_PATH`
+lets the test wrapper reuse the explicit installation. GitHub handles job cancellation and cleanup.
 
-Each browser container installs only the web workspace with `npm ci --workspace=apps/web
---include-workspace-root=false`, builds the production bundle, and runs its shard. npm download
-caching is retained in a mounted cache directory. Container cancellation removes the running
-container, and nonzero exit status fails the matrix job. Quality checks still run on the host.
-The image is already published by Microsoft; this repository does not build or publish a CI
-image. Update the pinned digest when changing Playwright versions and verify the new runtime.
-For local reproduction, copy the browser step from `.github/workflows/ci.yml` into Bash,
-set `GITHUB_WORKSPACE` to a disposable checkout, and set `CI_BROWSER_IMAGE` and `CHECK_COMMAND`
-to the values from that step and the desired matrix row. The install replaces that checkout's
-`node_modules`; `CI_BROWSER_NPM_CACHE` can select a separate npm download cache directory.
+For local reproduction, run `npm ci --workspace=apps/web --include-workspace-root=false` in a
+disposable checkout, then `npm run build --workspace=apps/web` and
+`CI=true npm run test:e2e --workspace=apps/web -- --shard=1/4 --max-failures=1`.
+The test wrapper installs Chromium and Linux libraries when `PLAYWRIGHT_BROWSERS_PATH` is unset.
 
 The preview owns port 5190 with `strictPort` and refuses to reuse an existing server. Wait for
 another worktree's suite to finish before running; never reuse its build or stop its server.

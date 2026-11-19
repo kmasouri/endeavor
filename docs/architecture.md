@@ -50,8 +50,10 @@ HTTP API. `npm run check` runs it locally, including browser setup. CI runs brow
 four browser shards and separate lint/type/build/unit jobs in one fail-fast matrix. A failed
 matrix job cancels the remaining jobs in that run; the final `check` gate requires the complete
 matrix to pass. Locally, the check runner overlaps lint, types, unit tests, and builds;
-browser tests start as soon as the web build passes. CI browser shards use the pinned official Playwright container image and install only web
-workspace dependencies. Quality jobs stay on the host; superseded PR runs are canceled.
+browser tests start as soon as the web build passes. All CI checks use `actions/setup-node` on
+GitHub runners. Browser shards install only web workspace dependencies and use Playwright to
+install Chromium and its Linux libraries.
+Superseded PR runs are canceled.
 The suite checks core chat, configuration, approvals and navigation flows, alongside schedule
 badge geometry, themes,
 responsive layout, empty/error states, and keyboard navigation without starting agents or

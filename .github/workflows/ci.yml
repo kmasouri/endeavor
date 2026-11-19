@@ -18,6 +18,8 @@ jobs:
   validation:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
     strategy:
       # One failed check cancels the queued/running checks in this workflow run.
       fail-fast: true
@@ -53,7 +55,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Node
-        if: ${{ !matrix.browser }}
         uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
@@ -63,69 +64,26 @@ jobs:
         if: ${{ !matrix.browser }}
         run: npm ci
 
-      - name: Cache browser npm downloads
+      - name: Install browser test dependencies
         if: matrix.browser
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.temp }}/endeavor-ci-browser-npm
-          key: browser-npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json', '.nvmrc') }}
+        run: npm ci --workspace=apps/web --include-workspace-root=false --no-audit --no-fund
 
-      - name: Run browser shard in the prepared image
+      - name: Install Chromium and system libraries
+        if: matrix.browser
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Build web workspace
+        if: matrix.browser
+        run: npm run build --workspace=apps/web
+
+      - name: Run browser shard
         if: matrix.browser
         env:
           CHECK_COMMAND: ${{ matrix.command }}
-          CI_BROWSER_IMAGE: mcr.microsoft.com/playwright:v1.64.1-noble@sha256:2f05f8a734509a7b3f26a912639488ee08f58a7b292d14d62271bcff9038768f
-        shell: bash
         run: |
-          set -euo pipefail
           read -r -a options <<< "$CHECK_COMMAND"
-          workspace="$GITHUB_WORKSPACE"
-          image="$CI_BROWSER_IMAGE"
-          cache="${CI_BROWSER_NPM_CACHE:-${RUNNER_TEMP:-/tmp}/endeavor-ci-browser-npm}"
-          mkdir -p -- "$cache"
-          cache="$(cd -- "$cache" && pwd)"
-          container="endeavor-ci-browser-${BASHPID}-${RANDOM}"
-
-          cleanup() {
-            docker rm --force "$container" >/dev/null 2>&1 || true
-            if [[ -n "${docker_pid:-}" ]]; then wait "$docker_pid" 2>/dev/null || true; fi
-          }
-          trap cleanup EXIT
-          trap 'exit 130' INT
-          trap 'exit 143' TERM
-
-          docker pull "$image"
-          docker run --rm --init --ipc=host --pull=never --name "$container" \
-            --mount "type=bind,source=$workspace,target=/work" \
-            --mount "type=bind,source=$cache,target=/root/.npm" \
-            --workdir /work \
-            --env CI=true --env "CI_BROWSER_IMAGE=$image" \
-            "$image" bash -euo pipefail -c '
-              node <<"NODE"
-          const fs = require("node:fs");
-          const expectedNodeMajor = fs.readFileSync(".nvmrc", "utf8").trim().replace(/^v/, "").split(".")[0];
-          if (process.versions.node.split(".")[0] !== expectedNodeMajor) {
-            throw new Error(`CI browser image must provide Node ${expectedNodeMajor}; found ${process.version}`);
-          }
-          const expectedPlaywright = JSON.parse(fs.readFileSync("apps/web/package.json", "utf8")).devDependencies["@playwright/test"];
-          if (!process.env.CI_BROWSER_IMAGE.startsWith(`mcr.microsoft.com/playwright:v${expectedPlaywright}-noble@sha256:`)) {
-            throw new Error("Update .github/workflows/ci.yml to match the pinned Playwright version");
-          }
-          console.log(`CI browser runtime: Node ${process.version}, Playwright ${expectedPlaywright}`);
-          NODE
-              phase() {
-                local name="$1" start=$SECONDS
-                shift
-                "$@"
-                printf "CI phase %s: %ss\n" "$name" "$((SECONDS - start))"
-              }
-              phase dependencies npm ci --workspace=apps/web --include-workspace-root=false --no-audit --no-fund
-              phase build npm run build --workspace=apps/web
-              phase browser npm run test:e2e --workspace=apps/web -- "$@"
-            ' ci-browser "${options[@]}" &
-          docker_pid=$!
-          # A signal interrupts wait immediately, so cancellation can remove the container promptly.
-          wait "$docker_pid"
+          npm run test:e2e --workspace=apps/web -- "${options[@]}"
 
       - name: Run quality check
         if: ${{ !matrix.browser }}

@@ -110,10 +110,15 @@ Playwright CLI stops after an injected first failure without executing a second 
 passed the complete local check again in 61.6 seconds. Actual GitHub cancellation remains
 a hosted-workflow check; the local probes do not establish GitHub cancellation behavior.
 
-## Container-based browser jobs
+## Earlier container-based browser jobs
 
-The browser matrix rows run Docker commands directly in `.github/workflows/ci.yml`. The public
-Microsoft image is pinned there by version and immutable multi-platform manifest digest.
+These measurements describe the CA-109 implementation. CA-119 replaces its Docker setup with
+`actions/setup-node` and `playwright install --with-deps chromium` on GitHub runners. The image
+pin and container commands described below are historical. The shared fail-fast matrix and
+web-only dependency install remain part of the current workflow.
+
+The earlier browser matrix rows ran Docker commands using a public Microsoft image pinned by
+version and immutable multi-platform manifest digest.
 The image already provides Node 26.13.0, Playwright browsers, and Linux libraries. Quality jobs
 continue to use `.nvmrc`'s Node 26.10.0 on the host. The workflow checks that the image Node major
 matches `.nvmrc` and that the pinned Playwright version matches the web package before installing
