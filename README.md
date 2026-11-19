@@ -263,8 +263,8 @@ the served app. The suite mocks the HTTP API; it needs no database, Docker app, 
 model calls, and it never changes real schedules or runs.
 
 Run `npm run test:e2e` for browser tests alone. Chromium downloads on the first local run.
-CI browser tests use a pinned official Playwright image containing Node 26, browsers, and Linux
-libraries, and install only the web workspace dependencies. Browser tests are split across four shards in the same fail-fast matrix as lint, types, builds, and
+CI uses `actions/setup-node` and npm caching for every validation job. Browser jobs install
+only web workspace dependencies and use Playwright to install Chromium and Linux libraries. Browser tests are split across four shards in the same fail-fast matrix as lint, types, builds, and
 unit/pilot tests. A failed job cancels the remaining jobs in that run; the final `check` gate
 requires the complete matrix to pass. Each CI browser shard stops at its first failure. Superseded runs for the same PR are canceled. Main pushes run independently. On a new Linux
 workstation, install missing system libraries with `npx playwright install-deps chromium` from
