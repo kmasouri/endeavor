@@ -24,6 +24,7 @@ services:
       retries: 10
 
   app:
+    image: ${ENDEAVOR_IMAGE:-}
     build: .
     # Starts again after a crash or a reboot, once Docker is running. `npm run down` stops it.
     restart: unless-stopped
