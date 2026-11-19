@@ -32,7 +32,7 @@ The web interface uses Svelte 5 and Vite in `apps/web/`. It calls the API over H
 - **Tests** with Jest that don't need a database.
 - **Dockerfile** that builds a small image and doesn't run as root.
 - **Terraform** for a throwaway AWS test setup: network, load balancer, image registry, and containers on ECS Fargate.
-- **GitHub Actions** that run the checks on every push, and deploy when you publish a GitHub release.
+- **GitHub Actions** that run checks, publish release images, and optionally deploy to AWS.
 
 Clone [kmasouri/endeavor](https://github.com/kmasouri/endeavor):
 
@@ -187,25 +187,61 @@ Requests that act as a person send that person's ID in the `x-actor-id` header. 
 
 ## Releases and deployment
 
-To release and deploy a new version:
+To publish a new version:
 
 1. In GitHub, go to **Releases** and click **Draft a new release**.
-2. Create a new tag such as `v1.2.0`. Click **Generate release notes** if you want GitHub to list the merged pull requests.
+2. Create a tag such as `v1.2.0` from the code you want to release. Use `v1.3.0-rc.1` for a prerelease.
 3. Click **Publish release**.
 
-Publishing starts the `release` workflow. It builds the Docker image, tags it with the version (`1.2.0`) and `latest`, and deploys it to the `sandbox` environment.
+The existing `release` workflow runs the full CI checks for the release commit. Once they pass,
+it builds the app for AMD64 and ARM64 and publishes it to `ghcr.io/kmasouri/endeavor` using the
+workflow's `GITHUB_TOKEN`. Each image has a version tag such as `1.2.0` and a
+`sha-<full-commit-sha>` tag. Stable releases also update `latest`. Prereleases keep their own tags
+and skip AWS deployment.
 
-Set these in the GitHub `sandbox` environment:
+GitHub initially makes new container packages private. After the first successful publication,
+open the `endeavor` package's settings on GitHub and change its visibility to **Public**. This
+one-time setting lets people pull the image without a GitHub account. Forks publish under their
+own lowercase `ghcr.io/<owner>/<repository>` name.
 
-| Name                 | Kind     | Description                                              |
-| -------------------- | -------- | -------------------------------------------------------- |
-| `AWS_ROLE_TO_ASSUME` | secret   | The AWS role GitHub Actions logs in as.                  |
-| `AWS_REGION`         | variable | The AWS region the app runs in.                          |
-| `ECR_REPOSITORY`     | variable | ECR repository name, such as `endeavor-sandbox-service`. |
-| `ECS_CLUSTER`        | variable | ECS cluster name, such as `endeavor-sandbox-cluster`.    |
-| `ECS_SERVICE`        | variable | ECS service name, such as `endeavor-sandbox-service`.    |
+### Run a published image
 
-To redeploy an image that's already built, run the `deploy` workflow by hand. It doesn't make a new release.
+Use the repository's Compose file to keep Postgres, migrations, ports, and persistent volumes.
+Set `ENDEAVOR_IMAGE` in `.env` to a published version. Compose reads this setting. When unset,
+local builds use Compose's default image name.
+
+```bash
+cp .env.example .env
+# Set provider keys and CREDENTIALS_KEY in .env, as described in docs/local.md.
+# Add ENDEAVOR_IMAGE=ghcr.io/kmasouri/endeavor:1.2.0 to .env.
+docker compose pull app
+docker compose up -d --no-build
+```
+
+The app image contains the API and web interface. Postgres is a separate service in Compose.
+The optional coding executor still uses the setup in [docs/coding.md](docs/coding.md).
+
+### Enable AWS deployment
+
+Set the repository variable `AWS_DEPLOY_ENABLED` to `true` to enable the AWS job. With this
+variable unset or false, releases publish to GHCR and skip AWS. Configure the following in the
+GitHub `sandbox` environment before enabling it:
+
+| Name | Kind | Description |
+| --- | --- | --- |
+| `AWS_ROLE_TO_ASSUME` | secret | The AWS role GitHub Actions assumes through OIDC. |
+| `AWS_REGION` | variable | The AWS region the app runs in. |
+| `ECR_REPOSITORY` | variable | Existing ECR repository name, such as `endeavor-sandbox-service`. |
+| `ECS_CLUSTER` | variable | Existing ECS cluster name, such as `endeavor-sandbox-cluster`. |
+| `ECS_SERVICE` | variable | Existing ECS service name, such as `endeavor-sandbox-service`. |
+
+The AWS job copies the exact GHCR image by digest, including both architectures, to ECR with
+its version tag and `latest`. It uses Skopeo to copy the image without rebuilding it. ECS then
+starts a new deployment using the existing task definition's `latest` tag. An enabled AWS job
+with missing configuration fails clearly; the GHCR publication is already complete.
+
+To redeploy an image already in ECR, run the `deploy` workflow by hand with its version tag.
+This explicit AWS operation uses the sandbox configuration and does not create a new release.
 
 ## Browser regression tests
 
