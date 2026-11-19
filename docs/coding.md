@@ -4,6 +4,14 @@ Coding and review use ordinary agents, the GitHub MCP connection, and an optiona
 connection. There is no built-in engineering role or agent supervisor. People select each
 agent's connections and add participants to an endeavor.
 
+## Start work in an endeavor
+
+Start a new endeavor and describe the change; the first message becomes its goal. Put it
+in a project whose default agents include Coding agent and Code reviewer, or add them as
+participants. @mention the agent to start it directly. An untagged message is routed to
+an agent, or a Decision Engine message asks you to pick one. Messages, approvals, run
+steps, and outputs stay with that endeavor.
+
 ## Connect GitHub
 
 Open Connections, create a connection, and choose the GitHub MCP example. Its endpoint is
