@@ -8,12 +8,8 @@ import {
   Skill,
   SkillVersion
 } from '../../shared/types';
-import {
-  CatalogNameConflictError,
-  CatalogRepository,
-  ConnectionInput,
-  CreateSkillVersionInput
-} from './catalog.repository';
+import { CatalogNameConflictError, CatalogRepository } from './catalog.repository';
+import type { ConnectionInput, CreateSkillVersionInput } from '..';
 import { CredentialCipher } from './credential-cipher';
 
 interface SkillRow {
@@ -37,6 +33,7 @@ interface SkillVersionRow {
 }
 
 interface ConnectionRow {
+  auth_method?: 'none' | 'header' | 'oauth';
   kind: 'http' | 'mcp';
   allowed_tools: string[];
   approval_tools: string[];
@@ -67,6 +64,7 @@ interface GrantRow {
 const UNIQUE_VIOLATION = '23505';
 const NAME_INDEXES = new Set(['idx_skills_name_unique', 'idx_connections_name_unique']);
 const UPDATABLE_CONNECTION_COLUMNS = {
+  authMethod: 'auth_method',
   allowedTools: 'allowed_tools',
   approvalTools: 'approval_tools',
   name: 'name',
@@ -86,7 +84,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
   ) {}
 
   async createSkill(
-    input: { name: string; description: string; discoverable?: boolean },
+    input: { name: string; description: string; discoverable: boolean },
     firstVersion: CreateSkillVersionInput
   ): Promise<{ skill: Skill; version: SkillVersion }> {
     const skillId = randomUUID();
@@ -114,7 +112,7 @@ export class CatalogPostgresRepository implements CatalogRepository {
           versionId,
           firstVersion.instructions,
           firstVersion.createdByHumanId,
-          input.discoverable ?? false
+          input.discoverable
         ]
       )
       .catch((error) => rethrowNameConflict(error, input.name));
@@ -232,9 +230,9 @@ export class CatalogPostgresRepository implements CatalogRepository {
         `INSERT INTO endeavor.connections (
            id, name, description, base_url, auth_header, credential_ciphertext, allowed_methods,
            allowed_path_prefixes, created_by_human_id, approval_methods, kind, allowed_tools, approval_tools,
-           discoverable
+           discoverable, auth_method
          )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          RETURNING *`,
         [
           randomUUID(),
@@ -250,7 +248,8 @@ export class CatalogPostgresRepository implements CatalogRepository {
           input.kind ?? 'http',
           input.allowedTools ?? [],
           input.approvalTools ?? [],
-          input.discoverable ?? false
+          input.discoverable,
+          input.authMethod ?? (input.credential ? 'header' : 'none')
         ]
       )
       .catch((error) => rethrowNameConflict(error, input.name));
@@ -489,6 +488,7 @@ function toSkillVersion(row: SkillVersionRow): SkillVersion {
 
 function toConnection(row: ConnectionRow): Connection {
   return {
+    authMethod: row.auth_method ?? (row.credential_ciphertext ? 'header' : 'none'),
     kind: row.kind ?? 'http',
     allowedTools: row.allowed_tools ?? [],
     approvalTools: row.approval_tools ?? [],

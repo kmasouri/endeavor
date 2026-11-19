@@ -1,8 +1,4 @@
 export { formatDateTime, formatShortTime } from './time-display.svelte';
-export function toLimit(value: string): number | undefined {
-  const number = Number.parseInt(value, 10);
-  return Number.isFinite(number) && number > 0 ? number : undefined;
-}
 export const CONTEXT_LABELS = {
   instructions:
     'How an agent should behave, set by people. Example: "Investigate billing issues and cite your sources."',

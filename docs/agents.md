@@ -17,11 +17,12 @@ Configuration is the place to manage access. Revoked skills, connections, and ac
 **Costs and budgets.** Each model call's cost is worked out from `MODEL_PRICES` (US dollars per million input and output tokens, per model) and saved with the call. A model with no price has an unknown cost: its tokens are still counted, and it shows up as `unpricedCalls`, but dollar budgets can't count it.
 
 - `GET /agents/:agentId/costs`: what the agent spent in total and this month (UTC), and its costliest tasks this month.
-- `GET /conversations/:conversationId/costs`: what all agent work in a conversation spent.
+- `GET /conversations/:conversationId/costs`: what all agent work in a conversation spent, with an
+  uncapped `agents` list containing each agent's ID, display name, cost, tokens, and unpriced calls.
 - An agent's **monthly budget** (`PATCH /agents/:agentId` with `monthlyBudgetUsd`) covers all its work in a calendar month. A conversation's **budget** (`PATCH /conversations/:conversationId` with `budgetUsd`) covers all agent work in it. `null` removes a budget. Neither is versioned.
 - Before each model call, the task's own cap, the agent's monthly budget, and the conversation's budget are all checked. The tightest wins. A task over any of them is blocked with the reason, and the person who asked is told. Raising the budget and resuming the task lets it go on. Budgets are checked before each call, so the last call can take spending a little over the budget.
 
-**Who sees what:** in v1 there is one role, so every person sees every task and approval. The member rules are still in the code, switched off in `apps/api/src/shared/access.ts`: with roles on, members see only tasks, and their approvals, in conversations they belong to, plus tasks they asked for.
+**Who sees what:** in v1 there is one role, so every person sees every task and approval. The member rules are still in the code, switched off in `apps/api/src/services/access/access.rules.ts`: with roles on, members see only tasks, and their approvals, in conversations they belong to, plus tasks they asked for.
 
 Any person can create or change agents. Agents can't. A disabled agent takes no new tasks, but its open tasks keep going until a human pauses or cancels them.
 
@@ -133,3 +134,89 @@ New agent links to editable Coding agent and Code reviewer examples. They use th
 configuration, grants, budgets, and peer collaboration model. They do not assign roles, select
 connections, or start work. See [GitHub coding and review](coding.md) for the required
 connections, isolated execution, verification evidence, and human publication approvals.
+
+## Team docs specialist (CA-73)
+
+A specialist is an ordinary agent with instructions and explicitly selected connections.
+[pilot/docs-specialist.example.json](../pilot/docs-specialist.example.json) is a complete
+`POST /agents` body for the fictional Juniper Parcel docs pilot. It starts with no connection
+selections and cannot retrieve the docs until access is configured. Its limits cap each task
+at 20 model turns, 60,000 tokens, $0.25, and 10 working minutes. No schedule is created.
+
+Set up its source before running it:
+
+1. Open the existing **Juniper Parcel — Notion** connection and sign in with OAuth. Use a
+   provider identity whose permissions restrict reads to the Juniper Parcel root
+   `4051a83d-088f-81d9-a706-e5461045f50e` and its descendants. The shared connection acts as
+   that identity for every agent granted access. Naming a root in instructions or in the
+   connection description does not restrict the provider's search or page reads.
+2. Discover tools and inspect their exact names, descriptions, and input schemas. Allow
+   only docs search and page reads. Keep write tools excluded. Permit those verified
+   read-only tools to run without individual approvals; leave all other tools unavailable.
+3. Check that the root and a child page are readable and that a known page outside the
+   allowed root cannot be read or found in search. If the signed-in identity cannot enforce
+   that boundary, use a separate restricted identity or provider integration; leave the
+   agent without access until this is resolved. OAuth sign-in alone proves no content scope.
+4. Create the agent from the example with `POST /agents`, using a human `x-actor-id` header.
+   In its Configuration, select only the verified docs connection and save. This creates
+   the live grant as well as a new configuration version. No skill is required. For an
+   existing task, explicitly migrate its version or start a new task.
+5. Add the specialist to an Endeavor and address it with a question. Check task events for
+   successful search and page-read results, then open the cited pages and compare each
+   factual claim. A missing-source response is useful evidence of a limit, but does not
+   count as a successful retrieval test.
+
+The specialist reads source pages when invoked. It does not copy the knowledge base into
+saved notes or build an index. The example rejects instructions embedded in retrieved
+content, reconciles archived references, and distinguishes documented policy from current
+health. These instructions guide behavior; connection policies and provider permissions
+enforce access. See [catalog grants and tools](catalogs.md#remote-mcp-tools-ca-64).
+
+The example also asks the specialist to preserve conditions that affect its advice: scope,
+time windows, required inputs, exceptions, and failure or escalation steps. Evaluate those
+conditions against the source, not just whether the answer has citations. Use a fresh
+Endeavor with the original question and no answer-key excerpts when checking a correction.
+Keep the existing task and conversation limits; record incomplete answers without silently
+raising budgets or retrying them.
+
+Juniper Parcel is synthetic. Its historical incidents and example log queries cannot prove
+current production health. CA-73 covers the Notion docs specialist; CloudWatch and a real
+on-call pilot are outside its current scope. The recorded pilot has explicit approval for
+broader read-only provider-account visibility. Its Juniper focus is an instruction, not an
+enforced page boundary. That exception does not change the restricted-identity setup above
+for new deployments. The ticket's linked evaluation records the approved scope and results.
+
+## Avatar appearance (CA-92)
+
+Overview → Profile → Edit offers a live avatar preview, three theme-aware colors (lime, sky,
+teal), and ten built-in icons. Save profile applies the choices; Discard changes makes no write.
+Automatic or Reset appearance restores the ID-derived tint and profile icon. Reset takes effect
+only when saved. Agent identity remains in the avatar's accessible label and tooltip, with the robot corner badge and no redundant visible agent labels.
+
+`PATCH /agents/:agentId` accepts optional `avatarColor` (`lime`, `sky`, `teal`) and `avatarIcon`
+(`agents`, `search`, `check`, `file`, `work`, `connections`, `approvals`, `catalogs`, `setup`,
+`schedules`). Each field accepts `null` to restore its default; omitted fields stay unchanged.
+The same fields are returned on agents, directory entries, and agent conversation members.
+Appearance belongs to the profile and never creates a configuration version. Existing agents
+start with null overrides. Migration 017 adds the nullable columns and allowed-value constraints.
+Pictures, uploads, arbitrary colors, and object storage are outside this feature.
+
+## Public handoff profiles (CA-98)
+
+`POST /agents` and `PATCH /agents/:agentId` accept optional `produces` and `needs`
+strings (at most 500 characters each after trimming). Produces says what the agent hands
+back; Needs says what input it expects. Omission preserves a field on PATCH; null or blank
+text clears it. Storage returns missing values as null. Migration 023 adds the columns and
+length constraints. These are public profile descriptions, not instructions, and changes
+do not create a version or change grants or task pins.
+
+New agent and Overview → Profile → Edit use the existing profile form. Save applies
+the fields; Discard leaves storage unchanged. Participant popovers show purpose, skill
+names from the current configuration, Produces, Needs, and status in the current endeavor.
+Busy means an open task (working, waiting, or blocked), including paused work. Work in
+another endeavor does not make the agent busy here. Completed and cancelled work does
+not count. Directory entries have no endeavor status.
+
+The runner and member responses use the same public projection. It selects only identity,
+purpose, handoff descriptions, skill names, and endeavor status. It never selects skill
+instructions, notes, credentials, connection details, or other conversations.

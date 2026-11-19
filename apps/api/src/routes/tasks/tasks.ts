@@ -114,7 +114,7 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
     {
       schema: {
         description:
-          "What all agent work in a conversation spent in US dollars, and its costliest tasks, next to the conversation's budget.",
+          "What all agent work in a conversation spent in US dollars, split by agent and including its costliest tasks, next to the conversation's budget.",
         tags: ['tasks'],
         headers: actorHeadersSchema,
         params: conversationOutputsParamsSchema
@@ -128,7 +128,7 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
     {
       schema: {
         description:
-          'Outputs and evidence from every task in a conversation, newest first: results, documents, links, files, and logs.',
+          'Outputs and evidence from every task in a conversation, newest first. Each is draft until its task completes, then final.',
         tags: ['tasks'],
         headers: actorHeadersSchema,
         params: conversationOutputsParamsSchema,
@@ -142,7 +142,8 @@ export async function tasksRouter(fastifyInstance: FastifyInstance): Promise<voi
     '/tasks/:taskId/outputs',
     {
       schema: {
-        description: "A task's outputs and evidence.",
+        description:
+          "A task's outputs and evidence. Each is draft until the task completes, then final.",
         tags: ['tasks'],
         headers: actorHeadersSchema,
         params: taskParamsSchema

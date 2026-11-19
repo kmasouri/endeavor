@@ -88,14 +88,15 @@ const descriptions: Record<ToolName, string> = {
   delete_repository_file:
     'Delete a file from this task checkout. No changes are published to GitHub.',
   run_command:
-    'Run a shell command against this task checkout in a disposable offline container. Returns an execution ID immediately; poll get_execution. Dependencies come from the configured image; network installs are unavailable. The timeout is ten minutes. Only existing source files are imported. New generated files are discarded; use write_repository_file to add source.',
+    "Run a shell command against this task checkout in this task's reusable offline container. Returns an execution ID immediately; poll get_execution. Dependencies come from the configured image; network installs are unavailable. The timeout is ten minutes. Only existing source files are imported. Generated files, caches, dependencies, and background processes persist until workspace cleanup; use write_repository_file to add publishable source. workspaceReset reports a newly created environment. Redirect background logs to a file.",
   get_execution:
-    'Wait up to 20 seconds for completion, then read status, exit code, bounded log, base commit, and snapshot revision. Set wait_seconds to 0 for an immediate read. Poll until finished before editing or publishing. A cancelled or interrupted run never imports its files.',
-  cancel_execution: 'Stop this task execution and discard its container changes.',
+    'Wait up to 20 seconds for completion, then read status, exit code, bounded log, base commit, and snapshot revision. Set wait_seconds to 0 for an immediate read. Poll until finished before editing or publishing. A cancelled or interrupted run never imports its files. Background processes prevent verification; stop them before the final check.',
+  cancel_execution:
+    'Cancel a running execution and remove its workspace container, including background processes. Keep the last accepted source snapshot.',
   repository_changes:
     'List changed and deleted paths relative to the checked-out commit, with content hashes. Read the changed files and publish them through the GitHub connection after reviewing the diff. Tests apply only to the reported revision.',
   discard_repository:
-    'Delete this task checkout and evidence. Refused while an execution is running.'
+    'Delete this task checkout, evidence, and workspace container. Refused while an execution is running.'
 };
 export const TOOLS = Object.entries(toolSchemas).map(([name, schema]) => ({
   name,

@@ -1,4 +1,7 @@
 <script lang="ts">
+  import CatalogNavigation from './CatalogNavigation.svelte';
+  import ConnectionStatus from '../ConnectionStatus.svelte';
+  import { authenticationLabel } from '../connection-auth';
   import PageHeader from '../PageHeader.svelte';
   import Icon from '../Icon.svelte';
   import ManagementToolbar from '../ManagementToolbar.svelte';
@@ -22,6 +25,7 @@
   <PageHeader {title} subtitle={kind === 'skills' ? 'Reusable instructions for your agents.' : 'HTTP APIs and MCP servers your agents can use.'}>
     {#snippet actions()}<button onclick={() => go(`/${kind}/new`)}>+ Create {singular}</button>{/snippet}
   </PageHeader>
+  <CatalogNavigation current={kind} />
   <ErrorNote error={entries.error} />
   {#if !entries.data && !entries.error}<p class="muted">Loading {kind}…</p>{/if}
   {#if entries.data}
@@ -29,16 +33,22 @@
     <div class="label muted">{title} · {shown.length}</div>
     <ul class="management-list" aria-label={title}>
       {#each shown as entry (entry.id)}
-        <li><a class="management-row" href={`#/${kind}/${entry.id}`}>
+        <li><a class="management-row" class:connection-row={'baseUrl' in entry} href={`#/${kind}/${entry.id}`}>
           <span class="management-icon"><Icon name={kind === 'skills' ? 'file' : 'connections'} /></span>
           <div><h3>{entry.name}</h3><p>{entry.description}</p></div>
           <div class="management-meta">
             {#if 'baseUrl' in entry}
               {entry.kind === 'mcp' ? 'MCP server' : 'HTTP API'}
-              <small>{entry.hasCredential ? 'Credential saved' : 'No credential'}</small>
+              <small>{authenticationLabel(entry)}</small>
             {:else}Versioned instructions{/if}
           </div>
-          <span class="management-status" class:enabled={!entry.disabledAt}>{entry.disabledAt ? 'Disabled' : 'Enabled'}</span>
+          {#if 'baseUrl' in entry}
+            <div class="management-statuses">
+              <ConnectionStatus connection={entry} />
+            </div>
+          {:else}
+            <span class="management-status" class:enabled={!entry.disabledAt}>{entry.disabledAt ? 'Disabled' : 'Enabled'}</span>
+          {/if}
           <span class="chevron" aria-hidden="true">›</span>
         </a></li>
       {/each}

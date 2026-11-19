@@ -30,8 +30,9 @@ export const responsibilityParamsSchema = z.object({ responsibilityId: z.uuid() 
 
 export const createResponsibilityBodySchema = z
   .strictObject({
-    agentId: z.uuid(),
-    // The agent posts its results here. It must already be a member.
+    projectId: z.uuid().optional(),
+    agentId: z.uuid().nullable().optional(),
+    // Legacy clients can still identify the project through a conversation.
     conversationId: z.uuid().optional(),
     title: z.string().trim().min(1).max(200),
     brief: z.string().trim().min(1),
@@ -55,6 +56,7 @@ export const createResponsibilityBodySchema = z
 
 export const updateResponsibilityBodySchema = z
   .strictObject({
+    agentId: z.uuid().nullable().optional(),
     title: z.string().trim().min(1).max(200).optional(),
     brief: z.string().trim().min(1).optional(),
     completionCriteria: z.string().trim().min(1).optional(),
@@ -78,6 +80,7 @@ export const updateResponsibilityBodySchema = z
 
 export const listResponsibilitiesQuerySchema = z.strictObject({
   agentId: z.uuid().optional(),
+  projectId: z.uuid().optional(),
   status: z.enum(['enabled', 'paused', 'cancelled']).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0)

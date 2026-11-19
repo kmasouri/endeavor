@@ -9,6 +9,7 @@ export const AGENT_TOOLS = {
   completeTask: 'complete_task',
   reportBlocked: 'report_blocked',
   suggestParticipant: 'suggest_participant',
+  findAgents: 'find_agents',
   httpRequest: 'http_request',
   saveNote: 'save_note',
   listFiles: 'list_files',
@@ -81,7 +82,7 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
   {
     name: AGENT_TOOLS.completeTask,
     description:
-      'Finish your task with its result. A separate check reads the result and your outputs against the completion criteria first; if it finds gaps, you get them back to fix. Then the result is saved and posted to whoever asked. Say how it meets each criterion in criteria_check.',
+      'Finish your task with its result. A separate check reads the result and your outputs against the completion criteria first; if it finds gaps, you get them back to fix. The result is saved. By default it is posted to whoever asked. Set post_result false when no reply is needed or you already sent the answer. An outstanding reply wait still receives your answer. Say how it meets each criterion in criteria_check.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -90,7 +91,12 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
           type: 'string',
           description: 'How the result meets each completion criterion, or what is missing.'
         },
-        criteria_met: { type: 'boolean' }
+        criteria_met: { type: 'boolean' },
+        post_result: {
+          type: 'boolean',
+          description:
+            'Defaults to true. Use false to finish silently after an acknowledgement or an answer you already sent. The result stays in task history.'
+        }
       },
       required: ['result', 'criteria_check', 'criteria_met'],
       additionalProperties: false
@@ -112,7 +118,7 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
   {
     name: AGENT_TOOLS.saveNote,
     description:
-      'Save a note for your later work, like "Yesterday\'s check ruled out the payment gateway." Notes are your own memory, not approved facts, and people can read, fix, or delete them. A note saved here is only shown to you in this conversation. Save only what will help later; don\'t copy whole messages.',
+      'Save a note for your later work, like "Yesterday\'s check ruled out the payment gateway." Notes are your own memory, not approved facts, and people can read, fix, or delete them. Notes are shared with your other endeavors in this project. In a standalone endeavor, the note stays in this conversation. Save only what will help later; don\'t copy whole messages.',
     inputSchema: {
       type: 'object',
       properties: { note: { type: 'string', description: 'The note, in a sentence or two.' } },
@@ -162,7 +168,7 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
   {
     name: AGENT_TOOLS.findCapabilities,
     description:
-      'List skills and connections that people made discoverable, with what each allows and whether you can use it now. Finding one gives you no access: use request_access to ask a person.',
+      'List enabled, discoverable skills and connections, with what each allows and whether you can use it now. Finding one gives you no access: use request_access to ask a person.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -197,13 +203,26 @@ export const AGENT_TOOL_DEFINITIONS: ModelToolDefinition[] = [
     }
   },
   {
+    name: AGENT_TOOLS.findAgents,
+    description:
+      'Search public profiles of discoverable agents outside this endeavor. Returns at most 10 matches by name, purpose, skill names, what they produce, and what input they need. Finding an agent grants nothing: use suggest_participant to ask a person to add them.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Words describing the specialist you need.' }
+      },
+      required: ['query'],
+      additionalProperties: false
+    }
+  },
+  {
     name: AGENT_TOOLS.suggestParticipant,
     description:
       'Suggest that a person add an agent from the directory to this conversation. It only posts the suggestion to the people here; it does not add anyone or contact the agent.',
     inputSchema: {
       type: 'object',
       properties: {
-        name: { type: 'string', description: 'The agent name, from the directory.' },
+        name: { type: 'string', description: 'The agent name returned by find_agents.' },
         reason: { type: 'string', description: 'Why they would help.' }
       },
       required: ['name', 'reason'],

@@ -91,6 +91,7 @@ export class ModelAiSdkClient implements ModelClient {
         ...(request.tools.length > 0 && { tools }),
         maxOutputTokens: request.maxTokens,
         providerOptions: this.sdk.options?.(request.model),
+        abortSignal: request.signal,
         // The runner retries with its own backoff and counts failures.
         maxRetries: 0
       });

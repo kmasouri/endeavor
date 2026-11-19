@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import { type AgentNote, api } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import { formatDateTime } from '../components';
@@ -13,9 +12,11 @@
   } = $props();
   let note = $derived(props.note);
   let editing = $state(false);
-  let body = $state(untrack(() => note.body));
+  let body = $state('');
   const action = createAction();
   let path = $derived(`/agents/${props.agentId}/notes/${note.id}`);
+  // Narrowing an agent-wide note keeps it to its project, or to its conversation for older notes.
+  let narrowScope = $derived(note.projectId ? 'project' : note.sourceConversationId ? 'conversation' : null);
   const save = (event: SubmitEvent) => {
     event.preventDefault();
     void action
@@ -27,12 +28,12 @@
 <li>
   {#if editing}
     <form onsubmit={save} class="stack">
-      <textarea bind:value={body} rows={3}></textarea>
+      <textarea aria-label="Note text" bind:value={body} rows={3} maxlength={10000} required disabled={action.busy}></textarea>
 
       <div class="row">
-        <button disabled={action.busy}> Save </button>
+        <button disabled={action.busy || !body.trim()}> Save </button>
 
-        <button type="button" class="secondary" onclick={() => (editing = false)}> Cancel </button>
+        <button type="button" class="secondary" disabled={action.busy} onclick={() => (editing = false)}> Cancel </button>
       </div>
     </form>
   {:else}
@@ -65,6 +66,8 @@
 
     {#if note.scope === 'agent'}
       used in all its work
+    {:else if note.scope === 'project'}
+      used in every endeavor of that project
     {:else}
       used only in that conversation
     {/if}
@@ -72,22 +75,26 @@
 
   {#if !editing}
     <div class="row wrap">
-      <button class="secondary" onclick={() => (editing = true)}> Correct </button>
+      <button class="secondary" disabled={action.busy} onclick={() => { body = note.body; editing = true; }}> Correct </button>
 
+      {#if note.scope !== 'agent' || narrowScope}
       <button
         class="secondary"
         disabled={action.busy}
         onclick={() =>
           void action
-            .run(() => api.patch(path, { scope: note.scope === 'agent' ? 'conversation' : 'agent' }))
+            .run(() => api.patch(path, { scope: note.scope === 'agent' ? narrowScope : 'agent' }))
             .then(props.onChanged)}
       >
-        {#if note.scope === 'agent'}
+        {#if note.scope === 'agent' && narrowScope === 'project'}
+          Use only in its project
+        {:else if note.scope === 'agent'}
           Use only in its conversation
         {:else}
           Use in all its work
         {/if}
       </button>
+      {/if}
 
       <button
         class="secondary"
@@ -103,3 +110,7 @@
 
   <ErrorNote error={action.error} />
 </li>
+
+<style>
+  .body { white-space: pre-wrap; }
+</style>

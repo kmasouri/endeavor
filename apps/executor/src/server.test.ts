@@ -17,6 +17,7 @@ test('speaks MCP to the installed client and requires trusted task identity for 
     settings,
     {
       async recover() {},
+      async release() {},
       run() {
         throw new Error('not used');
       }

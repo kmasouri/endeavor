@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorkspaceFsClient } from './workspace-fs.client';
@@ -88,9 +88,23 @@ describe('WorkspaceFsClient', () => {
     await expect(client.read(TASK, 'link/file.txt')).rejects.toMatchObject({
       name: 'workspacePathInvalid'
     });
-    await expect(client.write(TASK, 'link/new.txt', 'x')).rejects.toMatchObject({
+    await expect(client.write(TASK, 'link/new/sub/file.txt', 'x')).rejects.toMatchObject({
       name: 'workspacePathInvalid'
     });
+    expect(await readdir(outside)).toEqual(['file.txt']);
+  });
+
+  it('refuses a task root that links to another task', async () => {
+    await client.write(OTHER_TASK, 'secret.txt', 'theirs');
+    await symlink(join(root, OTHER_TASK), join(root, TASK));
+    await expect(client.read(TASK, 'secret.txt')).rejects.toMatchObject({
+      name: 'workspacePathInvalid'
+    });
+    await expect(client.list(TASK)).rejects.toMatchObject({ name: 'workspacePathInvalid' });
+    await expect(client.write(TASK, 'new/file.txt', 'x')).rejects.toMatchObject({
+      name: 'workspacePathInvalid'
+    });
+    expect(await readdir(join(root, OTHER_TASK))).toEqual(['secret.txt']);
   });
 
   it('enforces the size limits', async () => {

@@ -1,26 +1,30 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
   import {
     type CostReport,
     type DirectoryEntry,
     type Member,
     type Message,
+    type RoutingDecision,
     type Task,
     type TaskOutput
   } from '../api';
   import { collectConversationArtifacts } from '../conversation-artifacts';
-  import { buildMessagePreview } from '../message-format';
+  import { buildMessagePreview, findTextMentions } from '../message-format';
   import { formatDateTime, formatShortTime } from '../components';
   import FormattedText from '../FormattedText.svelte';
   import Avatar from '../Avatar.svelte';
+  import ParticipantProfile from '../ParticipantProfile.svelte';
   import Icon from '../Icon.svelte';
   import Suggestion from './Suggestion.svelte';
   import TaskStatus from './TaskStatus.svelte';
   import RunSteps from './RunSteps.svelte';
+  import RoutingDecisions from './RoutingDecisions.svelte';
   import ArtifactCard from './ArtifactCard.svelte';
   let props: {
+    conversationId: string;
     messages: Message[];
     nameOf: (ref: { type: string; id: string | null }) => string;
+    humanName: (id: string | null) => string | undefined;
     members: Member[];
     directory: DirectoryEntry[];
     meId: string;
@@ -29,31 +33,57 @@
     costs?: CostReport;
     onAdd: (agentId: string) => Promise<unknown>;
     onReply: (message: Message) => void;
+    onReveal: (messageId: string) => Promise<void>;
     onRevise: (output: TaskOutput & { taskId: string }) => void;
     onChanged: () => void;
+    onInspect: (message: Message) => void;
+    onInspectRun: (id: string) => void;
+    selectedRunId?: string;
+    routingDecisions: RoutingDecision[];
+    onRoutingChanged: () => Promise<unknown> | void;
   } = $props();
-  let end = $state<HTMLDivElement | null>(null);
   let copied = $state('');
   let copyError = $state('');
   let count = $derived(props.messages.length);
-  $effect(() => {
-    count;
-    untrack(() => {
-      end?.scrollIntoView({ block: 'end' });
-    });
-  });
-  let artifacts = $derived(collectConversationArtifacts(props.outputs, props.messages, props.tasks));
+  let artifacts = $derived(
+    collectConversationArtifacts(props.outputs, props.messages, props.tasks)
+  );
   let byId = $derived.by(() => new Map(props.messages.map((message) => [message.id, message])));
   let lastForTask = $derived.by(
-    () => new Map(props.messages.filter((message) => message.taskId).map((message) => [message.taskId, message.id]))
+    () =>
+      new Map(
+        props.messages
+          .filter((message) => message.taskId)
+          .map((message) => [message.taskId, message.id])
+      )
   );
   let lastForAgent = $derived.by(
     () =>
-      new Map(props.messages.filter((message) => message.authorType === 'agent').map((message) => [message.authorId, message.id]))
+      new Map(
+        props.messages
+          .filter((message) => message.authorType === 'agent')
+          .map((message) => [message.authorId, message.id])
+      )
   );
   let names = $derived(
-    props.members.map((member) => ({ name: member.name, you: member.participant.id === props.meId }))
+    props.members.map((member) => ({
+      name: member.name,
+      you: member.participant.id === props.meId
+    }))
   );
+  const tagsFor = (message: Message) => {
+    const tags = [...new Map(message.mentions.map((ref) => [
+      `${ref.type}:${ref.id}`,
+      { ...ref, name: props.members.find((member) => member.participant.type === ref.type && member.participant.id === ref.id)?.name ?? props.nameOf(ref) }
+    ])).values()];
+    const written = new Set(findTextMentions(message.body, [
+      ...props.members.map((member) => ({ name: member.name })), ...tags
+    ]).map(({ entry }) => entry.name.toLowerCase()));
+    return tags.filter((tag) => !written.has(tag.name.toLowerCase()));
+  };
+  const appearanceOf = (id: string | null) =>
+    props.members.find((member) => member.participant.type === 'agent' && member.participant.id === id)
+      ?? props.directory.find((agent) => agent.id === id);
   const copy = async (message: Message) => {
     try {
       await navigator.clipboard.writeText(message.body);
@@ -79,7 +109,9 @@
       new Date(previous.createdAt).toDateString() === new Date(message.createdAt).toDateString() &&
       Date.parse(message.createdAt) - Date.parse(previous.createdAt) < 300000}
     {@const replyTo = message.inReplyToMessageId ? byId.get(message.inReplyToMessageId) : null}
-    {@const name = props.nameOf({ type: message.authorType, id: message.authorId })}
+    {@const routingDecision = props.routingDecisions.find((decision) => decision.decisionMessageId === message.id)}
+    {@const name = routingDecision ? 'Decision Engine' : props.nameOf({ type: message.authorType, id: message.authorId })}
+    {@const missingTags = tagsFor(message)}
     {@const you = message.mentions.some((mention) => mention.id === props.meId && mention.type === 'human')}
     {#if !previous || new Date(previous.createdAt).toDateString() !== new Date(message.createdAt).toDateString()}<li
         class="date-divider"
@@ -94,20 +126,23 @@
       </li>{/if}
     <li
       id={`m-${message.id}`}
+      data-message-id={message.id}
       class="message"
+      class:selected-run={Boolean(message.taskId && message.taskId === props.selectedRunId)}
       class:grouped
       class:mentioned-you={you}
-      class:has-reply={Boolean(replyTo)}
+      class:has-reply={Boolean(message.inReplyToMessageId)}
     >
-      {#if replyTo}
-        {@const replyName = props.nameOf({ type: replyTo.authorType, id: replyTo.authorId })}
+      {#if message.inReplyToMessageId}
+        {@const replyName = replyTo ? props.nameOf({ type: replyTo.authorType, id: replyTo.authorId }) : 'an earlier message'}
         <a
           class="reply-preview"
-          href={`#m-${replyTo.id}`}
-          aria-label={`Reply to ${replyName}: ${buildMessagePreview(replyTo.body)}`}
-          onclick={(event) => {
+          href={`#m-${message.inReplyToMessageId}`}
+          aria-label={replyTo ? `Reply to ${replyName}: ${buildMessagePreview(replyTo.body)}` : 'Load replied-to message'}
+          onclick={async (event) => {
             event.preventDefault();
-            document.getElementById(`m-${replyTo.id}`)?.scrollIntoView({ block: 'center' });
+            await props.onReveal(message.inReplyToMessageId!);
+            document.getElementById(`m-${message.inReplyToMessageId}`)?.scrollIntoView({ block: 'center' });
           }}
         >
           <svg
@@ -120,45 +155,74 @@
             stroke-width="2"
             aria-hidden="true"><path d="M1 12V6a5 5 0 015-5h16" /></svg
           >
-          <Avatar
+          {#if replyTo}<Avatar
             name={replyName}
-            id={replyTo.authorId ?? 'platform'}
+            id={replyTo.authorId ?? 'platform'} appearance={appearanceOf(replyTo.authorId)}
             agent={replyTo.authorType === 'agent'}
             size="sm"
           />
-          <strong class="reply-name">{replyName}</strong>{#if replyTo.authorType === 'agent'}<span
-              class="agent-label">agent</span
-            >{/if}
+          <strong class="reply-name">{replyName}</strong>
           <span class="reply-excerpt">{buildMessagePreview(replyTo.body)}</span>
+          {:else}<span class="reply-excerpt">Reply to an earlier message · Load message</span>{/if}
         </a>
       {/if}
       <div class="message-avatar">
-        {#if !grouped}<Avatar
+        {#if !grouped && message.authorType !== 'system' && message.authorId}
+          <ParticipantProfile {name} id={message.authorId} agent={message.authorType === 'agent'} meId={props.meId}
+            member={props.members.find((member) => member.participant.id === message.authorId && member.participant.type === message.authorType)}
+            directory={message.authorType === 'agent' ? props.directory.find((entry) => entry.id === message.authorId) : undefined} avatar>
+            <Avatar {name} id={message.authorId} appearance={appearanceOf(message.authorId)} agent={message.authorType === 'agent'} size="lg" />
+          </ParticipantProfile>
+        {:else if !grouped}<Avatar
             {name}
-            id={message.authorId ?? 'platform'}
+            id={message.authorId ?? 'platform'} appearance={appearanceOf(message.authorId)}
             agent={message.authorType === 'agent'}
             size="lg"
           />{/if}
       </div>
       <div class="message-content">
         {#if !grouped}<div class="meta">
-            <strong>{name}</strong>{#if message.authorType === 'agent'}<span class="agent-label"
-                >agent</span
-              >{/if}<time class="caption muted" title={formatDateTime(message.createdAt)}
+            {#if message.authorType !== 'system' && message.authorId}
+              <ParticipantProfile {name} id={message.authorId} agent={message.authorType === 'agent'} meId={props.meId}
+                member={props.members.find((member) => member.participant.id === message.authorId && member.participant.type === message.authorType)}
+                directory={message.authorType === 'agent' ? props.directory.find((entry) => entry.id === message.authorId) : undefined}>
+                <strong>{name}</strong>
+              </ParticipantProfile>
+            {:else}<strong>{name}</strong>{/if}<time class="caption muted" title={formatDateTime(message.createdAt)}
               >{formatShortTime(message.createdAt)}</time
             >
           </div>{:else}<time class="group-time caption muted" title={formatDateTime(message.createdAt)}
             >{formatShortTime(message.createdAt)}</time
           >{/if}
-        <div class="message-body"><FormattedText text={message.body} {names} /></div>
+        <div class="message-body"><FormattedText text={message.body} {names} />
+          {#if missingTags.length}
+            <p class="message-tags" aria-label="Tagged participants">
+              {#each missingTags as tag (`${tag.type}:${tag.id}`)}
+                <mark class={tag.type === 'human' && tag.id === props.meId ? 'mention-you' : 'mention'}>@{tag.name}</mark>
+              {/each}
+            </p>
+          {/if}
+        </div>
+        {#if routingDecision}
+          <RoutingDecisions
+            conversationId={props.conversationId}
+            decision={routingDecision}
+            directory={props.directory}
+            humanName={props.humanName}
+            onChanged={props.onRoutingChanged}
+            embedded
+          />
+        {/if}
         {#if message.taskId && lastForTask.get(message.taskId) === message.id}
           {#if !props.outputs.some((output) => output.taskId === message.taskId) || artifacts.some((output) => output.taskId === message.taskId)}<RunSteps
               taskId={message.taskId}
+              onInspect={props.onInspectRun}
             />{/if}
           {#each artifacts.filter((output) => output.taskId === message.taskId) as output (output.id)}<ArtifactCard
               {output}
               task={props.tasks.find((task) => task.id === message.taskId)}
               cost={props.costs?.tasks.find((taskCost) => taskCost.taskId === message.taskId)?.costUsd}
+              onInspect={props.onInspectRun}
               onReply={() => props.onRevise(output)}
               onChanged={props.onChanged}
             />{/each}
@@ -167,6 +231,7 @@
           {#each props.tasks.filter((task) => task.ownerAgentId === message.authorId && !['completed', 'cancelled'].includes(task.state)) as task (task.id)}<TaskStatus
               {task}
               costs={props.costs}
+              pausedByName={props.humanName(task.pausedByHumanId)}
               onChanged={props.onChanged}
             />{/each}
         {/if}
@@ -180,14 +245,14 @@
           aria-label={copied === message.id ? 'Copied' : 'Copy'}
           onclick={() => void copy(message)}
           ><Icon name={copied === message.id ? 'check' : 'copy'} /></button
-        >{#if message.authorType === 'agent' && message.taskId}<a
+        >{#if message.authorType === 'agent'}<button
             class="quiet icon-button"
             aria-label="See what this agent did"
-            href={`#/tasks/${message.taskId}`}><Icon name="history" /></a
+            title={message.taskId ? "Inspect this run" : "No run was recorded for this message"}
+            onclick={() => props.onInspect(message)}><Icon name="history" /></button
           >{/if}
       </div>
     </li>
   {/each}
 </ol>
 {#if copyError}<p class="error">{copyError}</p>{/if}
-<div bind:this={end}></div>

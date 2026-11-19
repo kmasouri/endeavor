@@ -1,6 +1,6 @@
 import { HumanRepository, UpdateHumanInput } from '../../data';
 import { HumanLogger } from '../../observability';
-import { ADMIN_ONLY, requireHuman } from '../../shared/access';
+import { ADMIN_ONLY, requireHuman } from '../access/access.rules';
 import { Human, HumanRole } from '../../shared/types';
 
 export class HumanService {

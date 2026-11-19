@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import DeleteAgent from './DeleteAgent.svelte';
   import Avatar from '../Avatar.svelte';
   import {
@@ -20,7 +21,7 @@
   import AgentStatus from './AgentStatus.svelte';
   import { loadAll, listVersionChanges } from './agent-data';
   import './agents.css';
-  let { agentId }: { agentId: string } = $props();
+  let { agentId, initialConfiguration }: { agentId: string; initialConfiguration: boolean } = $props();
   const agent = createLoad(
     () => api.get<Agent>(`/agents/${agentId}`),
     () => [agentId]
@@ -43,7 +44,7 @@
     () => []
   );
   let deleting = $state(false);
-  let tab = $state('Overview');
+  let tab = $state(untrack(() => initialConfiguration ? 'Configuration' : 'Overview'));
   let editingProfile = $state(false);
   const action = createAction();
   const reloadAll = () => {
@@ -85,11 +86,11 @@
   {#if !loadedAgent && !agent.error}<p>Loading agent…</p>{:else if loadedAgent}
     <header class="agent-detail-header">
       <div class="agent-heading">
-        <Avatar name={loadedAgent.name} id={loadedAgent.id} agent />
+        <Avatar name={loadedAgent.name} id={loadedAgent.id} appearance={loadedAgent} agent />
         <div>
           <div class="row wrap">
             <h1>{loadedAgent.name}</h1>
-            <span class="agent-label">agent</span><AgentStatus agent={loadedAgent} />
+            <AgentStatus agent={loadedAgent} />
           </div>
           <p>{loadedAgent.purpose}</p>
         </div>
@@ -190,6 +191,7 @@
         <div>
           {#if editingProfile}<Profile
               agent={loadedAgent}
+              onDiscard={() => (editingProfile = false)}
               onSaved={() => {
                 editingProfile = false;
                 agent.reload();
@@ -199,11 +201,16 @@
                 <h2>Profile</h2>
                 <button class="text-button" onclick={() => (editingProfile = true)}>Edit</button>
               </div>
+              <div class="row"><Avatar name={loadedAgent.name} id={loadedAgent.id} appearance={loadedAgent} agent size="lg" /><span>Appearance</span></div>
               <dl class="agent-kv">
                 <dt>Name</dt>
                 <dd>{loadedAgent.name}</dd>
                 <dt>Purpose</dt>
                 <dd>{loadedAgent.purpose}</dd>
+                <dt>Produces</dt>
+                <dd>{loadedAgent.produces || 'Not specified'}</dd>
+                <dt>Needs</dt>
+                <dd>{loadedAgent.needs || 'Not specified'}</dd>
               </dl>
               <p class="caption muted">Not versioned. A change shows everywhere at once.</p>
             </section>{/if}

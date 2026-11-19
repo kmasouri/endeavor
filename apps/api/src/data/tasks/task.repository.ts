@@ -1,6 +1,7 @@
 import {
   Actor,
   CriteriaCheck,
+  ResponsibilityRun,
   Task,
   TaskEvent,
   TaskOutput,
@@ -29,6 +30,26 @@ export interface CreateTaskInput {
   responsibilityId: string | null;
 }
 
+export interface StartResponsibilityRunInput {
+  responsibilityId: string;
+  agentId: string | null;
+  projectId: string;
+  runKey: string;
+  endeavorTitle: string;
+  title: string;
+  goal: string;
+  completionCriteria: string;
+  note?: string;
+  startedBy: Actor;
+  expectedUpdatedAt: Date;
+  expectedNextRunAt?: Date;
+  catchUpSlot?: Date;
+}
+
+export type ResponsibilityRunStart =
+  | { run: ResponsibilityRun; created: boolean; task: Task | null }
+  | { reason: 'open' | 'changed' | 'agent' | 'project' };
+
 export interface ListTasksInput {
   // Only tasks this person may see: in a conversation they belong to, or asked for by them.
   visibleToHumanId?: string;
@@ -51,6 +72,8 @@ export interface TaskChanges {
   agentVersionId?: string;
 }
 
+export type TaskUpdateEvent = Pick<TaskEvent, 'type' | 'actor' | 'data'>;
+
 export interface CreateTaskWaitInput {
   kind: TaskWaitKind;
   targetId: string | null;
@@ -65,6 +88,11 @@ export interface CreateTaskOutputInput {
   metadata: Record<string, unknown>;
 }
 
+export interface ConversationTaskOutput {
+  output: TaskOutput;
+  taskState: TaskState;
+}
+
 export interface CostFilter {
   agentId?: string;
   conversationId?: string;
@@ -77,6 +105,11 @@ export interface CostSummary {
   unpricedCalls: number;
 }
 
+export interface AgentCost extends CostSummary {
+  agentId: string;
+  name: string;
+}
+
 export interface TaskCost {
   taskId: string;
   title: string;
@@ -84,10 +117,40 @@ export interface TaskCost {
   tokens: number;
 }
 
+export interface StoredHttpCall {
+  requestHash: string;
+  response: { status: number; body: string; truncated: boolean } | null;
+}
+
 export interface TaskRepository {
+  getHttpCall(taskId: string, callId: string): Promise<StoredHttpCall | null>;
+  // Only the insert winner may send this call. Existing claims are never reset.
+  claimHttpCall(taskId: string, callId: string, requestHash: string): Promise<boolean>;
+  saveHttpCallResponse(
+    taskId: string,
+    callId: string,
+    requestHash: string,
+    response: NonNullable<StoredHttpCall['response']>
+  ): Promise<boolean>;
   // Creates the task, or returns the existing one with the same runKey. For responsibility
-  // starts, a competing open run can also be returned; services check its key before use.
+  // starts, or an agent already working in an endeavor, a competing open task can also be
+  // returned; services check its key before using it as a new run.
   create(input: CreateTaskInput): Promise<{ task: Task; created: boolean }>;
+  startResponsibilityRun(input: StartResponsibilityRunInput): Promise<ResponsibilityRunStart>;
+  waitForNextResponsibilityRun(responsibilityId: string, slot: Date): Promise<boolean>;
+  getResponsibilityRun(runKey: string): Promise<ResponsibilityRun | null>;
+  listResponsibilityRuns(
+    responsibilityId: string, limit: number, offset: number
+  ): Promise<{ runs: ResponsibilityRun[]; total: number }>;
+  isScheduledStarter(messageId: string): Promise<boolean>;
+  getScheduledStarter(messageId: string, agentId: string): Promise<{
+    responsibilityId: string;
+    title: string;
+    brief: string;
+    completionCriteria: string;
+    requestedByType: 'human' | 'schedule';
+    requestedById: string | null;
+  } | null>;
   getById(taskId: string): Promise<Task | null>;
   getByRunKey(runKey: string): Promise<Task | null>;
   list(input: ListTasksInput): Promise<Task[]>;
@@ -98,7 +161,8 @@ export interface TaskRepository {
   update(
     taskId: string,
     expected: { state: TaskState; paused: boolean; agentVersionId?: string },
-    changes: TaskChanges
+    changes: TaskChanges,
+    event?: TaskUpdateEvent
   ): Promise<Task | null>;
 
   addWaits(taskId: string, waits: CreateTaskWaitInput[]): Promise<TaskWait[]>;
@@ -114,7 +178,17 @@ export interface TaskRepository {
     actor: Actor,
     data: Record<string, unknown>
   ): Promise<TaskEvent>;
+  // Saves batch results only while this worker owns the task, or after a human control
+  // action released its lease and left it stopped. Never finalizes another worker's batch.
+  recordToolResults(
+    taskId: string,
+    workerId: string,
+    data: Record<string, unknown>
+  ): Promise<boolean>;
   listEvents(taskId: string, options: { afterId: number; limit: number }): Promise<TaskEvent[]>;
+
+  // The newest matching event per task, fetched together for a status poll.
+  listLatestEvents(taskIds: string[], types: string[]): Promise<TaskEvent[]>;
 
   addOutput(taskId: string, input: CreateTaskOutputInput): Promise<TaskOutput>;
   listOutputs(taskId: string): Promise<TaskOutput[]>;
@@ -123,11 +197,13 @@ export interface TaskRepository {
   listConversationOutputs(
     conversationId: string,
     options: { limit: number; offset: number }
-  ): Promise<TaskOutput[]>;
+  ): Promise<ConversationTaskOutput[]>;
   countConversationOutputs(conversationId: string): Promise<number>;
   // What model calls cost, for an agent or a conversation, since a moment if given. costUsd only
   // counts calls with a known price; unpricedCalls says how many had none.
   sumCost(filter: CostFilter): Promise<CostSummary>;
+  // Every agent's total for the same filters, without a display limit.
+  listAgentCosts(filter: CostFilter): Promise<AgentCost[]>;
   // The costliest tasks, for the same filters.
   listTaskCosts(filter: CostFilter, limit: number): Promise<TaskCost[]>;
 
@@ -140,7 +216,6 @@ export interface TaskRepository {
   renewLease(taskId: string, workerId: string, leaseMs: number): Promise<boolean>;
 
   // A responsibility's open (working, waiting, or blocked) run, if it has one.
-  findOpenRun(responsibilityId: string): Promise<Task | null>;
   // The agent's open (working, waiting, or blocked) task in a conversation, if it has one.
   findOpenTask(conversationId: string, agentId: string): Promise<Task | null>;
   // Waiting tasks with no open waits. A crash between resolving a wait and waking the task

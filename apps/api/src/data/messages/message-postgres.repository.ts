@@ -41,6 +41,10 @@ export class MessagePostgresRepository implements MessageRepository {
          SELECT saved.id, agent_id
          FROM saved, unnest($10::uuid[]) AS agent_id
        )
+       , routed AS (
+         INSERT INTO endeavor.routing_decisions(id, conversation_id, message_id, kind)
+         SELECT gen_random_uuid(), conversation_id, id, 'starter' FROM saved WHERE $11::boolean
+       )
        SELECT * FROM saved`,
       [
         randomUUID(),
@@ -53,7 +57,8 @@ export class MessagePostgresRepository implements MessageRepository {
         input.inReplyToMessageId,
         input.taskId,
         input.clientKey,
-        input.deliverToAgentIds
+        input.deliverToAgentIds,
+        input.routeRequest ?? false
       ]
     );
 
@@ -95,6 +100,36 @@ export class MessagePostgresRepository implements MessageRepository {
       [conversationId, options.since, options.limit, options.offset]
     );
 
+    return result.rows.map(toMessage);
+  }
+
+  async listWindow(
+    conversationId: string,
+    options: { since: Date | null; limit: number; beforeId?: string; afterId?: string }
+  ): Promise<Message[]> {
+    const order = options.afterId ? 'ASC' : 'DESC';
+    const result = await this.db.query<MessageRow>(
+      `SELECT * FROM (
+         SELECT * FROM endeavor.messages
+         WHERE conversation_id = $1
+           AND ($2::timestamptz IS NULL OR created_at >= $2)
+           AND ($4::uuid IS NULL OR (created_at, id) < (
+             SELECT created_at, id FROM endeavor.messages WHERE id = $4 AND conversation_id = $1
+           ))
+           AND ($5::uuid IS NULL OR (created_at, id) > (
+             SELECT created_at, id FROM endeavor.messages WHERE id = $5 AND conversation_id = $1
+           ))
+         ORDER BY created_at ${order}, id ${order}
+         LIMIT $3
+       ) message_window ORDER BY created_at, id`,
+      [
+        conversationId,
+        options.since,
+        options.limit,
+        options.beforeId ?? null,
+        options.afterId ?? null
+      ]
+    );
     return result.rows.map(toMessage);
   }
 

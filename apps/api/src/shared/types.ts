@@ -81,6 +81,7 @@ export interface Task {
   state: TaskState;
   stateReason: string | null;
   pausedAt: Date | null;
+  pausedByHumanId: string | null;
   requestedByType: TaskRequesterType;
   requestedById: string | null;
   requestMessageId: string | null;
@@ -119,6 +120,8 @@ export interface TaskEvent {
 
 export const TASK_OUTPUT_KINDS = ['text', 'link', 'file', 'data', 'log'] as const;
 export type TaskOutputKind = (typeof TASK_OUTPUT_KINDS)[number];
+export const TASK_OUTPUT_STATES = ['draft', 'final'] as const;
+export type TaskOutputState = (typeof TASK_OUTPUT_STATES)[number];
 
 export interface TaskOutput {
   id: string;
@@ -131,6 +134,10 @@ export interface TaskOutput {
   createdAt: Date;
 }
 
+export interface TaskOutputView extends TaskOutput {
+  state: TaskOutputState;
+}
+
 // Saved notes (agent memory): what an agent wrote down for later work. Not instructions, and
 // not an approved shared fact.
 export interface AgentNote {
@@ -139,7 +146,10 @@ export interface AgentNote {
   body: string;
   sourceTaskId: string | null;
   sourceConversationId: string | null;
-  // 'conversation': shown only in tasks in the source conversation. 'agent': in all of them.
+  // The project of the source conversation. null for notes saved outside any conversation.
+  projectId: string | null;
+  // 'project': shown in tasks in every endeavor of the project. 'conversation': only in tasks
+  // in the source conversation (notes saved before projects). 'agent': in all of them.
   scope: NoteScope;
   createdBy: Actor;
   updatedByHumanId: string | null;
@@ -147,12 +157,15 @@ export interface AgentNote {
   updatedAt: Date;
 }
 
-export type NoteScope = 'conversation' | 'agent';
+export const NOTE_SCOPES = ['conversation', 'project', 'agent'] as const;
+export type NoteScope = (typeof NOTE_SCOPES)[number];
 
-// A knowledge source a person attached to a conversation.
-export interface ConversationDocument {
+// A knowledge source a person attached to a project. conversationId, when set, limits it to that
+// one endeavor.
+export interface ProjectDocument {
   id: string;
-  conversationId: string;
+  projectId: string | null;
+  conversationId: string | null;
   title: string;
   content: string;
   addedByHumanId: string;
@@ -164,7 +177,40 @@ export interface ConversationDocument {
 export const MODEL_PROVIDERS = ['anthropic', 'openai', 'scripted'] as const;
 export type ModelProvider = (typeof MODEL_PROVIDERS)[number];
 
-export interface Agent {
+export const AGENT_AVATAR_COLORS = ['lime', 'sky', 'teal'] as const;
+export const AGENT_AVATAR_ICONS = [
+  'agents',
+  'search',
+  'check',
+  'file',
+  'work',
+  'connections',
+  'approvals',
+  'catalogs',
+  'setup',
+  'schedules'
+] as const;
+export interface AgentAppearance {
+  avatarColor?: (typeof AGENT_AVATAR_COLORS)[number] | null;
+  avatarIcon?: (typeof AGENT_AVATAR_ICONS)[number] | null;
+}
+
+// Public descriptions only. Never include instructions, notes, or connection details.
+export interface AgentProfileFields {
+  produces?: string | null;
+  needs?: string | null;
+}
+
+export interface AgentProfile extends AgentProfileFields {
+  id: string;
+  name: string;
+  purpose: string;
+  skillNames: string[];
+  // null outside an endeavor. Busy means an open task, including waiting or paused work.
+  status: 'idle' | 'busy' | null;
+}
+
+export interface Agent extends AgentAppearance, AgentProfileFields {
   // Retained only for historical references. Deleted agents cannot be restored.
   deletedAt?: Date | null;
   id: string;
@@ -208,9 +254,73 @@ export interface AgentVersion {
   createdAt: Date;
 }
 
+export const PROJECT_COLORS = [
+  'slate',
+  'sand',
+  'coral',
+  'orange',
+  'yellow',
+  'green',
+  'teal',
+  'blue',
+  'violet',
+  'pink'
+] as const;
+export const PROJECT_ICONS = [
+  'folder',
+  'language',
+  'science',
+  'code',
+  'description',
+  'work_outline',
+  'build',
+  'lightbulb'
+] as const;
+
+export interface ProjectAppearance {
+  icon?: (typeof PROJECT_ICONS)[number] | null;
+  color?: (typeof PROJECT_COLORS)[number] | null;
+}
+
+// A long-lived group of endeavors. It holds knowledge sources, saved notes, and the people and
+// agents added to each new endeavor in it.
+export interface Project extends ProjectAppearance {
+  id: string;
+  name: string;
+  // Human-supplied background included in every endeavor of this project.
+  about: string | null;
+  routingConfidenceThreshold: number | null;
+  // New endeavors go here when no project is named.
+  isDefault: boolean;
+  createdByHumanId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  archivedAt: Date | null;
+}
+
+export interface ProjectMember {
+  projectId: string;
+  participant: ParticipantRef;
+  addedByHumanId: string | null;
+  addedAt: Date;
+}
+
+export type EndeavorState = 'open' | 'closed';
+
+// An endeavor in the web app: one goal inside a project.
 export interface Conversation {
   id: string;
   title: string;
+  projectId: string | null;
+  // The request that opened the endeavor. null until someone asks for something.
+  goal: string | null;
+  goalMessageId: string | null;
+  // When the goal is met. Filled in from the goal; people can edit it.
+  doneCriteria: string | null;
+  // Closed when a person confirms the goal is done. Closed endeavors are archived.
+  state: EndeavorState;
+  closedAt: Date | null;
+  closedByHumanId: string | null;
   createdByHumanId: string;
   // A cap on what all agent work in this conversation spends, in US dollars. null: no cap.
   budgetUsd: number | null;
@@ -235,7 +345,8 @@ export interface MessageDelivery {
 
 // What the agent directory shows about an agent. Only what's needed to decide whom to ask:
 // never instructions, saved notes, credentials, or conversations.
-export interface DirectoryEntry {
+export interface DirectoryEntry extends AgentAppearance, AgentProfileFields {
+  skillNames: string[];
   id: string;
   name: string;
   purpose: string;
@@ -275,6 +386,9 @@ export type HttpMethod = (typeof HTTP_METHODS)[number];
 
 // A connection as the API shows it. The credential itself is never included.
 export interface Connection {
+  authMethod?: 'none' | 'header' | 'oauth';
+  // Credential availability, not a live provider health check.
+  authenticated?: boolean;
   // Missing kind in older in-memory records means HTTP.
   kind?: 'http' | 'mcp';
   allowedTools?: string[];
@@ -420,10 +534,11 @@ export interface CalendarRecurrence {
   timeZone: string;
 }
 
-// A recurring piece of work for one agent. Each run is a task with this responsibilityId.
+// Recurring work owned by a project, optionally assigned to a pinned agent.
 export interface Responsibility {
   id: string;
-  agentId: string;
+  projectId: string;
+  agentId: string | null;
   conversationId: string | null;
   title: string;
   brief: string;
@@ -439,4 +554,13 @@ export interface Responsibility {
   createdByHumanId: string;
   createdAt: Date;
   updatedAt: Date;
+}
+
+// A schedule run is visible before routing assigns a task. Older runs may have no endeavor.
+export interface ResponsibilityRun {
+  runKey: string;
+  conversationId: string | null;
+  createdAt: Date;
+  taskId: string | null;
+  state: TaskState | 'routing' | 'skipped';
 }

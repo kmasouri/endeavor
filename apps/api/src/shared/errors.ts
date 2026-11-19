@@ -8,7 +8,7 @@ interface ErrorDefinition {
 // The key is the error's name in responses. docs/errors.md documents each one.
 //
 // Codes are grouped by feature: 10xxx general, 20xxx items, 30xxx people and access, 40xxx tasks,
-// 50xxx agents, 60xxx conversations, 70xxx catalogs, 80xxx notes.
+// 50xxx agents, 60xxx conversations and projects, 70xxx catalogs, 80xxx notes.
 // Never change or reuse a code once it has shipped; clients may depend on it.
 export const ERRORS = {
   // 10xxx: general
@@ -59,6 +59,11 @@ export const ERRORS = {
     code: 40009,
     statusCode: 409,
     message: 'The last run of this responsibility is still going'
+  },
+  responsibilityRunChanged: {
+    code: 40012,
+    statusCode: 409,
+    message: 'The schedule changed before the run could start. Try again.'
   },
   catchUpNotPending: {
     code: 40010,
@@ -118,6 +123,22 @@ export const ERRORS = {
     statusCode: 422,
     message: 'That agent is not in the directory outside this conversation'
   },
+  projectNotFound: { code: 60008, statusCode: 404, message: 'Project not found' },
+  projectArchived: {
+    code: 60009,
+    statusCode: 409,
+    message: 'The project is archived. Restore it before starting endeavors in it'
+  },
+  defaultProjectArchive: {
+    code: 60010,
+    statusCode: 409,
+    message: "The default project can't be archived"
+  },
+  conversationClosed: {
+    code: 60011,
+    statusCode: 409,
+    message: 'This endeavor is closed. Reopen it to continue'
+  },
 
   // 70xxx: catalogs (skills, connections, grants)
   skillNotFound: { code: 70001, statusCode: 404, message: 'Skill not found' },
@@ -154,10 +175,24 @@ export const ERRORS = {
     statusCode: 400,
     message: 'This sign-in callback is invalid or expired. Start sign-in again from Catalogs.'
   },
+  connectionCallOutcomeUnknown: {
+    code: 70010,
+    statusCode: 409,
+    message:
+      'The HTTP call has an unknown outcome. A person must check the external service before requesting another attempt.'
+  },
 
   // 80xxx: saved notes and documents
   noteNotFound: { code: 80001, statusCode: 404, message: 'Note not found' },
   documentNotFound: { code: 80002, statusCode: 404, message: 'Document not found' },
+  // 85xxx: routing decisions
+  routingNotFound: { code: 85001, statusCode: 404, message: 'Routing decision not found' },
+  routingConflict: {
+    code: 85002,
+    statusCode: 409,
+    message:
+      'This decision changed or delivery is being assigned. Reload and try again. If it updated existing work, stop that work before sending a directed request.'
+  },
   // 90xxx: task workspaces (agents' files)
   workspacePathInvalid: {
     code: 90001,

@@ -46,9 +46,20 @@ The API and the web interface are separate npm workspaces, so each has its own d
 
 The web interface uses one Svelte component per page or form. Shared request and action state lives in `apps/web/src/state.svelte.ts`; hash navigation stays in `App.svelte`. Requests ignore answers from closed pages or older reloads, and polling stops when its component is removed. The typed HTTP client stays in `api.ts`. `svelte-check` checks components and TypeScript together. Web unit tests use Node's test runner with Svelte's compiler and browser runtime; they need no browser or database.
 The committed Playwright suite in `apps/web/e2e/` exercises the production web build with a mocked
-HTTP API. `npm run check` runs it locally and in CI, including browser setup. It checks schedule
-badge geometry, themes, responsive layout, empty states, and keyboard navigation without starting
-agents or requiring a database. Browser traces and screenshots are retained on failure.
+HTTP API. `npm run check` runs it locally, including browser setup. CI runs browser tests in
+four browser shards and separate lint/type/build/unit jobs in one fail-fast matrix. A failed
+matrix job cancels the remaining jobs in that run; the final `check` gate requires the complete
+matrix to pass. Locally, the check runner overlaps lint, types, unit tests, and builds;
+browser tests start as soon as the web build passes. All CI checks use `actions/setup-node` on
+GitHub runners. Browser shards install only web workspace dependencies and use Playwright to
+install Chromium and its Linux libraries.
+Superseded PR runs are canceled.
+The suite checks core chat, configuration, approvals and navigation flows, alongside schedule
+badge geometry, themes,
+responsive layout, empty/error states, and keyboard navigation without starting agents or
+requiring a database. Failure screenshots are automatic; full browser traces and success
+screenshots are opt-in. The
+[browser coverage matrix](browser-tests.md) records covered behavior, design references and gaps.
 
 Endeavors is the product-facing conversation destination. Its header search and native creation
 modal live in the shared shell; the selected chat keeps its existing features and compatible hash
@@ -57,7 +68,7 @@ hyphens, with a decorative `#` only in navigation. Creation input and API create
 normalize names; migration 034 upgrades existing names and adds a database constraint. IDs and all
 conversation relationships stay intact. Selection is remembered per person in browser storage and restored only from the current
 accessible list. Paginated lists are fully loaded for restoration and search; old requests cannot
-publish into another person's shell. A successful creation refreshes Recent and focuses the
+publish into another person's shell. A successful creation refreshes the project’s endeavors and focuses the
 composer. Optional initial human and agent members use the existing membership validation; no
 message or agent invocation occurs during creation. See [conversations](conversations.md).
 
@@ -65,9 +76,11 @@ The sidebar stays mounted when collapsed, with a compact rail of navigation icon
 with a mouse or focusing a control with the keyboard expands it temporarily. The header toggle
 pins it open. On narrow screens, the expanded sidebar overlays the page and navigation returns
 it to the rail. Width and label transitions respect the browser's reduced-motion setting.
-Recent endeavors and its New action appear only in the Endeavors view. Other sections retain
-main navigation and show their own page content. Returning to Endeavors restores the last
-accessible conversation for the selected person.
+The sidebar groups endeavors under expandable projects and lists standalone endeavors separately.
+New endeavor opens a draft in the main pane. Its project picker opens below the message box and
+starts on Standalone unless the draft came from a project. A project row menu opens the overview
+or edits the name and appearance. The same Material icon and preset color appear in the sidebar
+and picker. Selecting an endeavor expands its project. Unread counts roll up on collapsed projects.
 
 Agents uses the centered page frame, a searchable list, a separate creation page, and Overview,
 Configuration, and Versions tabs. Configuration uses catalog search with chosen-item removal
@@ -93,8 +106,10 @@ align their metadata and reflow based on the page width. It separates source cal
 from viewer-local next-run and history instants. Calendar recurrence stores a named source timezone,
 local time, frequency, and optional ISO weekdays alongside durable UTC slots. The task service
 computes source dates through clock changes, skipping gaps and choosing the earlier repeated instant.
-The existing scheduler and run keys retain restart recovery and missed-run handling; a partial
-unique index also prevents different starts from creating competing open runs for one responsibility.
+Projects own schedules. Each run opens a fresh endeavor and starts a pinned agent or queues a
+routing decision in the same transaction. The run key survives retries while routing waits for
+a person. Schedule locks serialize starts, and a partial unique index limits each schedule to
+one open starter task. Missed slots still follow the schedule’s catch-up policy.
 See `docs/scheduling.md` for API compatibility and migration steps. `profile-state.svelte.ts` keeps separate drafts for
 the two settings tabs, retains failed saves for retry, and guards navigation and person switching
 until edits are saved or discarded. `PATCH /humans/me` updates only the selected person's profile
@@ -109,10 +124,24 @@ inspection; the conversation shows the answer once, without a duplicate card or 
 Named outputs, files, links, distinct content, and pending reviews keep their artifact cards. Artifact cards use task
 review when review is pending; requests for changes return to the conversation composer.
 
-The interface shows only data returned by the API. Unread counts, live steps and typing, pause
-attribution, spending by agent, and draft/final labels remain follow-up work. Work links and existing
-task routes stay available until conversation-scoped history replaces them in CA-40. The temporary
-History links filter Work by conversation and owner; message inspection links open the recorded task.
+Run inspection lives in the conversation's Details panel. Agent History requests both conversationId
+and ownerAgentId from the task API, newest first, with explicit pagination. Message actions use the
+recorded taskId; legacy messages without a run association show an unavailable state. The inspector
+keeps chat visible and shows the request, criteria, state, outputs, readable steps, and expandable
+technical events. Event loading follows afterId through every page. Pending decisions, result review,
+pause, stop, resume, restart, version migration, and task access remain available in context.
+
+Ask for changes focuses the conversation composer. For completed or cancelled work it sends the
+composer text to the existing restart API, preserving its linked-new-run and retry semantics rather
+than creating an unrelated message-triggered task. The composer identifies the selected run and agent;
+a failed send retains the draft. Open work receives ordinary directed chat messages.
+
+Work is no longer in navigation. Existing task links open their exact run in its conversation;
+standalone runs keep a read-only inspector at the existing task URL. No task records or API access
+rules changed. Live steps derive from task events in the task service and appear above the composer.
+Conversation spending is split by agent in Details. Human typing uses short-lived, in-memory
+presence heartbeats that contain no draft text and expire after a disconnect. Draft/final labels
+remain follow-up work.
 
 Code is grouped by layer first, then by feature. For example, all handlers are in `handlers/`, and the item handlers are in `handlers/items/`. We chose this over one folder per feature because:
 
@@ -149,7 +178,7 @@ Imports only go one way, down the list:
 ```text
 routes       -> schemas, handlers
 handlers     -> schemas (types only), services through request.server
-services     -> data, integrations, observability (never other services)
+services     -> data, integrations, observability, feature rule helpers (never service classes)
 data         -> (nothing but shared)
 integrations -> (nothing but shared)
 schemas      -> (nothing but shared)
@@ -161,7 +190,7 @@ everything   -> shared
 These rules keep each layer easy to change without breaking the ones above it. Lint enforces the important ones:
 
 - Routes and handlers can't import from `data/` or `integrations/`. Only services use them.
-- Services can't import other services.
+- Service classes can't import other service classes. Services may import feature-owned `.rules.ts` helpers.
 - Repositories and integrations can only import from `shared/`.
 - Handlers can't import from `routes/`.
 - Schemas can't import from any other layer.
@@ -246,7 +275,7 @@ Service tests mock the interface with `jest.fn()`, the same way as a repository.
 
 ## Services never use each other
 
-A service never imports another service. If two services need the same thing, put it in a repository or integration, and give it to both. This keeps services free of import loops, and keeps each service's tests small.
+A service class never imports another service class. Share data access through repositories and outside calls through integrations, and give those dependencies to each service. Share business rules through feature-owned `.rules.ts` helpers that work on plain values and import only shared contracts or packages. This keeps services free of import loops and keeps their tests small.
 
 ## Plugins
 
@@ -327,9 +356,29 @@ A task is one run of work by one agent. `TaskService` owns every change to a tas
 
 ### Sharing lifecycle rules between services
 
-Two services change tasks: `TaskService`, for the API and human actions, and `TaskRunnerService`, the runner acting for agents. Services never use each other, so both use `TaskLifecycle` (`apps/api/src/services/tasks/task-lifecycle.ts`). It is a helper inside the tasks feature, not a service, and it holds the rules for state changes, waits, outputs, and completion. Put shared business rules that only one feature needs in a helper like this. Put rules several features need, like `addressedAgentIds()`, in `apps/api/src/shared/`.
+Two services change tasks: `TaskService`, for the API and human actions, and `TaskRunnerService`, the runner acting for agents. Services never use each other, so both use `TaskLifecycle` (`apps/api/src/services/tasks/task-lifecycle.ts`). It is a helper inside the tasks feature, not a service, and it holds the rules for state changes, waits, outputs, and completion. Keep business rules in the service layer even when several features use them. Put reusable rules in feature-owned `<name>.rules.ts` files: `services/access/access.rules.ts` for human authorization, `services/conversations/addressing.rules.ts` for message recipients, `services/conversations/goal.rules.ts` for default done criteria, and `services/connections/connection-access.rules.ts` for connection calls. Services import these helpers directly, including across feature folders; do not export them through the service barrel. Rule helpers work on plain values and import only shared contracts or packages, which lint enforces. They never load records, call providers, log, or import service classes.
+
+`shared/` holds cross-layer contracts and infrastructure: types, response helpers, and the error catalog. Conversation-name normalization stays there because both input schemas and services use it. The OAuth session type stays there because repositories, integrations, and services use that contract. Usage by several services alone is not a reason to put business rules in `shared/`.
 
 How messages become work is in `docs/conversations.md`.
+
+## Projects and endeavors
+
+A **project** is a long-lived group of endeavors (`ProjectService`, `services/projects/`). It holds knowledge sources, the notes agents save for it, and default people and agents that join every new endeavor in it. It has no messages of its own. An **endeavor** is a conversation with one goal: `ConversationService` gives it a `projectId`, a `goal`, `doneCriteria`, and an open or closed `state`.
+
+- The project and conversation services never call each other. Both use `ProjectRepository`, and both use `DocumentRepository` (`data/projects/`).
+- The default done criteria come from `services/conversations/goal.rules.ts`. Migration `021_projects.sql` builds the same text for older conversations.
+- One project has `is_default`. Endeavors created without a `projectId` go there, so older clients keep working. It can't be archived.
+- Every model turn loads the endeavor's current goal and done criteria before the task request.
+  Agents finish their own tasks and may propose goal completion; only people close endeavors.
+- Migration `022_one_open_endeavor_task.sql` enforces one open task per agent and endeavor,
+  including paused work. A concurrent message delivery joins the winning task. Run-key retries
+  still find their original task; conflicting restarts are rejected and schedule starts are skipped.
+- Projects expose optional `about` background. Migration `025_project_context.sql` adds a JSON
+  context object so more project context can be added later. Project updates change only the
+  About key. The runner receives `ProjectRepository` from its plugin and reads the current
+  background for the endeavor on each model turn, under its own quoted section.
+- Documents and notes carry a `project_id`. The runner asks the repositories for what one conversation may see, and the queries work out its project. See `docs/notes.md`.
 
 ## Configuration
 
@@ -370,7 +419,7 @@ new or resumed work for deleted identities. See [permanent deletion](agents.md#p
 ## Remote MCP connections
 
 Connections have an immutable type: HTTP API or remote MCP server. Existing rows default to
-HTTP. The catalog service owns tool discovery for people; the runner discovers and executes
+HTTP. The connection service owns tool discovery for people; the runner discovers and executes
 only tools allowed by the connection and the agent's live access. `McpClient` is an integration
 interface. Plugins build `McpHttpClient` and pass it to both services. Model adapters remain
 provider-neutral and never execute tools themselves.
@@ -383,8 +432,8 @@ See [MCP connections](catalogs.md#remote-mcp-tools-ca-64) for setup, limits, and
 
 ### Remote connection OAuth
 
-Catalogs starts and completes browser OAuth through the MCP SDK integration. The catalog
-service and runner each receive the encrypted OAuth session repository and OAuth client
+The connection service starts and completes browser OAuth through the MCP SDK integration.
+The connection service and runner each receive the encrypted OAuth session repository and OAuth client
 from their plugins. They do not call another service. Session transitions hold a database
 transaction lock so workers cannot rotate the same refresh token concurrently or restore
 credentials after a completed disconnect. Existing catalog grants, tool allowlists, approvals,
@@ -416,12 +465,45 @@ every call still passes enabled-state, method/path or tool, and per-call approva
 `apps/executor` is an optional, separate trusted service. The task runner reaches it as an MCP
 connection, through existing grants and approvals, and supplies trusted task identity in a
 transport header. Its GitHub integration resolves immutable snapshots only from an operator
-repository allowlist. Commands run in fresh Docker containers with serialized source input,
+repository allowlist. Commands reuse a task-scoped Docker container, created lazily on the first command, with
 no network, credentials, or mounts, and explicit resource limits. The main app has no Docker
 socket. The broker alone controls Docker and persists validated snapshots and execution
-summaries in a separate volume. It never runs repository code in its own process or filesystem.
+summaries in a separate volume. Versioned records are validated on load; corrupt or unsupported
+records are quarantined with a durable per-task unavailable marker. Healthy tasks still load, and
+the affected task requires operator repair or explicit discard before reuse. Explicit file edits are synchronized before the next command;
+generated files and background processes stay in the live container. Containers expire after 30 idle
+minutes; accepted source expires after 24 idle hours. Shutdown and restart remove containers; the
+next command restores accepted source, not caches or processes. It never runs repository code in its
+own process or filesystem.
 
 The broker has its own Zod tool schemas, HTTP adapter, execution service, and GitHub/Docker
 integrations. This is a third npm workspace; `npm run check` covers all three. Coding and review
 examples are editable agent instructions, not privileged platform roles. See [coding](coding.md)
 for trust boundaries, offline dependency images, cancellation limits, and recovery.
+
+Connection authentication method is stored independently from enabled state. The connection
+service derives a credential-free authentication summary for list/detail responses from the
+stored method and encrypted OAuth session. The web interface combines enabled and authentication
+state into one badge: Disabled, Authentication required, or Enabled, in that order of precedence.
+It sends OAuth creation directly to consent through the
+saved connection page. Failed consent retries reuse that connection. See [authentication
+status](catalogs.md#authentication-choice-and-status).
+
+## Skill and connection services
+
+Skills and connections are shared product catalogs with separate application services in
+one API process. `SkillService` owns instruction-only skills, immutable versions, discovery
+settings, and enabled state. It receives a `SkillRepository`, human access checks, and a
+`SkillLogger`; it has no connection, credential, MCP, OAuth, or agent dependencies.
+
+`ConnectionService` owns connection management, authentication summaries, OAuth sign-in,
+and MCP tool discovery. Its plugin provides a `ConnectionRepository`, encrypted OAuth
+session storage, and the external clients. `GrantService` owns the existing grant and revoke
+endpoints. It uses skill, connection, grant, and agent repositories directly to preserve
+atomic agent configuration updates without calling either management service.
+
+Each service has its own plugin and logger. Existing log event names and HTTP contracts
+remain unchanged. The focused repository interfaces share `CatalogPostgresRepository` as
+their SQL implementation. `CatalogRepository` combines those interfaces for task execution
+and agent configuration, which need both capability types and live grants. No database
+migration or separate deployment is needed for these service boundaries.

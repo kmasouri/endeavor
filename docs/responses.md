@@ -128,6 +128,14 @@ IANA timezone and the person's saved hour format, without changing stored instan
 
 ## Recurring schedules
 
+Schedules include `projectId` and nullable `agentId`. The latter identifies a pinned agent.
+Run creation returns `success(run)` with 201 for a new endeavor and 200 for a retry. Run
+history returns the same records, newest first. Each has `runKey`, `conversationId`,
+`taskId`, `state`, and `createdAt`. A run can be `routing` or `waiting` before it has a
+task. A run that ends without a task is `skipped`. Historical runs without an endeavor
+have a null `conversationId`. Catch-up answers return `success({ responsibility, run })`;
+choosing to wait returns `run: null`.
+
 Responsibility responses include `intervalMinutes` and `recurrence`. Existing interval schedules
 return their original interval and `recurrence: null`. Calendar schedules return
 `intervalMinutes: null` and `recurrence: { frequency, time, timeZone, days? }`. Only weekly rules
@@ -197,3 +205,73 @@ was added. Skills and connections return `discoverable`.
 including revoked ones: `id`, `approvalId`, `targetType`, `targetId`, `name`, `skillVersionId`,
 `scope`, `duration`, `grantedByHumanId`, `grantedAt`, `revokedByHumanId`, and `revokedAt`.
 `DELETE /tasks/:taskId/capabilities/:capabilityId` returns the entry after revoking it.
+
+### Connection authentication summary
+
+Connection list, detail, and mutation responses include `authMethod` (`none`, `header`, or
+`oauth`) and `authenticated` (boolean). These fields contain no secrets. Authenticated is
+independent of `disabledAt`, agent grants, and allowed tools; it describes stored credential
+availability, not a live server health check. A connection configured for no authentication
+returns true because no credential is required.
+
+Create and update accept optional `authMethod`. OAuth is only accepted for MCP connections.
+Explicit none/OAuth authentication rejects a supplied header credential. Legacy creates
+without authMethod infer header when a credential is supplied, otherwise none. Removing a
+header credential preserves the selected method and makes authentication required. Replacing
+a header credential selects header authentication. Existing OAuth must be disconnected
+before switching methods, as for endpoint or credential changes.
+
+### Task pause attribution
+
+Task responses include `pausedAt` and `pausedByHumanId`. Both are null when the task
+is unpaused. An older pause without a matching event still returns its timestamp,
+with `pausedByHumanId` set to null. Resuming clears both fields.
+
+### Current task activity
+
+`GET /tasks` items and `GET /tasks/:taskId` include `activity`. It is null when paused,
+waiting, blocked, completed, or cancelled. Working tasks return:
+
+```json
+{ "kind": "reading", "detail": "reading notes/source.md", "since": "2026-10-27T12:00:00.000Z" }
+```
+
+Kinds are `searching`, `reading`, `writing`, `checking`, `connection`, and `thinking`.
+`since` marks the recorded step start, not the polling time. This adds no model calls.
+
+### Agent appearance
+
+Agent records, directory entries, and agent conversation members include nullable `avatarColor`
+and `avatarIcon` overrides. `null` uses the existing ID-derived color or profile icon.
+`PATCH /agents/:agentId` accepts either field independently; omission preserves the saved value,
+and explicit `null` resets it. See [agent appearance](agents.md#avatar-appearance-ca-92) for choices.
+
+### Human typing presence
+
+`GET /conversations/:conversationId` includes `typingHumanIds`, the IDs of other human members
+with an active short-lived browser heartbeat. The caller is omitted. The array contains no draft
+text and drops expired sessions. `PUT /conversations/:conversationId/typing` returns the same
+shape in `data` after setting the caller's browser session active or inactive.
+
+## Agent public profiles
+
+Agent create, read, list, and profile-update responses include nullable `produces` and
+`needs`. Directory entries add those fields and `skillNames` (an array of names). Agent
+members in conversation details add the same fields plus `status`: `idle` or `busy` in
+that endeavor; null for deleted/unavailable profiles. These fields never include private
+instructions, saved notes, or credentials. See [agent profiles](agents.md#public-handoff-profiles-ca-98).
+
+Routing decisions use the same response helpers: `GET /conversations/:conversationId/routing` returns a paged list with `limit` and `offset`; choosing through `POST .../routing/:decisionId/choice` returns the updated decision in `data`. Records include `kind`, `status`, `selectedAgentId`, `reason`, `confidence`, eligible `candidates`, and a `revision` for competing choices.
+
+## Project background
+
+Project create, list, get, and update responses include `about`: the optional
+"About this project" text, or `null` when unset. Create and PATCH accept a string
+of up to 5,000 characters or `null`. Whitespace at either end is trimmed; blank text
+clears it. An omitted `about` on PATCH preserves the current value. The response
+helpers and list pagination stay the same.
+
+Project create, list, get, and update responses also include
+`routingConfidenceThreshold`, a number from 0 to 1 or `null`. Create and PATCH
+accept the same field. Send `null` to use the default of 0.6. An omitted field
+on PATCH preserves the current value.

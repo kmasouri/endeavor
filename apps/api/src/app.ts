@@ -12,13 +12,17 @@ import fastify, { FastifyInstance, FastifyReply, FastifySchemaValidationError } 
 import { join } from 'node:path';
 import { config } from './config';
 import agentPlugin from './plugins/agent';
-import catalogPlugin from './plugins/catalog';
+import skillPlugin from './plugins/skill';
+import connectionPlugin from './plugins/connection';
+import grantPlugin from './plugins/grant';
 import conversationPlugin from './plugins/conversation';
 import humanPlugin from './plugins/human';
 import itemPlugin from './plugins/item';
 import notePlugin from './plugins/note';
+import projectPlugin from './plugins/project';
 import responsibilityPlugin from './plugins/responsibility';
 import runnerPlugin from './plugins/runner';
+import routingPlugin from './plugins/routing';
 import taskPlugin from './plugins/task';
 import { AppError, ErrorName, ERRORS } from './shared/errors';
 import { ErrorDetail, failure } from './shared/response';
@@ -192,13 +196,17 @@ export function setupApp(): FastifyInstance {
   });
 
   app.register(agentPlugin);
-  app.register(catalogPlugin);
+  app.register(skillPlugin);
+  app.register(connectionPlugin);
+  app.register(grantPlugin);
   app.register(conversationPlugin);
   app.register(humanPlugin);
   app.register(itemPlugin);
   app.register(notePlugin);
+  app.register(projectPlugin);
   app.register(responsibilityPlugin);
   app.register(taskPlugin);
+  app.register(routingPlugin);
   app.register(runnerPlugin);
 
   app.register(routes.agentsRouter);
@@ -208,8 +216,10 @@ export function setupApp(): FastifyInstance {
   app.register(routes.humansRouter);
   app.register(routes.itemsRouter);
   app.register(routes.notesRouter);
+  app.register(routes.projectsRouter);
   app.register(routes.responsibilitiesRouter);
   app.register(routes.tasksRouter);
+  app.register(routes.routingRouter);
 
   // The web interface is its own app. Vite builds it into apps/web/dist, two folders up from
   // this file in both src/ and dist/.

@@ -1,6 +1,14 @@
-import { Agent, AgentLimits, AgentVersion, ModelProvider } from '../../shared/types';
+import {
+  AgentProfileFields,
+  AgentProfile,
+  AgentAppearance,
+  Agent,
+  AgentLimits,
+  AgentVersion,
+  ModelProvider
+} from '../../shared/types';
 
-export interface CreateAgentInput {
+export interface CreateAgentInput extends AgentProfileFields {
   name: string;
   purpose: string;
 }
@@ -52,17 +60,25 @@ export interface AgentRepository {
     firstVersion: CreateAgentVersionInput,
     access?: AgentAccessChanges
   ): Promise<{ agent: Agent; version: AgentVersion }>;
+  getProfiles(agentIds: string[], conversationId: string | null): Promise<AgentProfile[]>;
   getById(agentId: string): Promise<Agent | null>;
   getByName(name: string): Promise<Agent | null>;
   list(input: { limit: number; offset: number; includeDisabled: boolean }): Promise<Agent[]>;
   count(input: { includeDisabled: boolean }): Promise<number>;
   // The directory: enabled agents with a configuration, minus excludeIds, by name.
   listDirectory(input: { excludeIds: string[]; limit: number; offset: number }): Promise<Agent[]>;
+  // Search public profiles across the full visible directory, before limiting results.
+  searchDirectory(input: {
+    excludeIds: string[];
+    terms: string[];
+    limit: number;
+  }): Promise<AgentProfile[]>;
   countDirectory(input: { excludeIds: string[] }): Promise<number>;
   // monthlyBudgetUsd: a number sets the cap, null removes it, undefined leaves it.
   update(
     agentId: string,
-    changes: { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
+    changes: AgentAppearance &
+      AgentProfileFields & { name?: string; purpose?: string; monthlyBudgetUsd?: number | null }
   ): Promise<Agent | null>;
   setDisabled(agentId: string, disabled: boolean): Promise<Agent | null>;
 

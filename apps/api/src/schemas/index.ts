@@ -5,5 +5,8 @@ export * from './conversations';
 export * from './humans';
 export * from './items';
 export * from './notes';
+export * from './projects';
 export * from './responsibilities';
 export * from './tasks';
+
+export * from './routing';

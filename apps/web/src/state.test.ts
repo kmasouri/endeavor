@@ -1,32 +1,18 @@
 /// <reference types="node" />
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { compileModule } from 'svelte/compiler';
 import { flushSync } from 'svelte';
-import ts from 'typescript';
+import { loadRunes } from './runes.test-helper.ts';
 
-// Compile the runes as Vite does, then use Svelte's browser runtime without mounting a DOM.
-// Resolving imports first lets the compiled module run from an in-memory URL.
-const source = readFileSync(new URL('./state.svelte.ts', import.meta.url), 'utf8');
-const javascript = ts.transpileModule(source, {
-  compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext }
-}).outputText;
 const harness = `
 export function root(fn) { return $effect.root(fn); }
 export function cell(initial) {
   let value = $state(initial);
   return { get value() { return value; }, set value(next) { value = next; } };
 }`;
-const compiled = compileModule(javascript + harness, {
-  filename: 'state.svelte.js',
-  generate: 'client'
-}).js.code.replace(
-  /from (['"])(svelte[^'"]*)\1/g,
-  (_, _quote, name: string) => `from ${JSON.stringify(import.meta.resolve(name))}`
-);
-const { createLoad, createAction, root, cell } = (await import(
-  `data:text/javascript;base64,${Buffer.from(compiled).toString('base64')}`
+const { createLoad, createAction, root, cell } = (await loadRunes(
+  new URL('./state.svelte.ts', import.meta.url),
+  harness
 )) as typeof import('./state.svelte') & {
   root: (fn: () => void) => () => void;
   cell: <T>(initial: T) => { value: T };
@@ -84,9 +70,10 @@ test('the newest reload wins even when an older request finishes later', async (
   try {
     flushSync();
     await settle();
-    resource.reload();
+    const reloaded = resource.reload();
     await settle();
     requests[1].resolve('newest');
+    assert.equal(await reloaded, true);
     await settle();
     requests[0].resolve('older');
     await settle();
@@ -168,4 +155,22 @@ test('actions show failures, clear them on retry, and prevent duplicate submissi
   assert.equal(action.error, 'Save failed');
   assert.equal(await action.run(async () => {}), true);
   assert.equal(action.error, null);
+});
+
+test('reload reports failures and closed resources without rejecting', async () => {
+  let resource!: ReturnType<typeof createLoad<string>>;
+  const destroy = root(() => {
+    resource = createLoad(
+      async () => {
+        throw new Error('load failed');
+      },
+      () => []
+    );
+  });
+  flushSync();
+  await settle();
+  assert.equal(await resource.reload(), false);
+  assert.equal(resource.error, 'load failed');
+  destroy();
+  assert.equal(await resource.reload(), false);
 });

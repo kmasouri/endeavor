@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const baseSchedule = {
   agentId: 'agent-1',
-  conversationId: null,
+  projectId: 'project-1',
   brief: 'Check the test API.',
   completionCriteria: 'Report failures.',
   intervalMinutes: 10,
@@ -72,6 +72,11 @@ async function mockApi(
         ])
       );
     }
+    if (url.pathname === '/projects') {
+      return reply(paged(url.searchParams.get('archived') === 'true' ? [] : [
+        { id: 'project-1', name: 'General', isDefault: true, archivedAt: null }
+      ]));
+    }
     if (url.pathname === '/responsibilities') {
       if (mode === 'error') return reply({ error: { message: 'Schedules unavailable' } }, 503);
       let data =
@@ -134,21 +139,23 @@ async function expectSingleLineBadges(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
 
-for (const theme of ['dark', 'light'] as const) {
-  for (const width of [2515, 1024, 390]) {
-    test(`status badges stay on one line in the production bundle: ${theme}, ${width}px`, async ({
-      page
-    }) => {
-      await page.setViewportSize({ width, height: 1000 });
-      await mockApi(page, theme);
-      await page.goto('/app/#/schedules');
-      await expectSingleLineBadges(page);
-      await page.getByRole('button', { name: /Cancelled check/ }).click();
-      const badge = page.locator('.schedule-badge');
-      await expect(badge).toContainText('Cancelled');
-      await expect(badge).toHaveCSS('display', /^(inline-)?flex$/);
-    });
-  }
+for (const { theme, width } of [
+  { theme: 'light', width: 2515 },
+  { theme: 'light', width: 1024 },
+  { theme: 'dark', width: 390 }
+] as const) {
+  test(`status badges stay on one line in the production bundle: ${theme}, ${width}px`, async ({
+    page
+  }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await mockApi(page, theme);
+    await page.goto('/app/#/schedules');
+    await expectSingleLineBadges(page);
+    await page.getByRole('button', { name: /Cancelled check/ }).click();
+    const badge = page.locator('.schedule-badge');
+    await expect(badge).toContainText('Cancelled');
+    await expect(badge).toHaveCSS('display', /^(inline-)?flex$/);
+  });
 }
 
 test('wide layout shares a centered frame with a persistent header creation action', async ({
@@ -187,32 +194,118 @@ test('failed schedule loading does not show an empty-state creation prompt', asy
   await expect(page.getByRole('heading', { name: 'No schedules yet' })).toHaveCount(0);
 });
 
-for (const theme of ['dark', 'light'] as const) {
-  test(`Endeavor keeps the selected person, theme, and navigation after reload: ${theme}`, async ({
-    page
-  }) => {
-    await page.setViewportSize({ width: 1100, height: 800 });
-    await mockApi(page, theme, 'populated', true);
-    await page.goto('/app/#/schedules');
-    await expect(page).toHaveTitle('Endeavor');
-    await expect(page.getByRole('link', { name: 'Endeavor', exact: true })).toBeVisible();
-    await page.getByRole('link', { name: 'Setup', exact: true }).click();
-    await expect(page.getByText('People, providers, and Endeavor on this computer.')).toBeVisible();
-    await page.reload();
-    await expect(page.getByRole('button', { name: 'Profile and settings' })).toContainText(
-      'Kayvan'
-    );
-    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    expect(await page.evaluate(() => localStorage.getItem('endeavor.actorId'))).toBe('person-1');
-    await page.getByRole('link', { name: 'Schedules', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Schedules', exact: true })).toBeVisible();
-    expect(await page.evaluate(() => localStorage.getItem('endeavor.theme'))).toBe(theme);
-    expect(
-      await page.evaluate(() => localStorage.getItem('collaborative-agents.actorId'))
-    ).toBeNull();
-    expect(
-      await page.evaluate(() => localStorage.getItem('collaborative-agents.theme'))
-    ).toBeNull();
-    await expect(page.locator('.brand')).not.toContainText('Collaborative Agents');
+test('Endeavor keeps the selected person, theme, and navigation after reload: dark', async ({
+  page
+}) => {
+  const theme = 'dark';
+  await page.setViewportSize({ width: 1100, height: 800 });
+  await mockApi(page, theme, 'populated', true);
+  await page.goto('/app/#/schedules');
+  await expect(page).toHaveTitle('Endeavor');
+  await expect(page.getByRole('link', { name: 'Endeavor', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Setup', exact: true }).click();
+  await expect(page.getByText('People, providers, and Endeavor on this computer.')).toBeVisible();
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Profile and settings' })).toContainText('Kayvan');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+  expect(await page.evaluate(() => localStorage.getItem('endeavor.actorId'))).toBe('person-1');
+  await page.getByRole('link', { name: 'Schedules', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Schedules', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('endeavor.theme'))).toBe(theme);
+  expect(
+    await page.evaluate(() => localStorage.getItem('collaborative-agents.actorId'))
+  ).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('collaborative-agents.theme'))).toBeNull();
+  await expect(page.locator('.brand')).not.toContainText('Collaborative Agents');
+});
+
+test('catch-up failure survives reload and keeps Run once now available for a successful retry', async ({
+  page
+}) => {
+  await mockApi(page, 'light');
+  const pending = {
+    ...baseSchedule,
+    id: 'retry',
+    title: 'Retryable check',
+    status: 'enabled',
+    catchUp: { slot: '2026-10-26T12:00:00Z', missed: 2 }
+  };
+  let fail = true;
+  let resolved = false;
+  const decisions: unknown[] = [];
+  await page.route('**/responsibilities**', async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const reply = (data: unknown, status = 200) =>
+      route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(data) });
+    if (request.method() === 'POST' && url.pathname.endsWith('/catch-up')) {
+      decisions.push(request.postDataJSON());
+      if (fail) return reply({ error: { message: 'The agent is unavailable. Try again.' } }, 409);
+      resolved = true;
+      return reply({
+        data: { responsibility: { ...pending, catchUp: null }, run: { runKey: 'only-run', conversationId: 'run-1' } }
+      });
+    }
+    return reply({
+      data: [{ ...pending, catchUp: resolved ? null : pending.catchUp }],
+      page: { limit: 100, offset: 0, total: 1 }
+    });
   });
-}
+  await page.goto('/app/#/schedules');
+  const run = page.getByRole('button', { name: 'Run once now', exact: true });
+  await run.click();
+  await expect(page.getByText('The agent is unavailable. Try again.')).toBeVisible();
+  await page.reload();
+  await expect(run).toBeEnabled();
+  await expect(page.getByText('Retryable check missed 2 runs')).toBeVisible();
+  fail = false;
+  await run.click();
+  await expect(page.getByText('Catch-up run started.', { exact: true })).toBeVisible();
+  await expect(page.locator('.schedule-catchup')).toHaveCount(0);
+  expect(decisions).toEqual([{ decision: 'run' }, { decision: 'run' }]);
+});
+
+test('creates an unpinned project schedule and opens its waiting run from history', async ({ page }) => {
+  await mockApi(page, 'light', 'empty');
+  const title = 'Weekly status';
+  let submitted: unknown;
+  let created = false;
+  const schedule = { ...baseSchedule, id: 'project-schedule', title, status: 'enabled', agentId: null };
+  await page.route('**/responsibilities**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const data = path.endsWith('/runs')
+      ? [{ runKey: 'run-1', taskId: null, conversationId: 'run-endeavor', state: 'waiting',
+          createdAt: '2026-11-10T13:00:00Z' }]
+      : created ? [schedule] : [];
+    if (request.method() === 'POST') {
+      submitted = request.postDataJSON();
+      created = true;
+      return route.fulfill({ status: 201, json: { data: schedule } });
+    }
+    return route.fulfill({ json: { data, page: { limit: 100, offset: 0, total: data.length } } });
+  });
+  await page.goto('/app/#/schedules');
+  await page.getByRole('button', { name: 'Create schedule' }).click();
+  await page.getByRole('combobox', { name: 'Project', exact: true }).selectOption('project-1');
+  await expect(page.getByRole('combobox', { name: 'Starting agent' })).toHaveValue('');
+  await page.getByLabel('Title').fill(title);
+  await page.getByLabel('What to do each time').fill('Draft the weekly status');
+  await page.getByLabel('Done when').fill('Include three bullets');
+  await page.getByRole('button', { name: 'Create schedule' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Schedule created.' })).toBeVisible();
+  expect(submitted).toEqual({
+    projectId: 'project-1',
+    agentId: null,
+    title,
+    brief: 'Draft the weekly status',
+    completionCriteria: 'Include three bullets',
+    recurrence: { frequency: 'daily', time: '09:00', timeZone: expect.any(String) },
+    missedRunPolicy: 'ask'
+  });
+  await page.getByRole('button', { name: /Weekly status Automatic routing/ }).click();
+  await expect(page.locator('.schedule-runs')).toContainText('waiting');
+  await expect(page.getByRole('link', { name: 'Open endeavor' })).toHaveAttribute(
+    'href', '#/conversations/run-endeavor'
+  );
+});

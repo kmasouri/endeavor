@@ -11,7 +11,7 @@ export const createSkillBodySchema = z.strictObject({
   name: z.string().trim().min(1).max(80),
   description: z.string().trim().min(1),
   instructions: z.string().trim().min(1),
-  discoverable: discoverable.optional()
+  discoverable: discoverable.default(true)
 });
 
 export const updateSkillBodySchema = z.strictObject({ discoverable });
@@ -46,28 +46,31 @@ export const createConnectionBodySchema = z.union([
   z.strictObject({
     ...connectionFields,
     kind: z.literal('http').default('http'),
+    authMethod: z.enum(['none', 'header']).optional(),
     allowedTools: z.never().optional(),
     approvalTools: z.never().optional(),
     authHeader: connectionFields.authHeader.optional(),
     credential: connectionFields.credential.optional(),
     approvalMethods: connectionFields.approvalMethods.optional(),
-    discoverable: discoverable.optional()
+    discoverable: discoverable.default(true)
   }),
   z.strictObject({
     name: connectionFields.name,
     description: connectionFields.description,
     baseUrl: connectionFields.baseUrl,
     kind: z.literal('mcp'),
+    authMethod: z.enum(['none', 'header', 'oauth']).optional(),
     authHeader: connectionFields.authHeader.optional(),
     credential: connectionFields.credential.optional(),
     allowedTools: toolNames,
     approvalTools: toolNames.optional(),
-    discoverable: discoverable.optional()
+    discoverable: discoverable.default(true)
   })
 ]);
 
 export const updateConnectionBodySchema = z
   .strictObject({
+    authMethod: z.enum(['none', 'header', 'oauth']).optional(),
     allowedTools: toolNames.optional(),
     approvalTools: toolNames.optional(),
     name: connectionFields.name.optional(),

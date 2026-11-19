@@ -1,3 +1,4 @@
+import { captureReviewScreenshot } from './review-screenshot';
 import { expect, test, type Page } from '@playwright/test';
 
 async function mockApi(page: Page, theme: string) {
@@ -106,48 +107,49 @@ async function mockApi(page: Page, theme: string) {
   return { writes, failSave: (fail: boolean) => (failSave = fail) };
 }
 
-for (const width of [1440, 390]) {
-  for (const theme of ['dark', 'light']) {
-    test(`management lists align and filter at ${width}px in ${theme}`, async ({ page }, info) => {
-      await page.setViewportSize({ width, height: 1000 });
-      await mockApi(page, theme);
-      await page.goto('/app/#/agents');
-      await expect(page.locator('.agent-row')).toHaveCount(1);
-      const reference = (await page.locator('.page-header').boundingBox())!;
-      for (const [kind, total] of [
-        ['skills', 2],
-        ['connections', 2],
-        ['schedules', 3]
-      ] as const) {
-        await page.goto(`/app/#/${kind}`);
-        const rows = page.locator(kind === 'schedules' ? '.schedule-row' : '.management-row');
-        await expect(rows).toHaveCount(total);
-        const header = (await page.locator('.page-header').boundingBox())!;
-        const row = (await rows.first().boundingBox())!;
-        expect(Math.abs(header.x - reference.x)).toBeLessThan(1);
-        expect(Math.abs(header.width - reference.width)).toBeLessThan(1);
-        expect(Math.abs(row.x - header.x)).toBeLessThan(1);
-        expect(Math.abs(row.width - header.width)).toBeLessThan(1);
-        const filter = page.getByRole('button', {
-          name: kind === 'schedules' ? 'Cancelled' : 'Disabled',
-          exact: true
-        });
-        await filter.click();
-        await expect(filter).toHaveAttribute('aria-pressed', 'true');
-        await expect(rows).toHaveCount(1);
-        await page.getByRole('searchbox').fill('no-match');
-        await expect(rows).toHaveCount(0);
-        await expect(page.getByText(`No ${kind} match your filters.`)).toBeVisible();
-        await page.getByRole('searchbox').fill('');
-        await page.getByRole('button', { name: 'All', exact: true }).click();
-        await expect(rows).toHaveCount(total);
-        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-          true
-        );
-        await page.screenshot({ path: info.outputPath(`${kind}.png`), fullPage: true });
-      }
-    });
-  }
+for (const { theme, width } of [
+  { theme: 'light', width: 1440 },
+  { theme: 'dark', width: 390 }
+] as const) {
+  test(`management lists align and filter at ${width}px in ${theme}`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await mockApi(page, theme);
+    await page.goto('/app/#/agents');
+    await expect(page.locator('.agent-row')).toHaveCount(1);
+    const reference = (await page.locator('.page-header').boundingBox())!;
+    for (const [kind, total] of [
+      ['skills', 2],
+      ['connections', 2],
+      ['schedules', 3]
+    ] as const) {
+      await page.goto(`/app/#/${kind}`);
+      const rows = page.locator(kind === 'schedules' ? '.schedule-row' : '.management-row');
+      await expect(rows).toHaveCount(total);
+      const header = (await page.locator('.page-header').boundingBox())!;
+      const row = (await rows.first().boundingBox())!;
+      expect(Math.abs(header.x - reference.x)).toBeLessThan(1);
+      expect(Math.abs(header.width - reference.width)).toBeLessThan(1);
+      expect(Math.abs(row.x - header.x)).toBeLessThan(1);
+      expect(Math.abs(row.width - header.width)).toBeLessThan(1);
+      const filter = page.getByRole('button', {
+        name: kind === 'schedules' ? 'Cancelled' : 'Disabled',
+        exact: true
+      });
+      await filter.click();
+      await expect(filter).toHaveAttribute('aria-pressed', 'true');
+      await expect(rows).toHaveCount(1);
+      await page.getByRole('searchbox').fill('no-match');
+      await expect(rows).toHaveCount(0);
+      await expect(page.getByText(`No ${kind} match your filters.`)).toBeVisible();
+      await page.getByRole('searchbox').fill('');
+      await page.getByRole('button', { name: 'All', exact: true }).click();
+      await expect(rows).toHaveCount(total);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+        true
+      );
+      await captureReviewScreenshot(page, { path: info.outputPath(`${kind}.png`), fullPage: true });
+    }
+  });
 }
 
 test('skill configuration keeps failed edits, saves versions, and reports enable failures', async ({

@@ -7,6 +7,7 @@ import {
   HumanRepository,
   MessageRepository,
   NoteRepository,
+  ProjectRepository,
   ResponsibilityRepository,
   TaskCapabilityRepository,
   TaskRepository
@@ -17,7 +18,16 @@ import {
 
 export function mockTaskRepository(): jest.Mocked<TaskRepository> {
   return {
+    getHttpCall: jest.fn().mockResolvedValue(null),
+    claimHttpCall: jest.fn().mockResolvedValue(true),
+    saveHttpCallResponse: jest.fn().mockResolvedValue(true),
     create: jest.fn(),
+    startResponsibilityRun: jest.fn(),
+    waitForNextResponsibilityRun: jest.fn().mockResolvedValue(true),
+    getResponsibilityRun: jest.fn().mockResolvedValue(null),
+    listResponsibilityRuns: jest.fn(),
+    isScheduledStarter: jest.fn().mockResolvedValue(false),
+    getScheduledStarter: jest.fn().mockResolvedValue(null),
     getById: jest.fn(),
     getByRunKey: jest.fn(),
     list: jest.fn(),
@@ -28,7 +38,9 @@ export function mockTaskRepository(): jest.Mocked<TaskRepository> {
     findOpenWaits: jest.fn().mockResolvedValue([]),
     resolveWait: jest.fn(),
     resolveOpenWaits: jest.fn().mockResolvedValue(0),
-    addEvent: jest.fn(),
+    addEvent: jest.fn().mockResolvedValue(undefined),
+    recordToolResults: jest.fn().mockResolvedValue(true),
+    listLatestEvents: jest.fn().mockResolvedValue([]),
     listEvents: jest.fn().mockResolvedValue([]),
     addOutput: jest.fn(),
     listOutputs: jest.fn().mockResolvedValue([]),
@@ -36,12 +48,12 @@ export function mockTaskRepository(): jest.Mocked<TaskRepository> {
     listConversationOutputs: jest.fn().mockResolvedValue([]),
     countConversationOutputs: jest.fn().mockResolvedValue(0),
     sumCost: jest.fn().mockResolvedValue({ costUsd: 0, tokens: 0, unpricedCalls: 0 }),
+    listAgentCosts: jest.fn().mockResolvedValue([]),
     listTaskCosts: jest.fn().mockResolvedValue([]),
     claimRunnable: jest.fn().mockResolvedValue([]),
     releaseLease: jest.fn(),
     renewLease: jest.fn().mockResolvedValue(true),
     findOpenTask: jest.fn().mockResolvedValue(null),
-    findOpenRun: jest.fn().mockResolvedValue(null),
     listWaitingWithoutOpenWaits: jest.fn().mockResolvedValue([]),
     listFinishedWithoutEvent: jest.fn().mockResolvedValue([]),
     countEvents: jest.fn().mockResolvedValue(0)
@@ -55,6 +67,8 @@ export function mockAgentRepository(): jest.Mocked<AgentRepository> {
     getByName: jest.fn().mockResolvedValue(null),
     list: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
+    getProfiles: jest.fn().mockResolvedValue([]),
+    searchDirectory: jest.fn().mockResolvedValue([]),
     listDirectory: jest.fn().mockResolvedValue([]),
     countDirectory: jest.fn().mockResolvedValue(0),
     update: jest.fn(),
@@ -85,6 +99,8 @@ export function mockConversationRepository(): jest.Mocked<ConversationRepository
     create: jest.fn(),
     getById: jest.fn(),
     update: jest.fn(),
+    setGoalIfEmpty: jest.fn().mockResolvedValue(null),
+    setClosed: jest.fn(),
     list: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
     addMember: jest.fn(),
@@ -99,6 +115,7 @@ export function mockMessageRepository(): jest.Mocked<MessageRepository> {
   return {
     create: jest.fn(),
     getById: jest.fn(),
+    listWindow: jest.fn().mockResolvedValue([]),
     list: jest.fn().mockResolvedValue([]),
     listRecent: jest.fn().mockResolvedValue([]),
     claimDeliveries: jest.fn().mockResolvedValue([]),
@@ -165,8 +182,24 @@ export function mockNoteRepository(): jest.Mocked<NoteRepository> {
     getById: jest.fn().mockResolvedValue(null),
     list: jest.fn().mockResolvedValue([]),
     count: jest.fn().mockResolvedValue(0),
+    listForProject: jest.fn().mockResolvedValue([]),
+    countForProject: jest.fn().mockResolvedValue(0),
     update: jest.fn(),
     softDelete: jest.fn().mockResolvedValue(true)
+  };
+}
+
+export function mockProjectRepository(): jest.Mocked<ProjectRepository> {
+  return {
+    create: jest.fn(),
+    getById: jest.fn().mockResolvedValue(null),
+    getDefault: jest.fn().mockResolvedValue(null),
+    list: jest.fn().mockResolvedValue([]),
+    count: jest.fn().mockResolvedValue(0),
+    update: jest.fn(),
+    listMembers: jest.fn().mockResolvedValue([]),
+    setMembers: jest.fn().mockResolvedValue(undefined),
+    hasHuman: jest.fn().mockResolvedValue(false)
   };
 }
 
@@ -188,6 +221,6 @@ export function mockResponsibilityRepository(): jest.Mocked<ResponsibilityReposi
     update: jest.fn(),
     listDue: jest.fn().mockResolvedValue([]),
     advance: jest.fn().mockResolvedValue(true),
-    clearCatchUp: jest.fn().mockResolvedValue(true)
+    getCatchUpDecision: jest.fn().mockResolvedValue(null)
   };
 }

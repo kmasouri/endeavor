@@ -4,6 +4,7 @@ import {
   Actor,
   ActorType,
   CriteriaCheck,
+  ResponsibilityRun,
   Task,
   TaskEvent,
   TaskOutput,
@@ -15,14 +16,20 @@ import {
   TaskWaitKind
 } from '../../shared/types';
 import {
+  AgentCost,
   CostFilter,
   CostSummary,
   TaskCost,
   CreateTaskInput,
   CreateTaskOutputInput,
   CreateTaskWaitInput,
+  ConversationTaskOutput,
   ListTasksInput,
   TaskChanges,
+  TaskUpdateEvent,
+  StoredHttpCall,
+  ResponsibilityRunStart,
+  StartResponsibilityRunInput,
   TaskRepository
 } from './task.repository';
 
@@ -39,6 +46,7 @@ interface TaskRow {
   state: TaskState;
   state_reason: string | null;
   paused_at: Date | null;
+  paused_by_human_id?: string | null;
   requested_by_type: TaskRequesterType;
   requested_by_id: string | null;
   request_message_id: string | null;
@@ -50,6 +58,24 @@ interface TaskRow {
   created_at: Date;
   updated_at: Date;
   finished_at: Date | null;
+}
+
+interface ResponsibilityRunRow {
+  run_key: string;
+  conversation_id: string | null;
+  created_at: Date;
+  task_id: string | null;
+  state: ResponsibilityRun['state'];
+}
+
+function toResponsibilityRun(row: ResponsibilityRunRow): ResponsibilityRun {
+  return {
+    runKey: row.run_key,
+    conversationId: row.conversation_id,
+    createdAt: row.created_at,
+    taskId: row.task_id,
+    state: row.state
+  };
 }
 
 interface TaskWaitRow {
@@ -84,6 +110,10 @@ interface TaskOutputRow {
   created_at: Date;
 }
 
+interface ConversationTaskOutputRow extends TaskOutputRow {
+  task_state: TaskState;
+}
+
 // Maps TaskChanges fields to their columns. Only these columns can be changed by update().
 const CHANGE_COLUMNS: Record<keyof TaskChanges, string> = {
   state: 'state',
@@ -95,11 +125,344 @@ const CHANGE_COLUMNS: Record<keyof TaskChanges, string> = {
   agentVersionId: 'agent_version_id'
 };
 
+// Ignore events from earlier pauses, including when a legacy task has no matching event.
+const PAUSE_ACTOR_COLUMN = `CASE WHEN tasks.paused_at IS NOT NULL THEN (
+  SELECT event.actor_id FROM endeavor.task_events event
+  WHERE event.task_id = tasks.id AND event.type = 'task.paused' AND event.actor_type = 'human'
+    AND event.created_at >= tasks.paused_at
+  ORDER BY event.id DESC LIMIT 1
+) END AS paused_by_human_id`;
+
 export class TaskPostgresRepository implements TaskRepository {
   constructor(private readonly db: FastifyInstance['pg']) {}
 
+  async getHttpCall(taskId: string, callId: string): Promise<StoredHttpCall | null> {
+    const result = await this.db.query<{
+      request_hash: string;
+      response: StoredHttpCall['response'];
+    }>(
+      `SELECT request_hash, response FROM endeavor.http_calls WHERE task_id = $1 AND call_id = $2`,
+      [taskId, callId]
+    );
+    const row = result.rows[0];
+    return row ? { requestHash: row.request_hash, response: row.response } : null;
+  }
+
+  async claimHttpCall(taskId: string, callId: string, requestHash: string): Promise<boolean> {
+    const result = await this.db.query(
+      `INSERT INTO endeavor.http_calls (task_id, call_id, request_hash)
+       VALUES ($1, $2, $3) ON CONFLICT (task_id, call_id) DO NOTHING`,
+      [taskId, callId, requestHash]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async saveHttpCallResponse(
+    taskId: string,
+    callId: string,
+    requestHash: string,
+    response: NonNullable<StoredHttpCall['response']>
+  ): Promise<boolean> {
+    const result = await this.db.query(
+      `UPDATE endeavor.http_calls SET response = $4, finished_at = now()
+       WHERE task_id = $1 AND call_id = $2 AND request_hash = $3 AND response IS NULL`,
+      [taskId, callId, requestHash, response]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async create(input: CreateTaskInput): Promise<{ task: Task; created: boolean }> {
-    const result = await this.db.query<TaskRow>(
+    return this.insertTask(input, this.db);
+  }
+
+  async startResponsibilityRun(input: StartResponsibilityRunInput): Promise<ResponsibilityRunStart> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      const existing = await this.readResponsibilityRun(input.runKey, client);
+      if (existing && !input.catchUpSlot) {
+        await client.query('COMMIT');
+        return { run: existing, created: false, task: null };
+      }
+      // Match permanent deletion's agent-before-schedule lock order.
+      const agent = input.agentId
+        ? (await client.query<{ current_version_id: string }>(
+            `SELECT current_version_id FROM endeavor.agents WHERE id = $1
+             AND deleted_at IS NULL AND disabled_at IS NULL AND current_version_id IS NOT NULL
+             FOR SHARE`,
+            [input.agentId]
+          )).rows[0]
+        : null;
+      if (input.agentId && !agent) {
+        await client.query('COMMIT');
+        return { reason: 'agent' };
+      }
+      // Serialize starts and catch-up answers for this schedule.
+      const schedule = (await client.query<{ created_by_human_id: string; conversation_id: string | null }>(
+        `SELECT created_by_human_id, conversation_id FROM endeavor.responsibilities
+         WHERE id = $1 AND agent_id IS NOT DISTINCT FROM $2::uuid AND project_id = $3
+         AND status <> 'cancelled' AND date_trunc('milliseconds', updated_at) = $4
+         FOR NO KEY UPDATE`,
+        [input.responsibilityId, input.agentId, input.projectId, input.expectedUpdatedAt]
+      )).rows[0];
+      if (!schedule) {
+        await client.query('COMMIT');
+        return { reason: 'changed' };
+      }
+      const replay = await this.readResponsibilityRun(input.runKey, client);
+      if (replay && !input.catchUpSlot) {
+        await client.query('COMMIT');
+        return { run: replay, created: false, task: null };
+      }
+      const current = await client.query(
+        `SELECT id FROM endeavor.responsibilities WHERE id = $1
+         AND ($2::timestamptz IS NULL OR (status = 'enabled' AND next_run_at = $2))
+         AND ($3::timestamptz IS NULL OR (
+           status = 'enabled' AND catch_up_slot = $3 AND next_run_at > clock_timestamp()
+         ))`,
+        [input.responsibilityId, input.expectedNextRunAt ?? null, input.catchUpSlot ?? null]
+      );
+      if (!current.rowCount) {
+        await client.query('COMMIT');
+        return { reason: 'changed' };
+      }
+      const open = await client.query(
+        `SELECT 1 FROM endeavor.responsibility_run_history
+         WHERE responsibility_id = $1 AND state IN ('working', 'waiting', 'blocked', 'routing')
+         LIMIT 1`,
+        [input.responsibilityId]
+      );
+      if (open.rowCount) {
+        await client.query('COMMIT');
+        return { reason: 'open' };
+      }
+      const project = await client.query(
+        'SELECT id FROM endeavor.projects WHERE id = $1 AND archived_at IS NULL FOR SHARE',
+        [input.projectId]
+      );
+      if (!project.rowCount) {
+        await client.query('COMMIT');
+        return { reason: 'project' };
+      }
+      const conversationId = randomUUID();
+      const messageId = randomUUID();
+      const creatorId = input.startedBy.id ?? schedule.created_by_human_id;
+      const brief = input.note ? `${input.goal}\n\n${input.note}` : input.goal;
+      await client.query(
+        `INSERT INTO endeavor.conversations
+         (id, title, project_id, goal, done_criteria, created_by_human_id)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [conversationId, input.endeavorTitle, input.projectId, input.goal,
+          input.completionCriteria, creatorId]
+      );
+      await client.query(
+        `INSERT INTO endeavor.conversation_members (conversation_id, participant_type, participant_id, added_by_human_id)
+         SELECT $1::uuid, 'human', $2::uuid, $2::uuid
+         UNION ALL SELECT $1, 'agent', $3, $2 WHERE $3::uuid IS NOT NULL
+         UNION ALL
+         SELECT $1, m.participant_type, m.participant_id, $2
+         FROM (
+           SELECT participant_type, participant_id FROM endeavor.project_members
+           WHERE project_id = $4 AND removed_at IS NULL
+           UNION
+           SELECT participant_type, participant_id FROM endeavor.conversation_members
+           WHERE conversation_id = $5 AND removed_at IS NULL
+         ) m
+         LEFT JOIN endeavor.agents a ON m.participant_type = 'agent' AND a.id = m.participant_id
+         WHERE m.participant_type = 'human'
+           OR (a.id IS NOT NULL AND a.deleted_at IS NULL AND a.disabled_at IS NULL)
+         ON CONFLICT DO NOTHING`,
+        [conversationId, creatorId, input.agentId, input.projectId, schedule.conversation_id]
+      );
+      await client.query(
+        `INSERT INTO endeavor.messages (id, conversation_id, author_type, author_id, body)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [messageId, conversationId, input.startedBy.type, input.startedBy.id, brief]
+      );
+      await client.query(
+        'UPDATE endeavor.conversations SET goal_message_id = $2 WHERE id = $1',
+        [conversationId, messageId]
+      );
+      const recorded = await client.query<{ created_at: Date }>(
+        `INSERT INTO endeavor.responsibility_runs
+         (run_key, responsibility_id, conversation_id, starter_message_id, title)
+         VALUES ($1, $2, $3, $4, $5) RETURNING created_at`,
+        [input.runKey, input.responsibilityId, conversationId, messageId, input.title]
+      );
+      let task: Task | null = null;
+      if (input.agentId && agent) {
+        const result = await this.insertTask({
+          runKey: input.runKey,
+          conversationId,
+          ownerAgentId: input.agentId,
+          agentVersionId: agent.current_version_id,
+          title: input.title,
+          brief,
+          completionCriteria: input.completionCriteria,
+          reviewRequired: false,
+          requestedByType: input.startedBy.type === 'human' ? 'human' : 'schedule',
+          requestedById: input.startedBy.id,
+          requestMessageId: messageId,
+          parentTaskId: null,
+          restartedFromTaskId: null,
+          responsibilityId: input.responsibilityId
+        }, client);
+        task = result.task;
+      } else {
+        await client.query(
+          `INSERT INTO endeavor.routing_decisions (id, conversation_id, message_id, kind)
+           VALUES ($1, $2, $3, 'starter')`,
+          [randomUUID(), conversationId, messageId]
+        );
+      }
+      if (input.catchUpSlot &&
+          !(await this.recordCatchUp(client, input.responsibilityId, input.catchUpSlot, input.runKey))) {
+        await client.query('ROLLBACK');
+        return { reason: 'changed' };
+      }
+      await client.query('COMMIT');
+      return {
+        run: {
+          runKey: input.runKey,
+          conversationId,
+          createdAt: recorded.rows[0].created_at,
+          taskId: task?.id ?? null,
+          state: task?.state ?? 'routing'
+        },
+        created: true,
+        task
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  async waitForNextResponsibilityRun(responsibilityId: string, slot: Date): Promise<boolean> {
+    const client = await this.db.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('SELECT id FROM endeavor.responsibilities WHERE id = $1 FOR NO KEY UPDATE', [
+        responsibilityId
+      ]);
+      const saved = await this.recordCatchUp(client, responsibilityId, slot, null);
+      await client.query('COMMIT');
+      return saved;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  private async recordCatchUp(
+    db: Pick<FastifyInstance['pg'], 'query'>,
+    responsibilityId: string,
+    slot: Date,
+    runKey: string | null
+  ): Promise<boolean> {
+    const result = await db.query(
+      `WITH saved AS (
+         INSERT INTO endeavor.catch_up_decisions (responsibility_id, slot, next_run_at, decision, run_key)
+         SELECT id, catch_up_slot, next_run_at, $3, $4 FROM endeavor.responsibilities
+         WHERE id = $1 AND status = 'enabled' AND catch_up_slot = $2
+           AND next_run_at > clock_timestamp()
+         ON CONFLICT DO NOTHING RETURNING responsibility_id
+       )
+       UPDATE endeavor.responsibilities r SET catch_up_slot = NULL,
+         catch_up_missed = NULL, updated_at = now()
+       FROM saved WHERE r.id = saved.responsibility_id`,
+      [responsibilityId, slot, runKey === null ? 'wait' : 'run', runKey]
+    );
+    return Boolean(result.rowCount);
+  }
+
+  async getResponsibilityRun(runKey: string): Promise<ResponsibilityRun | null> {
+    return this.readResponsibilityRun(runKey, this.db);
+  }
+
+  private async readResponsibilityRun(
+    runKey: string,
+    db: Pick<FastifyInstance['pg'], 'query'>
+  ): Promise<ResponsibilityRun | null> {
+    const result = await db.query<ResponsibilityRunRow>(
+      `SELECT * FROM endeavor.responsibility_run_history WHERE run_key = $1`,
+      [runKey]
+    );
+    return result.rows[0] ? toResponsibilityRun(result.rows[0]) : null;
+  }
+
+  async listResponsibilityRuns(
+    responsibilityId: string,
+    limit: number,
+    offset: number
+  ): Promise<{ runs: ResponsibilityRun[]; total: number }> {
+    const [rows, count] = await Promise.all([
+      this.db.query<ResponsibilityRunRow>(
+        `SELECT * FROM endeavor.responsibility_run_history WHERE responsibility_id = $1
+         ORDER BY created_at DESC, run_key DESC LIMIT $2 OFFSET $3`,
+        [responsibilityId, limit, offset]
+      ),
+      this.db.query<{ total: number }>(
+        `SELECT count(*)::int AS total FROM endeavor.responsibility_run_history
+         WHERE responsibility_id = $1`,
+        [responsibilityId]
+      )
+    ]);
+    return { runs: rows.rows.map(toResponsibilityRun), total: count.rows[0].total };
+  }
+
+  async isScheduledStarter(messageId: string): Promise<boolean> {
+    const result = await this.db.query(
+      'SELECT 1 FROM endeavor.responsibility_runs WHERE starter_message_id = $1',
+      [messageId]
+    );
+    return Boolean(result.rowCount);
+  }
+
+  async getScheduledStarter(messageId: string, agentId: string): Promise<{
+    responsibilityId: string;
+    title: string;
+    brief: string;
+    completionCriteria: string;
+    requestedByType: 'human' | 'schedule';
+    requestedById: string | null;
+  } | null> {
+    const result = await this.db.query<{
+      responsibility_id: string;
+      title: string;
+      done_criteria: string;
+      body: string;
+      author_type: ActorType;
+      author_id: string | null;
+    }>(
+      `SELECT r.responsibility_id, r.title, c.done_criteria, m.body, m.author_type, m.author_id
+       FROM endeavor.responsibility_runs r
+       JOIN endeavor.routing_decisions d ON d.message_id = r.starter_message_id
+       JOIN endeavor.conversations c ON c.id = r.conversation_id
+       JOIN endeavor.messages m ON m.id = r.starter_message_id
+       WHERE d.delivery_message_id = $1 AND d.selected_agent_id = $2 AND c.closed_at IS NULL`,
+      [messageId, agentId]
+    );
+    const row = result.rows[0];
+    return row ? {
+      responsibilityId: row.responsibility_id,
+      title: row.title,
+      brief: row.body,
+      completionCriteria: row.done_criteria,
+      requestedByType: row.author_type === 'human' ? 'human' : 'schedule',
+      requestedById: row.author_id
+    } : null;
+  }
+
+  private async insertTask(
+    input: CreateTaskInput,
+    db: Pick<FastifyInstance['pg'], 'query'>
+  ): Promise<{ task: Task; created: boolean }> {
+    const result = await db.query<TaskRow>(
       `INSERT INTO endeavor.tasks (
          id, run_key, conversation_id, owner_agent_id, agent_version_id, title, brief,
          completion_criteria, review_required, state, requested_by_type, requested_by_id,
@@ -131,18 +494,41 @@ export class TaskPostgresRepository implements TaskRepository {
       return { task: toTask(result.rows[0]), created: true };
     }
 
+    // Use the same connection: a scheduled insert keeps its schedule lock through conflict
+    // recovery too. Run-key matches take precedence over a competing open run.
+    const byKey = await db.query<TaskRow>(
+      `SELECT *, ${PAUSE_ACTOR_COLUMN} FROM endeavor.tasks WHERE run_key = $1`,
+      [input.runKey]
+    );
+    const byEndeavor =
+      !byKey.rows[0] && input.conversationId
+        ? await db.query<TaskRow>(
+            `SELECT *, ${PAUSE_ACTOR_COLUMN} FROM endeavor.tasks WHERE conversation_id = $1 AND owner_agent_id = $2
+             AND state IN ('working', 'waiting', 'blocked') LIMIT 1`,
+            [input.conversationId, input.ownerAgentId]
+          )
+        : null;
     const existing =
-      (await this.getByRunKey(input.runKey)) ??
-      (input.responsibilityId ? await this.findOpenRun(input.responsibilityId) : null);
+      byKey.rows[0] ??
+      byEndeavor?.rows[0] ??
+      (input.responsibilityId
+        ? (
+            await db.query<TaskRow>(
+              `SELECT *, ${PAUSE_ACTOR_COLUMN} FROM endeavor.tasks WHERE responsibility_id = $1
+           AND state IN ('working', 'waiting', 'blocked') LIMIT 1`,
+              [input.responsibilityId]
+            )
+          ).rows[0]
+        : undefined);
     if (!existing) {
       throw new Error(`Task with run key ${input.runKey} conflicted but was not found`);
     }
-    return { task: existing, created: false };
+    return { task: toTask(existing), created: false };
   }
 
   async getById(taskId: string): Promise<Task | null> {
     const result = await this.db.query<TaskRow>(
-      `SELECT *
+      `SELECT *, ${PAUSE_ACTOR_COLUMN}
        FROM endeavor.tasks
        WHERE id = $1`,
       [taskId]
@@ -153,7 +539,7 @@ export class TaskPostgresRepository implements TaskRepository {
 
   async getByRunKey(runKey: string): Promise<Task | null> {
     const result = await this.db.query<TaskRow>(
-      `SELECT *
+      `SELECT *, ${PAUSE_ACTOR_COLUMN}
        FROM endeavor.tasks
        WHERE run_key = $1`,
       [runKey]
@@ -165,7 +551,7 @@ export class TaskPostgresRepository implements TaskRepository {
   async list(input: ListTasksInput): Promise<Task[]> {
     const { where, values } = listFilters(input);
     const result = await this.db.query<TaskRow>(
-      `SELECT *
+      `SELECT *, ${PAUSE_ACTOR_COLUMN}
        FROM endeavor.tasks
        ${where}
        ORDER BY created_at DESC, id
@@ -191,7 +577,8 @@ export class TaskPostgresRepository implements TaskRepository {
   async update(
     taskId: string,
     expected: { state: TaskState; paused: boolean; agentVersionId?: string },
-    changes: TaskChanges
+    changes: TaskChanges,
+    event?: TaskUpdateEvent
   ): Promise<Task | null> {
     const values: unknown[] = [
       taskId,
@@ -214,16 +601,27 @@ export class TaskPostgresRepository implements TaskRepository {
       sets.push('lease_owner = NULL', 'lease_expires_at = NULL');
     }
 
-    const result = await this.db.query<TaskRow>(
-      `UPDATE endeavor.tasks
-       SET ${sets.join(', ')}
-       WHERE id = $1
-         AND state = $2
-         AND (paused_at IS NOT NULL) = $3
-         AND ($4::uuid IS NULL OR agent_version_id = $4)
-       RETURNING *`,
-      values
-    );
+    const update = `UPDATE endeavor.tasks
+      SET ${sets.join(', ')}
+      WHERE id = $1
+        AND state = $2
+        AND (paused_at IS NOT NULL) = $3
+        AND ($4::uuid IS NULL OR agent_version_id = $4)`;
+    let sql = `${update} RETURNING *, ${PAUSE_ACTOR_COLUMN}`;
+    if (event) {
+      const param = values.length + 1;
+      values.push(event.type, event.actor.type, event.actor.id, event.data);
+      // Record the pause with the state change so readers see both and retries cannot split them.
+      sql = `WITH changed AS (${update} RETURNING *),
+        recorded AS (
+          INSERT INTO endeavor.task_events (task_id, type, actor_type, actor_id, data)
+          SELECT id, $${param}, $${param + 1}, $${param + 2}, $${param + 3} FROM changed
+          RETURNING task_id, actor_id
+        )
+        SELECT changed.*, recorded.actor_id AS paused_by_human_id
+        FROM changed JOIN recorded ON recorded.task_id = changed.id`;
+    }
+    const result = await this.db.query<TaskRow>(sql, values);
 
     return result.rows[0] ? toTask(result.rows[0]) : null;
   }
@@ -310,6 +708,28 @@ export class TaskPostgresRepository implements TaskRepository {
     return toTaskEvent(result.rows[0]);
   }
 
+  async recordToolResults(
+    taskId: string,
+    workerId: string,
+    data: Record<string, unknown>
+  ): Promise<boolean> {
+    const result = await this.db.query(
+      `INSERT INTO endeavor.task_events (task_id, type, actor_type, actor_id, data)
+       SELECT id, 'tool.results', 'system', NULL, $3::jsonb
+       FROM (
+         SELECT id FROM endeavor.tasks
+         WHERE id = $1
+           AND (
+             (lease_owner = $2 AND lease_expires_at > now())
+             OR (lease_owner IS NULL AND (state <> 'working' OR paused_at IS NOT NULL))
+           )
+         FOR UPDATE
+       ) controlled_task`,
+      [taskId, workerId, data]
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async listEvents(
     taskId: string,
     options: { afterId: number; limit: number }
@@ -324,6 +744,20 @@ export class TaskPostgresRepository implements TaskRepository {
       [taskId, options.afterId, options.limit]
     );
 
+    return result.rows.map(toTaskEvent);
+  }
+
+  async listLatestEvents(taskIds: string[], types: string[]): Promise<TaskEvent[]> {
+    if (taskIds.length === 0) return [];
+    const result = await this.db.query<TaskEventRow>(
+      `SELECT event.* FROM unnest($1::uuid[]) AS requested(task_id)
+       CROSS JOIN LATERAL (
+         SELECT * FROM endeavor.task_events
+         WHERE task_id = requested.task_id AND type = ANY($2::text[])
+         ORDER BY id DESC LIMIT 1
+       ) AS event`,
+      [taskIds, types]
+    );
     return result.rows.map(toTaskEvent);
   }
 
@@ -353,9 +787,9 @@ export class TaskPostgresRepository implements TaskRepository {
   async listConversationOutputs(
     conversationId: string,
     options: { limit: number; offset: number }
-  ): Promise<TaskOutput[]> {
-    const result = await this.db.query<TaskOutputRow>(
-      `SELECT o.*
+  ): Promise<ConversationTaskOutput[]> {
+    const result = await this.db.query<ConversationTaskOutputRow>(
+      `SELECT o.*, t.state AS task_state
        FROM endeavor.task_outputs o
        JOIN endeavor.tasks t ON t.id = o.task_id
        WHERE t.conversation_id = $1
@@ -364,7 +798,7 @@ export class TaskPostgresRepository implements TaskRepository {
       [conversationId, options.limit, options.offset]
     );
 
-    return result.rows.map(toTaskOutput);
+    return result.rows.map((row) => ({ output: toTaskOutput(row), taskState: row.task_state }));
   }
 
   async countConversationOutputs(conversationId: string): Promise<number> {
@@ -401,6 +835,38 @@ export class TaskPostgresRepository implements TaskRepository {
       tokens: Number(row?.tokens ?? 0),
       unpricedCalls: row?.unpriced ?? 0
     };
+  }
+
+  async listAgentCosts(filter: CostFilter): Promise<AgentCost[]> {
+    const { where, values } = buildCostWhereClause(filter);
+    const result = await this.db.query<{
+      agent_id: string;
+      name: string;
+      cost: string | null;
+      tokens: string | null;
+      unpriced: number;
+    }>(
+      `SELECT t.owner_agent_id AS agent_id,
+              CASE WHEN a.deleted_at IS NULL THEN a.name ELSE 'Deleted agent' END AS name,
+              sum((e.data->>'costUsd')::numeric) AS cost,
+              sum(coalesce((e.data->'usage'->>'inputTokens')::bigint, 0)
+                + coalesce((e.data->'usage'->>'outputTokens')::bigint, 0)) AS tokens,
+              count(*) FILTER (WHERE e.data->>'costUsd' IS NULL)::int AS unpriced
+       FROM endeavor.task_events e
+       JOIN endeavor.tasks t ON t.id = e.task_id
+       JOIN endeavor.agents a ON a.id = t.owner_agent_id
+       WHERE ${where}
+       GROUP BY t.owner_agent_id, a.name, a.deleted_at
+       ORDER BY cost DESC NULLS LAST, tokens DESC, name, agent_id`,
+      values
+    );
+    return result.rows.map((row) => ({
+      agentId: row.agent_id,
+      name: row.name,
+      costUsd: Number(row.cost ?? 0),
+      tokens: Number(row.tokens ?? 0),
+      unpricedCalls: row.unpriced
+    }));
   }
 
   async listTaskCosts(filter: CostFilter, limit: number): Promise<TaskCost[]> {
@@ -491,19 +957,6 @@ export class TaskPostgresRepository implements TaskRepository {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async findOpenRun(responsibilityId: string): Promise<Task | null> {
-    const result = await this.db.query<TaskRow>(
-      `SELECT *
-       FROM endeavor.tasks
-       WHERE responsibility_id = $1
-         AND state IN ('working', 'waiting', 'blocked')
-       ORDER BY created_at DESC
-       LIMIT 1`,
-      [responsibilityId]
-    );
-
-    return result.rows[0] ? toTask(result.rows[0]) : null;
-  }
 
   async findOpenTask(conversationId: string, agentId: string): Promise<Task | null> {
     const result = await this.db.query<TaskRow>(
@@ -619,6 +1072,7 @@ function toTask(row: TaskRow): Task {
     state: row.state,
     stateReason: row.state_reason,
     pausedAt: row.paused_at,
+    pausedByHumanId: row.paused_at ? (row.paused_by_human_id ?? null) : null,
     requestedByType: row.requested_by_type,
     requestedById: row.requested_by_id,
     requestMessageId: row.request_message_id,

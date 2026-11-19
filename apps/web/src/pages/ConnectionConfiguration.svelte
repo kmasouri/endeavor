@@ -1,18 +1,37 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+  import { authenticationLabel } from '../connection-auth';
   import { api, type Connection } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import { createAction } from '../state.svelte';
   import DiscoverableToggle from './DiscoverableToggle.svelte';
   import EnableButton from './EnableButton.svelte';
   import ConnectionOAuth from './ConnectionOAuth.svelte';
+  import ConnectionEditForm from './ConnectionEditForm.svelte';
 
-  let props: { connection: Connection; onChanged: () => void } = $props();
+  let props: { connection: Connection; onChanged: () => Promise<boolean>; startSignIn?: boolean } = $props();
   let connection = $derived(props.connection);
   let credential = $state('');
+  let editing = $state(false);
+  let editButton = $state<HTMLButtonElement>();
+  async function closeEditor() {
+    editing = false;
+    await tick();
+    editButton?.focus();
+  }
+  async function savedConfiguration() {
+    if (!await props.onChanged()) throw new Error('Changes saved, but the connection could not be reloaded. Try saving again to refresh it.');
+    discovered = null;
+    allowedTools = null;
+    approvalTools = null;
+    await closeEditor();
+  }
   let discovered = $state<{ name: string; description: string }[] | null>(null);
   let allowedTools = $state<string[] | null>(null);
   let approvalTools = $state<string[] | null>(null);
-  const action = createAction();
+  const toolAction = createAction();
+  const credentialAction = createAction();
+  const busy = $derived(toolAction.busy || credentialAction.busy);
   const visibleTools = $derived([
     ...(discovered ?? []),
     ...(connection.allowedTools ?? [])
@@ -24,7 +43,7 @@
   ]);
 
   function discover() {
-    void action.run(async () => {
+    void toolAction.run(async () => {
       discovered = await api.post(`/connections/${connection.id}/tools`, {});
     });
   }
@@ -43,7 +62,7 @@
   }
 
   function saveTools() {
-    void action
+    void toolAction
       .run(() => api.patch(`/connections/${connection.id}`, {
         allowedTools: allowedTools ?? connection.allowedTools ?? [],
         approvalTools: approvalTools ?? connection.approvalTools ?? []
@@ -58,29 +77,38 @@
   }
 
   const setSecret = (value: string | null) =>
-    void action
+    void credentialAction
       .run(() => api.patch(`/connections/${connection.id}`, { credential: value }))
       .then((ok) => ok && ((credential = ''), props.onChanged()));
 </script>
 
 <div class="stack">
-  <div class="row">
+  <div class="row wrap">
     <div class="grow">
       <h2>Configuration</h2>
-      <p class="muted small">{connection.kind === 'mcp' ? 'MCP server' : 'HTTP API'} · {connection.hasCredential ? 'Credential saved' : 'No credential'}</p>
+      <p class="muted small">{connection.kind === 'mcp' ? 'MCP server' : 'HTTP API'} · {authenticationLabel(connection)}</p>
     </div>
+    {#if !editing}
+      <button type="button" class="secondary" bind:this={editButton} disabled={busy} onclick={() => { editing = true; }}>Edit configuration</button>
+    {/if}
     <EnableButton
       path={`/connections/${connection.id}`}
       disabled={Boolean(connection.disabledAt)}
       onChanged={props.onChanged}
     />
   </div>
+  {#if editing}
+    <ConnectionEditForm {connection} onDiscard={closeEditor} onSaved={savedConfiguration} onChanged={props.onChanged} />
+  {:else}
   <DiscoverableToggle
     path={`/connections/${connection.id}`}
     discoverable={connection.discoverable}
     onChanged={props.onChanged}
   />
 
+  {#if connection.kind === 'mcp'}
+    <ConnectionOAuth {connection} onChanged={props.onChanged} startSignIn={props.startSignIn} />
+  {/if}
   <fieldset class="stack">
     <legend>Access</legend>
     <div><span class="muted small">Endpoint</span><p>{connection.baseUrl}</p></div>
@@ -92,10 +120,9 @@
     <p class="muted small">Access is granted separately on each agent. Credentials are encrypted and never shown again.</p>
   </fieldset>
   {#if connection.kind === 'mcp'}
-    <ConnectionOAuth {connection} />
     <details>
       <summary>Discover and manage tools</summary>
-      <button type="button" class="secondary" disabled={action.busy} onclick={discover}>
+      <button type="button" class="secondary" disabled={busy} onclick={discover}>
         Discover tools
       </button>
       {#if discovered}
@@ -123,9 +150,9 @@
             </label>
           </fieldset>
         {/each}
-        <button disabled={action.busy} onclick={saveTools}>Save tool access</button>
+        <button disabled={busy} onclick={saveTools}>Save tool access</button>
       {/if}
-      <ErrorNote error={action.error} />
+      <ErrorNote error={toolAction.error} />
     </details>
   {/if}
 
@@ -146,15 +173,16 @@
         bind:value={credential}
         placeholder={`New value for the ${connection.authHeader} header`}
       />
-      <button disabled={action.busy || !credential}>Replace</button>
+      <button disabled={busy || !credential}>Replace</button>
       {#if connection.hasCredential}
-        <button type="button" class="secondary" disabled={action.busy} onclick={() => setSecret(null)}>
+        <button type="button" class="secondary" disabled={busy} onclick={() => setSecret(null)}>
           Remove
         </button>
       {/if}
     </form>
-    <ErrorNote error={action.error} />
+    <ErrorNote error={credentialAction.error} />
   </details>
+  {/if}
 </div>
 
 <style>

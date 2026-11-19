@@ -76,15 +76,66 @@ export interface ParticipantRef {
   id: string;
 }
 
+export const PROJECT_COLORS = [
+  'slate',
+  'sand',
+  'coral',
+  'orange',
+  'yellow',
+  'green',
+  'teal',
+  'blue',
+  'violet',
+  'pink'
+] as const;
+export const PROJECT_ICONS = [
+  'folder',
+  'language',
+  'science',
+  'code',
+  'description',
+  'work_outline',
+  'build',
+  'lightbulb'
+] as const;
+export type ProjectColor = (typeof PROJECT_COLORS)[number];
+export type ProjectIcon = (typeof PROJECT_ICONS)[number];
+
+export interface Project {
+  id: string;
+  name: string;
+  icon?: ProjectIcon | null;
+  color?: ProjectColor | null;
+  routingConfidenceThreshold: number | null;
+  isDefault: boolean;
+  archivedAt: string | null;
+  createdAt: string;
+}
+
+export interface ProjectDetails extends Project {
+  members: (Member & { addedAt?: string })[];
+}
+
 export interface Conversation {
   id: string;
   title: string;
   createdAt: string;
+  projectId?: string | null;
+  goal?: string | null;
+  doneCriteria?: string | null;
+  state?: 'open' | 'closed';
   // Messages from others you haven't seen. Only the conversations list sends it.
   unreadCount?: number;
 }
 
-export interface Member {
+export interface AgentProfileFields {
+  produces?: string | null;
+  needs?: string | null;
+}
+
+export interface Member extends AgentAppearance, AgentProfileFields {
+  skillNames?: string[];
+  status?: 'idle' | 'busy' | null;
   deleted?: boolean;
   participant: ParticipantRef;
   name: string;
@@ -94,6 +145,7 @@ export interface Member {
 
 export interface ConversationDetails extends Conversation {
   members: Member[];
+  typingHumanIds: string[];
 }
 
 export interface Message {
@@ -107,7 +159,27 @@ export interface Message {
   createdAt: string;
 }
 
-export interface DirectoryEntry {
+export interface RoutingDecision {
+  id: string;
+  messageId: string | null;
+  decisionMessageId: string | null;
+  kind: 'starter' | 'handoff';
+  status: 'waiting' | 'resolved';
+  selectedAgentId: string | null;
+  decidedByHumanId: string | null;
+  outcome: string | null;
+  reason: string;
+  revision: number;
+  candidates: {
+    id: string;
+    name: string;
+    purpose?: string;
+    recommended?: boolean;
+  }[];
+}
+
+export interface DirectoryEntry extends AgentAppearance, AgentProfileFields {
+  skillNames?: string[];
   id: string;
   name: string;
   purpose: string;
@@ -145,7 +217,25 @@ export interface AgentVersion {
   createdAt: string;
 }
 
-export interface Agent {
+export const AGENT_AVATAR_COLORS = ['lime', 'sky', 'teal'] as const;
+export const AGENT_AVATAR_ICONS = [
+  'agents',
+  'search',
+  'check',
+  'file',
+  'work',
+  'connections',
+  'approvals',
+  'catalogs',
+  'setup',
+  'schedules'
+] as const;
+export interface AgentAppearance {
+  avatarColor?: (typeof AGENT_AVATAR_COLORS)[number] | null;
+  avatarIcon?: (typeof AGENT_AVATAR_ICONS)[number] | null;
+}
+
+export interface Agent extends AgentAppearance, AgentProfileFields {
   id: string;
   name: string;
   purpose: string;
@@ -176,6 +266,9 @@ export interface SkillDetails extends Skill {
 }
 
 export interface Connection {
+  authMethod?: 'none' | 'header' | 'oauth';
+  // Credential availability, not a live provider health check.
+  authenticated?: boolean;
   kind?: 'http' | 'mcp';
   allowedTools?: string[];
   approvalTools?: string[];
@@ -200,7 +293,6 @@ export interface Grant {
 }
 
 export type TaskState = 'working' | 'waiting' | 'completed' | 'blocked' | 'cancelled';
-export const TASK_STATES: TaskState[] = ['working', 'waiting', 'completed', 'blocked', 'cancelled'];
 
 export interface Actor {
   type: 'human' | 'agent' | 'system';
@@ -216,7 +308,14 @@ export interface TaskWait {
   resolvedAt: string | null;
 }
 
+export interface TaskActivity {
+  kind: 'searching' | 'reading' | 'writing' | 'checking' | 'connection' | 'thinking';
+  detail: string;
+  since: string;
+}
+
 export interface Task {
+  activity?: TaskActivity | null;
   id: string;
   conversationId: string | null;
   ownerAgentId: string;
@@ -228,6 +327,7 @@ export interface Task {
   state: TaskState;
   stateReason: string | null;
   pausedAt: string | null;
+  pausedByHumanId: string | null;
   requestedByType: 'human' | 'agent' | 'schedule';
   requestedById: string | null;
   parentTaskId: string | null;
@@ -255,6 +355,7 @@ export interface TaskEvent {
 export interface TaskOutput {
   id: string;
   kind: string;
+  state: 'draft' | 'final';
   title: string;
   content: string | null;
   uri: string | null;
@@ -317,7 +418,8 @@ export interface TaskCapability {
 
 export interface Responsibility {
   id: string;
-  agentId: string;
+  projectId: string;
+  agentId: string | null;
   conversationId: string | null;
   title: string;
   brief: string;
@@ -336,12 +438,22 @@ export interface Responsibility {
   catchUp: { slot: string; missed: number } | null;
 }
 
+export interface ResponsibilityRun {
+  runKey: string;
+  conversationId: string | null;
+  taskId: string | null;
+  createdAt: string;
+  state: string;
+}
+
 export interface AgentNote {
   id: string;
   body: string;
   sourceTaskId: string | null;
   sourceConversationId: string | null;
-  scope: 'conversation' | 'agent';
+  // The source conversation's project. Notes saved before projects have scope 'conversation'.
+  projectId: string | null;
+  scope: 'conversation' | 'project' | 'agent';
   createdBy: Actor;
   updatedByHumanId: string | null;
   createdAt: string;
@@ -365,5 +477,6 @@ export interface CostReport {
   total: CostSummary;
   thisMonth: CostSummary;
   budgetUsd: number | null;
+  agents?: (CostSummary & { agentId: string; name: string })[];
   tasks: { taskId: string; title: string; costUsd: number; tokens: number }[];
 }

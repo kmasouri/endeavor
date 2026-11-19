@@ -2,6 +2,10 @@
 
 People keep two shared catalogs. Being in a catalog gives no agent access. Choosing an entry in an agent configuration grants access; removing it and saving revokes access. The runner enforces these choices through per-agent grants.
 
+Skill management belongs to `SkillService`; connection management, OAuth, and MCP
+discovery belong to `ConnectionService`. `GrantService` manages the existing access
+endpoints. These services run in the same API process.
+
 ## Creating catalog entries
 
 The **Create skill** and **Create connection** buttons open dedicated pages at
@@ -10,6 +14,39 @@ layout: a back link, heading, grouped fields, and a sticky Cancel/Create footer.
 Cancel and successful saves return to the matching catalog list. Failed saves keep the
 entered values and show the error on the form. Connection creation includes Profile,
 Authentication, and Access sections for both HTTP APIs and MCP servers.
+
+## Importing plugin packages (CA-115)
+
+Open **Plugins** in the catalog and select the extracted package folder. Endeavor
+reads the manifest and displays the package contents in the browser. Reviewing a
+package does not upload the folder, run its contents, or call its endpoints.
+
+- [Agent Plugins 1.0](https://agent-plugins.org/specification) uses a root
+  `plugin.json` with the 1.0 schema, `skills/<name>/SKILL.md`, and optional
+  `mcp.json` with the matching schema.
+- [Codex](https://developers.openai.com/plugins/build/plugins) and
+  [Claude Code](https://code.claude.com/docs/en/plugins-reference) packages can
+  use their respective hidden manifest directories, `skills/`, and `.mcp.json`.
+  The adapters also read local skill directories and local MCP JSON paths or
+  inline maps declared in the manifest. The portable manifest takes precedence
+  when present.
+- Only the skill name, description, and Markdown instructions are imported.
+  Support files, hooks, apps, subprocess commands, package variables, and bundled
+  headers are skipped. URLs containing a username or password are skipped. Remote servers must use Streamable HTTP with a literal
+  HTTP or HTTPS endpoint.
+
+Review a skill's instructions and import it as a regular catalog entry. Map each
+remote server you want to an existing enabled MCP connection, or create one with
+Endeavor's standard form. Turn off discovery before saving an entry if you want
+to hide it from agents. New connections start with an empty tool list. Tools you add require approval
+unless you explicitly exempt them. Select the authentication method in the form
+and complete OAuth sign-in from the saved connection when needed.
+
+After saving or mapping an entry, choose an agent and open its configuration.
+Select the individual skills and connections, then save a version to grant
+access. The preview is temporary. Catalog entries and agent grants are saved
+through the same APIs as individual setup. Import works with folders you already
+have on disk. Marketplace browsing and package updates are outside this flow.
 
 ## Skills
 
@@ -27,6 +64,20 @@ A connection is an outside service: an HTTP API or a remote MCP server. Both hav
 - The credential is encrypted with AES-256-GCM using `CREDENTIALS_KEY`, and is never returned by the API. `hasCredential` shows whether one is stored. Without `CREDENTIALS_KEY`, saving a credential fails with `credentialsKeyMissing`.
 - Agents call HTTP connections through the `http_request` tool. The platform adds the credential, doesn't follow redirects, keeps the path on the connection's host, and cuts responses off at 20,000 characters.
 
+Each HTTP call has a durable claim in `http_calls`, keyed by task and tool call ID. Only the
+worker that inserts the claim may send it. A hash binds the claim to the connection, endpoint,
+method, path and body without storing credentials or the request body in the claim. The bounded
+response is saved before audit or batch results. Recovery reuses that response after checking
+live access; it never sends that call ID again, even if approval policy changes.
+
+A claim without a response has an unknown outcome, including a crash just before dispatch,
+a timeout after a remote write, or a failure saving the response. Unattended work is blocked
+for a person to check the external service. After checking, resume with instructions to accept
+the observed outcome or explicitly request a new attempt. Resuming does not reset the original
+claim. Calls from older builds with a `connection.called` event but no saved response also need
+reconciliation. A pre-upgrade request that left no durable evidence cannot be identified.
+No provider-specific idempotency header is invented; each provider has its own contract.
+
 ## Grants and revocation
 
 `POST /agents/:id/grants` grants ongoing access to a skill or connection and adds it to configuration as a new version when needed; `DELETE /agents/:id/grants/:type/:targetId` revokes it. Every `http_request` call is checked at the moment it runs. The connection must be:
@@ -34,7 +85,7 @@ A connection is an outside service: an HTTP API or a remote MCP server. Both hav
 1. explicitly chosen in the task's configuration version (`connectionIds`),
 2. granted to the agent right now,
 3. enabled, and
-4. allow the method and path (`apps/api/src/shared/connection-access.ts`).
+4. allow the method and path (`apps/api/src/services/connections/connection-access.rules.ts`).
 
 So a revoke, a disabled connection, or a narrower path list applies on the very next call. That holds even for tasks on an older configuration version. Revoked or disabled skills drop out of the prompt on the task's next run.
 
@@ -68,13 +119,24 @@ A connection's `approvalMethods` (for example `["POST", "DELETE"]`) are methods 
 
 A second decision on the same approval gets `approvalAlreadyDecided`.
 
+HTTP recovery looks up the original task/tool approval before considering the current
+`approvalMethods`. A pending request still waits, a rejected request stays rejected, and an
+executed request reuses its saved response or error. Relaxing the policy never authorizes an
+existing request or repeats an executed one. The connection, method, path and body must match
+the saved request, and live grants and connection limits are still checked before recovery.
+
 ## Discovery and access requests (CA-38)
 
-A person can mark a skill or connection **discoverable** (`discoverable: true` on create,
-`PATCH /skills/:skillId`, or `PATCH /connections/:connectionId`; the catalog shows a checkbox).
-Entries are private by default. Discovery shows agents only the name, description, skill
-version, and connection scope. It never shows credentials or connected content, and it grants
-nothing.
+New skills and connections are **discoverable** by default. To hide an entry, clear the
+discovery checkbox in the catalog or send `discoverable: false` on create or in
+`PATCH /skills/:skillId` or `PATCH /connections/:connectionId`. Set it back to `true` to
+show it again. The upgrade preserves saved settings for existing entries because the old
+default and an explicit hide both stored `false`. Disabling an entry removes it from
+discovery until it is enabled again.
+
+Use agent-safe names, descriptions, and scope settings. Discovery shows those details and
+whether the agent already has access. Agents can use discovery to ask for access. Skill
+instructions, credentials, and connected content require their normal access checks.
 
 1. An agent calls `find_capabilities` to list enabled, discoverable entries and see whether it
    can already use each one.
@@ -203,8 +265,19 @@ All pages of each catalog are loaded before filtering, including disabled entrie
 
 Open a row to configure it at `#/skills/:id` or `#/connections/:id`. Skill changes create a
 new instruction version. Connection details keep credential replacement/removal and MCP
-tool discovery and access settings together on a dedicated page. Enable and disable
-controls show failed requests without changing the displayed status.
+tool discovery and access settings together on a dedicated page. **Edit configuration** opens a
+draft for the name, description, endpoint, authentication method and credential header. HTTP
+connections also expose methods, path prefixes and approval requirements. **Save changes**
+sends only changed fields; **Discard** makes no configuration writes. The connection ID and
+agent grants stay the same. Newly selected HTTP methods require approval by default.
+
+Saved credentials remain hidden and unchanged during ordinary edits. Switching to no
+authentication or OAuth removes a saved header credential. Replace or remove credentials
+with the separate controls after saving. OAuth endpoint or authentication edits require an
+explicit disconnect first; disconnecting takes effect immediately, even if edits are discarded.
+Sign in again after saving when keeping OAuth. Name and description edits preserve the session.
+
+Enable and disable controls show failed requests without changing the displayed status.
 
 Creation uses `#/skills/new` and `#/connections/new`. Older `#/catalogs` links, including
 `?tab=connections` and the original creation URLs, still open the matching destination.
@@ -279,3 +352,33 @@ optional structured output schema is checked with Zod when representable; vendor
 that Zod cannot convert remain opaque data. Tool input schemas and arguments still must
 convert and validate before transport. Server metadata is excluded from model results, and
 identical content repeated in structuredContent is emitted only once.
+
+### Authentication choice and status
+
+Connection creation offers No authentication, API key / token, and (for MCP) OAuth sign-in.
+The Notion example fills its endpoint and selects OAuth. **Create and sign in** first saves
+one connection, then opens its configuration page and starts browser consent. If setup or
+consent fails, retry Sign in on that saved connection; it is not created again. Token fields
+are hidden for OAuth and any previously typed token is omitted from the create request.
+
+The catalog list and detail header show one connection status: **Disabled** when switched
+off, **Authentication required** when enabled but authentication is missing, or **Enabled**
+otherwise. Disabled takes precedence even if credentials are saved or missing. Public
+connections need no authentication to show Enabled. The enable/disable control and OAuth
+controls stay in configuration. OAuth controls appear expanded near the top of an OAuth
+connection. Refresh status reloads the stored state, shows progress, and confirms completion
+even if the state has not changed. Button labels and the feedback area keep a stable size
+so repeated refreshes do not move the page. Busy actions keep keyboard focus and prevent
+duplicate requests without flashing all controls dim. Refresh does not test the provider. Disconnect is disabled
+while signed out. A successful disconnect updates the badge and confirms completion; failed
+actions show an error and allow retry. An empty tool list still allows no tools after authentication.
+
+Migration 015 records the authentication method. Existing OAuth sessions become OAuth
+connections; existing saved header credentials remain header authentication; other existing
+connections retain anonymous access. Requests omitting authMethod remain compatible.
+Choosing OAuth does not fall back to an old header credential when a session is absent.
+The list and detail read stored authentication state without contacting the provider.
+For header authentication, satisfied authentication means a credential is saved; it is not a live
+validation of the provider or a guarantee that every tool call will succeed. OAuth expiry
+without a refresh token requires authentication again; a renewable login remains authenticated
+until renewal or a provider response establishes that sign-in is required.

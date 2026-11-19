@@ -31,4 +31,25 @@ export class ConversationLogger {
       'message posted'
     );
   }
+
+  onGoalSet(conversationId: string, messageId: string): void {
+    getCurrentLogger(this.logger).info(
+      { event: 'conversation.goal.set', conversationId, messageId },
+      'endeavor goal set'
+    );
+  }
+
+  onConversationClosed(conversationId: string, humanId: string): void {
+    getCurrentLogger(this.logger).info(
+      { event: 'conversation.closed', conversationId, humanId },
+      'endeavor closed'
+    );
+  }
+
+  onConversationReopened(conversationId: string, humanId: string): void {
+    getCurrentLogger(this.logger).info(
+      { event: 'conversation.reopened', conversationId, humanId },
+      'endeavor reopened'
+    );
+  }
 }

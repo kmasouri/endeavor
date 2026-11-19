@@ -1,0 +1,574 @@
+import { captureReviewScreenshot } from './review-screenshot';
+import { expect, test } from '@playwright/test';
+import { fixture, createdAt } from './chat-fixture';
+
+test('conversation details split spending across agents and their tasks', async ({ page }) => {
+  const api = await fixture(page);
+  api.state.costs.total = { costUsd: 0.07, tokens: 7000, unpricedCalls: 0 };
+  api.state.costs.budgetUsd = 1;
+  api.state.costs.tasks = [
+    { taskId: 'review-1', title: 'Check claims', costUsd: 0.03, tokens: 3000 },
+    { taskId: 'research-2', title: 'Revise brief', costUsd: 0.025, tokens: 2500 },
+    { taskId: 'research-1', title: 'Draft brief', costUsd: 0.015, tokens: 1500 }
+  ];
+  api.state.costs.agents = [
+    { agentId: 'reviewer', name: 'Reviewer', costUsd: 0.03, tokens: 3000, unpricedCalls: 0 },
+    {
+      agentId: 'researcher',
+      name: 'Researcher',
+      costUsd: 0.04,
+      tokens: 4000,
+      unpricedCalls: 0
+    }
+  ];
+
+  await page.goto('/app/#/conversations/brief');
+  await page.getByRole('button', { name: 'Show details' }).click();
+  const spending = page.getByRole('heading', { name: 'Spending' }).locator('..');
+  await expect(spending).toContainText('$0.07');
+  await expect(spending).toContainText('of a $1.00 budget');
+  await expect(spending.locator('.agent-costs li')).toHaveText(['Reviewer$0.03', 'Researcher$0.04']);
+  const geometry = await spending.locator('.agent-costs').evaluate((list) => {
+    const bounds = list.getBoundingClientRect();
+    const rows = [...list.querySelectorAll('li')].map((row) => row.getBoundingClientRect());
+    return {
+      noOverflow: list.scrollWidth <= list.clientWidth,
+      rowsInside: rows.every((row) => row.left >= bounds.left && row.right <= bounds.right),
+      valuesAligned: new Set(rows.map((row) => Math.round(row.right))).size === 1
+    };
+  });
+  expect(geometry).toEqual({ noOverflow: true, rowsInside: true, valuesAligned: true });
+  await captureReviewScreenshot(spending, { path: 'conversation-spending.png' });
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('keyboard mentions, multiline messages and replies send exact references and appear in chat', async ({
+  page
+}) => {
+  const api = await fixture(page);
+  await page.goto('/app/#/conversations/brief');
+  const input = page.getByRole('textbox', { name: 'Message', exact: true });
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
+  await input.fill('@Res');
+  const picker = page.getByRole('listbox', { name: 'People and agents' });
+  await expect(picker.getByRole('option')).toHaveCount(1);
+  await input.fill('@');
+  await expect(picker.getByRole('option')).toHaveCount(3);
+  await input.press('ArrowDown');
+  await expect(picker.getByRole('option').nth(1)).toHaveAttribute('aria-selected', 'true');
+  await input.press('Enter');
+  await expect(input).toHaveValue('@Researcher ');
+  await expect(picker).toHaveCount(0);
+  await expect(input).toBeFocused();
+  expect(api.state.posts).toEqual([]);
+  await input.pressSequentially('Find sources');
+  await input.press('Shift+Enter');
+  await input.pressSequentially('Include dates');
+  expect(api.state.posts).toEqual([]);
+  await input.press('Enter');
+  await expect(input).toHaveValue('');
+  await expect(page.locator('.message-body').last()).toContainText('Include dates');
+  expect(api.state.posts[0]).toEqual({
+    body: '@Researcher Find sources\nInclude dates',
+    mentions: [{ type: 'agent', id: 'researcher' }],
+    clientKey: expect.any(String)
+  });
+
+  await page.locator('#m-question').hover();
+  await page.locator('#m-question').getByRole('button', { name: 'Reply', exact: true }).click();
+  await expect(input).toBeFocused();
+  await expect(page.locator('.reply-bar')).toContainText('Replying to Kayvan');
+  await page.getByRole('button', { name: 'Cancel reply' }).click();
+  await expect(page.locator('.reply-bar')).toHaveCount(0);
+  await page.locator('#m-question').hover();
+  await page.locator('#m-question').getByRole('button', { name: 'Reply', exact: true }).click();
+  await input.fill('Use the approved sources.');
+  await input.press('Enter');
+  await expect(page.locator('#m-sent-2')).toContainText('Use the approved sources.');
+  await expect(
+    page.locator('#m-sent-2').getByRole('link', { name: /^Reply to Kayvan/ })
+  ).toHaveAttribute('href', '#m-question');
+  expect(api.state.posts[1]).toEqual({
+    body: 'Use the approved sources.',
+    mentions: [],
+    inReplyToMessageId: 'question',
+    clientKey: expect.any(String)
+  });
+  await expect(page.locator('.reply-bar')).toHaveCount(0);
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('human typing presence shares no draft, coexists with agents, and clears on send and stop', async ({
+  page
+}, info) => {
+  const api = await fixture(page);
+  await page.setViewportSize({ width: 390, height: 900 });
+  api.state.extraMembers.push(
+    {
+      participant: { type: 'human', id: 'sam' },
+      name: 'Sam',
+      purpose: null,
+      historyFrom: null
+    },
+    {
+      participant: { type: 'human', id: 'lee' },
+      name: 'Lee',
+      purpose: null,
+      historyFrom: null
+    }
+  );
+  api.state.typingHumanIds = ['sam', 'lee'];
+  api.state.tasks.push({
+    id: 'research-1',
+    conversationId: 'brief',
+    ownerAgentId: 'researcher',
+    title: 'Draft brief',
+    state: 'working',
+    pausedAt: null,
+    activity: { kind: 'writing', detail: 'drafting the brief', startedAt: createdAt }
+  });
+  await page.goto('/app/#/conversations/brief');
+  const status = page.locator('.live-status');
+  const input = page.getByRole('textbox', { name: 'Message', exact: true });
+  await expect(status).toContainText('Sam is typing…');
+  await expect(status).toContainText('Lee is typing…');
+  await expect(status).toContainText('Researcher');
+  await expect(status).toContainText('drafting the brief');
+  expect(
+    await status.evaluate((element) => element.scrollWidth <= element.clientWidth)
+  ).toBe(true);
+  await captureReviewScreenshot(status, { path: info.outputPath('human-typing-status.png') });
+
+  await input.fill('Private draft text');
+  await expect.poll(() => api.state.typingPosts.length).toBeGreaterThan(0);
+  expect(api.state.typingPosts.at(-1)).toMatchObject({ typing: true });
+  expect(JSON.stringify(api.state.typingPosts)).not.toContain('Private draft text');
+
+  await input.press('Enter');
+  await expect.poll(() => api.state.typingPosts.at(-1)?.typing).toBe(false);
+  await input.fill('Another draft');
+  await input.blur();
+  await expect.poll(() => api.state.typingPosts.at(-1)?.typing).toBe(false);
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('failed reply retains draft and reference, blocks duplicate submissions and retries', async ({
+  page
+}) => {
+  const api = await fixture(page);
+  api.state.failSend = true;
+  api.state.holdSend = true;
+  await page.goto('/app/#/conversations/brief');
+  await page.locator('#m-question').hover();
+  await page.locator('#m-question').getByRole('button', { name: 'Reply', exact: true }).click();
+  const input = page.getByRole('textbox', { name: 'Message', exact: true });
+  await input.fill('@Researcher Please check this.');
+  await input.press('Enter');
+  await expect.poll(() => api.state.posts.length).toBe(1);
+  await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
+  await input.press('Enter');
+  expect(api.state.posts).toHaveLength(1);
+  api.state.releaseSend();
+  await expect(page.getByText('Message not sent. Try again.', { exact: true })).toBeVisible();
+  await expect(input).toHaveValue('@Researcher Please check this.');
+  await expect(page.locator('.reply-bar')).toContainText('Replying to Kayvan');
+  await expect(page.locator('.message')).toHaveCount(1);
+  api.state.failSend = false;
+  api.state.holdSend = false;
+  await input.press('Enter');
+  await expect(input).toHaveValue('');
+  await expect(page.locator('.message')).toHaveCount(2);
+  expect(api.state.posts).toHaveLength(2);
+  expect(api.state.posts[1]).toMatchObject({
+    body: api.state.posts[0].body,
+    mentions: [{ type: 'agent', id: 'researcher' }],
+    inReplyToMessageId: 'question'
+  });
+  await expect(page.getByText('Message not sent. Try again.', { exact: true })).toHaveCount(0);
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('mentioning a new specialist requires a successful membership write before sending', async ({
+  page
+}) => {
+  const api = await fixture(page);
+  api.state.failMembers = true;
+  await page.goto('/app/#/conversations/brief');
+  const input = page.getByRole('textbox', { name: 'Message', exact: true });
+  await input.fill('@Nobody');
+  await expect(page.getByText('No matches.', { exact: true })).toBeVisible();
+  await input.press('Escape');
+  await expect(page.getByRole('listbox')).toHaveCount(0);
+  await input.fill('@Rev');
+  await input.press('ArrowDown');
+  await input.press('ArrowUp');
+  await input.press('Enter');
+  await expect(page.getByText('Could not add Reviewer', { exact: true })).toBeVisible();
+  await expect(input).toHaveValue('@Rev');
+  expect(api.state.posts).toEqual([]);
+  api.state.failMembers = false;
+  await input.press('Enter');
+  await expect(input).toHaveValue('@Reviewer ');
+  expect(api.state.memberPosts).toEqual([
+    { type: 'agent', id: 'reviewer' },
+    { type: 'agent', id: 'reviewer' }
+  ]);
+  await input.pressSequentially('Check these sources.');
+  await input.press('Enter');
+  await expect(input).toHaveValue('');
+  expect(api.state.posts[0]).toMatchObject({ mentions: [{ type: 'agent', id: 'reviewer' }] });
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('failed message loading is visible and polling recovers to the empty state', async ({
+  page
+}) => {
+  const api = await fixture(page, 'dark', true);
+  api.state.failMessages = true;
+  await page.clock.install();
+  await page.goto('/app/#/conversations/brief');
+  await expect(page.getByText('Messages unavailable', { exact: true })).toBeVisible();
+  api.state.failMessages = false;
+  await page.clock.fastForward(2501);
+  await expect(page.getByText('Messages unavailable', { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByText('No messages yet. Say hello, and mention an agent to ask it.')
+  ).toBeVisible();
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+for (const { theme, width } of [
+  { theme: 'light', width: 1440 },
+  { theme: 'dark', width: 390 }
+] as const) {
+  test(`chat composer, mention picker and reply geometry in ${theme} at ${width}px`, async ({
+    page
+  }, info) => {
+    const api = await fixture(page, theme);
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/app/#/conversations/brief');
+    await page.locator('#m-question').hover();
+    await page.locator('#m-question').getByRole('button', { name: 'Reply', exact: true }).click();
+    await page.getByRole('textbox', { name: 'Message', exact: true }).fill('@');
+    await expect(page.getByRole('listbox')).toBeVisible();
+    await page.evaluate(() => document.fonts.ready);
+    const geometry = await page.locator('.composer').evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      const attach = element
+        .querySelector('[aria-label="Attach a document"]')!
+        .getBoundingClientRect();
+      const input = element.querySelector('textarea')!.getBoundingClientRect();
+      const send = element.querySelector('[aria-label="Send message"]')!.getBoundingClientRect();
+      const picker = element.querySelector('.mention-picker')!;
+      const bounds = picker.getBoundingClientRect();
+      return {
+        overflow: document.documentElement.scrollWidth > innerWidth,
+        controlsInside: attach.left >= box.left && send.right <= box.right,
+        ordered: attach.right <= input.left && input.right <= send.left,
+        aligned: Math.abs(attach.top - send.top) < 2,
+        pickerInside:
+          bounds.left >= 0 &&
+          bounds.right <= innerWidth &&
+          bounds.top >= 0 &&
+          bounds.bottom <= box.top + 1,
+        optionsFit: [...picker.querySelectorAll('button')].every(
+          (option) => option.scrollWidth <= option.clientWidth
+        )
+      };
+    });
+    expect(geometry).toEqual({
+      overflow: false,
+      controlsInside: true,
+      ordered: true,
+      aligned: true,
+      pickerInside: true,
+      optionsFit: true
+    });
+    await captureReviewScreenshot(page, {
+      path: info.outputPath('chat-mention-reply.png'),
+      fullPage: true
+    });
+    expect(api.errors).toEqual([]);
+    expect(api.unexpected).toEqual([]);
+  });
+}
+
+for (const { theme, width } of [
+  { theme: 'light', width: 1440 },
+  { theme: 'dark', width: 320 }
+] as const) {
+  test(`participant profiles open from names and avatars in ${theme} at ${width}px`, async ({
+    page
+  }, info) => {
+    const api = await fixture(page, theme);
+    api.state.messages.push({
+      id: 'answer',
+      authorType: 'agent',
+      authorId: 'researcher',
+      body: 'Here is the evidence.',
+      taskId: null,
+      mentions: [],
+      inReplyToMessageId: null,
+      createdAt
+    });
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/app/#/conversations/brief');
+    const person = page
+      .locator('#m-question .meta')
+      .getByRole('button', { name: "View Kayvan's profile" });
+    const senderBox = await person.boundingBox();
+    const timeBox = await page.locator('#m-question .meta time').boundingBox();
+    expect(Math.abs(senderBox!.y - timeBox!.y)).toBeLessThan(8);
+    await person.focus();
+    await person.press('Enter');
+    const humanCard = page.getByRole('dialog', { name: "Kayvan's profile" });
+    await expect(humanCard).toBeVisible();
+    await expect(humanCard).toContainText('Person · You');
+    await expect(humanCard.getByRole('link', { name: 'Edit profile' })).toHaveAttribute(
+      'href',
+      '#/settings'
+    );
+    await page.keyboard.press('Escape');
+    await expect(humanCard).not.toBeVisible();
+    await expect(person).toBeFocused();
+    await page.locator('#m-question .message-avatar .participant-trigger').click();
+    await expect(humanCard).toBeVisible();
+    await humanCard.getByRole('button', { name: 'Close profile' }).click();
+    await expect(page.locator('#m-question .message-avatar .participant-trigger')).toBeFocused();
+
+    const agent = page
+      .locator('#m-answer .meta')
+      .getByRole('button', { name: "View Researcher's profile" });
+    await agent.click();
+    const agentCard = page.getByRole('dialog', { name: "Researcher's profile" });
+    await expect(agentCard).toContainText('Find evidence');
+    await expect(agentCard).toContainText('Research, Writing');
+    await expect(agentCard).toContainText('A sourced brief');
+    await expect(agentCard).toContainText('A question and source documents');
+    await expect(agentCard).toContainText('Busy in this endeavor');
+    await expect(agentCard).toContainText('research-model');
+    await expect(agentCard).toContainText('2 skills · 1 connection');
+    await expect(agentCard.getByRole('link', { name: 'View agent' })).toHaveAttribute(
+      'href',
+      '#/agents/researcher'
+    );
+    const box = await agentCard.boundingBox();
+    expect(box!.x).toBeGreaterThanOrEqual(12);
+    expect(box!.x + box!.width).toBeLessThanOrEqual(width - 11);
+    expect(box!.y).toBeGreaterThanOrEqual(12);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(889);
+    await captureReviewScreenshot(page, { path: info.outputPath('participant-profile.png') });
+    // Tall profiles can cover the composer on phones. Click empty app-bar padding outside it.
+    await page.locator('.app-bar').click({ position: { x: width - 8, y: 8 } });
+    await expect(agentCard).not.toBeVisible();
+    expect(api.state.posts).toEqual([]);
+    expect(api.errors).toEqual([]);
+    expect(api.unexpected).toEqual([]);
+  });
+}
+
+test('unavailable authors retain profile attribution without broken agent links', async ({
+  page
+}) => {
+  const api = await fixture(page);
+  api.state.messages.push({
+    id: 'missing',
+    authorType: 'agent',
+    authorId: 'missing',
+    body: 'Historical evidence.',
+    taskId: null,
+    mentions: [],
+    inReplyToMessageId: null,
+    createdAt
+  });
+  await page.goto('/app/#/conversations/brief');
+  await page.locator('#m-missing .meta .participant-trigger').click();
+  const card = page.getByRole('dialog');
+  await expect(card).toContainText("This agent's details are no longer available.");
+  await expect(card.getByRole('link', { name: 'View agent' })).toHaveCount(0);
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('deleted agent profiles and member profiles preserve history and modal access', async ({
+  page
+}) => {
+  const api = await fixture(page);
+  api.state.extraMembers.push({
+    participant: { type: 'agent', id: 'deleted' },
+    name: 'Former researcher',
+    deleted: true,
+    purpose: 'Old research',
+    historyFrom: null
+  });
+  api.state.messages.push({
+    id: 'old',
+    authorType: 'agent',
+    authorId: 'deleted',
+    body: 'An old answer.',
+    taskId: null,
+    mentions: [],
+    inReplyToMessageId: null,
+    createdAt
+  });
+  await page.goto('/app/#/conversations/brief');
+  await page.locator('#m-old .meta .participant-trigger').click();
+  const deleted = page.getByRole('dialog', { name: "Former researcher's profile" });
+  await expect(deleted).toContainText('Agent · Deleted');
+  await expect(deleted).toContainText('Their messages remain');
+  await expect(deleted.getByRole('link')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /members. Show who's here/ }).click();
+  const members = page.getByRole('dialog', { name: 'People and agents', exact: true });
+  await members.getByRole('button', { name: "View Researcher's profile" }).last().click();
+  const card = page.getByRole('dialog', { name: "Researcher's profile" });
+  await expect(card).toContainText('Find evidence');
+  await expect(card.getByRole('button', { name: 'Close profile' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(card).not.toBeVisible();
+  await expect(members).toBeVisible();
+  await expect(
+    members.getByRole('button', { name: "View Researcher's profile" }).last()
+  ).toBeFocused();
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('custom agent appearance reaches chat avatars, profile cards and mention choices', async ({
+  page
+}) => {
+  const api = await fixture(page, 'dark', false, { avatarColor: 'teal', avatarIcon: 'file' });
+  api.state.messages.push({
+    id: 'answer',
+    authorType: 'agent',
+    authorId: 'researcher',
+    body: 'Here is the evidence.',
+    taskId: null,
+    mentions: [],
+    inReplyToMessageId: null,
+    createdAt
+  });
+  await page.goto('/app/#/conversations/brief');
+  const message = page.locator('#m-answer');
+  const avatar = message.getByRole('img', { name: 'Researcher · agent' });
+  await expect(avatar).toHaveAttribute('style', /agent-3-bg/);
+  const path = await avatar.locator(':scope > svg path').getAttribute('d');
+  expect(path).toContain('M6 3h8');
+  await message.locator('.message-avatar .participant-trigger').click();
+  const card = page.getByRole('dialog', { name: "Researcher's profile", exact: true });
+  await expect(card.getByRole('img')).toHaveAttribute('style', /agent-3-bg/);
+  await expect(card.getByRole('img').locator(':scope > svg path')).toHaveAttribute('d', path!);
+  await card.getByRole('button', { name: 'Close profile' }).click();
+  const input = page.getByRole('textbox', { name: 'Message', exact: true });
+  await input.fill('@Res');
+  const choice = page.getByRole('option').filter({ hasText: 'Researcher' });
+  await expect(choice.getByRole('img')).toHaveAttribute('style', /agent-3-bg/);
+  await expect(choice.getByRole('img').locator(':scope > svg path')).toHaveAttribute('d', path!);
+  await expect(
+    page.locator('.members-button').getByRole('img', { name: 'Researcher · agent' })
+  ).toHaveAttribute('style', /agent-3-bg/);
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('member profile status refreshes while the endeavor stays open', async ({ page }) => {
+  const { state, errors, unexpected } = await fixture(page);
+  state.messages.push({
+    id: 'profile-status',
+    authorType: 'agent',
+    authorId: 'researcher',
+    body: 'Checking evidence.',
+    taskId: null,
+    mentions: [],
+    inReplyToMessageId: null,
+    createdAt
+  });
+  await page.goto('/app/#/conversations/brief');
+  await page
+    .locator('#m-profile-status .meta')
+    .getByRole('button', { name: "View Researcher's profile" })
+    .click();
+  const card = page.getByRole('dialog', { name: "Researcher's profile" });
+  await expect(card).toContainText('Busy in this endeavor');
+  state.profileStatus = 'idle';
+  await expect(card).toContainText('Idle', { timeout: 7000 });
+  expect(state.posts).toEqual([]);
+  expect(errors).toEqual([]);
+  expect(unexpected).toEqual([]);
+});
+
+test('the composer can find specialists beyond the first directory page', async ({ page }) => {
+  const api = await fixture(page);
+  const entries = Array.from({ length: 101 }, (_, i) => ({
+    id: `specialist-${i}`,
+    name: `Specialist ${i}`,
+    purpose: 'Find sources',
+    skillNames: [],
+    produces: null,
+    needs: null
+  }));
+  await page.route('**/directory*', (route) => {
+    const url = new URL(route.request().url());
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    const limit = Number(url.searchParams.get('limit') ?? 50);
+    return route.fulfill({
+      json: {
+        data: entries.slice(offset, offset + limit),
+        page: { offset, limit, total: entries.length }
+      }
+    });
+  });
+  await page.goto('/app/#/conversations/brief');
+  await page.getByRole('textbox', { name: 'Message', exact: true }).fill('@Specialist 100');
+  await expect(page.getByRole('option', { name: /Specialist 100/ })).toBeVisible();
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});
+
+test('later output pages and schedule catch-ups remain visible', async ({ page }) => {
+  const api = await fixture(page);
+  const outputs = Array.from({ length: 101 }, (_, i) => ({
+    id: `output-${i}`,
+    taskId: 'old-task',
+    kind: 'document',
+    title: `Evidence ${i}`,
+    content: 'Saved evidence',
+    createdAt
+  }));
+  const schedules = Array.from({ length: 101 }, (_, i) => ({
+    id: `schedule-${i}`,
+    status: 'enabled',
+    catchUp: i === 100 ? { missed: 2 } : null
+  }));
+  await page.route('**/*', async (route) => {
+    const url = new URL(route.request().url());
+    const items =
+      url.pathname === '/responsibilities'
+        ? schedules
+        : url.pathname === '/conversations/brief/outputs'
+          ? outputs
+          : null;
+    if (!items) return route.fallback();
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    const limit = Number(url.searchParams.get('limit') ?? 100);
+    return route.fulfill({
+      json: {
+        data: items.slice(offset, offset + limit),
+        page: { offset, limit, total: items.length }
+      }
+    });
+  });
+  await page.goto('/app/#/conversations/brief');
+  await expect(page.getByRole('heading', { name: 'Evidence 100', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: 'Schedules', exact: true }).locator('.count-badge')
+  ).toHaveText('1');
+  expect(api.errors).toEqual([]);
+  expect(api.unexpected).toEqual([]);
+});

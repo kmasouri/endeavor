@@ -1,11 +1,12 @@
 <script lang="ts">
-  import { type AgentNote, api } from '../api';
+  import { type AgentNote } from '../api';
   import { CONTEXT_LABELS } from '../components';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
   import { createLoad } from '../state.svelte';
   import { createNames } from '../names.svelte';
   import ContextExplainer from './ContextExplainer.svelte';
+  import { loadAll } from './agent-data';
   import NoteRow from './NoteRow.svelte';
 
   let {
@@ -14,7 +15,7 @@
     agentId: string;
   } = $props();
   const notes = createLoad(
-    () => api.list<AgentNote>(`/agents/${agentId}/notes?limit=200`),
+    () => loadAll<AgentNote>(`/agents/${agentId}/notes`),
     () => [agentId]
   );
   const name = createNames();
@@ -30,12 +31,12 @@
 
 <ErrorNote error={notes.error} />
 
-{#if notes.data?.data.length === 0}
+{#if notes.data?.length === 0}
   <p class="muted">No saved notes.</p>
 {/if}
 
 <ul class="list">
-  {#each notes.data?.data ?? [] as note (note.id)}
+  {#each notes.data ?? [] as note (note.id)}
     <NoteRow {agentId} {note} {name} onChanged={notes.reload} />
   {/each}
 </ul>

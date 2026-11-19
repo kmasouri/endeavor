@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { loadAll } from './agent-data';
   import { api, type DirectoryEntry, type Human, type Member } from '../api';
   import Avatar from '../Avatar.svelte';
+  import ParticipantProfile from '../ParticipantProfile.svelte';
   import Modal from '../Modal.svelte';
   import ErrorNote from '../ErrorNote.svelte';
   import { formatDateTime } from '../components';
@@ -14,7 +16,7 @@
     onClose: () => void;
   } = $props();
   const people = createLoad(() => api.get<Human[]>('/humans'), () => []);
-  const directory = createLoad(() => api.get<DirectoryEntry[]>('/directory'), () => []);
+  const directory = createLoad(() => loadAll<DirectoryEntry>('/directory'), () => []);
   const action = createAction();
   let query = $state('');
   let selected = $state<string[]>([]);
@@ -25,7 +27,7 @@
     ...members.map((member) => key(member.participant.type, member.participant.id)), ...added
   ]));
   let choices = $derived([
-    ...(people.data ?? []).map((person) => ({ ...person, type: 'human', purpose: 'Person' })),
+    ...(people.data ?? []).map((person) => ({ ...person, type: 'human', purpose: 'Person', avatarColor: null, avatarIcon: null })),
     ...(directory.data ?? []).map((agent) => ({ ...agent, type: 'agent' }))
   ].filter((person) => !inside.has(key(person.type, person.id))));
   let filtered = $derived(choices.filter((person) =>
@@ -57,9 +59,12 @@
       <div class="endeavor-members">
         {#each members as member (`${member.participant.type}:${member.participant.id}`)}
           <div class="row endeavor-member">
-            <Avatar name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} />
-            <span class="grow"><span class="row"><strong>{member.name}</strong>
-              {#if member.participant.type === 'agent'}<span class="agent-label">agent</span>{/if}
+            <ParticipantProfile name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} meId={me.id} {member} directory={directory.data?.find((entry) => entry.id === member.participant.id)} avatar>
+              <Avatar name={member.name} id={member.participant.id} appearance={member} agent={member.participant.type === 'agent'} />
+            </ParticipantProfile>
+            <span class="grow"><span class="row"><ParticipantProfile name={member.name} id={member.participant.id} agent={member.participant.type === 'agent'} meId={me.id} {member} directory={directory.data?.find((entry) => entry.id === member.participant.id)}>
+                <strong>{member.name}</strong>
+              </ParticipantProfile>
               {#if member.participant.id === me.id}<span class="caption muted">(you)</span>{/if}
             </span>
             {#if member.purpose}<span class="caption muted">{member.purpose}</span>{/if}
@@ -76,8 +81,8 @@
       <div class="endeavor-members">
         {#each filtered as person (`${person.type}:${person.id}`)}
           <label class="check endeavor-member">
-            <Avatar name={person.name} id={person.id} agent={person.type === 'agent'} />
-            <span class="grow"><span class="row"><strong>{person.name}</strong>{#if person.type === 'agent'}<span class="agent-label">agent</span>{/if}</span><span class="caption muted">{person.purpose}</span></span>
+            <Avatar name={person.name} id={person.id} appearance={person} agent={person.type === 'agent'} />
+            <span class="grow"><span class="row"><strong>{person.name}</strong></span><span class="caption muted">{person.purpose}</span></span>
             <input type="checkbox" aria-label={`Add ${person.name}`} checked={selected.includes(key(person.type, person.id))} onchange={() => toggle(key(person.type, person.id))} />
           </label>
         {/each}

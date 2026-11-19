@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { untrack, tick } from 'svelte';
+  import { SvelteSet } from 'svelte/reactivity';
   import {
     api,
     type Approval,
@@ -8,6 +9,7 @@
     type DirectoryEntry,
     type Human,
     type Message,
+    type RoutingDecision,
     type Task,
     type TaskOutput
   } from '../api';
@@ -18,49 +20,222 @@
   import { conversationName } from '../appearance';
   import { formatDateTime, formatShortTime } from '../components';
   import { createLoad } from '../state.svelte';
+  import EndeavorGoal from './EndeavorGoal.svelte';
   import KnowledgeSources from './KnowledgeSources.svelte';
   import Spending from './Spending.svelte';
   import MessageList from './MessageList.svelte';
+  import RoutingDecisions from './RoutingDecisions.svelte';
   import Composer from './Composer.svelte';
   import Members from './Members.svelte';
   import ConversationAgents from './ConversationAgents.svelte';
   import ApprovalCard from './ApprovalCard.svelte';
   import TaskStatus from './TaskStatus.svelte';
+  import LiveActivity from './LiveActivity.svelte';
+  import { loadAll } from './agent-data';
+  import { createMessageFeed } from './message-feed.svelte';
   import ArtifactCard from './ArtifactCard.svelte';
-  let { conversationId, me, onReady, onRead }: {
+  import AgentHistory from './AgentHistory.svelte';
+  import RunInspector from './RunInspector.svelte';
+  let {
+    conversationId,
+    initialRunId = null,
+    me,
+    people,
+    onReady,
+    onRead,
+    onChanged
+  }: {
     conversationId: string;
+    initialRunId?: string | null;
     me: Human;
+    people: Human[];
     onReady?: (conversation: ConversationDetails) => boolean;
     // Called after the conversation is marked read, so the sidebar can refresh its counts.
     onRead?: () => void;
+    onChanged?: () => void;
   } = $props();
   let draft = $state('');
+  let historyAgentId = $state<string | null>(null);
+  let selectedRunId = $state<string | null>(null);
+  let unavailableRun = $state(false);
+  let revision = $state<Task | null>(null);
+  const focusDetails = () => {
+    void tick().then(() =>
+      document.querySelector<HTMLButtonElement>('.conversation-details button')?.focus()
+    );
+  };
+  const closeDetails = () => {
+    showDetails = false;
+    void tick().then(() =>
+      document.querySelector<HTMLButtonElement>('[aria-label="Show details"]')?.focus()
+    );
+  };
+  const openHistory = (agentId: string) => {
+    historyAgentId = agentId;
+    selectedRunId = null;
+    unavailableRun = false;
+    showDetails = true;
+    focusDetails();
+  };
+  const inspectMessage = (message: Message) => {
+    historyAgentId = message.authorId;
+    selectedRunId = message.taskId;
+    unavailableRun = !message.taskId;
+    showDetails = true;
+    focusDetails();
+  };
+  const inspectRun = (id: string) => {
+    selectedRunId = id;
+    unavailableRun = false;
+    showDetails = true;
+    focusDetails();
+  };
+  $effect(() => {
+    if (initialRunId)
+      untrack(() => {
+        selectedRunId = initialRunId;
+        showDetails = true;
+      });
+  });
+  const askForChanges = async (task: Task) => {
+    revision = ['completed', 'cancelled'].includes(task.state) ? task : null;
+    replyTo =
+      messages.data?.data.findLast(
+        (message) => message.taskId === task.id && message.authorType === 'agent'
+      ) ?? null;
+    draft = `@${nameOf({ type: 'agent', id: task.ownerAgentId })} Please revise "${task.title}": `;
+    if (window.innerWidth <= 700) showDetails = false;
+    await tick();
+    document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus();
+  };
   let showDetails = $state(false);
   let showMembers = $state(false);
   let attaching = $state(false);
   let replyTo = $state<Message | null>(null);
   const details = createLoad(
     () => api.get<ConversationDetails>(`/conversations/${conversationId}`),
-    () => [conversationId]
-  );
-  const messages = createLoad(
-    () => api.list<Message>(`/conversations/${conversationId}/messages?limit=500`),
     () => [conversationId],
-    2500
+    2000
   );
+  const messages = createMessageFeed(() => conversationId);
+  const routing = createLoad(
+    () => api.list<RoutingDecision>(`/conversations/${conversationId}/routing`),
+    () => [conversationId],
+    2000
+  );
+  let scroll = $state<HTMLDivElement | null>(null);
+  let newMessages = $state(0);
+  let follow = true;
+  let previous: Message[] = [];
+  let previousHasOlder = false;
+  let unseen = new SvelteSet<string>();
+  let markedRead: string | null = null;
+  let readBusy = false;
+  let readTimer: ReturnType<typeof setTimeout> | undefined;
+  let viewGeneration = 0;
+
+  const nearBottom = () => !scroll || scroll.scrollHeight - scroll.scrollTop - scroll.clientHeight <= 80;
+  const markVisible = async () => {
+    if (!scroll || document.visibilityState !== 'visible') return;
+    const frame = scroll.getBoundingClientRect();
+    const visible = [...scroll.querySelectorAll<HTMLElement>('[data-message-id]')]
+      .filter((element) => {
+        const box = element.getBoundingClientRect();
+        return box.bottom > frame.top && box.top < frame.bottom;
+      });
+    for (const element of visible) unseen.delete(element.dataset.messageId!);
+    newMessages = unseen.size;
+    if (readBusy) return;
+    const newest = visible.at(-1)?.dataset.messageId;
+    if (!newest || newest === markedRead) return;
+    const id = conversationId;
+    const generation = viewGeneration;
+    readBusy = true;
+    let retryMs = 150;
+    try {
+      await api.put(`/conversations/${id}/read`, { messageId: newest });
+      if (generation === viewGeneration) { markedRead = newest; onRead?.(); }
+    } catch {
+      retryMs = 2500;
+    } finally {
+      if (generation === viewGeneration) {
+        readBusy = false;
+        clearTimeout(readTimer);
+        readTimer = setTimeout(() => void markVisible(), retryMs);
+      }
+    }
+  };
+  const checkViewport = () => {
+    follow = nearBottom();
+    clearTimeout(readTimer);
+    readTimer = setTimeout(() => void markVisible(), 150);
+  };
+  const scrollToLatest = () => {
+    if (!scroll) return;
+    scroll.scrollTop = scroll.scrollHeight;
+    follow = true;
+    unseen.clear();
+    newMessages = 0;
+    checkViewport();
+  };
+  const onScroll = () => {
+    checkViewport();
+    if (scroll && scroll.scrollTop < 80 && !messages.historyError) void messages.older();
+  };
+  $effect(() => {
+    conversationId;
+    untrack(() => {
+      previous = []; previousHasOlder = false; unseen = new SvelteSet(); markedRead = null; readBusy = false;
+      newMessages = 0; follow = true; viewGeneration++;
+    });
+    return () => { viewGeneration++; clearTimeout(readTimer); };
+  });
+  $effect.pre(() => {
+    const current = messages.data.data;
+    const hasOlder = messages.hasOlder;
+    const container = scroll;
+    if (!container || !current.length) return;
+    untrack(() => {
+      const first = previous[0];
+      const prepended = first && current[0].id !== first.id;
+      const historyEnded = previousHasOlder && !hasOlder;
+      previousHasOlder = hasOlder;
+      const frame = container.getBoundingClientRect();
+      const anchor = [...container.querySelectorAll<HTMLElement>('[data-message-id]')]
+        .find((element) => element.getBoundingClientRect().bottom > frame.top);
+      const anchorTop = anchor?.getBoundingClientRect().top;
+      const initial = previous.length === 0;
+      // Existing history is not a new arrival. Track only messages appended since opening.
+      if (!initial && !prepended) {
+        const ids = new Set(previous.map((message) => message.id));
+        for (const message of current) if (!ids.has(message.id)) unseen.add(message.id);
+      }
+      newMessages = unseen.size;
+      previous = current;
+      const generation = viewGeneration;
+      void tick().then(() => {
+        if (generation !== viewGeneration) return;
+        if ((prepended || historyEnded) && anchor && anchorTop !== undefined) {
+          container.scrollTop += anchor.getBoundingClientRect().top - anchorTop;
+        } else if (initial || follow) container.scrollTop = container.scrollHeight;
+        checkViewport();
+        void markVisible();
+      });
+    });
+  });
   const directory = createLoad(
-    () => api.get<DirectoryEntry[]>('/directory'),
+    () => loadAll<DirectoryEntry>('/directory'),
     () => []
   );
   const tasks = createLoad(
-    () => api.list<Task>(`/tasks?conversationId=${conversationId}&limit=100`),
+    () => loadAll<Task>(`/tasks?conversationId=${conversationId}`),
     () => [conversationId],
     4000
   );
   const outputs = createLoad(
     () =>
-      api.list<TaskOutput & { taskId: string }>(
-        `/conversations/${conversationId}/outputs?limit=100`
+      loadAll<TaskOutput & { taskId: string }>(
+        `/conversations/${conversationId}/outputs`
       ),
     () => [conversationId],
     5000
@@ -71,48 +246,52 @@
     15000
   );
   const approvals = createLoad(
-    () => api.list<Approval>('/approvals?status=pending&limit=100'),
+    () => loadAll<Approval>('/approvals?status=pending'),
     () => [],
     4000
   );
   $effect(() => {
     if (details.data && onReady?.(details.data)) {
-      void tick().then(() => document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus());
+      void tick().then(() =>
+        document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus()
+      );
     }
   });
-  // Seeing the conversation marks it read up to the newest message shown, again whenever a
-  // new one arrives while it is open.
-  let markedRead: string | null = null;
-  $effect(() => {
-    const newest = messages.data?.data.at(-1);
-    if (!newest) return;
-    const key = `${conversationId}:${newest.id}`;
-    if (key === markedRead) return;
-    markedRead = key;
-    api.put(`/conversations/${conversationId}/read`, { messageId: newest.id }).then(
-      () => onRead?.(),
-      () => {
-        if (markedRead === key) markedRead = null;
-      }
-    );
-  });
   let conversation = $derived(details.data!);
-  let taskList = $derived(tasks.data?.data ?? []);
+  let taskList = $derived(tasks.data ?? []);
   let taskIds = $derived(new Set(taskList.map((task) => task.id)));
-  let conversationApprovals = $derived((approvals.data?.data ?? []).filter((approval) => taskIds.has(approval.taskId)));
+  let conversationApprovals = $derived(
+    (approvals.data ?? []).filter((approval) => taskIds.has(approval.taskId))
+  );
   let busy = $derived(taskList.filter((task) => !['completed', 'cancelled'].includes(task.state)));
+  let typingPeople = $derived(
+    (conversation.typingHumanIds ?? [])
+      .map((id) => conversation.members.find((member) => member.participant.type === 'human' && member.participant.id === id))
+      .filter((member) => member !== undefined)
+  );
   let artifacts = $derived(
-    collectConversationArtifacts(outputs.data?.data ?? [], messages.data?.data ?? [], taskList)
+    collectConversationArtifacts(outputs.data ?? [], messages.data?.data ?? [], taskList)
   );
   let unattached = $derived(
-    artifacts.filter((output) => !(messages.data?.data ?? []).some((message) => message.taskId === output.taskId))
+    artifacts.filter(
+      (output) => !(messages.data?.data ?? []).some((message) => message.taskId === output.taskId)
+    )
   );
   const nameOf = (ref: { type: string; id: string | null }) =>
-    conversation.members.find((member) => member.participant.type === ref.type && member.participant.id === ref.id)
-      ?.name ??
+    conversation.members.find(
+      (member) => member.participant.type === ref.type && member.participant.id === ref.id
+    )?.name ??
     (ref.type === 'system'
       ? 'Platform'
-      : (directory.data?.find((agent) => agent.id === ref.id)?.name ?? (ref.type === 'agent' ? 'Deleted agent' : 'Someone')));
+      : (directory.data?.find((agent) => agent.id === ref.id)?.name ??
+        (ref.type === 'agent' ? 'Deleted agent' : 'Someone')));
+  const humanName = (id: string | null) => people.find((person) => person.id === id)?.name;
+  const appearanceOf = (id: string | null) =>
+    details.data?.members.find((member) => member.participant.type === 'agent' && member.participant.id === id)
+      ?? directory.data?.find((agent) => agent.id === id);
+  const historyName = $derived(
+    historyAgentId ? nameOf({ type: 'agent', id: historyAgentId }) : 'Agent'
+  );
   const waitingApproval = (task: Task) =>
     task.state === 'waiting' && !task.pausedAt
       ? conversationApprovals.find((approval) => approval.taskId === task.id)
@@ -139,20 +318,27 @@
     outputs.reload();
     approvals.reload();
     costs.reload();
+    routing.reload();
   };
   const reply = (message: Message) => {
+    revision = null;
     replyTo = message;
     document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus();
   };
-  const revise = (output: TaskOutput & { taskId: string }) => {
-    const task = taskList.find((candidate) => candidate.id === output.taskId);
-    replyTo =
-      messages.data?.data.findLast((message) => message.taskId === output.taskId && message.authorType === 'agent') ??
-      null;
-    draft = `${task ? '@' + nameOf({ type: 'agent', id: task.ownerAgentId }) + ' ' : ''}Please revise "${output.title}": `;
-    document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus();
+  const revise = async (output: TaskOutput & { taskId: string }) => {
+    try {
+      const task =
+        taskList.find((candidate) => candidate.id === output.taskId) ??
+        (await api.get<Task>(`/tasks/${output.taskId}`));
+      await askForChanges(task);
+    } catch {
+      inspectRun(output.taskId);
+    }
   };
 </script>
+
+<svelte:document onvisibilitychange={checkViewport} />
+<svelte:window onresize={checkViewport} onkeydown={(event) => { if (event.key === "Escape" && showDetails) closeDetails(); }} />
 
 {#if details.error}<ErrorNote error={details.error} />{:else if !details.data}<p>Loading…</p>{:else}
   {#if showMembers}<Members
@@ -181,7 +367,7 @@
           >
             {#each conversation.members.slice(0, 4) as member (member.participant.id)}<Avatar
                 name={member.name}
-                id={member.participant.id}
+                id={member.participant.id} appearance={member}
                 agent={member.participant.type === 'agent'}
               />{/each}
             {#if conversation.members.length > 4}<span class="caption"
@@ -198,7 +384,9 @@
           >
         </div>
       </header>
-      <div class="conversation-scroll">
+      {#if conversation.projectId}<a class="caption project-breadcrumb" href={`#/projects/${conversation.projectId}`}>← Project</a>{/if}
+      <EndeavorGoal {conversation} onChanged={() => { details.reload(); onChanged?.(); }} />
+      <div class="conversation-scroll" bind:this={scroll} onscroll={onScroll}>
         {#if attaching}<section class="inline-panel">
             <div class="row">
               <h2 class="grow">Attach context</h2>
@@ -211,25 +399,55 @@
             <KnowledgeSources {conversationId} />
           </section>{/if}
         <ErrorNote error={messages.error ?? tasks.error ?? outputs.error ?? approvals.error} />
-        <MessageList
+        {#if !messages.ready}<p class="muted">Loading messages…</p>{/if}
+        {#if messages.error}<button class="text-button" onclick={() => void messages.reload()}>Retry messages</button>{/if}
+        {#if messages.hasOlder}<div class="message-history">
+          <button class="text-button" disabled={messages.loadingOlder} onclick={() => void messages.older()}>
+            {messages.loadingOlder ? 'Loading earlier messages…' : 'Load earlier messages'}
+          </button>
+          <ErrorNote error={messages.historyError} />
+        </div>{/if}
+        {#if messages.ready}<MessageList
+          {conversationId}
           messages={messages.data?.data ?? []}
           {nameOf}
+          {humanName}
           members={conversation.members}
           directory={directory.data ?? []}
           meId={me.id}
           tasks={taskList}
-          outputs={outputs.data?.data ?? []}
+          outputs={outputs.data ?? []}
           costs={costs.data}
           {onAdd}
           onReply={reply}
+          onReveal={async (id) => { await messages.reveal(id); await tick(); }}
           onRevise={revise}
           onChanged={reload}
-        />
+          onInspect={inspectMessage}
+          onInspectRun={inspectRun}
+          selectedRunId={showDetails ? selectedRunId ?? undefined : undefined}
+          routingDecisions={routing.data?.data ?? []}
+          onRoutingChanged={routing.reload}
+        />{/if}
+        {#each (routing.data?.data ?? []).filter((decision) =>
+          !decision.decisionMessageId || !(messages.data?.data ?? []).some((message) => message.id === decision.decisionMessageId)
+        ) as decision (decision.id)}
+          <div class="legacy-routing-decision">
+            <RoutingDecisions
+              {conversationId}
+              {decision}
+              directory={directory.data ?? []}
+              {humanName}
+              onChanged={routing.reload}
+            />
+          </div>
+        {/each}
         {#each unattached as output (output.id)}<div class="orphan-artifact">
             <ArtifactCard
               {output}
               task={taskList.find((task) => task.id === output.taskId)}
               cost={costs.data?.tasks.find((taskCost) => taskCost.taskId === output.taskId)?.costUsd}
+              onInspect={inspectRun}
               onReply={() => revise(output)}
               onChanged={reload}
             />
@@ -238,11 +456,9 @@
             <div class="row">
               <Avatar
                 name={nameOf({ type: 'agent', id: approval.agentId })}
-                id={approval.agentId}
+                id={approval.agentId} appearance={appearanceOf(approval.agentId)}
                 agent
-              /><strong>{nameOf({ type: 'agent', id: approval.agentId })}</strong><span
-                class="agent-label">agent</span
-              >
+              /><strong>{nameOf({ type: 'agent', id: approval.agentId })}</strong>
             </div>
             <h2>
               Needs your OK{approval.request.kind === 'access'
@@ -261,24 +477,29 @@
             <div class="row">
               <Avatar
                 name={nameOf({ type: 'agent', id: task.ownerAgentId })}
-                id={task.ownerAgentId}
+                id={task.ownerAgentId} appearance={appearanceOf(task.ownerAgentId)}
                 agent
-              /><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong><span
-                class="agent-label">agent</span
-              >
+              /><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
             </div>
-            <TaskStatus {task} costs={costs.data} onChanged={reload} />
+            <TaskStatus {task} pausedByName={humanName(task.pausedByHumanId)} costs={costs.data} onChanged={reload} />
           </div>{/each}
       </div>
       <div class="conversation-bottom">
-        {#if busy.length}<div class="live-status caption" aria-live="polite">
+        {#if newMessages > 0}<button class="secondary new-messages" onclick={scrollToLatest}>
+          {newMessages} new {newMessages === 1 ? 'message' : 'messages'} ↓
+        </button>{/if}
+        {#if busy.length || typingPeople.length}<div class="live-status caption" aria-live="polite">
+            {#each typingPeople as person (person.participant.id)}<span
+                ><span aria-hidden="true"><Avatar name={person.name} id={person.participant.id} appearance={person} size="sm" /></span><span><strong>{person.name}</strong> is typing…</span></span
+              >{/each}
             {#each busy as task (task.id)}<span
-                ><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
+                ><span aria-hidden="true"><Avatar name={nameOf({ type: 'agent', id: task.ownerAgentId })} id={task.ownerAgentId} appearance={appearanceOf(task.ownerAgentId)} agent size="sm" /></span><span><strong>{nameOf({ type: 'agent', id: task.ownerAgentId })}</strong>
                 {#if waitingApproval(task)}is <span class="waiting-ok">waiting for your OK</span>
                   <span class="muted">· {describeApproval(waitingApproval(task))}</span
-                  >{:else}{liveStatus(task)}{/if}</span
+                  >{:else if task.state === 'working' && !task.pausedAt && task.activity}<LiveActivity activity={task.activity} />{:else}{liveStatus(task)}{/if}</span></span
               >{/each}
           </div>{/if}
+        {#if conversation.state === 'closed'}<p class="endeavor-closed muted">This endeavor is archived. Reopen it to reply.</p>{:else}
         <Composer
           {conversationId}
           title={conversation.title}
@@ -287,13 +508,33 @@
           tasks={taskList}
           bind:replyTo
           bind:body={draft}
-          onPosted={reload}
+          bind:revision
+          onPosted={() => { reload(); details.reload(); onChanged?.(); }}
           {onAdd}
           onAttach={() => (attaching = !attaching)}
-        />
+        />{/if}
       </div>
     </section>
     {#if showDetails}<aside class="conversation-details" aria-label="Conversation details">
+        {#if selectedRunId || historyAgentId || unavailableRun}
+          <div class="row">
+            <div class="grow"><button class="text-button" onclick={() => {
+              if (selectedRunId || unavailableRun) { selectedRunId = null; unavailableRun = false; }
+              else historyAgentId = null;
+            }}>← {selectedRunId || unavailableRun ? `${historyName}'s history` : 'Details'}</button>
+            <h2>{selectedRunId || unavailableRun ? 'Run details' : `${historyName}'s history`}</h2></div>
+            <button class="quiet icon-button" aria-label="Close details" onclick={closeDetails}><Icon name="close" /></button>
+          </div>
+          {#if unavailableRun}<p class="muted">No run was recorded for this message. Its execution history is unavailable.</p>
+          {:else if selectedRunId}
+            {#key selectedRunId}<RunInspector taskId={selectedRunId} {conversationId}
+              cost={costs.data?.tasks.find((entry) => entry.taskId === selectedRunId)?.costUsd}
+              onLoaded={(task) => { historyAgentId = task.ownerAgentId; }}
+              onRevise={askForChanges} onSelect={inspectRun} onChanged={reload} />{/key}
+          {:else if historyAgentId}
+            {#key historyAgentId}<AgentHistory {conversationId} conversationTitle={conversation.title} agentId={historyAgentId} appearance={appearanceOf(historyAgentId)} agentName={historyName} costs={costs.data?.tasks ?? []} onSelect={inspectRun} />{/key}
+          {/if}
+        {:else}
         <div class="row">
           <div class="grow">
             <h2>Details</h2>
@@ -302,7 +543,7 @@
           <button
             class="quiet icon-button"
             aria-label="Close details"
-            onclick={() => (showDetails = false)}><Icon name="close" /></button
+            onclick={closeDetails}><Icon name="close" /></button
           >
         </div>
         <section>
@@ -310,7 +551,7 @@
           {#each conversation.members.filter((member) => member.participant.type === 'human') as member (member.participant.id)}<div
               class="person-line row"
             >
-              <Avatar name={member.name} id={member.participant.id} /><span
+              <Avatar name={member.name} id={member.participant.id} appearance={member} /><span
                 >{member.name}{member.participant.id === me.id ? ' (you)' : ''}</span
               >
             </div>{/each}
@@ -318,24 +559,25 @@
         <ConversationAgents
           members={conversation.members}
           tasks={taskList}
-          {conversationId}
           onChanged={reload}
+          onHistory={openHistory}
         />
         <section>
           <h2 class="label">Artifacts</h2>
-          {#each artifacts as output (output.id)}<a
-              class="artifact-line row"
-              href={`#/tasks/${output.taskId}`}
+          {#each artifacts as output (output.id)}<button
+              class="quiet artifact-line row"
+              onclick={() => inspectRun(output.taskId)}
               ><Icon name="file" /><span class="grow ellipsis">{output.title}</span><time
                 class="caption muted"
                 title={formatDateTime(output.createdAt)}>{formatShortTime(output.createdAt)}</time
-              ></a
+              ></button
             >{/each}{#if !artifacts.length}<p class="caption muted">None yet.</p>{/if}
         </section>
         <section>
           <Spending kind="conversation" id={conversationId} onBudgetSaved={costs.reload} />
         </section>
         <details><summary>Knowledge sources</summary><KnowledgeSources {conversationId} /></details>
+        {/if}
       </aside>{/if}
   </div>
 {/if}

@@ -13,6 +13,24 @@ interface MentionName {
   you?: boolean;
 }
 
+// Consume the whole longest name before looking for another tag. Email addresses are not tags.
+export function findTextMentions<T extends { name: string }>(text: string, names: T[]) {
+  const sorted = [...names]
+    .filter((entry) => entry.name)
+    .sort((a, b) => b.name.length - a.name.length);
+  const matches: { entry: T; start: number; end: number }[] = [];
+  for (let start = 0; start < text.length; start++) {
+    if (text[start] !== '@' || WORD_CHAR.test(text[start - 1] ?? '') || text[start - 1] === '@')
+      continue;
+    const entry = findMentionAt(text, start + 1, sorted);
+    if (!entry) continue;
+    const end = start + entry.name.length + 1;
+    matches.push({ entry, start, end });
+    start = end - 1;
+  }
+  return matches;
+}
+
 const MARKDOWN_TOKEN = /(`[^`]+`|\[[^\]]+\]\([^\s)]+\)|\*\*[^*]+\*\*|\*[^*]+\*)/g;
 const BARE_URL = /^(?:https?:\/\/|www\.)[^\s<>"`]+/i;
 const WORD_CHAR = /[\p{L}\p{N}_]/u;
@@ -130,6 +148,9 @@ function parsePlainText(text: string, mentionNames: MentionName[]): InlineText[]
       pendingText = '';
     }
   };
+  const mentions = new Map(
+    findTextMentions(text, mentionNames).map((match) => [match.start, match.entry])
+  );
   let index = 0;
   while (index < text.length) {
     const startsWord = index === 0 || !WORD_CHAR.test(text[index - 1]);
@@ -144,7 +165,7 @@ function parsePlainText(text: string, mentionNames: MentionName[]): InlineText[]
         continue;
       }
     }
-    const mention = text[index] === '@' ? findMentionAt(text, index + 1, mentionNames) : undefined;
+    const mention = mentions.get(index);
     if (mention) {
       flushText();
       const length = mention.name.length + 1;
@@ -184,11 +205,11 @@ function countOf(text: string, char: string): number {
 }
 
 // The mention name that starts at this index and ends at a word boundary, if any.
-function findMentionAt(
+function findMentionAt<T extends { name: string }>(
   text: string,
   index: number,
-  mentionNames: MentionName[]
-): MentionName | undefined {
+  mentionNames: T[]
+): T | undefined {
   return mentionNames.find(
     (entry) =>
       text.slice(index, index + entry.name.length).toLowerCase() === entry.name.toLowerCase() &&

@@ -50,7 +50,9 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((value) => value !== 'false'),
+  ROUTING_MODEL: z.string().min(1).default('gpt-6-luna'),
   RUNNER_INTERVAL_MS: z.coerce.number().int().min(100).default(2000),
+  MODEL_TIMEOUT_MS: z.coerce.number().int().min(1).max(3_600_000).default(120_000),
   // Model prices in US dollars per million tokens, as JSON, such as
   // {"some-model":{"inputPerMillion":0.15,"outputPerMillion":0.6}}. Models not listed have an
   // unknown cost: their tokens are still counted, but dollar budgets can't count them.
@@ -144,7 +146,9 @@ export const config = {
   OPENAI_BASE_URL: env.OPENAI_BASE_URL,
   // Never runs in tests, so they need no database.
   RUNNER_ENABLED: env.RUNNER_ENABLED && env.ENVIRONMENT !== 'test',
+  ROUTING_MODEL: env.ROUTING_MODEL,
   RUNNER_INTERVAL_MS: env.RUNNER_INTERVAL_MS,
+  MODEL_TIMEOUT_MS: env.MODEL_TIMEOUT_MS,
   COMPLETION_CHECK: env.COMPLETION_CHECK,
   MODEL_PRICES: env.MODEL_PRICES,
   TASK_BUDGET_USD: env.TASK_BUDGET_USD,

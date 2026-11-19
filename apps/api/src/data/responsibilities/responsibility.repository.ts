@@ -6,7 +6,8 @@ import {
 } from '../../shared/types';
 
 export interface CreateResponsibilityInput {
-  agentId: string;
+  projectId: string;
+  agentId: string | null;
   conversationId: string | null;
   title: string;
   brief: string;
@@ -19,6 +20,7 @@ export interface CreateResponsibilityInput {
 }
 
 export interface ResponsibilityChanges {
+  agentId?: string | null;
   title?: string;
   brief?: string;
   completionCriteria?: string;
@@ -29,16 +31,24 @@ export interface ResponsibilityChanges {
   status?: ResponsibilityStatus;
 }
 
+export interface CatchUpDecision {
+  slot: Date;
+  decision: 'run' | 'wait';
+  taskId: string | null;
+  runKey: string | null;
+}
+
 export interface ResponsibilityRepository {
   create(input: CreateResponsibilityInput): Promise<Responsibility>;
   getById(responsibilityId: string): Promise<Responsibility | null>;
   list(input: {
     agentId?: string;
+    projectId?: string;
     status?: ResponsibilityStatus;
     limit: number;
     offset: number;
   }): Promise<Responsibility[]>;
-  count(input: { agentId?: string; status?: ResponsibilityStatus }): Promise<number>;
+  count(input: { agentId?: string; projectId?: string; status?: ResponsibilityStatus }): Promise<number>;
   // Cancelled is final: returns null without changing a cancelled responsibility.
   update(responsibilityId: string, changes: ResponsibilityChanges): Promise<Responsibility | null>;
   // Enabled responsibilities whose next run is due.
@@ -54,7 +64,6 @@ export interface ResponsibilityRepository {
       catchUp?: { slot: Date; missed: number } | null;
     }
   ): Promise<boolean>;
-  // Closes the open catch-up question for this slot. False if it was already answered or
-  // lapsed, so only one answer counts.
-  clearCatchUp(responsibilityId: string, slot: Date): Promise<boolean>;
+  // A saved answer remains replayable only in its enabled, unretimed, future schedule window.
+  getCatchUpDecision(responsibilityId: string, slot?: Date): Promise<CatchUpDecision | null>;
 }

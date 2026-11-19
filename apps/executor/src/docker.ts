@@ -3,13 +3,15 @@ import { spawn } from 'node:child_process';
 export interface ContainerResult {
   code: number;
   stdout: string;
+  workspaceReset?: boolean;
 }
 export interface ContainerRun {
   result: Promise<ContainerResult>;
   cancel: () => Promise<void>;
 }
 export interface ContainerClient {
-  run(id: string, image: string, input: unknown): ContainerRun;
+  run(id: string, image: string, input: unknown, task?: string): ContainerRun;
+  release(task: string): Promise<void>;
   recover(): Promise<void>;
 }
 export const CONTAINER_LABEL = 'io.endeavor.executor=ca78';
@@ -82,6 +84,26 @@ async function docker(args: string[]): Promise<string> {
 }
 
 export class DockerClient implements ContainerClient {
+  private readonly sessions = new Map<string, { name: string; ready: Promise<void> }>();
+
+  async release(task: string): Promise<void> {
+    const session = this.sessions.get(task);
+    if (!session) return;
+    try {
+      await session.ready;
+    } catch {
+      await docker(['rm', '-f', session.name]).catch(() => undefined);
+      this.sessions.delete(task);
+      return;
+    }
+    await docker(['rm', '-f', session.name]).catch(async () => {
+      // Docker may already have lost the container. A daemon failure must still surface.
+      const remaining = await docker(['ps', '-aq', '--filter', `name=^/${session.name}$`]);
+      if (remaining.trim()) throw new Error('Workspace container could not be removed');
+    });
+    this.sessions.delete(task);
+  }
+
   async recover(): Promise<void> {
     // A single broker owns this label. Never touch platform services or unrelated containers.
     const ids = (await docker(['ps', '-aq', '--filter', `label=${CONTAINER_LABEL}`]))
@@ -89,19 +111,39 @@ export class DockerClient implements ContainerClient {
       .split(/\s+/)
       .filter(Boolean);
     for (const id of ids) await docker(['rm', '-f', id]);
+    this.sessions.clear();
   }
 
-  run(id: string, image: string, input: unknown): ContainerRun {
-    const name = `endeavor-execution-${id}`;
+  run(id: string, image: string, input: unknown, task?: string): ContainerRun {
+    let session = task ? this.sessions.get(task) : undefined;
+    const workspaceReset = !!task && !session;
+    const name = session?.name ?? `endeavor-execution-${id}`;
     // Create before starting: cancellation waits for the named container to exist, so an
     // immediate cancellation cannot race a later Docker create and leave work running.
-    const created = docker(containerArgs(id, image));
+    let created: Promise<unknown>;
+    if (task) {
+      if (!session) {
+        const args = containerArgs(id, image);
+        // The task container stays alive; each command runs the immutable image worker via exec.
+        args.splice(args.length - 1, 0, '--entrypoint', 'node');
+        args.push('-e', 'setInterval(() => {}, 3600000)');
+        const ready = docker(args)
+          .then(() => docker(['start', name]))
+          .then(() => undefined);
+        session = { name, ready };
+        this.sessions.set(task, session);
+      }
+      created = session.ready;
+    } else created = docker(containerArgs(id, image));
     let cancelled = false;
     let stopping: Promise<void> | undefined;
     const cancel = () => {
       cancelled = true;
       return (stopping ??= created
-        .then(() => docker(['rm', '-f', name]))
+        .then(async () => {
+          if (task) await this.release(task);
+          else await docker(['rm', '-f', name]);
+        })
         .then(() => undefined)
         .catch(() => undefined));
     };
@@ -109,7 +151,10 @@ export class DockerClient implements ContainerClient {
       await created;
       if (cancelled) return { code: -1, stdout: '' };
       return new Promise<ContainerResult>((resolve, reject) => {
-        const child = spawn('docker', ['start', '--attach', '--interactive', name], {
+        const args = task
+          ? ['exec', '-i', name, 'node', '/sandbox/worker.mjs']
+          : ['start', '--attach', '--interactive', name];
+        const child = spawn('docker', args, {
           stdio: ['pipe', 'pipe', 'pipe']
         });
         let stdout = '';
@@ -138,12 +183,17 @@ export class DockerClient implements ContainerClient {
         child.on('close', (code) => {
           clearTimeout(timer);
           if (exceeded) reject(new Error('Execution snapshot exceeded its output limit'));
-          else resolve({ code: code ?? -1, stdout });
+          else resolve({ code: code ?? -1, stdout, workspaceReset });
         });
-        child.stdin.end(JSON.stringify(input));
+        child.stdin.end(
+          JSON.stringify({
+            ...(input as object),
+            ...(task ? { persistent: true, initialize: workspaceReset } : {})
+          })
+        );
       });
     })().finally(async () => {
-      await docker(['rm', '-f', name]).catch(() => undefined);
+      if (!task) await docker(['rm', '-f', name]).catch(() => undefined);
     });
     return { result, cancel };
   }

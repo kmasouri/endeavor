@@ -57,6 +57,13 @@ export class TaskRunnerLogger {
     );
   }
 
+  onHttpCallAuditFailed(taskId: string, callId: string): void {
+    getCurrentLogger(this.logger).warn(
+      { event: 'runner.connection.audit.failed', taskId, callId },
+      'HTTP response saved, but the connection audit event could not be written'
+    );
+  }
+
   onAccessRequested(
     taskId: string,
     approvalId: string,

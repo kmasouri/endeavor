@@ -1,9 +1,14 @@
 export * from './agents';
-export * from './catalogs';
+export * from './skills';
+export * from './connections';
+export * from './grants';
 export * from './conversations';
 export * from './humans';
 export * from './items';
 export * from './notes';
+export * from './projects';
 export * from './request-logger';
 export * from './responsibilities';
 export * from './tasks';
+
+export * from './routing/routing.logger';

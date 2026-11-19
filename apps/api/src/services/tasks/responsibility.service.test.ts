@@ -2,11 +2,12 @@ import {
   mockAgentRepository,
   mockConversationRepository,
   mockHumanRepository,
+  mockProjectRepository,
   mockResponsibilityRepository,
   mockTaskRepository
 } from '../../data/repositories.test-helper';
 import { ResponsibilityLogger, TaskLogger } from '../../observability';
-import { Human, Responsibility, Task } from '../../shared/types';
+import { Human, Responsibility, ResponsibilityRun, Task } from '../../shared/types';
 import { ResponsibilityService } from './responsibility.service';
 
 const ADMIN = '00000000-0000-4000-8000-000000000001';
@@ -22,6 +23,7 @@ const admin: Human = {
 };
 const responsibility: Responsibility = {
   id: 'r1',
+  projectId: 'p1',
   agentId: AGENT,
   conversationId: CONV,
   title: 'Nightly QA',
@@ -39,12 +41,24 @@ const responsibility: Responsibility = {
   updatedAt: new Date()
 };
 
+const run: ResponsibilityRun = {
+  runKey: 'manual:r1:event-42',
+  conversationId: 'new-endeavor',
+  state: 'working',
+  taskId: 't1',
+  createdAt: new Date()
+};
+
 function setup() {
   const responsibilities = mockResponsibilityRepository();
   const tasks = mockTaskRepository();
   const agents = mockAgentRepository();
   const conversations = mockConversationRepository();
   const humans = mockHumanRepository();
+  const projects = mockProjectRepository();
+  projects.getDefault.mockResolvedValue({ id: 'p1', archivedAt: null } as never);
+  projects.getById.mockResolvedValue({ id: 'p1', archivedAt: null } as never);
+  conversations.getById.mockResolvedValue({ id: CONV, projectId: 'p1' } as never);
   humans.getById.mockResolvedValue(admin);
   agents.getById.mockResolvedValue({
     id: AGENT,
@@ -63,8 +77,9 @@ function setup() {
     ...responsibility,
     ...changes
   }));
-  tasks.create.mockImplementation(async (input) => ({
-    task: { id: 't1', ...input } as never,
+  tasks.startResponsibilityRun.mockImplementation(async (input) => ({
+    run: { ...run, runKey: input.runKey },
+    task: { id: 't1', ...input } as unknown as Task,
     created: true
   }));
   const responsibilityLogger = {
@@ -80,26 +95,25 @@ function setup() {
     conversations,
     humans,
     responsibilityLogger,
-    taskLogger
+    taskLogger,
+    projects
   );
-  return { service, responsibilities, tasks, conversations, humans };
+  return { service, responsibilities, tasks, conversations, humans, agents };
 }
 
 describe('ResponsibilityService', () => {
-  it('needs the agent to be in the conversation it reports to', async () => {
-    const { service, conversations } = setup();
-    conversations.getMember.mockResolvedValue(null);
-
-    await expect(
-      service.create(ADMIN, {
-        agentId: AGENT,
-        conversationId: CONV,
-        title: 't',
-        brief: 'b',
-        completionCriteria: 'c',
-        intervalMinutes: 60
-      })
-    ).rejects.toMatchObject({ name: 'agentNotInConversation' });
+  it('uses the legacy endeavor to find the project and accepts an unpinned schedule', async () => {
+    const { service, responsibilities } = setup();
+    await service.create(ADMIN, {
+      conversationId: CONV,
+      title: 't',
+      brief: 'b',
+      completionCriteria: 'c',
+      intervalMinutes: 60
+    });
+    expect(responsibilities.create).toHaveBeenCalledWith(expect.objectContaining({
+      agentId: null, projectId: 'p1', conversationId: CONV
+    }));
   });
 
   it('defaults to asking about missed runs, starting now', async () => {
@@ -214,13 +228,14 @@ describe('ResponsibilityService', () => {
     });
 
     expect(created).toBe(true);
-    expect(tasks.create).toHaveBeenCalledWith(
+    expect(tasks.startResponsibilityRun).toHaveBeenCalledWith(
       expect.objectContaining({
         runKey: 'manual:r1:event-42',
         responsibilityId: 'r1',
-        conversationId: CONV,
-        brief: 'Test checkout\n\nDeploy finished',
-        requestedByType: 'human'
+        projectId: 'p1',
+        goal: 'Test checkout',
+        note: 'Deploy finished',
+        startedBy: { type: 'human', id: ADMIN }
       })
     );
     expect(responsibilities.advance).not.toHaveBeenCalled();
@@ -229,19 +244,17 @@ describe('ResponsibilityService', () => {
 
   it('returns the same run for a repeated runKey, even while it is still going', async () => {
     const { service, tasks } = setup();
-    const running = { id: 't-running', state: 'working' } as unknown as Task;
-    tasks.getByRunKey.mockResolvedValue(running);
-    tasks.findOpenRun.mockResolvedValue(running);
+    tasks.startResponsibilityRun.mockResolvedValue({ run, task: null, created: false });
 
     const result = await service.startRun(ADMIN, 'r1', { runKey: 'event-42' });
 
-    expect(result).toEqual({ task: running, created: false });
+    expect(result).toEqual({ run, created: false });
     expect(tasks.create).not.toHaveBeenCalled();
   });
 
   it('refuses a new run while the last one is still going', async () => {
     const { service, tasks } = setup();
-    tasks.findOpenRun.mockResolvedValue({ id: 't-running', state: 'waiting' } as unknown as Task);
+    tasks.startResponsibilityRun.mockResolvedValue({ reason: 'open' });
 
     await expect(service.startRun(ADMIN, 'r1', { runKey: 'event-43' })).rejects.toMatchObject({
       name: 'responsibilityRunOpen'
@@ -259,17 +272,18 @@ describe('ResponsibilityService', () => {
         catchUp: { slot, missed: 4 }
       });
 
-      const { task } = await service.resolveCatchUp(ADMIN, 'r1', 'run');
+      const { run: started } = await service.resolveCatchUp(ADMIN, 'r1', 'run');
 
-      expect(responsibilities.clearCatchUp).toHaveBeenCalledWith('r1', slot);
-      expect(task).not.toBeNull();
-      expect(tasks.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          runKey: 'catchup:r1:2026-10-22T04:00:00.000Z',
-          brief: expect.stringContaining('4 scheduled runs were missed'),
-          requestedByType: 'human'
-        })
-      );
+      expect(started).not.toBeNull();
+      expect(tasks.startResponsibilityRun).toHaveBeenCalledWith(expect.objectContaining({
+        responsibilityId: 'r1',
+        agentId: AGENT,
+        catchUpSlot: slot,
+        runKey: 'catchup:r1:2026-10-22T04:00:00.000Z',
+        note: expect.stringContaining('4 scheduled runs were missed'),
+        startedBy: { type: 'human', id: ADMIN }
+      }));
+      expect(tasks.create).not.toHaveBeenCalled();
     });
 
     it('starts nothing when the person says wait', async () => {
@@ -281,7 +295,7 @@ describe('ResponsibilityService', () => {
 
       const result = await service.resolveCatchUp(ADMIN, 'r1', 'wait');
 
-      expect(result.task).toBeNull();
+      expect(result.run).toBeNull();
       expect(result.responsibility.catchUp).toBeNull();
       expect(tasks.create).not.toHaveBeenCalled();
     });
@@ -292,12 +306,94 @@ describe('ResponsibilityService', () => {
         ...responsibility,
         catchUp: { slot, missed: 2 }
       });
-      responsibilities.clearCatchUp.mockResolvedValue(false);
+      tasks.startResponsibilityRun.mockResolvedValue({ reason: 'changed' });
 
       await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).rejects.toMatchObject({
         name: 'catchUpNotPending'
       });
       expect(tasks.create).not.toHaveBeenCalled();
+    });
+
+    it('keeps a refused question available for retry after the agent becomes available', async () => {
+      const { service, responsibilities, tasks } = setup();
+      const pending = { ...responsibility, catchUp: { slot, missed: 2 } };
+      responsibilities.getById.mockResolvedValue(pending);
+      tasks.startResponsibilityRun.mockResolvedValueOnce({ reason: 'agent' });
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).rejects.toMatchObject({
+        name: 'agentUnavailable'
+      });
+      expect(tasks.waitForNextResponsibilityRun).not.toHaveBeenCalled();
+      expect(pending.catchUp).toEqual({ slot, missed: 2 });
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).resolves.toMatchObject({
+        run: { taskId: 't1' }
+      });
+    });
+
+    it('leaves an open-run refusal pending, including a competing insert', async () => {
+      const { service, responsibilities, tasks } = setup();
+      responsibilities.getById.mockResolvedValue({
+        ...responsibility,
+        catchUp: { slot, missed: 2 }
+      });
+      tasks.startResponsibilityRun.mockResolvedValue({ reason: 'open' });
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).rejects.toMatchObject({
+        name: 'responsibilityRunOpen'
+      });
+      expect(responsibilities.getCatchUpDecision).not.toHaveBeenCalled();
+    });
+
+    it('retries an insert failure without clearing the question', async () => {
+      const { service, responsibilities, tasks } = setup();
+      responsibilities.getById.mockResolvedValue({
+        ...responsibility,
+        catchUp: { slot, missed: 2 }
+      });
+      tasks.startResponsibilityRun.mockRejectedValueOnce(new Error('Database failure'));
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).rejects.toThrow('Database failure');
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).resolves.toMatchObject({
+        run: { taskId: 't1' }
+      });
+    });
+
+    it.each([false, true])(
+      'replays a committed run after response loss (stale pending=%s)',
+      async (stale) => {
+        const { service, responsibilities, tasks, agents } = setup();
+        responsibilities.getById.mockResolvedValue({
+          ...responsibility,
+          catchUp: stale ? { slot, missed: 2 } : null
+        });
+        responsibilities.getCatchUpDecision.mockResolvedValue({
+          slot,
+          decision: 'run',
+          taskId: 'original',
+          runKey: null
+        });
+        tasks.getById.mockResolvedValue({ id: 'original', runKey: 'catchup:r1:slot' } as Task);
+        tasks.getResponsibilityRun.mockResolvedValue({ ...run, taskId: 'original' });
+        tasks.startResponsibilityRun.mockResolvedValue({ reason: 'changed' });
+        const result = await service.resolveCatchUp(ADMIN, 'r1', 'run');
+        expect(result.run?.taskId).toBe('original');
+        expect(result.responsibility.catchUp).toBeNull();
+        if (!stale) expect(agents.getById).not.toHaveBeenCalled();
+      }
+    );
+
+    it('replays wait, while preserving the first answer against an opposing retry', async () => {
+      const { service, responsibilities, tasks } = setup();
+      responsibilities.getCatchUpDecision.mockResolvedValue({
+        slot,
+        decision: 'wait',
+        taskId: null,
+        runKey: null
+      });
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'wait')).resolves.toMatchObject({
+        run: null
+      });
+      await expect(service.resolveCatchUp(ADMIN, 'r1', 'run')).rejects.toMatchObject({
+        name: 'catchUpNotPending'
+      });
+      expect(tasks.startResponsibilityRun).not.toHaveBeenCalled();
     });
 
     it('refuses when there is no question at all', async () => {
@@ -353,7 +449,7 @@ describe('calendar schedule controls', () => {
     const { service, responsibilities, tasks } = setup();
     responsibilities.getById.mockResolvedValue(paused);
     await service.startRun(ADMIN, 'r1', { runKey: 'manual-dst' });
-    expect(tasks.create).toHaveBeenCalledWith(
+    expect(tasks.startResponsibilityRun).toHaveBeenCalledWith(
       expect.objectContaining({ runKey: 'manual:r1:manual-dst' })
     );
     expect(responsibilities.advance).not.toHaveBeenCalled();
@@ -389,10 +485,7 @@ describe('calendar schedule controls', () => {
   });
   it('reports an open run when a competing start wins the database constraint', async () => {
     const { service, tasks } = setup();
-    tasks.create.mockResolvedValue({
-      task: { id: 'other', runKey: 'schedule:r1:slot', state: 'working' } as Task,
-      created: false
-    });
+    tasks.startResponsibilityRun.mockResolvedValue({ reason: 'open' });
     await expect(service.startRun(ADMIN, 'r1', { runKey: 'manual-race' })).rejects.toMatchObject({
       name: 'responsibilityRunOpen'
     });

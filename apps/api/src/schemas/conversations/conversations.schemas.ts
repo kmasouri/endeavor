@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import { canonicalConversationName } from '../../shared/conversation-name';
+import {
+  canonicalConversationName,
+  MAX_CONVERSATION_NAME_LENGTH
+} from '../../shared/conversation-name';
 
 const conversationTitleSchema = z
   .string()
@@ -9,7 +12,7 @@ const conversationTitleSchema = z
     z
       .string()
       .min(1, 'Use at least one letter or number.')
-      .max(200)
+      .max(MAX_CONVERSATION_NAME_LENGTH, 'Use no more than 64 characters.')
       .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
   );
 
@@ -22,8 +25,17 @@ export const conversationParamsSchema = z.object({
   conversationId: z.uuid()
 });
 
+// The request the endeavor is for. People never have to write one: the first message becomes it.
+const goalSchema = z.string().trim().min(1).max(20_000);
+const doneCriteriaSchema = z.string().trim().min(1).max(5_000);
+
 export const createConversationBodySchema = z.strictObject({
   title: conversationTitleSchema,
+  // Without one, the endeavor goes into the default project.
+  projectId: z.uuid().nullable().optional(),
+  goal: goalSchema.optional(),
+  // Filled in from the goal when left out.
+  doneCriteria: doneCriteriaSchema.optional(),
   agentIds: z.array(z.uuid()).max(20).optional(),
   humanIds: z.array(z.uuid()).max(20).optional()
 });
@@ -32,7 +44,9 @@ export const updateConversationBodySchema = z
   .strictObject({
     title: conversationTitleSchema.optional(),
     // US dollars for all agent work in this conversation. null removes the cap.
-    budgetUsd: z.number().positive().max(100_000).nullable().optional()
+    budgetUsd: z.number().positive().max(100_000).nullable().optional(),
+    goal: goalSchema.optional(),
+    doneCriteria: doneCriteriaSchema.optional()
   })
   .refine((body) => Object.keys(body).length > 0, 'Send at least one field');
 
@@ -45,10 +59,17 @@ export const addMemberBodySchema = z.strictObject({
 
 export const postMessageBodySchema = z.strictObject({
   body: z.string().trim().min(1).max(20_000),
-  // Agents mentioned here are asked to respond. Messages that mention no one start no work.
+  // Agents mentioned here are asked to respond. Untagged messages without a reply enter routing.
   mentions: z.array(participantRefSchema).max(20).optional(),
   inReplyToMessageId: z.uuid().optional(),
   clientKey: z.string().trim().min(1).max(200).optional()
+});
+
+export const updateTypingBodySchema = z.strictObject({
+  // A browser session sends heartbeats while its person is composing. The session ID keeps one
+  // tab from clearing another tab's presence for the same person.
+  clientId: z.uuid(),
+  typing: z.boolean()
 });
 
 export const markReadBodySchema = z.strictObject({
@@ -58,13 +79,30 @@ export const markReadBodySchema = z.strictObject({
 
 export const listConversationsQuerySchema = z.strictObject({
   limit: z.coerce.number().int().min(1).max(100).default(50),
-  offset: z.coerce.number().int().min(0).default(0)
+  offset: z.coerce.number().int().min(0).default(0),
+  projectId: z.uuid().optional(),
+  // Closed endeavors are archived, so only open ones are listed unless asked.
+  state: z.enum(['open', 'closed', 'all']).default('open')
 });
 
-export const listMessagesQuerySchema = z.strictObject({
-  limit: z.coerce.number().int().min(1).max(500).default(100),
-  offset: z.coerce.number().int().min(0).default(0)
-});
+export const listMessagesQuerySchema = z
+  .strictObject({
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+    offset: z.coerce.number().int().min(0).default(0),
+    latest: z
+      .enum(['true', 'false'])
+      .transform((value) => value === 'true')
+      .optional(),
+    beforeId: z.uuid().optional(),
+    afterId: z.uuid().optional()
+  })
+  .refine((input) => {
+    const modes =
+      Number(Boolean(input.latest)) +
+      Number(Boolean(input.beforeId)) +
+      Number(Boolean(input.afterId));
+    return modes <= 1 && (modes === 0 || input.offset === 0);
+  }, 'Use only one of latest, beforeId or afterId, without an offset');
 
 export const addDocumentBodySchema = z.strictObject({
   title: z.string().trim().min(1).max(200),
@@ -83,6 +121,7 @@ export type CreateConversationBody = z.infer<typeof createConversationBodySchema
 export type AddMemberBody = z.infer<typeof addMemberBodySchema>;
 export type UpdateConversationBody = z.infer<typeof updateConversationBodySchema>;
 export type PostMessageBody = z.infer<typeof postMessageBodySchema>;
+export type UpdateTypingBody = z.infer<typeof updateTypingBodySchema>;
 export type MarkReadBody = z.infer<typeof markReadBodySchema>;
 export type ListConversationsQuery = z.infer<typeof listConversationsQuerySchema>;
 export type ListMessagesQuery = z.infer<typeof listMessagesQuerySchema>;

@@ -2,6 +2,7 @@ import {
   CreateTaskOutputInput,
   CreateTaskWaitInput,
   TaskChanges,
+  TaskUpdateEvent,
   TaskRepository
 } from '../../data';
 import { TaskLogger } from '../../observability';
@@ -183,12 +184,15 @@ export class TaskLifecycle {
   }
 
   // Writes the changes only if nobody changed the task since it was read.
-  async applyChanges(task: Task, changes: TaskChanges): Promise<Task> {
-    const updated = await this.taskRepository.update(
-      task.id,
-      { state: task.state, paused: task.pausedAt !== null, agentVersionId: task.agentVersionId },
-      changes
-    );
+  async applyChanges(task: Task, changes: TaskChanges, event?: TaskUpdateEvent): Promise<Task> {
+    const expected = {
+      state: task.state,
+      paused: task.pausedAt !== null,
+      agentVersionId: task.agentVersionId
+    };
+    const updated = event
+      ? await this.taskRepository.update(task.id, expected, changes, event)
+      : await this.taskRepository.update(task.id, expected, changes);
     if (!updated) {
       throw new AppError(
         'taskStateConflict',

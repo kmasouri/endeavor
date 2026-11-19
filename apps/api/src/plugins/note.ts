@@ -4,7 +4,8 @@ import {
   AgentPostgresRepository,
   ConversationPostgresRepository,
   HumanPostgresRepository,
-  NotePostgresRepository
+  NotePostgresRepository,
+  ProjectPostgresRepository
 } from '../data';
 import { NoteLogger } from '../observability';
 import { NoteService } from '../services';
@@ -20,6 +21,7 @@ const notePlugin: FastifyPluginAsync = async (fastify) => {
     new NotePostgresRepository(fastify.pg),
     new AgentPostgresRepository(fastify.pg),
     new ConversationPostgresRepository(fastify.pg),
+    new ProjectPostgresRepository(fastify.pg),
     new HumanPostgresRepository(fastify.pg),
     new NoteLogger(fastify.log)
   );

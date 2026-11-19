@@ -6,13 +6,15 @@
   import { createAction, createLoad } from '../state.svelte';
 
   let {
-    conversationId
+    conversationId, projectId
   }: {
-    conversationId: string;
+    conversationId?: string;
+    projectId?: string;
   } = $props();
+  const path = $derived(projectId ? `/projects/${projectId}/documents` : `/conversations/${conversationId}/documents`);
   const docs = createLoad(
-    () => api.get<ConversationDocument[]>(`/conversations/${conversationId}/documents`),
-    () => [conversationId]
+    () => api.get<ConversationDocument[]>(path),
+    () => [conversationId, projectId]
   );
   let title = $state('');
   let content = $state('');
@@ -20,7 +22,7 @@
   const add = (event: SubmitEvent) => {
     event.preventDefault();
     void action
-      .run(() => api.post(`/conversations/${conversationId}/documents`, { title, content }))
+      .run(() => api.post(path, { title, content }))
       .then((ok) => ok && ((title = ''), (content = ''), docs.reload()));
   };
 </script>
@@ -28,7 +30,7 @@
 <h2>Knowledge sources</h2>
 
 <Hint>
-  {CONTEXT_LABELS.knowledge} Agents here can use these.
+  {CONTEXT_LABELS.knowledge} {projectId ? "Every endeavor in this project can use these." : "Agents here can use these."}
 </Hint>
 
 <ErrorNote error={docs.error} />
@@ -53,7 +55,7 @@
         disabled={action.busy}
         onclick={() =>
           void action
-            .run(() => api.delete(`/conversations/${conversationId}/documents/${doc.id}`))
+            .run(() => api.delete(`${path}/${doc.id}`))
             .then(docs.reload)}
       >
         Remove
@@ -66,9 +68,9 @@
   <summary> Attach a document </summary>
 
   <form onsubmit={add} class="stack">
-    <input bind:value={title} placeholder="Title" required />
+    <input aria-label="Document title" maxlength="200" bind:value={title} placeholder="Title" required />
 
-    <textarea bind:value={content} rows={5} placeholder="Paste the text" required></textarea>
+    <textarea aria-label="Document text" maxlength="100000" bind:value={content} rows={5} placeholder="Paste the text" required></textarea>
 
     <button disabled={action.busy}> Attach </button>
   </form>

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   AgentRepository,
+  AgentCost,
   CostSummary,
   TaskCost,
   ApprovalRepository,
@@ -14,7 +15,7 @@ import {
   TaskRepository
 } from '../../data';
 import { TaskLogger } from '../../observability';
-import { ADMIN_ONLY, requireHuman, hasFullAccess } from '../../shared/access';
+import { ADMIN_ONLY, requireHuman, hasFullAccess } from '../access/access.rules';
 import { AppError } from '../../shared/errors';
 import {
   AccessDuration,
@@ -28,7 +29,8 @@ import {
   Human,
   Task,
   TaskEvent,
-  TaskOutput
+  TaskOutput,
+  TaskOutputView
 } from '../../shared/types';
 import { startOfMonth } from './pricing';
 import {
@@ -39,6 +41,8 @@ import {
 } from './task-lifecycle';
 import { isFinished } from './task-state';
 import { TASK_EVENTS } from './task-events';
+import { ACTIVITY_EVENTS, ActiveTask, deriveTaskActivity } from './task-activity';
+import { describeOutputState } from './output.rules';
 
 export interface CreateTaskRequest {
   ownerAgentId: string;
@@ -58,6 +62,7 @@ export interface CostReport {
   thisMonth: CostSummary;
   budgetUsd: number | null;
   tasks: TaskCost[];
+  agents?: AgentCost[];
 }
 
 export class TaskService {
@@ -112,14 +117,15 @@ export class TaskService {
   async getTask(actorId: string, taskId: string): Promise<TaskDetails> {
     const task = await this.requireVisibleTask(actorId, taskId);
     const waits = await this.taskRepository.listWaits(task.id, { openOnly: false });
-    return { ...task, waits };
+    const [active] = await this.withActivity([task]);
+    return { ...active, waits };
   }
 
   // Admins see every task. Members see tasks in their conversations and tasks they asked for.
   async listTasks(
     actorId: string,
     input: Omit<ListTasksInput, 'visibleToHumanId'>
-  ): Promise<{ tasks: Task[]; total: number }> {
+  ): Promise<{ tasks: ActiveTask[]; total: number }> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const filters = {
       state: input.state,
@@ -131,7 +137,21 @@ export class TaskService {
       this.taskRepository.list({ ...filters, limit: input.limit, offset: input.offset }),
       this.taskRepository.count(filters)
     ]);
-    return { tasks, total };
+    return { tasks: await this.withActivity(tasks), total };
+  }
+
+  private async withActivity(tasks: Task[]): Promise<ActiveTask[]> {
+    const ids = tasks
+      .filter((task) => task.state === 'working' && !task.pausedAt)
+      .map((task) => task.id);
+    const events = ids.length
+      ? await this.taskRepository.listLatestEvents(ids, ACTIVITY_EVENTS)
+      : [];
+    const latest = new Map(events.map((event) => [event.taskId, event]));
+    return tasks.map((task) => ({
+      ...task,
+      activity: deriveTaskActivity(task, latest.get(task.id))
+    }));
   }
 
   async listEvents(
@@ -143,9 +163,10 @@ export class TaskService {
     return this.taskRepository.listEvents(taskId, options);
   }
 
-  async listOutputs(actorId: string, taskId: string): Promise<TaskOutput[]> {
-    await this.requireVisibleTask(actorId, taskId);
-    return this.taskRepository.listOutputs(taskId);
+  async listOutputs(actorId: string, taskId: string): Promise<TaskOutputView[]> {
+    const task = await this.requireVisibleTask(actorId, taskId);
+    const outputs = await this.taskRepository.listOutputs(taskId);
+    return outputs.map((output) => describeOutputState(output, task.state));
   }
 
   // Everything agents attached in one conversation, so people can inspect results and evidence
@@ -154,7 +175,7 @@ export class TaskService {
     actorId: string,
     conversationId: string,
     input: { limit: number; offset: number }
-  ): Promise<{ outputs: TaskOutput[]; total: number }> {
+  ): Promise<{ outputs: TaskOutputView[]; total: number }> {
     const human = requireHuman(await this.humanRepository.getById(actorId));
     const member = await this.conversationRepository.getMember(conversationId, {
       type: 'human',
@@ -167,7 +188,10 @@ export class TaskService {
       this.taskRepository.listConversationOutputs(conversationId, input),
       this.taskRepository.countConversationOutputs(conversationId)
     ]);
-    return { outputs, total };
+    return {
+      outputs: outputs.map(({ output, taskState }) => describeOutputState(output, taskState)),
+      total
+    };
   }
 
   // What an agent spent: in total, this month (UTC), and its costliest tasks, next to its
@@ -202,12 +226,13 @@ export class TaskService {
       throw new AppError('conversationNotFound', `Conversation ${conversationId} was not found`);
     }
     const month = startOfMonth(new Date());
-    const [total, thisMonth, tasks] = await Promise.all([
+    const [total, thisMonth, tasks, agents] = await Promise.all([
       this.taskRepository.sumCost({ conversationId }),
       this.taskRepository.sumCost({ conversationId, since: month }),
-      this.taskRepository.listTaskCosts({ conversationId }, 10)
+      this.taskRepository.listTaskCosts({ conversationId }, 10),
+      this.taskRepository.listAgentCosts({ conversationId })
     ]);
-    return { total, thisMonth, budgetUsd: conversation.budgetUsd, tasks };
+    return { total, thisMonth, budgetUsd: conversation.budgetUsd, tasks, agents };
   }
 
   // Human actions
@@ -219,10 +244,15 @@ export class TaskService {
       throw new AppError('taskStateConflict', `Task ${task.id} is ${describeState(task)}`);
     }
 
-    const paused = await this.lifecycle.applyChanges(task, { pausedAt: new Date() });
-    await this.taskRepository.addEvent(task.id, TASK_EVENTS.paused, toHumanActor(human.id), {
-      reason: reason ?? null
-    });
+    const paused = await this.lifecycle.applyChanges(
+      task,
+      { pausedAt: new Date() },
+      {
+        type: TASK_EVENTS.paused,
+        actor: toHumanActor(human.id),
+        data: { reason: reason ?? null }
+      }
+    );
     this.taskLogger.onTaskPaused(task.id);
     return paused;
   }
@@ -320,6 +350,12 @@ export class TaskService {
     });
 
     if (!created && task.runKey !== runKey) {
+      if (task.conversationId === previous.conversationId && previous.conversationId) {
+        throw new AppError(
+          'taskStateConflict',
+          'This agent already has an open task in the endeavor. Send it a message instead.'
+        );
+      }
       throw new AppError('responsibilityRunOpen', 'Another run of this schedule is already open');
     }
     if (created) {

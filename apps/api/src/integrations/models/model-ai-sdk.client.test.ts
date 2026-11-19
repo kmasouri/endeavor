@@ -32,6 +32,32 @@ const request: ModelTurnRequest = {
 };
 
 describe('ModelAiSdkClient', () => {
+  it('propagates cancellation into an active SDK provider call', async () => {
+    const controller = new AbortController();
+    let began!: () => void;
+    const started = new Promise<void>((resolve) => {
+      began = resolve;
+    });
+    const model = new MockLanguageModelV4({
+      doGenerate: async (options) => {
+        began();
+        return new Promise((_resolve, reject) => {
+          options.abortSignal!.addEventListener(
+            'abort',
+            () => reject(new Error('Provider aborted')),
+            { once: true }
+          );
+        });
+      }
+    });
+    const client = new ModelAiSdkClient('openai', { model: () => model });
+    const pending = client.complete({ ...request, signal: controller.signal });
+    const rejected = expect(pending).rejects.toBeInstanceOf(ModelClientError);
+    await started;
+    controller.abort();
+    await rejected;
+    expect(model.doGenerateCalls[0].abortSignal?.aborted).toBe(true);
+  });
   it('returns tool calls without running them, so the runner stays in charge', async () => {
     const model = new MockLanguageModelV4({
       doGenerate: {

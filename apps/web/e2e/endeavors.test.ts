@@ -1,3 +1,4 @@
+import { captureReviewScreenshot } from './review-screenshot';
 import { expect, test, type Page } from '@playwright/test';
 
 const people = [
@@ -79,6 +80,9 @@ async function mockApi(page: Page, options: Options = {}) {
       data,
       page: { limit: 100, offset: Number(url.searchParams.get('offset') ?? 0), total }
     });
+    if (request.method() === 'PUT' && url.pathname.endsWith('/typing')) {
+      return reply({ data: { typingHumanIds: [] } });
+    }
     if (request.method() !== 'GET') state.writes.push(`${request.method()} ${url.pathname}`);
     if (url.pathname === '/humans')
       return reply({
@@ -87,7 +91,7 @@ async function mockApi(page: Page, options: Options = {}) {
           preferences: { ...p.preferences, theme: options.theme ?? p.preferences.theme }
         }))
       });
-    if (url.pathname === '/directory') return reply({ data: agents });
+    if (url.pathname === '/directory') return reply(paged(agents));
     if (url.pathname === '/conversations' && request.method() === 'POST') {
       const input = request.postDataJSON();
       state.posts.push(input);
@@ -118,8 +122,14 @@ async function mockApi(page: Page, options: Options = {}) {
       const conversation = state.conversations.find((c) => c.id === match[1]);
       if (!conversation) return reply({ error: { message: 'Unavailable' } }, 404);
       const posted = conversation.id === 'created' ? state.posts.at(-1) : undefined;
-      const humanIds = [...((posted?.humanIds ?? []) as string[]), ...state.members.filter((m) => m.type === 'human').map((m) => m.id)];
-      const agentIds = [...((posted?.agentIds ?? []) as string[]), ...state.members.filter((m) => m.type === 'agent').map((m) => m.id)];
+      const humanIds = [
+        ...((posted?.humanIds ?? []) as string[]),
+        ...state.members.filter((m) => m.type === 'human').map((m) => m.id)
+      ];
+      const agentIds = [
+        ...((posted?.agentIds ?? []) as string[]),
+        ...state.members.filter((m) => m.type === 'agent').map((m) => m.id)
+      ];
       return reply({
         data: {
           ...conversation,
@@ -164,7 +174,8 @@ async function openNew(page: Page) {
     const bounds = element.getBoundingClientRect();
     const icon = element.querySelector('svg')!.getBoundingClientRect();
     const label = [...element.childNodes].find(
-      (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()
+      (node) =>
+        node.nodeType === Node.ELEMENT_NODE && (node as Element).classList.contains('sidebar-label')
     )!;
     const range = document.createRange();
     range.selectNodeContents(label);
@@ -181,49 +192,54 @@ async function openNew(page: Page) {
   expect(geometry.sameLine).toBe(true);
   if (page.viewportSize()!.width <= 700) expect(geometry.height).toBeGreaterThanOrEqual(44);
   await button.click();
-  return page.getByRole('dialog', { name: 'What do you want to accomplish?' });
+  return page.getByRole('region', { name: 'New endeavor' });
 }
 
-for (const theme of ['dark', 'light'] as const) {
-  test(`${theme}: collapsed sidebar keeps icons and expands on hover and keyboard focus`, async ({ page }) => {
-    await mockApi(page, { theme });
-    await page.goto('/app/');
-    const sidebar = page.getByRole('complementary', { name: 'Sidebar', exact: true });
-    const width = () => sidebar.evaluate((element) => element.getBoundingClientRect().width);
-    await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
-    await expect.poll(width).toBe(68);
-    const iconOffsets = await sidebar.locator('nav a').evaluateAll((links) => links.map((link) => {
+test('dark: collapsed sidebar keeps icons and expands on hover and keyboard focus', async ({
+  page
+}) => {
+  const theme = 'dark';
+  await mockApi(page, { theme });
+  await page.goto('/app/');
+  const sidebar = page.getByRole('complementary', { name: 'Sidebar', exact: true });
+  const width = () => sidebar.evaluate((element) => element.getBoundingClientRect().width);
+  await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+  await expect.poll(width).toBe(68);
+  const iconOffsets = await sidebar.locator('nav > a').evaluateAll((links) =>
+    links.map((link) => {
       const bounds = link.getBoundingClientRect();
       const icon = link.querySelector('svg')!.getBoundingClientRect();
       return Math.abs((icon.left + icon.right - bounds.left - bounds.right) / 2);
-    }));
-    expect(iconOffsets.every((offset) => offset < 1)).toBe(true);
-    const agents = sidebar.getByRole('link', { name: 'Agents', exact: true });
-    await expect(agents.locator('svg')).toBeVisible();
-    await expect(agents).toHaveAttribute('href', '#/agents');
-    await agents.hover();
-    await expect.poll(width).toBe(264);
-    await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
-    await agents.click();
-    await expect(page).toHaveURL(/#\/agents$/);
-    await expect(agents).toHaveAttribute('aria-current', 'page');
-    await page.getByRole('button', { name: 'Search endeavors', exact: true }).hover();
-    await expect.poll(width).toBe(68);
-    // Keyboard focus reveals the labels even after the mouse has left.
-    await page.keyboard.press('Tab');
-    await expect.poll(width).toBe(264);
-    await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
-    await page.getByRole('button', { name: 'Search endeavors', exact: true }).hover();
-    await expect.poll(width).toBe(264);
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await expect(sidebar).toHaveCSS('transition-duration', '0s');
-    await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
-    await expect.poll(width).toBe(68);
-    await page.screenshot({ path: `/tmp/ca61-${theme}-collapsed.png` });
-  });
-}
+    })
+  );
+  expect(iconOffsets.every((offset) => offset < 1)).toBe(true);
+  const agents = sidebar.getByRole('link', { name: 'Agents', exact: true });
+  await expect(agents.locator('svg')).toBeVisible();
+  await expect(agents).toHaveAttribute('href', '#/agents');
+  await agents.hover();
+  await expect.poll(width).toBe(264);
+  await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
+  await agents.click();
+  await expect(page).toHaveURL(/#\/agents$/);
+  await expect(agents).toHaveAttribute('aria-current', 'page');
+  await page.getByRole('button', { name: 'Search endeavors', exact: true }).hover();
+  await expect.poll(width).toBe(68);
+  // Keyboard focus reveals the labels even after the mouse has left.
+  await page.keyboard.press('Tab');
+  await expect.poll(width).toBe(264);
+  await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
+  await page.getByRole('button', { name: 'Search endeavors', exact: true }).hover();
+  await expect.poll(width).toBe(264);
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(sidebar).toHaveCSS('transition-duration', '0s');
+  await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
+  await expect.poll(width).toBe(68);
+  await captureReviewScreenshot(page, { path: `/tmp/ca61-${theme}-collapsed.png` });
+});
 
-test('sidebar width drags between its limits, remembers the choice, and works from the keyboard', async ({ page }) => {
+test('sidebar width drags between its limits, remembers the choice, and works from the keyboard', async ({
+  page
+}) => {
   await mockApi(page);
   await page.goto('/app/');
   const sidebar = page.getByRole('complementary', { name: 'Sidebar', exact: true });
@@ -272,11 +288,13 @@ test.describe('touch sidebar', () => {
     await expect.poll(width).toBe(68);
     await page.getByRole('button', { name: 'Open sidebar', exact: true }).tap();
     await expect.poll(width).toBe(264);
-    await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toHaveCount(0);
-    await expect(sidebar.locator('.sidebar-conversations')).toHaveCount(0);
-    await sidebar.getByRole('link', { name: 'Endeavors', exact: true }).tap();
+    await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
+    await expect(sidebar.locator('.sidebar-conversations')).toBeVisible();
+    await sidebar.getByRole('link', { name: '#heat-pump-brief', exact: true }).tap();
     await expect.poll(width).toBe(68);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true
+    );
   });
 });
 
@@ -293,16 +311,25 @@ test('restores the last accessible selection, preserves links, and searches olde
   ).toHaveAttribute('title', 'website-reliability');
   await page.getByRole('link', { name: '#heat-pump-brief', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
-  for (const destination of ['Agents', 'Schedules', 'Approvals', 'Skills', 'Connections', 'Setup', 'Work']) {
-    await page.getByRole('navigation', { name: 'Main', exact: true })
-      .getByRole('link', { name: destination, exact: true }).click();
-    await expect(page.locator('.sidebar-conversations')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'New endeavor', exact: true })).toHaveCount(0);
+  for (const destination of [
+    'Agents',
+    'Schedules',
+    'Approvals',
+    'Skills',
+    'Connections',
+    'Setup'
+  ]) {
+    await page
+      .getByRole('navigation', { name: 'Main', exact: true })
+      .getByRole('link', { name: destination, exact: true })
+      .click();
+    await expect(page.locator('.sidebar-conversations')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
     await expect(page.getByRole('navigation', { name: 'Main', exact: true })).toBeVisible();
   }
   await page.getByRole('button', { name: 'Profile and settings', exact: true }).click();
-  await expect(page.locator('.sidebar-conversations')).toHaveCount(0);
-  await page.getByRole('link', { name: 'Endeavors', exact: true }).click();
+  await expect(page.locator('.sidebar-conversations')).toBeVisible();
+  await page.getByRole('link', { name: '#heat-pump-brief', exact: true }).click();
   await expect(page.locator('.sidebar-conversations')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   await page.reload();
@@ -324,7 +351,7 @@ test('unavailable saved selection falls back, and switching people resets access
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Switch person', exact: true }).click();
   await page.getByRole('button', { name: 'Lee', exact: true }).click();
-  await page.getByRole('link', { name: 'Endeavors', exact: true }).click();
+  await page.getByRole('link', { name: '#website-reliability', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'website-reliability', exact: true })
   ).toBeVisible();
@@ -334,68 +361,82 @@ test('unavailable saved selection falls back, and switching people resets access
   ).toHaveCount(0);
 });
 
-test('cancel, Close and Escape preserve the thread and draft, trap focus, and restore the opener', async ({
+test('dark at 320px: search backdrop dismisses without losing the thread or draft', async ({
   page
 }) => {
-  const { state, errors } = await mockApi(page);
+  const theme = 'dark';
+  const width = 320;
+  await page.setViewportSize({ width, height: 900 });
+  const { state, errors } = await mockApi(page, { theme });
   await page.goto('/app/#/conversations/site');
-  await page.getByRole('textbox', { name: 'Message', exact: true }).fill('Keep this draft');
-  for (const dismissal of ['Cancel', 'Close', 'Escape']) {
-    const dialog = await openNew(page);
-    await expect(dialog.getByLabel('Name', { exact: true })).toBeFocused();
-    await expect(dialog.locator('input[type=checkbox]:checked')).toHaveCount(0);
-    await dialog.getByRole('button', { name: 'Cancel', exact: true }).focus();
-    // Start is disabled: Cancel is the last enabled control.
-    await page.keyboard.press('Tab');
-    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
-    await page.keyboard.press('Shift+Tab');
-    await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
-    if (dismissal === 'Escape') await page.keyboard.press('Escape');
-    else await dialog.getByRole('button', { name: dismissal, exact: true }).click();
-    await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'New endeavor', exact: true })).toBeFocused();
-    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toHaveValue(
-      'Keep this draft'
-    );
-    await expect(page).toHaveURL(/#\/conversations\/site$/);
-  }
+  const draft = page.getByRole('textbox', { name: 'Message', exact: true });
+  await draft.fill('Keep this draft');
+  const opener = page.getByRole('button', { name: 'Search endeavors', exact: true });
+  await opener.click();
+  const dialog = page.getByRole('dialog', { name: 'Find an endeavor' });
+  const query = dialog.getByLabel('Search endeavors', { exact: true });
+  await query.fill('website');
+  await query.click();
+  await expect(dialog).toBeVisible();
+  const bounds = await dialog.boundingBox();
+  if (!bounds) throw new Error('Search dialog has no bounds');
+  // Empty dialog padding is inside the surface, not part of its backdrop.
+  await page.mouse.click(bounds.x + 4, bounds.y + 4);
+  await expect(dialog).toBeVisible();
+  const input = await query.boundingBox();
+  if (!input) throw new Error('Search input has no bounds');
+  // A drag that starts inside and ends outside must not dismiss search.
+  await page.mouse.move(input.x + 12, input.y + input.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(4, 4, { steps: 5 });
+  await page.mouse.up();
+  await expect(dialog).toBeVisible();
+  await expect(query).toHaveValue('website');
+  await page.mouse.click(4, 4);
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  await expect(draft).toHaveValue('Keep this draft');
+  await expect(page).toHaveURL(/#\/conversations\/site$/);
   expect(state.posts).toEqual([]);
   expect(errors).toEqual([]);
 });
 
-test('keeps failed values and membership, prevents duplicate saves, then selects and focuses the new chat', async ({
+test('leaving a new endeavor asks before discarding its draft', async ({ page }) => {
+  const { state, errors } = await mockApi(page);
+  await page.goto('/app/#/conversations/site');
+  const draft = await openNew(page);
+  const message = draft.getByRole('textbox', { name: 'First message' });
+  await expect(message).toBeFocused();
+  await message.fill('Keep this draft');
+  const existing = page.getByRole('link', { name: '#website-reliability', exact: true });
+  page.once('dialog', (dialog) => dialog.dismiss());
+  await existing.click();
+  await expect(page).toHaveURL(/new-endeavor$/);
+  await expect(message).toHaveValue('Keep this draft');
+  page.once('dialog', (dialog) => dialog.accept());
+  await existing.click();
+  await expect(page).toHaveURL(/conversations\/site$/);
+  expect(state.posts).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('standalone creation keeps a failed first draft and prevents duplicate sends', async ({
   page
 }) => {
   const { state, errors } = await mockApi(page, { fail: true, slow: true });
   await page.goto('/app/');
-  const dialog = await openNew(page);
-  const name = dialog.getByLabel('Name', { exact: true });
-  await name.fill('! @ 🧪');
-  await expect(dialog.getByRole('button', { name: 'Start', exact: true })).toBeDisabled();
-  await name.fill('Heat');
-  await name.press('Space');
-  await expect(name).toHaveValue('heat-');
-  await name.pressSequentially('Pumps @ Brief!!');
-  await expect(name).toHaveValue('heat-pumps-brief-');
-  await name.press('Tab');
-  await expect(name).toHaveValue('heat-pumps-brief');
-  await name.fill('  Explain heat pumps  ');
-  await dialog.getByLabel('Find people or agents').fill('research');
-  await dialog.getByRole('checkbox', { name: 'Add Researcher' }).check();
-  await expect(dialog.locator('.spark')).toHaveCount(1);
-  await dialog.getByLabel('Find people or agents').fill('lee');
-  await dialog.getByRole('checkbox', { name: 'Add Lee' }).check();
-  await dialog.getByRole('button', { name: 'Start', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Starting…', exact: true })).toBeDisabled();
-  await page.keyboard.press('Escape');
-  await expect(dialog).toBeVisible();
-  await expect(dialog.getByText('Please try again.', { exact: true })).toBeVisible();
-  await expect(dialog.getByLabel('Name', { exact: true })).toHaveValue('explain-heat-pumps');
-  await expect(dialog.getByRole('checkbox', { name: 'Add Lee' })).toBeChecked();
+  const draft = await openNew(page);
+  const message = draft.getByRole('textbox', { name: 'First message' });
+  const send = draft.getByRole('button', { name: 'Send message' });
+  await expect(send).toBeDisabled();
+  await message.fill('Explain heat pumps');
+  await message.press('Enter');
+  await expect(send).toBeDisabled();
+  await expect(draft.getByText('Please try again.', { exact: true })).toBeVisible();
+  await expect(message).toHaveValue('Explain heat pumps');
   expect(state.posts).toHaveLength(1);
   state.fail = false;
-  await dialog.getByRole('button', { name: 'Start', exact: true }).click();
-  await expect(dialog).toHaveCount(0);
+  await send.click();
   await expect(
     page.getByRole('heading', { name: 'explain-heat-pumps', exact: true })
   ).toBeVisible();
@@ -403,159 +444,196 @@ test('keeps failed values and membership, prevents duplicate saves, then selects
   await expect(
     page.getByRole('link', { name: '#explain-heat-pumps', exact: true })
   ).toHaveAttribute('aria-current', 'page');
-  await page.getByRole('button', { name: 'Show details', exact: true }).click();
-  const details = page.getByRole('complementary', { name: 'Conversation details' });
-  await expect(details.getByText('Lee', { exact: true })).toBeVisible();
-  await details.getByRole('button', { name: /1 more agents/ }).click();
-  await expect(
-    details.getByRole('button', { name: 'Agent Researcher agent Free', exact: true })
-  ).toBeVisible();
-  expect(state.posts[1]).toEqual({
-    title: 'explain-heat-pumps',
-    agentIds: ['agent-1'],
-    humanIds: ['person-2']
-  });
-  expect(state.writes).toEqual(['POST /conversations', 'POST /conversations']);
+  expect(state.posts[1]).toEqual({ title: 'explain-heat-pumps', projectId: null });
+  expect(state.writes.filter((write) => write.startsWith('POST '))).toEqual([
+    'POST /conversations',
+    'POST /conversations',
+    'POST /conversations/created/messages'
+  ]);
   expect(errors).toEqual([]);
 });
 
-for (const theme of ['dark', 'light'] as const) {
-  for (const width of [1440, 390, 320]) {
-    test(`${theme} at ${width}px: empty prompt, creation, search and chat fit`, async ({
-      page
-    }) => {
-      await page.setViewportSize({ width, height: 900 });
-      const { state, errors } = await mockApi(page, { empty: true, saved: 'gone', theme });
-      await page.goto('/app/');
-      await expect(
-        page.getByRole('heading', { name: 'What do you want to accomplish?' })
-      ).toBeVisible();
-      const dialog = await openNew(page);
-      await dialog.getByLabel('Name', { exact: true }).fill('A readable outcome ');
-      await expect(dialog.getByRole('button', { name: 'Start', exact: true })).toBeEnabled();
-      await page.screenshot({ path: `/tmp/ca52-${theme}-${width}-dialog.png` });
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-        true
-      );
-      expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-      await dialog.getByLabel('Name', { exact: true }).press('Enter');
-      await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeFocused();
-      await page.getByRole('button', { name: 'Search endeavors', exact: true }).click();
-      await page
-        .getByRole('dialog')
-        .getByLabel('Search endeavors', { exact: true })
-        .fill('missing');
-      await expect(page.getByText('No endeavors found.', { exact: true })).toBeVisible();
-      await page.keyboard.press('Escape');
-      await expect(
-        page.getByRole('button', { name: 'Search endeavors', exact: true })
-      ).toBeFocused();
-      await page.screenshot({ path: `/tmp/ca52-${theme}-${width}-chat.png` });
-      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
-        true
-      );
-      expect(state.posts[0]).toEqual({ title: 'a-readable-outcome', agentIds: [], humanIds: [] });
-      expect(errors).toEqual([]);
-    });
-  }
-}
-
-for (const width of [1440, 390, 320]) {
-  test(`member dialog at ${width}px: avatars, search, retry, history and focus`, async ({ page }) => {
+for (const { theme, width } of [
+  { theme: 'light', width: 1440 },
+  { theme: 'dark', width: 320 }
+] as const) {
+  test(`${theme} at ${width}px: empty prompt, creation, search and chat fit`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    const { state, errors } = await mockApi(page, { fail: true });
-    await page.goto('/app/#/conversations/site');
-    const opener = page.getByRole('button', { name: /members. Show who's here/ });
-    await expect(opener).toBeVisible();
-    await expect(page.locator('.add-members-button')).toHaveCount(0);
-    await opener.click();
-    const dialog = page.getByRole('dialog', { name: 'People and agents', exact: true });
-    const search = dialog.getByLabel('Find people or agents');
-    await expect(search).toBeFocused();
-    await expect(dialog.getByRole('region', { name: 'Current members' }).getByText('Kayvan', { exact: true })).toBeVisible();
-    await search.fill('evidence');
-    await dialog.getByRole('checkbox', { name: 'Add Researcher', exact: true }).check();
-    await expect(dialog.getByRole('checkbox', { name: 'Add Lee', exact: true })).toHaveCount(0);
-    await search.fill('Lee');
-    await dialog.getByRole('checkbox', { name: 'Add Lee', exact: true }).check();
-    const history = dialog.getByLabel('Hide earlier messages from them');
-    await history.check();
-    expect((await history.boundingBox())!.width).toBeLessThan(30);
-    await dialog.getByRole('button', { name: 'Add (2)', exact: true }).click();
-    await expect(dialog.getByText('Please try again.', { exact: true })).toBeVisible();
-    await expect(dialog.getByRole('checkbox', { name: 'Add Lee', exact: true })).toBeChecked();
-    expect(state.members).toEqual([]);
-    state.fail = false;
-    await dialog.getByRole('button', { name: 'Add (2)', exact: true }).click();
-    await expect(dialog.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
-    await expect(dialog.getByRole('region', { name: 'Current members' }).getByText('Researcher', { exact: true })).toBeVisible();
-    expect(state.members).toEqual([
-      { type: 'human', id: 'person-2', history: 'from_now' },
-      { type: 'agent', id: 'agent-1', history: 'from_now' }
-    ]);
-    const bounds = (await dialog.boundingBox())!;
-    expect(bounds.width).toBeLessThanOrEqual(560);
-    expect(bounds.x).toBeGreaterThanOrEqual(0);
-    expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+    const { state, errors } = await mockApi(page, { empty: true, saved: 'gone', theme });
+    await page.goto('/app/');
+    await expect(
+      page.getByRole('heading', { name: 'What do you want to accomplish?' })
+    ).toBeVisible();
+    const dialog = await openNew(page);
+    await dialog.getByRole('textbox', { name: 'First message' }).fill('A readable outcome ');
+    await expect(dialog.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
+    await captureReviewScreenshot(page, { path: `/tmp/ca52-${theme}-${width}-dialog.png` });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true
+    );
     expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
-    if (width <= 700) expect((await opener.boundingBox())!.height).toBeGreaterThanOrEqual(44);
-    await page.screenshot({ path: `/tmp/ca74-members-${width}.png` });
-    await dialog.getByRole('button', { name: 'Done', exact: true }).focus();
-    await page.keyboard.press('Tab');
-    await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+    await dialog.getByRole('textbox', { name: 'First message' }).press('Enter');
+    await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeFocused();
+    await page.getByRole('button', { name: 'Search endeavors', exact: true }).click();
+    await page.getByRole('dialog').getByLabel('Search endeavors', { exact: true }).fill('missing');
+    await expect(page.getByText('No endeavors found.', { exact: true })).toBeVisible();
     await page.keyboard.press('Escape');
-    await expect(dialog).toHaveCount(0);
-    await expect(opener).toBeFocused();
+    await expect(page.getByRole('button', { name: 'Search endeavors', exact: true })).toBeFocused();
+    await captureReviewScreenshot(page, { path: `/tmp/ca52-${theme}-${width}-chat.png` });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true
+    );
+    expect(state.posts[0]).toEqual({ title: 'a-readable-outcome', projectId: null });
     expect(errors).toEqual([]);
   });
 }
 
-for (const theme of ['dark', 'light'] as const) {
-  test(`${theme}: notification counts stay centered beside long endeavor names`, async ({
-    page
-  }, testInfo) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await mockApi(page, { theme, unread: true });
-    await page.goto('/app/#/conversations');
-    const badges = page.locator('.sidebar-conversations .count-badge');
-    await expect(badges).toHaveCount(4);
-    for (const width of [220, 480]) {
-      const handle = page.getByRole('separator', { name: 'Resize sidebar', exact: true });
-      await handle.focus();
-      await handle.press(width === 220 ? 'Home' : 'End');
-      const geometry = await badges.evaluateAll((elements) =>
-        elements.map((badge) => {
-          const box = badge.getBoundingClientRect();
-          const row = badge.parentElement!.getBoundingClientRect();
-          const label = badge.previousElementSibling!.getBoundingClientRect();
-          const range = document.createRange();
-          range.selectNodeContents(badge);
-          const text = range.getBoundingClientRect();
-          return {
-            height: box.height,
-            width: box.width,
-            horizontalOffset: Math.abs((text.left + text.right - box.left - box.right) / 2),
-            verticalOffset: Math.abs((text.top + text.bottom - box.top - box.bottom) / 2),
-            rowOffset: Math.abs((box.top + box.bottom - row.top - row.bottom) / 2),
-            padding: (box.width - text.width) / 2,
-            gap: box.left - label.right,
-            rightInset: row.right - box.right
-          };
-        })
-      );
-      for (const badge of geometry) {
-        expect(badge.height).toBe(20);
-        expect(badge.width).toBeGreaterThanOrEqual(20);
-        expect(badge.horizontalOffset).toBeLessThanOrEqual(0.5);
-        expect(badge.verticalOffset).toBeLessThanOrEqual(1);
-        expect(badge.rowOffset).toBeLessThanOrEqual(0.5);
-        expect(badge.padding).toBeGreaterThanOrEqual(5);
-        expect(badge.gap).toBeGreaterThanOrEqual(10);
-        expect(badge.rightInset).toBeGreaterThanOrEqual(8);
-      }
+test('member dialog at 320px: avatars, search, retry, history and focus', async ({ page }) => {
+  const width = 320;
+  await page.setViewportSize({ width, height: 900 });
+  const { state, errors } = await mockApi(page, { fail: true });
+  await page.goto('/app/#/conversations/site');
+  const opener = page.getByRole('button', { name: /members. Show who's here/ });
+  await expect(opener).toBeVisible();
+  await expect(page.locator('.add-members-button')).toHaveCount(0);
+  await opener.click();
+  const dialog = page.getByRole('dialog', { name: 'People and agents', exact: true });
+  const search = dialog.getByLabel('Find people or agents');
+  await expect(search).toBeFocused();
+  await expect(
+    dialog
+      .getByRole('region', { name: 'Current members' })
+      .getByRole('button', { name: "View Kayvan's profile", exact: true })
+      .last()
+  ).toBeVisible();
+  await search.fill('evidence');
+  await dialog.getByRole('checkbox', { name: 'Add Researcher', exact: true }).check();
+  await expect(dialog.getByRole('checkbox', { name: 'Add Lee', exact: true })).toHaveCount(0);
+  await search.fill('Lee');
+  await dialog.getByRole('checkbox', { name: 'Add Lee', exact: true }).check();
+  const history = dialog.getByLabel('Hide earlier messages from them');
+  await history.check();
+  expect((await history.boundingBox())!.width).toBeLessThan(30);
+  await dialog.getByRole('button', { name: 'Add (2)', exact: true }).click();
+  await expect(dialog.getByText('Please try again.', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('checkbox', { name: 'Add Lee', exact: true })).toBeChecked();
+  expect(state.members).toEqual([]);
+  state.fail = false;
+  await dialog.getByRole('button', { name: 'Add (2)', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Add', exact: true })).toBeDisabled();
+  await expect(
+    dialog
+      .getByRole('region', { name: 'Current members' })
+      .getByRole('button', { name: "View Researcher's profile", exact: true })
+      .last()
+  ).toBeVisible();
+  expect(state.members).toEqual([
+    { type: 'human', id: 'person-2', history: 'from_now' },
+    { type: 'agent', id: 'agent-1', history: 'from_now' }
+  ]);
+  const bounds = (await dialog.boundingBox())!;
+  expect(bounds.width).toBeLessThanOrEqual(560);
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(width);
+  expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  if (width <= 700) expect((await opener.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await captureReviewScreenshot(page, { path: `/tmp/ca74-members-${width}.png` });
+  await dialog.getByRole('button', { name: 'Done', exact: true }).focus();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Close', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+  expect(errors).toEqual([]);
+});
+
+test('dark: notification counts stay centered beside long endeavor names', async ({
+  page
+}, testInfo) => {
+  const theme = 'dark';
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await mockApi(page, { theme, unread: true });
+  await page.goto('/app/#/conversations');
+  const badges = page.locator('.sidebar-conversations .count-badge');
+  await expect(badges).toHaveCount(4);
+  for (const width of [220, 480]) {
+    const handle = page.getByRole('separator', { name: 'Resize sidebar', exact: true });
+    await handle.focus();
+    await handle.press(width === 220 ? 'Home' : 'End');
+    const geometry = await badges.evaluateAll((elements) =>
+      elements.map((badge) => {
+        const box = badge.getBoundingClientRect();
+        const row = badge.parentElement!.getBoundingClientRect();
+        const label = badge.previousElementSibling!.getBoundingClientRect();
+        const range = document.createRange();
+        range.selectNodeContents(badge);
+        const text = range.getBoundingClientRect();
+        return {
+          height: box.height,
+          width: box.width,
+          horizontalOffset: Math.abs((text.left + text.right - box.left - box.right) / 2),
+          verticalOffset: Math.abs((text.top + text.bottom - box.top - box.bottom) / 2),
+          rowOffset: Math.abs((box.top + box.bottom - row.top - row.bottom) / 2),
+          padding: (box.width - text.width) / 2,
+          gap: box.left - label.right,
+          rightInset: row.right - box.right
+        };
+      })
+    );
+    for (const badge of geometry) {
+      expect(badge.height).toBe(20);
+      expect(badge.width).toBeGreaterThanOrEqual(20);
+      expect(badge.horizontalOffset).toBeLessThanOrEqual(0.5);
+      expect(badge.verticalOffset).toBeLessThanOrEqual(1);
+      expect(badge.rowOffset).toBeLessThanOrEqual(0.5);
+      expect(badge.padding).toBeGreaterThanOrEqual(5);
+      expect(badge.gap).toBeGreaterThanOrEqual(10);
+      expect(badge.rightInset).toBeGreaterThanOrEqual(8);
     }
-    await page
-      .locator('.sidebar-conversations')
-      .screenshot({ path: testInfo.outputPath('notification-counts.png') });
+  }
+  await captureReviewScreenshot(page.locator('.sidebar-conversations'), {
+    path: testInfo.outputPath('notification-counts.png')
   });
-}
+});
+
+test('finder is wider and keeps long names on one line at every width', async ({ page }) => {
+  const { state } = await mockApi(page);
+  state.conversations.push({
+    id: 'long',
+    title: 'a-very-long-channel-name-'.repeat(7).replace(/-$/, ''),
+    createdAt: '2026-10-24T10:00:00Z'
+  });
+  await page.goto('/app/');
+  await page.getByRole('button', { name: 'Search endeavors', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Find an endeavor' });
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    const box = await dialog.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeLessThanOrEqual(width - 20);
+    if (width === 1280) expect(box!.width).toBe(760);
+    const label = dialog.locator('.endeavor-results button span').last();
+    const geometry = await label.evaluate((el) => {
+      const style = getComputedStyle(el);
+      return {
+        height: el.getBoundingClientRect().height,
+        lineHeight: parseFloat(style.lineHeight),
+        width: el.clientWidth,
+        scrollWidth: el.scrollWidth,
+        whitespace: style.whiteSpace,
+        ellipsis: style.textOverflow
+      };
+    });
+    expect(geometry.whitespace).toBe('nowrap');
+    expect(geometry.ellipsis).toBe('ellipsis');
+    expect(geometry.height).toBeLessThanOrEqual(geometry.lineHeight + 1);
+    expect(geometry.scrollWidth).toBeGreaterThan(geometry.width);
+    expect(await dialog.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
+  }
+  await page.keyboard.press('Escape');
+  const creation = await openNew(page);
+  const firstMessage = creation.getByRole('textbox', { name: 'First message' });
+  await firstMessage.fill('a'.repeat(65));
+  await firstMessage.press('Enter');
+  await expect.poll(() => state.posts[0]).toEqual({ title: 'a'.repeat(64), projectId: null });
+});

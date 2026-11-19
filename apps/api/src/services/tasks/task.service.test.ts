@@ -53,6 +53,7 @@ function makeTask(overrides: Partial<Task> = {}): Task {
     state: 'working',
     stateReason: null,
     pausedAt: null,
+    pausedByHumanId: null,
     requestedByType: 'human',
     requestedById: HUMAN_ID,
     requestMessageId: null,
@@ -242,6 +243,45 @@ describe('TaskService', () => {
       await expect(service.getTask(HUMAN_ID, TASK_ID)).resolves.toMatchObject({ id: TASK_ID });
     });
 
+    it('keeps both conversation and owner filters when loading a page of agent history', async () => {
+      const { service, tasks } = setup();
+      tasks.list.mockResolvedValue([]);
+      tasks.count.mockResolvedValue(42);
+      const filters = { conversationId: 'conversation-1', ownerAgentId: AGENT_ID };
+      const result = await service.listTasks(HUMAN_ID, { ...filters, limit: 20, offset: 20 });
+      expect(tasks.list).toHaveBeenCalledWith(
+        expect.objectContaining({ ...filters, limit: 20, offset: 20 })
+      );
+      expect(tasks.count).toHaveBeenCalledWith(expect.objectContaining(filters));
+      expect(result.total).toBe(42);
+    });
+
+    it('loads current steps in one query only for visible working tasks', async () => {
+      const { service, tasks } = setup();
+      const current = makeTask();
+      const paused = makeTask({ id: 'paused', pausedAt: new Date() });
+      tasks.list.mockResolvedValue([current, paused]);
+      tasks.count.mockResolvedValue(2);
+      tasks.listLatestEvents.mockResolvedValue([
+        {
+          id: 1,
+          taskId: current.id,
+          type: 'tool.started',
+          actor: agentActor,
+          data: { name: 'read_file', input: { path: 'notes.md' } },
+          createdAt: current.createdAt
+        }
+      ]);
+      const result = await service.listTasks(HUMAN_ID, { limit: 20, offset: 0 });
+      expect(tasks.listLatestEvents).toHaveBeenCalledTimes(1);
+      expect(tasks.listLatestEvents.mock.calls[0][0]).toEqual([current.id]);
+      expect(result.tasks[0].activity).toMatchObject({
+        kind: 'reading',
+        detail: 'reading notes.md'
+      });
+      expect(result.tasks[1].activity).toBeNull();
+    });
+
     it('shows every person all tasks, since v1 has one role', async () => {
       const { service, tasks } = setup();
       tasks.list.mockResolvedValue([]);
@@ -359,10 +399,51 @@ describe('TaskService', () => {
 
       await service.pauseTask(HUMAN_ID, TASK_ID, 'Hold on');
 
-      const [, expected, changes] = tasks.update.mock.calls[0];
+      const [, expected, changes, event] = tasks.update.mock.calls[0];
       expect(expected).toEqual({ state: 'waiting', paused: false, agentVersionId: VERSION_ID });
       expect(changes).toEqual({ pausedAt: expect.any(Date) });
-      expect(eventTypes(tasks)).toEqual(['task.paused']);
+      expect(event).toEqual({
+        type: 'task.paused',
+        actor: { type: 'human', id: HUMAN_ID },
+        data: { reason: 'Hold on' }
+      });
+      expect(tasks.addEvent).not.toHaveBeenCalled();
+    });
+
+    it('attributes each pause to the person who paused it and clears it on resume', async () => {
+      const { service, tasks, humans } = setup();
+      const other = { ...human, id: '00000000-0000-4000-8000-000000000009', name: 'Sam' };
+      humans.getById.mockImplementation(async (id) => (id === other.id ? other : human));
+
+      let task = makeTask({ state: 'waiting' });
+      tasks.getById.mockImplementation(async () => task);
+      tasks.update.mockImplementation(async (_id, _expected, changes, event) => {
+        task = {
+          ...task,
+          ...changes,
+          pausedByHumanId: event?.actor.id ?? null
+        };
+        return task;
+      });
+
+      const first = await service.pauseTask(HUMAN_ID, TASK_ID);
+      expect(first).toMatchObject({ pausedAt: expect.any(Date), pausedByHumanId: HUMAN_ID });
+      await expect(service.getTask(other.id, TASK_ID)).resolves.toMatchObject({
+        pausedAt: first.pausedAt,
+        pausedByHumanId: HUMAN_ID
+      });
+      await expect(service.resumeTask(other.id, TASK_ID)).resolves.toMatchObject({
+        pausedAt: null,
+        pausedByHumanId: null
+      });
+
+      const second = await service.pauseTask(other.id, TASK_ID);
+      expect(second).toMatchObject({ pausedAt: expect.any(Date), pausedByHumanId: other.id });
+      tasks.list.mockResolvedValue([second]);
+      tasks.count.mockResolvedValue(1);
+      await expect(service.listTasks(HUMAN_ID, { limit: 10, offset: 0 })).resolves.toMatchObject({
+        tasks: [{ pausedAt: second.pausedAt, pausedByHumanId: other.id }]
+      });
     });
 
     it('does not pause a task that is already paused or finished', async () => {
@@ -637,6 +718,19 @@ describe('TaskService', () => {
       expect(tasks.addEvent).not.toHaveBeenCalled();
     });
 
+    it('refuses a competing endeavor task instead of returning it as a restart', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed', conversationId: 'c1' }));
+      tasks.create.mockResolvedValue({
+        task: makeTask({ id: NEW_TASK_ID, runKey: 'message:other', conversationId: 'c1' }),
+        created: false
+      });
+      await expect(service.restartTask(HUMAN_ID, TASK_ID)).rejects.toMatchObject({
+        name: 'taskStateConflict'
+      });
+      expect(tasks.addEvent).not.toHaveBeenCalled();
+    });
+
     it('only restarts finished work', async () => {
       const { service, tasks } = setup();
       tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
@@ -863,17 +957,79 @@ describe('TaskService', () => {
     expect(task.stateReason).toBe('Needs access to the billing docs');
   });
 
+  describe('listOutputs', () => {
+    const output = {
+      id: 'o1',
+      taskId: TASK_ID,
+      kind: 'text' as const,
+      title: 'Result',
+      content: 'A useful result',
+      uri: null,
+      metadata: {},
+      createdAt: new Date()
+    };
+
+    it('returns draft outputs while the task is not completed', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'waiting' }));
+      tasks.listOutputs.mockResolvedValue([output]);
+
+      await expect(service.listOutputs(HUMAN_ID, TASK_ID)).resolves.toEqual([
+        expect.objectContaining({ id: 'o1', state: 'draft' })
+      ]);
+    });
+
+    it('returns final outputs after the task completes', async () => {
+      const { service, tasks } = setup();
+      tasks.getById.mockResolvedValue(makeTask({ state: 'completed' }));
+      tasks.listOutputs.mockResolvedValue([output]);
+
+      await expect(service.listOutputs(HUMAN_ID, TASK_ID)).resolves.toEqual([
+        expect.objectContaining({ id: 'o1', state: 'final' })
+      ]);
+    });
+  });
+
   describe('listConversationOutputs', () => {
     it('lists outputs from every task in the conversation', async () => {
       const { service, tasks } = setup();
       tasks.countConversationOutputs.mockResolvedValue(2);
+      tasks.listConversationOutputs.mockResolvedValue([
+        {
+          output: {
+            id: 'draft-output',
+            taskId: TASK_ID,
+            kind: 'text',
+            title: 'Draft',
+            content: null,
+            uri: null,
+            metadata: {},
+            createdAt: new Date()
+          },
+          taskState: 'working'
+        },
+        {
+          output: {
+            id: 'final-output',
+            taskId: NEW_TASK_ID,
+            kind: 'text',
+            title: 'Final',
+            content: null,
+            uri: null,
+            metadata: {},
+            createdAt: new Date()
+          },
+          taskState: 'completed'
+        }
+      ]);
 
-      const { total } = await service.listConversationOutputs(HUMAN_ID, 'conv-1', {
+      const { outputs, total } = await service.listConversationOutputs(HUMAN_ID, 'conv-1', {
         limit: 10,
         offset: 0
       });
 
       expect(total).toBe(2);
+      expect(outputs.map((output) => output.state)).toEqual(['draft', 'final']);
       expect(tasks.listConversationOutputs).toHaveBeenCalledWith('conv-1', {
         limit: 10,
         offset: 0
@@ -897,6 +1053,47 @@ describe('TaskService', () => {
         budgetUsd: 20
       });
       expect(tasks.sumCost).toHaveBeenCalledWith({ agentId: agent.id, since: expect.any(Date) });
+    });
+  });
+
+  describe('conversationCosts', () => {
+    it('reports totals for several agents across the conversation tasks', async () => {
+      const { service, tasks, conversations } = setup();
+      conversations.getById.mockResolvedValue({ id: 'conv-1', budgetUsd: 1 } as never);
+      conversations.getMember.mockResolvedValue({} as never);
+      tasks.sumCost
+        .mockResolvedValueOnce({ costUsd: 0.07, tokens: 7000, unpricedCalls: 1 })
+        .mockResolvedValueOnce({ costUsd: 0.07, tokens: 7000, unpricedCalls: 1 });
+      tasks.listTaskCosts.mockResolvedValue([
+        { taskId: 'review-1', title: 'Check claims', costUsd: 0.03, tokens: 3000 },
+        { taskId: 'research-2', title: 'Revise brief', costUsd: 0.025, tokens: 2500 },
+        { taskId: 'research-1', title: 'Draft brief', costUsd: 0.015, tokens: 1500 }
+      ]);
+      tasks.listAgentCosts.mockResolvedValue([
+        {
+          agentId: 'reviewer',
+          name: 'Reviewer',
+          costUsd: 0.03,
+          tokens: 3000,
+          unpricedCalls: 0
+        },
+        {
+          agentId: 'researcher',
+          name: 'Researcher',
+          costUsd: 0.04,
+          tokens: 4000,
+          unpricedCalls: 1
+        }
+      ]);
+
+      const report = await service.getConversationCosts(HUMAN_ID, 'conv-1');
+
+      expect(report.agents).toEqual([
+        expect.objectContaining({ agentId: 'reviewer', costUsd: 0.03 }),
+        expect.objectContaining({ agentId: 'researcher', costUsd: 0.04 })
+      ]);
+      expect(report.tasks).toHaveLength(3);
+      expect(tasks.listAgentCosts).toHaveBeenCalledWith({ conversationId: 'conv-1' });
     });
   });
 

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -16,25 +16,39 @@ const file = (path: string, text: string): WorkspaceFile => ({
 const initial = [file('index.js', 'original')];
 function fakeContainers() {
   const jobs: {
-    finish: (files?: WorkspaceFile[], exitCode?: number, code?: number) => void;
+    finish: (
+      files?: WorkspaceFile[],
+      exitCode?: number,
+      code?: number,
+      backgroundProcesses?: boolean
+    ) => void;
     cancelled: boolean;
     input: unknown;
+    task?: string;
   }[] = [];
   let recovered = 0;
+  const released: string[] = [];
   const client: ContainerClient = {
     async recover() {
       recovered++;
     },
-    run(_id, _image, input) {
+    async release(task) {
+      released.push(task);
+    },
+    run(_id, _image, input, task) {
       let resolve!: (result: ContainerResult) => void;
       const result = new Promise<ContainerResult>((done) => {
         resolve = done;
       });
       const job = {
         input,
+        task,
         cancelled: false,
-        finish(files = initial, exitCode = 0, code = 0) {
-          resolve({ code, stdout: JSON.stringify({ exitCode, log: 'test evidence', files }) });
+        finish(files = initial, exitCode = 0, code = 0, backgroundProcesses = false) {
+          resolve({
+            code,
+            stdout: JSON.stringify({ exitCode, log: 'test evidence', files, backgroundProcesses })
+          });
         }
       };
       jobs.push(job);
@@ -50,6 +64,7 @@ function fakeContainers() {
   return {
     client,
     jobs,
+    released,
     get recovered() {
       return recovered;
     }
@@ -372,6 +387,272 @@ test('a waiting status read never holds the cancellation lock', async () => {
     await ctx.service.call(task, 'cancel_execution', { execution_id: job.id });
     assert.equal(((await waiting) as { status: string }).status, 'cancelled');
     assert.ok(Date.now() - started < 5000);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test('commands share only their task workspace and synchronize explicit file edits', async () => {
+  const ctx = await fixture();
+  const task = randomUUID();
+  const other = randomUUID();
+  async function run(taskId: string) {
+    const start = (await ctx.service.call(taskId, 'run_command', { command: 'test' })) as {
+      id: string;
+    };
+    const job = ctx.containers.jobs.at(-1)!;
+    assert.equal(job.task, taskId);
+    job.finish((job.input as { files: WorkspaceFile[] }).files);
+    await until(
+      async () =>
+        (
+          (await ctx.service.call(taskId, 'get_execution', { execution_id: start.id })) as {
+            status: string;
+          }
+        ).status === 'finished'
+    );
+    return job;
+  }
+  try {
+    await checkedOut(ctx, task);
+    await checkedOut(ctx, other);
+    assert.equal(ctx.containers.jobs[0].task, undefined);
+    assert.deepEqual((await run(task)).input, {
+      files: initial,
+      updates: [],
+      deleted: [],
+      command: 'test'
+    });
+    await ctx.service.call(task, 'write_repository_file', { path: 'new.js', content: 'added' });
+    const edited = await run(task);
+    assert.deepEqual((edited.input as { updates: string[] }).updates, ['new.js']);
+    assert.deepEqual((await run(other)).input, {
+      files: initial,
+      updates: [],
+      deleted: [],
+      command: 'test'
+    });
+    assert.deepEqual((await run(task)).input, {
+      files: [initial[0], file('new.js', 'added')],
+      updates: [],
+      deleted: [],
+      command: 'test'
+    });
+    await ctx.service.call(task, 'delete_repository_file', { path: 'new.js' });
+    assert.deepEqual(((await run(task)).input as { deleted: string[] }).deleted, ['new.js']);
+    const releases = ctx.containers.released.length;
+    await checkedOut(ctx, task);
+    assert.deepEqual(ctx.containers.released.slice(releases), [task]);
+    await ctx.service.call(task, 'discard_repository', {});
+    assert.equal(ctx.containers.released.at(-1), task);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test('idle cleanup releases containers while retaining source until checkout expiry', async () => {
+  const ctx = await fixture();
+  const task = randomUUID();
+  try {
+    await checkedOut(ctx, task);
+    const records = (ctx.service as unknown as { records: Map<string, { touchedAt: number }> })
+      .records;
+    records.get(task)!.touchedAt = Date.now() - 1_800_001;
+    await ctx.service.cleanup();
+    assert.equal(ctx.containers.released.at(-1), task);
+    assert.equal(
+      (
+        (await ctx.service.call(task, 'read_repository_file', { path: 'index.js' })) as {
+          content: string;
+        }
+      ).content,
+      'original'
+    );
+    records.get(task)!.touchedAt = Date.now() - 86_400_001;
+    await ctx.service.cleanup();
+    await assert.rejects(
+      ctx.service.call(task, 'read_repository_file', { path: 'index.js' }),
+      /Check out/
+    );
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test('background work cannot certify a source revision', async () => {
+  const ctx = await fixture();
+  const task = randomUUID();
+  try {
+    await checkedOut(ctx, task);
+    const job = (await ctx.service.call(task, 'run_command', {
+      command: 'start server and test'
+    })) as { id: string };
+    ctx.containers.jobs.at(-1)!.finish(initial, 0, 0, true);
+    await until(
+      async () =>
+        (
+          (await ctx.service.call(task, 'get_execution', { execution_id: job.id })) as {
+            status: string;
+          }
+        ).status === 'finished'
+    );
+    const result = (await ctx.service.call(task, 'get_execution', { execution_id: job.id })) as {
+      verifiedRevision: null;
+      backgroundProcesses: boolean;
+    };
+    assert.equal(result.backgroundProcesses, true);
+    assert.equal(result.verifiedRevision, null);
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test('failed workspace cleanup records failure and releases the task lock for retry', async () => {
+  const ctx = await fixture();
+  const task = randomUUID();
+  try {
+    await checkedOut(ctx, task);
+    const release = ctx.containers.client.release;
+    ctx.containers.client.release = async () => {
+      throw new Error('daemon unavailable');
+    };
+    const job = (await ctx.service.call(task, 'run_command', { command: 'invalid export' })) as {
+      id: string;
+    };
+    ctx.containers.jobs.at(-1)!.finish([file('../bad', 'invalid')]);
+    await until(
+      async () =>
+        (
+          (await ctx.service.call(task, 'get_execution', { execution_id: job.id })) as {
+            status: string;
+          }
+        ).status === 'failed'
+    );
+    assert.equal(
+      (
+        (await ctx.service.call(task, 'read_repository_file', { path: 'index.js' })) as {
+          content: string;
+        }
+      ).content,
+      'original'
+    );
+    ctx.containers.client.release = release;
+  } finally {
+    await ctx.cleanup();
+  }
+});
+
+test('quarantines damaged records, migrates healthy legacy data and keeps tasks isolated across restarts', async () => {
+  const ctx = await fixture();
+  const healthy = randomUUID();
+  const warnings: string[] = [];
+  const recovered = new ExecutionService(
+    ctx.settings,
+    ctx.containers.client,
+    ctx.source,
+    (warning) => warnings.push(warning)
+  );
+  const restarted = new ExecutionService(
+    ctx.settings,
+    ctx.containers.client,
+    ctx.source,
+    (warning) => warnings.push(warning)
+  );
+  try {
+    const job = await checkedOut(ctx, healthy);
+    const healthyPath = join(ctx.settings.EXECUTOR_DATA_DIR, `${healthy}.json`);
+    const stored = JSON.parse(await readFile(healthyPath, 'utf8'));
+    assert.equal(stored.version, 1);
+    // The old versionless format remains readable and is upgraded after validation.
+    await writeFile(healthyPath, JSON.stringify(stored.record));
+    const badPath = structuredClone(stored);
+    badPath.record.checkout.files[0].path = '../secret';
+    const badJob = structuredClone(stored);
+    badJob.record.executions[0].status = 'surprise';
+    const damaged = [
+      Buffer.from('{"private":"do-not-log",'),
+      Buffer.from(JSON.stringify({ ...stored.record, executions: null })),
+      Buffer.from(JSON.stringify({ version: 99, record: stored.record })),
+      Buffer.from(JSON.stringify(badPath)),
+      Buffer.from(JSON.stringify(badJob))
+    ].map((bytes) => ({ task: randomUUID(), bytes }));
+    for (const { task, bytes } of damaged)
+      await writeFile(join(ctx.settings.EXECUTOR_DATA_DIR, `${task}.json`), bytes);
+    await recovered.initialize();
+    assert.equal(ctx.containers.jobs.length, 1, 'recovery must never replay work');
+    assert.equal(warnings.length, damaged.length);
+    assert.ok(warnings.every((warning) => !warning.includes('do-not-log')));
+    assert.equal(JSON.parse(await readFile(healthyPath, 'utf8')).version, 1);
+    assert.equal(
+      (
+        (await recovered.call(healthy, 'get_execution', { execution_id: job.id })) as {
+          status: string;
+        }
+      ).status,
+      'finished'
+    );
+    const backups = new Map<string, string>();
+    for (const { task, bytes } of damaged) {
+      const marker = JSON.parse(
+        await readFile(join(ctx.settings.EXECUTOR_DATA_DIR, `${task}.json`), 'utf8')
+      );
+      const backup = join(ctx.settings.EXECUTOR_DATA_DIR, 'quarantine', marker.quarantinedFile);
+      backups.set(task, backup);
+      assert.deepEqual(await readFile(backup), bytes);
+      await assert.rejects(recovered.call(task, 'list_executions', {}), /quarantined/);
+      await assert.rejects(
+        recovered.call(task, 'checkout_repository', { repository: 'owner/repo', ref: 'main' }),
+        /quarantined/
+      );
+      await assert.rejects(
+        recovered.call(task, 'get_execution', { execution_id: job.id }),
+        /quarantined/
+      );
+    }
+    await recovered.close();
+    await restarted.initialize();
+    assert.equal(
+      (await readdir(join(ctx.settings.EXECUTOR_DATA_DIR, 'quarantine'))).length,
+      damaged.length,
+      'restart must reuse markers and preserve the original backups'
+    );
+    for (const { task, bytes } of damaged) {
+      await assert.rejects(restarted.call(task, 'list_executions', {}), /quarantined/);
+      assert.deepEqual(await readFile(backups.get(task)!), bytes);
+    }
+    const reset = damaged[0];
+    assert.deepEqual(await restarted.call(reset.task, 'discard_repository', {}), {
+      discarded: true
+    });
+    assert.ok(ctx.containers.released.includes(reset.task));
+    assert.deepEqual(
+      await readFile(backups.get(reset.task)!),
+      reset.bytes,
+      'explicit discard keeps recovery evidence'
+    );
+    await checkedOut({ ...ctx, service: restarted }, reset.task);
+    assert.equal(
+      ((await restarted.call(reset.task, 'list_executions', {})) as unknown[]).length,
+      1
+    );
+    assert.equal(((await restarted.call(healthy, 'list_executions', {})) as unknown[]).length, 1);
+  } finally {
+    await restarted.close();
+    await ctx.cleanup();
+  }
+});
+
+test('a failed quarantine write stops startup without replacing the damaged original', async () => {
+  const ctx = await fixture();
+  const task = randomUUID();
+  const original = Buffer.from('broken record');
+  const path = join(ctx.settings.EXECUTOR_DATA_DIR, `${task}.json`);
+  try {
+    await writeFile(path, original);
+    await writeFile(join(ctx.settings.EXECUTOR_DATA_DIR, 'quarantine'), 'not a directory');
+    const recovered = new ExecutionService(ctx.settings, ctx.containers.client, ctx.source);
+    await assert.rejects(recovered.initialize(), /EEXIST|ENOTDIR/);
+    assert.deepEqual(await readFile(path), original);
   } finally {
     await ctx.cleanup();
   }

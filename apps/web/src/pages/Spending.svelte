@@ -67,6 +67,14 @@
     </Hint>
   {/if}
 
+  {#if props.kind === 'conversation' && costReport.agents?.length}
+    <ul class="agent-costs small">
+      {#each costReport.agents as agentCost (agentCost.agentId)}
+        <li><span>{agentCost.name}</span><span>{formatMoney(agentCost.costUsd)}</span></li>
+      {/each}
+    </ul>
+  {/if}
+
   {#if props.kind === 'agent' && costReport.tasks.length > 0}
     <details>
       <summary>Costliest tasks</summary>
@@ -112,3 +120,21 @@
 {/if}
 
 <ErrorNote error={action.error} />
+
+<style>
+  .agent-costs {
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+    margin: 0;
+    padding: 0;
+    color: var(--text-secondary);
+    list-style: none;
+  }
+
+  .agent-costs li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+</style>

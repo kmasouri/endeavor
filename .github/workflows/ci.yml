@@ -1,6 +1,7 @@
 name: ci
 
 on:
+  workflow_call:
   pull_request:
   push:
     branches:
@@ -9,13 +10,50 @@ on:
 permissions:
   contents: read
 
+# Superseded PR commits can stop; every main push gets its own group.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
-  check:
+  validation:
+    name: ${{ matrix.name }}
     runs-on: ubuntu-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.cache/ms-playwright
+    strategy:
+      # One failed check cancels the queued/running checks in this workflow run.
+      fail-fast: true
+      matrix:
+        include:
+          - name: lint
+            browser: false
+            command: npm run lint
+          - name: types
+            browser: false
+            command: npm run typecheck
+          - name: build
+            browser: false
+            command: npm run build
+          - name: unit and pilot tests
+            browser: false
+            command: npm test
+          - name: browser (1/4)
+            browser: true
+            command: --shard=1/4 --max-failures=1
+          - name: browser (2/4)
+            browser: true
+            command: --shard=2/4 --max-failures=1
+          - name: browser (3/4)
+            browser: true
+            command: --shard=3/4 --max-failures=1
+          - name: browser (4/4)
+            browser: true
+            command: --shard=4/4 --max-failures=1
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -24,7 +62,41 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        if: ${{ !matrix.browser }}
         run: npm ci
 
-      - name: Run checks
-        run: npm run check
+      - name: Install browser test dependencies
+        if: matrix.browser
+        run: npm ci --workspace=apps/web --include-workspace-root=false --no-audit --no-fund
+
+      - name: Install Chromium and system libraries
+        if: matrix.browser
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Build web workspace
+        if: matrix.browser
+        run: npm run build --workspace=apps/web
+
+      - name: Run browser shard
+        if: matrix.browser
+        env:
+          CHECK_COMMAND: ${{ matrix.command }}
+        run: |
+          read -r -a options <<< "$CHECK_COMMAND"
+          npm run test:e2e --workspace=apps/web -- "${options[@]}"
+
+      - name: Run quality check
+        if: ${{ !matrix.browser }}
+        run: ${{ matrix.command }}
+
+  # Preserve the existing gate; failures, cancellations and skipped checks cannot pass it.
+  check:
+    if: ${{ always() }}
+    needs: [validation]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every matrix check to pass
+        env:
+          VALIDATION_RESULT: ${{ needs.validation.result }}
+        run: test "$VALIDATION_RESULT" = success

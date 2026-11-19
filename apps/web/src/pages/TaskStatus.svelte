@@ -2,8 +2,13 @@
   import { api, type CostReport, type Task, type TaskDetails } from '../api';
   import { createAction, createLoad } from '../state.svelte';
   import ErrorNote from '../ErrorNote.svelte';
-  let { task, costs, onChanged }: { task: Task; costs?: CostReport; onChanged: () => void } =
-    $props();
+  import { formatShortTime } from '../time-display.svelte';
+  let { task, costs, pausedByName, onChanged }: {
+    task: Task;
+    costs?: CostReport;
+    pausedByName?: string;
+    onChanged: () => void;
+  } = $props();
   const details = createLoad(
     () =>
       task.state === 'waiting'
@@ -41,6 +46,12 @@
     class:stuck={task.state === 'blocked' && !task.pausedAt}
   >
     <strong>{task.pausedAt ? 'Paused' : task.state === 'blocked' ? 'Stuck' : 'Waiting'}</strong>
+    {#if task.pausedAt}
+      <p class="muted">
+        {pausedByName ? `${pausedByName} paused it at` : 'Paused at'}
+        <time datetime={task.pausedAt}>{formatShortTime(task.pausedAt)}</time>
+      </p>
+    {/if}
     {#if task.stateReason}<p>{task.stateReason}</p>{/if}
     {#if !task.pausedAt && task.state === 'waiting'}{#each details.data?.waits.filter((wait) => !wait.resolvedAt) ?? [] as wait (wait.id)}<p
         >

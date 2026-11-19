@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { tick } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import {
     api,
+    getActorId,
     type DirectoryEntry,
     type Member,
     type Message,
@@ -12,7 +13,7 @@
   import Avatar from '../Avatar.svelte';
   import Icon from '../Icon.svelte';
   import { createAction } from '../state.svelte';
-  import { buildMessagePreview } from '../message-format';
+  import { buildMessagePreview, findTextMentions } from '../message-format';
   import { conversationName } from '../appearance';
   let {
     conversationId,
@@ -22,6 +23,7 @@
     tasks,
     replyTo = $bindable(null),
     body = $bindable(''),
+    revision = $bindable(null),
     onPosted,
     onAdd,
     onAttach
@@ -33,10 +35,17 @@
     tasks: Task[];
     replyTo: Message | null;
     body: string;
+    revision: Task | null;
     onPosted: () => void;
     onAdd: (id: string) => Promise<unknown>;
     onAttach: () => void;
   } = $props();
+  let revisionSent = $state('');
+  const typingClientId = crypto.randomUUID();
+  let typing = false;
+  let lastTypingHeartbeat = 0;
+  let typingIdleTimer: ReturnType<typeof setTimeout> | undefined;
+  let typingRequest: Promise<unknown> = Promise.resolve();
   let mentions = $state<ParticipantRef[]>([]);
   let input = $state<HTMLTextAreaElement>();
   let caret = $state(0);
@@ -46,13 +55,17 @@
   let query = $derived(/(?:^|\s)@([^@\n]*)$/.exec(body.slice(0, caret))?.[1]);
   let candidates = $derived(
     [
-      ...members.filter((member) => !member.deleted).map((member) => ({
-        id: member.participant.id,
-        name: member.name,
-        type: member.participant.type,
-        inside: true,
-        purpose: member.purpose
-      })),
+      ...members
+        .filter((member) => !member.deleted)
+        .map((member) => ({
+          id: member.participant.id,
+          name: member.name,
+          type: member.participant.type,
+          inside: true,
+          avatarColor: member.avatarColor,
+          avatarIcon: member.avatarIcon,
+          purpose: member.purpose
+        })),
       ...directory
         .filter((agent) => !members.some((member) => member.participant.id === agent.id))
         .map((agent) => ({
@@ -60,10 +73,14 @@
           name: agent.name,
           type: 'agent' as const,
           inside: false,
+          avatarColor: agent.avatarColor,
+          avatarIcon: agent.avatarIcon,
           purpose: agent.purpose
         }))
     ]
-      .filter((member) => query !== undefined && member.name.toLowerCase().includes(query.toLowerCase()))
+      .filter(
+        (member) => query !== undefined && member.name.toLowerCase().includes(query.toLowerCase())
+      )
       .slice(0, 8)
   );
   let picker = $derived(query !== undefined && !dismissed);
@@ -82,45 +99,137 @@
     input?.focus();
     input?.setSelectionRange(caret, caret);
   };
+  const publishTyping = (next: boolean) => {
+    if (typing === next && (!next || Date.now() - lastTypingHeartbeat < 2_000)) return;
+    typing = next;
+    if (next) lastTypingHeartbeat = Date.now();
+    // Keep start/stop writes ordered when a blur or send follows the first heartbeat quickly.
+    typingRequest = typingRequest
+      .then(() =>
+        api.put(`/conversations/${conversationId}/typing`, {
+          clientId: typingClientId,
+          typing: next
+        })
+      )
+      .catch(() => undefined);
+  };
+  const stopTyping = () => {
+    clearTimeout(typingIdleTimer);
+    if (typing) publishTyping(false);
+  };
+  const noteTyping = (value: string) => {
+    clearTimeout(typingIdleTimer);
+    if (!value.trim()) {
+      stopTyping();
+      return;
+    }
+    publishTyping(true);
+    typingIdleTimer = setTimeout(stopTyping, 2_500);
+  };
+  let active = true;
+  onDestroy(() => {
+    stopTyping();
+    active = false;
+  });
+  let pendingMessage: {
+    identity: string;
+    payload: {
+      body: string;
+      mentions: ParticipantRef[];
+      inReplyToMessageId?: string;
+      clientKey: string;
+    };
+  } | null = null;
   const send = () => {
     if (!body.trim() || action.busy) return;
+    stopTyping();
     // Text pasted or typed in full works just like selecting a member in the picker.
     const selectedMembers = directory
       .filter(
         (agent) =>
-          mentions.some((mention) => mention.id === agent.id) && !members.some((member) => member.participant.id === agent.id)
+          mentions.some((mention) => mention.id === agent.id) &&
+          !members.some((member) => member.participant.id === agent.id)
       )
-      .map((agent) => ({ name: agent.name, participant: { type: 'agent' as const, id: agent.id } }));
-    const refs = [...members.filter((member) => !member.deleted), ...selectedMembers]
-      .filter((member) =>
-        new RegExp(
-          `(?:^|\\s)@${member.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\p{L}\\p{N}_])`,
-          'iu'
-        ).test(body)
-      )
-      .map((member) => member.participant);
+      .map((agent) => ({
+        name: agent.name,
+        participant: { type: 'agent' as const, id: agent.id }
+      }));
+    const refs = [...new Map(
+      findTextMentions(body, [...members.filter((member) => !member.deleted), ...selectedMembers])
+        .map(({ entry }) => [`${entry.participant.type}:${entry.participant.id}`, entry.participant])
+    ).values()];
+    const submitted = {
+      conversationId,
+      actorId: getActorId(),
+      body,
+      replyId: replyTo?.id ?? null,
+      revisionId: revision?.id ?? null,
+      revisionAgent:
+        members.find((member) => member.participant.id === revision?.ownerAgentId)?.name ??
+        'the agent'
+    };
+    // Identity treats mention order as irrelevant; a retry sends the original payload exactly.
+    const identity = JSON.stringify({
+      conversationId: submitted.conversationId,
+      actorId: submitted.actorId,
+      body: submitted.body,
+      replyId: submitted.replyId,
+      mentions: refs
+        .map(({ type, id }) => ({ type, id }))
+        .sort((a, b) => `${a.type}:${a.id}`.localeCompare(`${b.type}:${b.id}`))
+    });
+    if (!submitted.revisionId && pendingMessage?.identity !== identity) {
+      pendingMessage = {
+        identity,
+        payload: {
+          body: submitted.body,
+          mentions: refs.map(({ type, id }) => ({ type, id })),
+          ...(submitted.replyId && { inReplyToMessageId: submitted.replyId }),
+          clientKey: crypto.randomUUID()
+        }
+      };
+    }
+    const attempt = pendingMessage;
     void action
       .run(() =>
-        api.post(`/conversations/${conversationId}/messages`, {
-          body,
-          mentions: refs,
-          ...(replyTo && { inReplyToMessageId: replyTo.id }),
-          clientKey: crypto.randomUUID()
-        })
+        submitted.revisionId
+          ? api.post<Task>(`/tasks/${submitted.revisionId}/restart`, { reason: submitted.body })
+          : api.post(`/conversations/${submitted.conversationId}/messages`, attempt!.payload)
       )
       .then((ok) => {
-        if (ok) {
+        if (!ok || !active) return;
+        if (!submitted.revisionId && pendingMessage === attempt) pendingMessage = null;
+        if (conversationId !== submitted.conversationId || getActorId() !== submitted.actorId) return;
+        revisionSent = submitted.revisionId
+          ? `Changes sent to ${submitted.revisionAgent} as a linked new run.`
+          : '';
+        // A later draft, reply or revision belongs to the user; acknowledging this send must
+        // not erase it. Unchanged failed submissions keep their key until acknowledged.
+        if (
+          body === submitted.body &&
+          (replyTo?.id ?? null) === submitted.replyId &&
+          (revision?.id ?? null) === submitted.revisionId
+        ) {
+          revision = null;
           body = '';
           mentions = [];
           replyTo = null;
-          onPosted();
         }
+        onPosted();
       });
   };
 </script>
 
 <div class="composer-area">
-  {#if replyTo}<div class="reply-bar row">
+  {#if revision}
+    <div class="reply-bar row">
+      <Icon name="reply" />
+      <span class="grow">Changes to <strong>{revision.title}</strong> · {members.find((member) => member.participant.id === revision?.ownerAgentId)?.name ?? 'Deleted agent'} · creates a linked new run</span>
+      <button class="quiet icon-button" aria-label="Cancel revision" onclick={() => { revision = null; replyTo = null; }}><Icon name="close" /></button>
+    </div>
+  {/if}
+  {#if revisionSent}<p class="caption muted" role="status">{revisionSent}</p>{/if}
+  {#if replyTo && !revision}<div class="reply-bar row">
       <Icon name="reply" /><span class="grow ellipsis"
         >Replying to <strong
           >{members.find((member) => member.participant.id === replyTo?.authorId)?.name ?? 'Platform'}</strong
@@ -149,10 +258,9 @@
             onmousedown={(event) => event.preventDefault()}
             onclick={() => void pick(member)}
           >
-            <Avatar name={member.name} id={member.id} agent={member.type === 'agent'} />
+            <Avatar name={member.name} id={member.id} appearance={member} agent={member.type === 'agent'} />
             <span class="grow"
               >{member.name}
-              {#if member.type === 'agent'}<span class="agent-label">agent</span>{/if}
               {#if member.purpose}<span class="picker-purpose caption muted">{member.purpose}</span
                 >{/if}</span
             >
@@ -195,7 +303,9 @@
         caret = event.currentTarget.selectionStart;
         selected = 0;
         dismissed = false;
+        noteTyping(event.currentTarget.value);
       }}
+      onblur={stopTyping}
       onclick={(event) => {
         caret = event.currentTarget.selectionStart;
         dismissed = false;
@@ -215,7 +325,7 @@
           else send();
         }
       }}></textarea>
-    <button class="icon-button" aria-label="Send message" disabled={action.busy || !body.trim()}
+    <button class="icon-button" aria-label={revision ? "Send changes" : "Send message"} disabled={action.busy || !body.trim()}
       ><Icon name="send" /></button
     >
   </form>

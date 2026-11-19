@@ -1,16 +1,19 @@
+import { createHash } from 'node:crypto';
 import {
   AgentRepository,
   ApprovalRepository,
   CatalogRepository,
   ConnectionOAuthRepository,
   ConversationRepository,
+  ProjectRepository,
   DocumentRepository,
   HumanRepository,
   MessageRepository,
   NoteRepository,
   ResponsibilityRepository,
   TaskCapabilityRepository,
-  TaskRepository
+  TaskRepository,
+  StoredHttpCall
 } from '../../data';
 import {
   ConnectionClient,
@@ -23,11 +26,13 @@ import {
   ModelToolDefinition,
   ModelToolResult,
   ModelTranscriptEntry,
+  ModelTurnRequest,
+  ModelTurnResult,
   WorkspaceClient
 } from '../../integrations';
 import { TaskLogger, TaskRunnerLogger } from '../../observability';
-import { addressedAgentIds } from '../../shared/addressing';
-import { connectionCallDenied } from '../../shared/connection-access';
+import { addressedAgentIds } from '../conversations/addressing.rules';
+import { connectionCallDenied } from '../connections/connection-access.rules';
 import { AppError } from '../../shared/errors';
 import {
   ACCESS_DURATIONS,
@@ -79,9 +84,10 @@ import {
   scopeOf
 } from './capability-access';
 import { buildMcpToolName, isMcpToolName, parseMcpConnectionId } from './mcp-tool-names';
+import { callTaskModel, ModelCallStoppedError } from './model-call';
 import { calculateCostUsd, formatDollars, PriceTable, startOfMonth } from './pricing';
 import { planRun } from './schedule';
-import { startResponsibilityRun } from './scheduled-runs';
+import { responsibilityRunError, startResponsibilityRun } from './scheduled-runs';
 import { countEventsOfType, countEventsSinceLast, findBudgetOverrun } from './task-budget';
 import { TASK_EVENTS } from './task-events';
 import { ignoreStateConflict, ignoreWaitAlreadyResolved, TaskLifecycle } from './task-lifecycle';
@@ -98,6 +104,7 @@ export interface TaskRunnerOptions {
   // Model turns over the whole task before it is blocked. A stand-in until CA-5 adds budgets.
   maxTurnsPerTask: number;
   maxTokens: number;
+  modelTimeoutMs: number;
   historyLimit: number;
   // Before a task completes, a separate model call checks the result against its criteria, so
   // the agent's own word isn't enough. Skipped for the scripted test provider.
@@ -114,6 +121,7 @@ export const DEFAULT_RUNNER_OPTIONS: Omit<TaskRunnerOptions, 'workerId'> = {
   turnsPerClaim: 8,
   maxTurnsPerTask: 40,
   maxTokens: 16_000,
+  modelTimeoutMs: 120_000,
   historyLimit: 30,
   completionCheck: true,
   prices: {},
@@ -132,11 +140,10 @@ Reply with one line. Start with "MET:" if every criterion is met, or "NOT MET:" 
 const MAX_DELIVERY_ATTEMPTS = 5;
 const DELIVERY_LEASE_MS = 60_000;
 // How many agent-to-agent requests can chain before the runner stops starting new tasks. This
-// keeps two agents from asking each other for work forever.
-const MAX_REQUEST_DEPTH = 5;
-// How many directory agents the prompt lists. suggest_participant can name any agent in the
-// directory, listed or not.
-const DIRECTORY_AGENTS_IN_PROMPT = 30;
+// allows ten request/review exchanges while still bounding unattended chains. Per-task
+// turns, tokens, working time, and conversation spending also remain limited.
+const MAX_REQUEST_DEPTH = 20;
+
 const NOTES_IN_PROMPT = 20;
 const MAX_NUDGES = 2;
 const NUDGE_TEXT =
@@ -155,11 +162,15 @@ type ToolOutcome = string | { content: string; stop: boolean };
 // in the database, so a restart picks up where it stopped.
 export class TaskRunnerService {
   private readonly lifecycle: TaskLifecycle;
+  private readonly shutdownController = new AbortController();
+  private readonly runningTasks = new Map<string, Promise<void>>();
+  private polling = false;
 
   constructor(
     private readonly taskRepository: TaskRepository,
     private readonly messageRepository: MessageRepository,
     private readonly conversationRepository: ConversationRepository,
+    private readonly projectRepository: ProjectRepository,
     private readonly agentRepository: AgentRepository,
     private readonly humanRepository: HumanRepository,
     private readonly catalogRepository: CatalogRepository,
@@ -181,25 +192,54 @@ export class TaskRunnerService {
     this.lifecycle = new TaskLifecycle(taskRepository, taskLogger);
   }
 
-  // One pass: deliver new messages, wake tasks whose waits are done, then run claimed tasks.
-  async tick(): Promise<void> {
-    await this.startDueRuns();
-    await this.processDeliveries();
-    await this.repairWaitingTasks();
-    await this.postPendingResults();
-    await this.executeApprovedCalls();
-    const tasks = await this.taskRepository.claimRunnable(
-      this.options.workerId,
-      this.options.leaseMs,
-      this.options.concurrency
-    );
-    await Promise.all(tasks.map((task) => this.runClaimedTask(task)));
+  // Control work stays responsive while claimed tasks wait on providers. Callers can await
+  // newly started tasks for deterministic tests; the server polls without waiting for them.
+  async tick({ waitForTasks = true }: { waitForTasks?: boolean } = {}): Promise<void> {
+    if (this.shutdownController.signal.aborted || this.polling) return;
+    this.polling = true;
+    const started: Promise<void>[] = [];
+    try {
+      await this.startDueRuns();
+      await this.processDeliveries();
+      await this.repairWaitingTasks();
+      await this.postPendingResults();
+      await this.executeApprovedCalls();
+      const capacity = this.options.concurrency - this.runningTasks.size;
+      if (!this.shutdownController.signal.aborted && capacity > 0) {
+        const tasks = await this.taskRepository.claimRunnable(
+          this.options.workerId,
+          this.options.leaseMs,
+          capacity
+        );
+        for (const task of tasks) {
+          if (this.runningTasks.has(task.id)) continue;
+          const job = this.runClaimedTask(task)
+            .catch((error) => this.runnerLogger.onTaskRunFailed(task.id, error))
+            .finally(() => {
+              this.runningTasks.delete(task.id);
+            });
+          this.runningTasks.set(task.id, job);
+          started.push(job);
+        }
+      }
+    } finally {
+      this.polling = false;
+    }
+    if (waitForTasks) await Promise.all(started);
+  }
+
+  stop(): void {
+    this.shutdownController.abort();
+  }
+
+  async drain(): Promise<void> {
+    await Promise.all(this.runningTasks.values());
   }
 
   // Scheduling
 
-  // Starts runs for responsibilities that are due. Only the runner that moves the schedule on
-  // starts the run, and the run's key is its time slot, so a slot never runs twice. Slots
+  // Starts runs for responsibilities that are due. Only one runner advances each slot.
+  // The run's key is its time slot, so a slot never runs twice. Slots
   // missed while the service was down follow each responsibility's missed-run policy.
   async startDueRuns(now: Date = new Date()): Promise<void> {
     for (const responsibility of await this.responsibilityRepository.listDue(now, 20)) {
@@ -224,15 +264,12 @@ export class TaskRunnerService {
     let started = false;
     if (plan.start) {
       const result = await startResponsibilityRun(
-        {
-          taskRepository: this.taskRepository,
-          agentRepository: this.agentRepository,
-          conversationRepository: this.conversationRepository,
-          lifecycle: this.lifecycle
-        },
+        this.taskRepository,
+        this.lifecycle,
         responsibility,
         {
           runKey: `schedule:${responsibility.id}:${plan.slot.toISOString()}`,
+          expectedNextRunAt: responsibility.nextRunAt,
           startedBy: SYSTEM_ACTOR,
           note:
             plan.skipped > 0
@@ -240,11 +277,12 @@ export class TaskRunnerService {
               : undefined
         }
       );
-      if ('skippedReason' in result) {
-        this.runnerLogger.onScheduledRunSkipped(responsibility.id, result.skippedReason);
+      if ('reason' in result) {
+        if (result.reason === 'changed') return;
+        this.runnerLogger.onScheduledRunSkipped(responsibility.id, responsibilityRunError(result.reason).message);
       } else {
         started = true;
-        this.runnerLogger.onScheduledRun(responsibility.id, result.task.id, plan.skipped);
+        this.runnerLogger.onScheduledRun(responsibility.id, result.run.taskId, plan.skipped);
       }
     } else if (plan.ask) {
       await this.askToCatchUp(responsibility, plan.slot, plan.skipped, plan.nextRunAt);
@@ -319,18 +357,7 @@ export class TaskRunnerService {
     const author = getAuthorActor(message);
     const openTask = await this.taskRepository.findOpenTask(message.conversationId, agent.id);
     if (openTask) {
-      await this.taskRepository.addEvent(openTask.id, TASK_EVENTS.messageReceived, author, {
-        messageId: message.id
-      });
-      await this.resolveReplyWaits(openTask, message, author);
-      // A blocked task needs a person. A person writing to the agent is that attention.
-      if (openTask.state === 'blocked' && !openTask.pausedAt && message.authorType === 'human') {
-        await this.lifecycle
-          .transition(openTask, 'working', author, { reason: null })
-          .catch(ignoreStateConflict);
-      }
-      this.runnerLogger.onMessageDelivered(message.id, agent.id, openTask.id, 'update');
-      return openTask.id;
+      return this.deliverUpdate(openTask, message, agent, author);
     }
 
     if (agent.disabledAt || !agent.currentVersionId) {
@@ -341,30 +368,66 @@ export class TaskRunnerService {
       (await this.measureRequestDepth(message.taskId)) >= MAX_REQUEST_DEPTH
     ) {
       this.runnerLogger.onRequestChainTooDeep(message.id, agent.id);
+      await this.messageRepository.create({
+        conversationId: message.conversationId,
+        authorType: 'system',
+        authorId: null,
+        body: `The request to ${agent.name} reached the limit of ${MAX_REQUEST_DEPTH} agent handoffs. A person needs to review the work and send a new request to continue.`,
+        mentions: [],
+        inReplyToMessageId: message.id,
+        taskId: null,
+        deliverToAgentIds: [],
+        clientKey: `request-depth:${message.id}:${agent.id}`
+      });
       return null;
     }
-    const authorName = await this.lookupParticipantName(getAuthorRef(message));
+    const scheduled = await this.taskRepository.getScheduledStarter(message.id, agent.id);
+    const authorName = scheduled ? null : await this.lookupParticipantName(getAuthorRef(message));
     const { task, created } = await this.taskRepository.create({
       runKey: `message:${message.id}:${agent.id}`,
       conversationId: message.conversationId,
       ownerAgentId: agent.id,
       agentVersionId: agent.currentVersionId,
-      title: `Respond to ${authorName}: ${shortenForTitle(message.body)}`,
-      brief: message.body,
-      completionCriteria: DEFAULT_RESPONSE_CRITERIA,
+      title: scheduled?.title ?? `Respond to ${authorName}: ${shortenForTitle(message.body)}`,
+      brief: scheduled?.brief ?? message.body,
+      completionCriteria: scheduled?.completionCriteria ?? DEFAULT_RESPONSE_CRITERIA,
       reviewRequired: false,
-      requestedByType: message.authorType === 'system' ? 'schedule' : message.authorType,
-      requestedById: message.authorId,
+      requestedByType: scheduled?.requestedByType ?? (message.authorType === 'system' ? 'schedule' : message.authorType),
+      requestedById: scheduled ? scheduled.requestedById : message.authorId,
       requestMessageId: message.id,
       parentTaskId: message.authorType === 'agent' ? message.taskId : null,
       restartedFromTaskId: null,
-      responsibilityId: null
+      responsibilityId: scheduled?.responsibilityId ?? null
     });
+    if (task.conversationId !== message.conversationId) return null;
+    if (!created && task.runKey !== `message:${message.id}:${agent.id}`) {
+      return this.deliverUpdate(task, message, agent, author);
+    }
     if (created) {
       await this.lifecycle.recordCreated(task, author);
     }
     this.runnerLogger.onMessageDelivered(message.id, agent.id, task.id, 'new_task');
     return task.id;
+  }
+
+  private async deliverUpdate(
+    openTask: Task,
+    message: Message,
+    agent: Agent,
+    author: Actor
+  ): Promise<string> {
+    await this.taskRepository.addEvent(openTask.id, TASK_EVENTS.messageReceived, author, {
+      messageId: message.id
+    });
+    await this.resolveReplyWaits(openTask, message, author);
+    // A blocked task needs a person. A person writing to the agent is that attention.
+    if (openTask.state === 'blocked' && !openTask.pausedAt && message.authorType === 'human') {
+      await this.lifecycle
+        .transition(openTask, 'working', author, { reason: null })
+        .catch(ignoreStateConflict);
+    }
+    this.runnerLogger.onMessageDelivered(message.id, agent.id, openTask.id, 'update');
+    return openTask.id;
   }
 
   // A reply wait is answered by any message from the asked participant to the asker: an
@@ -411,11 +474,12 @@ export class TaskRunnerService {
       const result = (await this.taskRepository.listOutputs(task.id))
         .filter((output) => output.title === 'Result')
         .pop();
-      if (agent && result?.content) {
+      if (agent && result?.content && result.metadata.postResult !== false) {
         await this.answerRequester(task, agent, 'result', result.content);
       }
       await this.taskRepository.addEvent(task.id, TASK_EVENTS.resultPosted, SYSTEM_ACTOR, {
-        outputId: result?.id ?? null
+        outputId: result?.id ?? null,
+        ...(result?.metadata.postResult === false ? { silent: true } : {})
       });
     }
   }
@@ -442,6 +506,7 @@ export class TaskRunnerService {
   // Runs model turns until the task stops working or the turn budget for this claim is used.
   // Returns how long to wait before the task may be claimed again.
   async runTask(claimed: Task): Promise<number> {
+    if (this.shutdownController.signal.aborted) return 0;
     const agent = await this.agentRepository.getById(claimed.ownerAgentId);
     if (agent?.deletedAt) return 0;
     const version = await this.agentRepository.getVersion(claimed.agentVersionId);
@@ -467,9 +532,9 @@ export class TaskRunnerService {
       ...(connections.some((connection) => connection.kind !== 'mcp') ? [HTTP_REQUEST_TOOL] : []),
       ...(await this.discoverMcpTools(claimed, connections))
     ];
-    const prompt = await this.buildPrompt(claimed, agent);
 
     for (let turn = 0; turn < this.options.turnsPerClaim; turn++) {
+      if (this.shutdownController.signal.aborted) return 0;
       const task = await this.taskRepository.getById(claimed.id);
       if (!task || task.state !== 'working' || task.pausedAt) {
         return 0;
@@ -490,6 +555,7 @@ export class TaskRunnerService {
         return 0;
       }
 
+      const prompt = await this.buildPrompt(task, agent);
       const events = await this.loadEvents(task.id);
       const { transcript, pendingCalls } = await this.rebuildTranscript(
         prompt,
@@ -500,7 +566,19 @@ export class TaskRunnerService {
 
       // A tool call that was asked for but never run, such as after a crash, runs first.
       if (pendingCalls.length > 0) {
-        const stopped = await this.runToolCalls(task, agent, pendingCalls);
+        let stopped;
+        try {
+          const latestTurn = events.filter((event) => event.type === TASK_EVENTS.modelTurn).at(-1);
+          const contextEventId =
+            typeof latestTurn?.data.contextEventId === 'number'
+              ? latestTurn.data.contextEventId
+              : (latestTurn?.id ?? 0);
+          stopped = await this.runToolCalls(task, agent, pendingCalls, contextEventId);
+        } catch (error) {
+          if (error instanceof ModelCallStoppedError) return 0;
+          throw error;
+        }
+        if (typeof stopped === 'number') return stopped;
         if (stopped) {
           return 0;
         }
@@ -556,6 +634,28 @@ export class TaskRunnerService {
     return 0;
   }
 
+  // All provider calls share the same deadline and task-control checks.
+  private requestModel(
+    task: Task,
+    version: AgentVersion,
+    events: TaskEvent[],
+    client: ModelClient,
+    request: ModelTurnRequest
+  ): Promise<ModelTurnResult> {
+    return callTaskModel({
+      repository: this.taskRepository,
+      task,
+      version,
+      events,
+      client,
+      request,
+      workerId: this.options.workerId,
+      leaseMs: this.options.leaseMs,
+      timeoutMs: this.options.modelTimeoutMs,
+      shutdownSignal: this.shutdownController.signal
+    });
+  }
+
   // Returns 'continue', 'stop', or a retry delay in milliseconds.
   private async callModel(
     task: Task,
@@ -570,36 +670,18 @@ export class TaskRunnerService {
     const release = await this.agentRepository.acquireExecution(agent.id);
     if (!release) return 'stop';
     const agentActor: Actor = toAgentActor(agent);
-    // Model calls can be slow. Keep the lease alive while waiting, and drop the result if the
-    // lease was lost anyway, because another worker may be running the task by now.
-    let leaseHeld = true;
-    const heartbeat = setInterval(() => {
-      this.taskRepository
-        .renewLease(task.id, this.options.workerId, this.options.leaseMs)
-        .then((held) => (leaseHeld = leaseHeld && held))
-        .catch(() => (leaseHeld = false));
-    }, this.options.leaseMs / 3);
     try {
-      const result = await client.complete({
+      await this.taskRepository.addEvent(task.id, TASK_EVENTS.modelStarted, agentActor, {});
+      const result = await this.requestModel(task, version, events, client, {
         model: version.model,
         system,
         transcript,
         tools,
         maxTokens: this.options.maxTokens
       });
-      clearInterval(heartbeat);
-      if (
-        !leaseHeld ||
-        !(await this.taskRepository.renewLease(
-          task.id,
-          this.options.workerId,
-          this.options.leaseMs
-        ))
-      ) {
-        return 'stop';
-      }
       await this.taskRepository.addEvent(task.id, TASK_EVENTS.modelTurn, agentActor, {
         raw: result.raw,
+        contextEventId: events.at(-1)?.id ?? 0,
         provider: version.provider,
         format: client.transcriptFormat,
         text: result.text,
@@ -617,7 +699,7 @@ export class TaskRunnerService {
       }
       return 'continue';
     } catch (error) {
-      clearInterval(heartbeat);
+      if (error instanceof ModelCallStoppedError) return 'stop';
       if (!(error instanceof ModelClientError)) {
         throw error;
       }
@@ -641,16 +723,44 @@ export class TaskRunnerService {
     }
   }
 
-  // Runs the agent's tool calls and records all results together. Returns true when one of
-  // them ended the run (the task waits, completes, or is blocked).
-  private async runToolCalls(task: Task, agent: Agent, calls: ModelToolCall[]): Promise<boolean> {
+  // Rechecks human controls and the lease before each tool. An already issued action can
+  // finish, but the rest of its batch must not start after control changes.
+  private async runToolCalls(
+    task: Task,
+    agent: Agent,
+    calls: ModelToolCall[],
+    contextEventId: number
+  ): Promise<boolean | number> {
+    let leaseHeld = true;
+    const heartbeat = setInterval(() => {
+      this.taskRepository
+        .renewLease(task.id, this.options.workerId, this.options.leaseMs)
+        .then((held) => (leaseHeld = leaseHeld && held))
+        .catch(() => (leaseHeld = false));
+    }, this.options.leaseMs / 3);
+    try {
+      return await this.runToolBatch(task, agent, calls, contextEventId, () => leaseHeld);
+    } finally {
+      clearInterval(heartbeat);
+    }
+  }
+
+  private async runToolBatch(
+    task: Task,
+    agent: Agent,
+    calls: ModelToolCall[],
+    contextEventId: number,
+    holdsLease: () => boolean
+  ): Promise<boolean | number> {
     const results: ModelToolResult[] = [];
     let stopped = false;
+    let skippedReason = 'an earlier tool call in this turn already ended your turn.';
     for (const call of calls) {
+      if (this.shutdownController.signal.aborted) return true;
       if (stopped) {
         results.push({
           callId: call.id,
-          content: 'Skipped: an earlier tool call in this turn already ended your turn.',
+          content: `Skipped: ${skippedReason}`,
           isError: true
         });
         continue;
@@ -660,6 +770,53 @@ export class TaskRunnerService {
         if (!release) return true;
         let outcome;
         try {
+          // Store only the fields used by the status line; never duplicate tool secrets here.
+          const input =
+            call.input && typeof call.input === 'object'
+              ? (call.input as Record<string, unknown>)
+              : {};
+          const detailInput = ['read_file', 'write_file'].includes(call.name)
+            ? { path: input.path }
+            : call.name === 'save_output'
+              ? { title: input.title }
+              : {};
+          await this.taskRepository.addEvent(
+            task.id,
+            TASK_EVENTS.toolStarted,
+            toAgentActor(agent),
+            {
+              name: call.name,
+              input: detailInput
+            }
+          );
+          if (await this.hasNewTaskMessage(task.id, contextEventId)) {
+            stopped = true;
+            skippedReason = 'a new message arrived; read the update before taking further actions.';
+            results.push({ callId: call.id, content: `Skipped: ${skippedReason}`, isError: true });
+            continue;
+          }
+          const renewed =
+            holdsLease() &&
+            (await this.taskRepository.renewLease(
+              task.id,
+              this.options.workerId,
+              this.options.leaseMs
+            ));
+          // Pause and cancellation release ownership, so inspect controls even if renewal
+          // failed. This lets us save skipped results for stopped work.
+          const current = await this.taskRepository.getById(task.id);
+          if (
+            !current ||
+            current.state !== 'working' ||
+            current.pausedAt ||
+            current.agentVersionId !== task.agentVersionId
+          ) {
+            stopped = true;
+            skippedReason = 'the task stopped working, was paused, or changed configuration.';
+            results.push({ callId: call.id, content: `Skipped: ${skippedReason}`, isError: true });
+            continue;
+          }
+          if (!renewed || !holdsLease()) return true;
           outcome = await this.runToolCall(task, agent, call);
         } finally {
           await release();
@@ -668,11 +825,27 @@ export class TaskRunnerService {
         results.push({ callId: call.id, content, isError: false });
         stopped = STOPPING_TOOLS.has(call.name) || (typeof outcome !== 'string' && outcome.stop);
       } catch (error) {
+        if (error instanceof ModelCallStoppedError) throw error;
+        if (error instanceof ModelClientError) {
+          return this.handleCompletionFailure(task, call.id, error);
+        }
+        if (error instanceof AppError && error.name === 'connectionCallOutcomeUnknown') {
+          // A model could retry an error under a fresh call ID. Block before saving batch
+          // results. If blocking fails, leave the calls pending for safe recovery instead.
+          await this.block(task, error.message);
+          stopped = true;
+          skippedReason = 'an HTTP call needs human reconciliation before work can continue.';
+        }
         results.push({ callId: call.id, content: (error as Error).message, isError: true });
       }
     }
-    await this.taskRepository.addEvent(task.id, TASK_EVENTS.toolResults, SYSTEM_ACTOR, { results });
-    return stopped;
+    // Pause/cancel and stopping tools release the lease. The repository checks ownership
+    // atomically, allowing results for stopped work but never another worker's batch.
+    if (!holdsLease() && !stopped) return true;
+    const recorded = await this.taskRepository.recordToolResults(task.id, this.options.workerId, {
+      results
+    });
+    return stopped || !recorded;
   }
 
   private async runToolCall(task: Task, agent: Agent, call: ModelToolCall): Promise<ToolOutcome> {
@@ -691,6 +864,8 @@ export class TaskRunnerService {
         return this.runCompleteTaskTool(task, agent, call.id, input);
       case AGENT_TOOLS.reportBlocked:
         return this.runReportBlockedTool(task, agent, call.id, input);
+      case AGENT_TOOLS.findAgents:
+        return this.runFindAgentsTool(task, agent, input);
       case AGENT_TOOLS.suggestParticipant:
         return this.runSuggestParticipantTool(task, agent, call.id, input);
       case AGENT_TOOLS.saveNote:
@@ -819,11 +994,36 @@ export class TaskRunnerService {
     if (verdict) {
       criteriaCheck.summary = `${criteriaCheck.summary}\nIndependent check: ${verdict.summary}`;
     }
-    await this.saveOutputOnce(task, agentActor, callId, {
+    const savedResult = (await this.taskRepository.listOutputs(task.id)).find(
+      (output) => output.metadata.toolCallId === callId
+    );
+    let postResult = savedResult
+      ? savedResult.metadata.postResult !== false
+      : input.post_result !== false;
+    if (
+      !savedResult &&
+      !postResult &&
+      task.conversationId &&
+      task.requestedByType === 'agent' &&
+      task.requestedById
+    ) {
+      const requesterTask = await this.taskRepository.findOpenTask(
+        task.conversationId,
+        task.requestedById
+      );
+      const waits = requesterTask
+        ? await this.taskRepository.listWaits(requesterTask.id, { openOnly: true })
+        : [];
+      postResult = waits.some(
+        (wait) => wait.kind === 'reply' && wait.targetId === task.requestMessageId
+      );
+    }
+    const outputId = await this.saveOutputOnce(task, agentActor, callId, {
       title: 'Result',
       content: result,
       kind: 'text',
-      uri: null
+      uri: null,
+      metadata: { postResult }
     });
     const updatedTask = await this.lifecycle.completeTask(task.id, agentActor, criteriaCheck);
     if (updatedTask.state !== 'completed') {
@@ -831,9 +1031,14 @@ export class TaskRunnerService {
       await this.answerRequester(task, agent, `${callId}:review`, 'My result is ready for review.');
       return 'Result submitted. A person will review it before the task completes.';
     }
-    await this.answerRequester(task, agent, `${callId}:answer`, result);
-    await this.taskRepository.addEvent(task.id, TASK_EVENTS.resultPosted, agentActor, {});
-    return 'Task completed. Your result was posted.';
+    if (postResult) await this.answerRequester(task, agent, 'result', result);
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.resultPosted, agentActor, {
+      outputId,
+      ...(!postResult ? { silent: true } : {})
+    });
+    return postResult
+      ? 'Task completed. Your result was posted.'
+      : 'Task completed. Your result was saved without a chat message.';
   }
 
   private async runReportBlockedTool(
@@ -846,6 +1051,39 @@ export class TaskRunnerService {
     await this.lifecycle.blockTask(task.id, toAgentActor(agent), reason);
     await this.answerRequester(task, agent, `${callId}:answer`, `I can't proceed: ${reason}`);
     return 'Task blocked. A person will look at it.';
+  }
+
+  private async runFindAgentsTool(task: Task, agent: Agent, input: ToolInput): Promise<string> {
+    const query = readRequiredString(input, 'query').trim();
+    if (!query || query.length > 500) {
+      throw new AppError('validationError', 'query must contain 1 to 500 characters.');
+    }
+    const terms = [...new Set(query.toLowerCase().split(/\s+/))];
+    const members = task.conversationId
+      ? await this.conversationRepository.listMembers(task.conversationId)
+      : [];
+    const profiles = await this.agentRepository.searchDirectory({
+      excludeIds: [
+        ...new Set([
+          agent.id,
+          ...members
+            .filter((member) => member.participant.type === 'agent')
+            .map((member) => member.participant.id)
+        ])
+      ],
+      terms,
+      limit: 10
+    });
+    // Explicitly select public fields. IDs, configurations, and private context never leave here.
+    return JSON.stringify(
+      profiles.map(({ name, purpose, skillNames, produces, needs }) => ({
+        name,
+        purpose,
+        skillNames,
+        produces: produces ?? null,
+        needs: needs ?? null
+      }))
+    );
   }
 
   private async runSuggestParticipantTool(
@@ -872,7 +1110,7 @@ export class TaskRunnerService {
     if (!suggested || suggested.disabledAt || !suggested.currentVersionId) {
       throw new AppError(
         'suggestionNotAvailable',
-        `No available agent named "${name}" in the directory. Pick one from the directory list.`
+        `No available agent named "${name}" in the directory. Search with find_agents for an available specialist.`
       );
     }
     // Addressed to the people here by ID, never by name, so no agent is woken: people get
@@ -915,15 +1153,17 @@ export class TaskRunnerService {
     if (text.length > MAX_NOTE_CHARS) {
       throw new AppError('validationError', 'Keep notes under 2,000 characters.');
     }
-    // Saved for this conversation only, so it can't carry its details into another. The
-    // tool call is the note's key, so a replay after a crash finds the first save.
+    // Standalone endeavors keep their notes within the conversation.
+    const conversation = task.conversationId
+      ? await this.conversationRepository.getById(task.conversationId)
+      : null;
     const note = await this.noteRepository.create({
       clientKey: `tool:${task.id}:${callId}`,
       agentId: agent.id,
       body: text,
       sourceTaskId: task.id,
       sourceConversationId: task.conversationId,
-      scope: task.conversationId ? 'conversation' : 'agent',
+      scope: conversation?.projectId ? 'project' : task.conversationId ? 'conversation' : 'agent',
       createdBy: agentActor
     });
     await this.taskRepository.addEvent(task.id, TASK_EVENTS.noteSaved, agentActor, {
@@ -978,10 +1218,55 @@ export class TaskRunnerService {
     }
     const body = typeof input.body === 'string' ? input.body : null;
     const connection = await this.checkHttpCall(task, agent, { name, method, path, callId });
+    const clientKey = `tool:${task.id}:${callId}`;
+    const existing = await this.approvalRepository.getByClientKey(clientKey);
+    // A saved human decision belongs to this exact call, regardless of later policy edits.
+    if (existing) {
+      const request = existing.request;
+      if (
+        isAccessRequest(request) ||
+        request.kind === 'mcp' ||
+        request.connectionId !== connection.id ||
+        request.method !== method ||
+        request.path !== path ||
+        request.body !== body
+      ) {
+        throw new AppError(
+          'toolAccessDenied',
+          'This HTTP call does not match its saved approval. Request a new approval for a different action.'
+        );
+      }
+      if (existing.status === 'rejected') {
+        throw new AppError(
+          'toolAccessDenied',
+          `A person rejected this call: ${existing.reason ?? 'No reason given.'}`
+        );
+      }
+      if (existing.executedAt) {
+        const result = existing.result;
+        if (!result || (result.status === null && !result.error && !result.isError)) {
+          throw new AppError('connectionCallOutcomeUnknown');
+        }
+        if (result.error || result.isError) {
+          throw new AppError('validationError', result.error ?? result.body);
+        }
+        return `HTTP ${result.status}${result.truncated ? ' (cut off at 20,000 characters)' : ''}\n${result.body}`;
+      }
+    }
 
-    if (connection.approvalMethods.includes(method)) {
+    // A previously sent unattended call must recover its own result, even if the current
+    // policy now requires approval. Creating a fresh approval could repeat the same action.
+    const previous = await this.taskRepository.getHttpCall(task.id, callId);
+    const needsNewApproval = !previous && connection.approvalMethods.includes(method);
+    const legacyCall =
+      needsNewApproval &&
+      (await this.loadEvents(task.id)).some(
+        (event) => event.type === TASK_EVENTS.connectionCalled && event.data.callId === callId
+      );
+    if (existing || (needsNewApproval && !legacyCall)) {
       const approval = await this.requestApproval(task, agent, {
-        clientKey: `tool:${task.id}:${callId}`,
+        clientKey,
+        existing,
         request: {
           connectionId: connection.id,
           connectionName: connection.name,
@@ -1156,10 +1441,21 @@ export class TaskRunnerService {
       ).approval;
     const currentTask = await this.lifecycle.requireTask(task.id);
     const waits = await this.taskRepository.listWaits(task.id, { openOnly: false });
-    if (currentTask.state === 'working' && !waits.some((wait) => wait.targetId === approval.id)) {
-      await this.lifecycle.waitFor(task.id, toAgentActor(agent), [
-        { kind: 'approval', targetId: approval.id, description: input.description }
-      ]);
+    if (currentTask.state === 'working') {
+      const openWait = waits.find(
+        (wait) => wait.kind === 'approval' && wait.targetId === approval.id && !wait.resolvedAt
+      );
+      if (openWait) {
+        // A crash after saving the wait can leave the task working. Reuse that wait and
+        // finish its state transition instead of letting the next claim bypass approval.
+        await this.lifecycle.transition(currentTask, 'waiting', toAgentActor(agent), {
+          reason: openWait.description
+        });
+      } else {
+        await this.lifecycle.waitFor(task.id, toAgentActor(agent), [
+          { kind: 'approval', targetId: approval.id, description: input.description }
+        ]);
+      }
     }
     this.runnerLogger.onApprovalRequested(task.id, approval.id);
     return approval;
@@ -1329,30 +1625,89 @@ export class TaskRunnerService {
     connection: Connection,
     call: { method: HttpMethod; path: string; body: string | null; callId: string }
   ): Promise<{ status: number; body: string; truncated: boolean }> {
-    const response = await this.connectionClient
-      .request({
+    const requestHash = createHash('sha256')
+      .update(
+        JSON.stringify([
+          connection.id,
+          connection.baseUrl,
+          connection.authMethod,
+          connection.authHeader,
+          call.method,
+          call.path,
+          call.body
+        ])
+      )
+      .digest('hex');
+    const unknown = () =>
+      new AppError(
+        'connectionCallOutcomeUnknown',
+        `HTTP ${call.method} ${call.path} on ${connection.name} (call ${call.callId}) has an unknown outcome. It will not be retried automatically. A person must check the external service, then resume with instructions to accept the result or explicitly request a new attempt.`
+      );
+    const replay = (stored: StoredHttpCall) => {
+      if (stored.requestHash !== requestHash || !stored.response) throw unknown();
+      return stored.response;
+    };
+    const stored = await this.taskRepository.getHttpCall(task.id, call.callId);
+    if (stored) return replay(stored);
+    // Older builds recorded successful requests without a recoverable response. Treat that
+    // evidence conservatively instead of repeating a legacy action during the upgrade.
+    const events = await this.loadEvents(task.id);
+    if (
+      events.some(
+        (event) => event.type === TASK_EVENTS.connectionCalled && event.data.callId === call.callId
+      )
+    ) {
+      throw unknown();
+    }
+    const headers = await this.loadConnectionHeaders(connection);
+    if (!(await this.taskRepository.claimHttpCall(task.id, call.callId, requestHash))) {
+      const winner = await this.taskRepository.getHttpCall(task.id, call.callId);
+      if (!winner) throw unknown();
+      return replay(winner);
+    }
+    let response;
+    try {
+      response = await this.connectionClient.request({
         baseUrl: connection.baseUrl,
         method: call.method,
         path: call.path,
-        headers: await this.loadConnectionHeaders(connection),
+        headers,
         body: call.body
-      })
-      .catch((error: Error) => {
-        throw new AppError('validationError', `The call failed: ${error.message}`);
       });
-    // The response body isn't stored in the event; it is in the tool result.
-    await this.taskRepository.addEvent(
-      task.id,
-      TASK_EVENTS.connectionCalled,
-      { type: 'agent', id: agentId },
-      {
-        callId: call.callId,
-        connectionId: connection.id,
-        method: call.method,
-        path: call.path,
-        status: response.status
+      // Persist before audit/batch events. Losing either later must not resend the request.
+      if (
+        !(await this.taskRepository.saveHttpCallResponse(
+          task.id,
+          call.callId,
+          requestHash,
+          response
+        ))
+      ) {
+        throw unknown();
       }
-    );
+    } catch {
+      // A timeout, partial response, or lost database acknowledgement may follow a successful
+      // remote write. Keep the claim and never expose raw transport errors or credentials.
+      throw unknown();
+    }
+    await this.taskRepository
+      .addEvent(
+        task.id,
+        TASK_EVENTS.connectionCalled,
+        { type: 'agent', id: agentId },
+        {
+          callId: call.callId,
+          connectionId: connection.id,
+          method: call.method,
+          path: call.path,
+          status: response.status
+        }
+      )
+      .catch(() => {
+        // The durable response is authoritative. An audit failure must not look like a failed
+        // remote action to the model and provoke a duplicate under a fresh call ID.
+        this.runnerLogger.onHttpCallAuditFailed(task.id, call.callId);
+      });
     return response;
   }
 
@@ -1361,7 +1716,8 @@ export class TaskRunnerService {
       const result = await this.oauthRepository.withLock<Record<string, string> | null | false>(
         connection.id,
         async (session) => {
-          if (!session) return { session, result: null };
+          if (!session)
+            return { session, result: connection.authMethod === 'oauth' ? (false as const) : null };
           if (session.status !== 'connected') return { session, result: false as const };
           try {
             if (session.resource !== connection.baseUrl) throw new Error('Resource changed');
@@ -1378,7 +1734,14 @@ export class TaskRunnerService {
       if (result === false) throw new AppError('connectionSignInRequired');
       if (result) return result;
     }
+    if (connection.authMethod === 'oauth') throw new AppError('connectionSignInRequired');
     const credential = await this.catalogRepository.getConnectionCredential(connection.id);
+    if (connection.authMethod === 'header' && !credential) {
+      throw new AppError(
+        'validationError',
+        'Add an API key or token in this connection’s configuration before continuing.'
+      );
+    }
     return credential ? { [connection.authHeader]: credential } : {};
   }
 
@@ -1589,8 +1952,7 @@ export class TaskRunnerService {
 
   // Access requests
 
-  // Lists what people made discoverable. It shows names, descriptions, and scope only, and
-  // grants nothing.
+  // Lists enabled, discoverable catalog entries with their requestable scope.
   private async runFindCapabilitiesTool(
     task: Task,
     agent: Agent,
@@ -2039,7 +2401,7 @@ export class TaskRunnerService {
           )
           .join('\n')
       : '(none)';
-    const reply = await client.complete({
+    const reply = await this.requestModel(task, version, events, client, {
       model: version.model,
       system: COMPLETION_CHECK_PROMPT,
       transcript: [
@@ -2051,6 +2413,17 @@ export class TaskRunnerService {
       tools: [],
       maxTokens: 1000
     });
+    const latestTurn = events.filter((event) => event.type === TASK_EVENTS.modelTurn).at(-1);
+    const contextEventId =
+      typeof latestTurn?.data.contextEventId === 'number'
+        ? latestTurn.data.contextEventId
+        : (latestTurn?.id ?? 0);
+    if (await this.hasNewTaskMessage(task.id, contextEventId)) {
+      throw new AppError(
+        'taskCompletionRejected',
+        'A new message arrived during the check. Read the update and revise the result before completing.'
+      );
+    }
     const text = reply.text.trim();
     // Anything other than a clear "MET:" counts as not met, so a confused check never passes.
     const met = /^MET\b/i.test(text);
@@ -2067,6 +2440,36 @@ export class TaskRunnerService {
     return { met, summary, failures: failuresBefore + (met ? 0 : 1) };
   }
 
+  private async hasNewTaskMessage(taskId: string, contextEventId: number): Promise<boolean> {
+    const events = await this.taskRepository.listLatestEvents(
+      [taskId],
+      [TASK_EVENTS.messageReceived]
+    );
+    return events.some((event) => event.id > contextEventId);
+  }
+
+  private async handleCompletionFailure(
+    task: Task,
+    callId: string,
+    error: ModelClientError
+  ): Promise<number> {
+    const events = await this.loadEvents(task.id);
+    const failures =
+      events.filter(
+        (event) => event.type === TASK_EVENTS.completionFailed && event.data.callId === callId
+      ).length + 1;
+    await this.taskRepository.addEvent(task.id, TASK_EVENTS.completionFailed, SYSTEM_ACTOR, {
+      callId,
+      provider: error.provider,
+      retryable: error.retryable,
+      message: error.message
+    });
+    this.runnerLogger.onModelFailed(task.id, error.provider, error.retryable, error.message);
+    if (error.retryable && failures < MAX_MODEL_FAILURES) return 5_000 * 2 ** (failures - 1);
+    await this.block(task, `The completion check failed: ${error.message}`);
+    return 0;
+  }
+
   private async saveOutputOnce(
     task: Task,
     actor: Actor,
@@ -2076,6 +2479,7 @@ export class TaskRunnerService {
       content: string;
       kind: 'text' | 'link' | 'data' | 'log' | 'file';
       uri: string | null;
+      metadata?: Record<string, unknown>;
     }
   ): Promise<string> {
     const existing = (await this.taskRepository.listOutputs(task.id)).find(
@@ -2086,7 +2490,7 @@ export class TaskRunnerService {
     }
     const output = await this.lifecycle.addOutput(task.id, actor, {
       ...input,
-      metadata: { toolCallId: callId }
+      metadata: { ...input.metadata, toolCallId: callId }
     });
     return output.id;
   }
@@ -2124,7 +2528,8 @@ export class TaskRunnerService {
         ? await this.lookupParticipantName({ type: task.requestedByType, id: task.requestedById })
         : 'a schedule';
 
-    // Notes from this conversation, plus agent-wide ones. Never notes from other conversations.
+    // Notes from this conversation and its project, plus agent-wide ones. Never notes from other
+    // projects.
     const notes = await this.noteRepository.list({
       agentId: agent.id,
       visibility: { conversationId: task.conversationId },
@@ -2143,13 +2548,17 @@ export class TaskRunnerService {
       });
     }
     // Newest first, each cut to what the prompt can hold, so huge documents aren't loaded.
-    const [documents, participants, membership] = await Promise.all([
-      this.documentRepository.list(task.conversationId, {
-        limit: 50,
-        maxChars: MAX_DOCUMENT_CHARS
-      }),
+    const [documents, participants, membership, endeavor] = await Promise.all([
+      this.documentRepository.list(
+        { conversationId: task.conversationId },
+        {
+          limit: 50,
+          maxChars: MAX_DOCUMENT_CHARS
+        }
+      ),
       this.loadParticipants(task.conversationId),
-      this.conversationRepository.getMember(task.conversationId, toAgentActor(agent))
+      this.conversationRepository.getMember(task.conversationId, toAgentActor(agent)),
+      this.conversationRepository.getById(task.conversationId)
     ]);
 
     // Only history this agent may see: nothing from before it joined, if it joined that way.
@@ -2160,17 +2569,17 @@ export class TaskRunnerService {
     const names = new Map(
       participants.map((participant) => [`${participant.type}:${participant.id}`, participant.name])
     );
-    const directory = (await this.listDirectoryAgentsOutside(participants)).map(
-      ({ name, purpose }) => ({
-        name,
-        purpose
-      })
-    );
+    const project = endeavor?.projectId
+      ? await this.projectRepository.getById(endeavor.projectId)
+      : null;
     return buildTaskPrompt({
       task,
+      endeavor,
+      projectAbout: project?.about,
       requesterName,
-      participants,
-      directory,
+      participants: participants.filter(
+        (participant) => participant.type !== 'agent' || participant.id !== agent.id
+      ),
       notes,
       documents,
       history,
@@ -2178,19 +2587,18 @@ export class TaskRunnerService {
     });
   }
 
-  // Enabled agents with a configuration that aren't members. Only name and purpose are shown.
-  private async listDirectoryAgentsOutside(participants: ContextParticipant[]): Promise<Agent[]> {
-    return this.agentRepository.listDirectory({
-      excludeIds: participants
-        .filter((participant) => participant.type === 'agent')
-        .map((participant) => participant.id),
-      limit: DIRECTORY_AGENTS_IN_PROMPT,
-      offset: 0
-    });
-  }
-
   private async loadParticipants(conversationId: string): Promise<ContextParticipant[]> {
     const members = await this.conversationRepository.listMembers(conversationId);
+    const profiles = new Map(
+      (
+        await this.agentRepository.getProfiles(
+          members
+            .filter((member) => member.participant.type === 'agent')
+            .map((member) => member.participant.id),
+          conversationId
+        )
+      ).map((profile) => [profile.id, profile])
+    );
     return Promise.all(
       members.map(async (member) => {
         if (member.participant.type === 'agent') {
@@ -2198,7 +2606,11 @@ export class TaskRunnerService {
           return {
             ...member.participant,
             name: agent?.name ?? 'Unknown agent',
-            purpose: agent?.purpose ?? null
+            purpose: agent?.deletedAt ? null : (agent?.purpose ?? null),
+            produces: profiles.get(member.participant.id)?.produces ?? null,
+            needs: profiles.get(member.participant.id)?.needs ?? null,
+            skillNames: profiles.get(member.participant.id)?.skillNames ?? [],
+            status: profiles.get(member.participant.id)?.status ?? null
           };
         }
         return {

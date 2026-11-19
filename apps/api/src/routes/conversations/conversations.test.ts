@@ -27,10 +27,18 @@ describe('conversation creation', () => {
     const create = jest.spyOn(app.conversationService, 'createConversation').mockResolvedValue({
       id: 'created',
       title: 'Goal',
+      projectId: 'project-1',
+      goal: null,
+      goalMessageId: null,
+      doneCriteria: null,
+      state: 'open',
+      closedAt: null,
+      closedByHumanId: null,
       createdByHumanId: ACTOR,
       budgetUsd: null,
       createdAt: new Date(),
-      members: []
+      members: [],
+      typingHumanIds: []
     });
     const response = await app.inject({
       method: 'POST',
@@ -42,7 +50,7 @@ describe('conversation creation', () => {
     expect(create).toHaveBeenCalledWith(ACTOR, { title: 'goal', humanIds: [PERSON], agentIds: [] });
     await app.close();
   });
-  it.each(['', '   ', '#!?', '---', '🧪', 'a'.repeat(201)])(
+  it.each(['', '   ', '#!?', '---', '🧪', 'a'.repeat(65), 'a'.repeat(201)])(
     'rejects an empty or oversized canonical name: %s',
     async (title) => {
       const app = setupApp();
@@ -60,18 +68,51 @@ describe('conversation creation', () => {
     }
   );
 
+  it.each(['POST', 'PATCH'] as const)(
+    'enforces the 64-character boundary on %s',
+    async (method) => {
+      const app = setupApp();
+      await app.ready();
+      const create = jest
+        .spyOn(app.conversationService, 'createConversation')
+        .mockResolvedValue({ title: 'a'.repeat(64) } as never);
+      const update = jest
+        .spyOn(app.conversationService, 'updateConversation')
+        .mockResolvedValue({ title: 'a'.repeat(64) } as never);
+      for (const length of [64, 65]) {
+        const response = await app.inject({
+          method,
+          url: method === 'POST' ? '/conversations' : `/conversations/${ACTOR}`,
+          headers: { 'x-actor-id': ACTOR },
+          payload: { title: 'a'.repeat(length) }
+        });
+        expect(response.statusCode).toBe(length === 65 ? 400 : method === 'POST' ? 201 : 200);
+      }
+      expect(create.mock.calls.length + update.mock.calls.length).toBe(1);
+      await app.close();
+    }
+  );
+
   it.each(['  Heat Pumps!! Brief  ', '#HEAT___PUMPS / BRIEF', 'heat--pumps-brief---'])(
     'normalizes direct API creates and renames: %s',
     async (title) => {
       const app = setupApp();
       await app.ready();
-      const saved = {
+      const saved: Awaited<ReturnType<typeof app.conversationService.createConversation>> = {
         id: ACTOR,
         title: 'heat-pumps-brief',
+        projectId: 'project-1',
+        goal: null,
+        goalMessageId: null,
+        doneCriteria: null,
+        state: 'open',
+        closedAt: null,
+        closedByHumanId: null,
         createdByHumanId: ACTOR,
         budgetUsd: null,
         createdAt: new Date(),
-        members: []
+        members: [],
+        typingHumanIds: []
       };
       const create = jest
         .spyOn(app.conversationService, 'createConversation')
@@ -149,6 +190,50 @@ describe('marking a conversation read', () => {
   });
 });
 
+describe('human typing presence', () => {
+  const CONVERSATION = '00000000-0000-4000-8000-0000000000f1';
+  const CLIENT = '00000000-0000-4000-8000-0000000000c1';
+
+  it.each([{}, { clientId: 'bad', typing: true }, { clientId: CLIENT }, { clientId: CLIENT, typing: true, draft: 'private' }])(
+    'rejects an invalid typing heartbeat: %j',
+    async (payload) => {
+      const app = setupApp();
+      await app.ready();
+      const updateTyping = jest.spyOn(app.conversationService, 'updateTyping');
+      const response = await app.inject({
+        method: 'PUT',
+        url: `/conversations/${CONVERSATION}/typing`,
+        headers: { 'x-actor-id': ACTOR },
+        payload
+      });
+      expect(response.statusCode).toBe(400);
+      expect(updateTyping).not.toHaveBeenCalled();
+      await app.close();
+    }
+  );
+
+  it('passes presence only to the service', async () => {
+    const app = setupApp();
+    await app.ready();
+    const updateTyping = jest
+      .spyOn(app.conversationService, 'updateTyping')
+      .mockResolvedValue({ typingHumanIds: [PERSON] });
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/conversations/${CONVERSATION}/typing`,
+      headers: { 'x-actor-id': ACTOR },
+      payload: { clientId: CLIENT, typing: true }
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().data).toEqual({ typingHumanIds: [PERSON] });
+    expect(updateTyping).toHaveBeenCalledWith(ACTOR, CONVERSATION, {
+      clientId: CLIENT,
+      typing: true
+    });
+    await app.close();
+  });
+});
+
 describe('listing conversations', () => {
   it('returns each conversation with its unread count', async () => {
     const app = setupApp();
@@ -158,6 +243,13 @@ describe('listing conversations', () => {
         {
           id: PERSON,
           title: 'website-check',
+          projectId: 'project-1',
+          goal: null,
+          goalMessageId: null,
+          doneCriteria: null,
+          state: 'open',
+          closedAt: null,
+          closedByHumanId: null,
           createdByHumanId: ACTOR,
           budgetUsd: null,
           createdAt: new Date(),
@@ -175,4 +267,45 @@ describe('listing conversations', () => {
     expect(response.json().data[0].unreadCount).toBe(3);
     await app.close();
   });
+});
+
+describe('message window queries', () => {
+  const CONVERSATION = '00000000-0000-4000-8000-000000000003';
+  it.each([
+    'latest=true&beforeId=' + PERSON,
+    'beforeId=' + PERSON + '&afterId=' + ACTOR,
+    'latest=true&offset=1',
+    'latest=wrong',
+    'afterId=invalid'
+  ])('rejects invalid window %s', async (query) => {
+    const app = setupApp();
+    const response = await app.inject({
+      method: 'GET',
+      url: `/conversations/${CONVERSATION}/messages?${query}`,
+      headers: { 'x-actor-id': ACTOR }
+    });
+    expect(response.statusCode).toBe(400);
+    await app.close();
+  });
+  it.each(['latest=true', 'beforeId=' + PERSON, 'afterId=' + PERSON])(
+    'passes the window query %s without changing its array response',
+    async (query) => {
+      const app = setupApp();
+      await app.ready();
+      const list = jest.spyOn(app.conversationService, 'listMessages').mockResolvedValue([]);
+      const response = await app.inject({
+        method: 'GET',
+        url: `/conversations/${CONVERSATION}/messages?limit=50&${query}`,
+        headers: { 'x-actor-id': ACTOR }
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ data: [] });
+      expect(list).toHaveBeenCalledWith(
+        ACTOR,
+        CONVERSATION,
+        expect.objectContaining({ limit: 50, offset: 0 })
+      );
+      await app.close();
+    }
+  );
 });
