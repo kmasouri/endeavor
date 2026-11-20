@@ -120,9 +120,8 @@ only where they describe migration sources, immutable SQL history, dated records
 provenance. The runtime migration reader must recognize the old schema and browser keys to
 upgrade an existing installation; those are not active destination names.
 
-Approved design HTML, fragments, SVGs, screenshots, and generated token metadata still record the
-original board appearance. The quoted "Collaborative Agents app design" title identifies their
-source. Owner-led source/export refresh is tracked separately in [CA-58](https://app.notion.com/p/4031a83d088f81968d5dd41f6581ed05).
+Generated token metadata still records the original board appearance. The quoted "Collaborative
+Agents app design" title identifies its source. The screen mockups were removed in CA-124. Owner-led source/export refresh is tracked separately in [CA-58](https://app.notion.com/p/4031a83d088f81968d5dd41f6581ed05).
 Historical Git commits, merged PR descriptions, CA ticket IDs, and dated work logs are not rewritten.
 
 ## Verification on October 24, 2026

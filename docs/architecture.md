@@ -59,7 +59,7 @@ badge geometry, themes,
 responsive layout, empty/error states, and keyboard navigation without starting agents or
 requiring a database. Failure screenshots are automatic; full browser traces and success
 screenshots are opt-in. The
-[browser coverage matrix](browser-tests.md) records covered behavior, design references and gaps.
+[browser coverage matrix](browser-tests.md) records covered behavior, style guide references and gaps.
 
 Endeavors is the product-facing conversation destination. Its header search and native creation
 modal live in the shared shell; the selected chat keeps its existing features and compatible hash

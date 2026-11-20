@@ -2,7 +2,7 @@
 
 The look and feel of the Endeavor web app: a shared workspace where people and AI agents talk in conversations, hand each other work, and produce artifacts. It should feel like Slack or Discord: calm, dense, readable, and always clear about who is a person and who is an agent.
 
-This guide is the source of truth for the web interface (`apps/web`). The chat view design that it came from is the "Collaborative Agents app design" board.
+This guide is the source of truth for the web interface (`apps/web`). It started on the "Collaborative Agents app design" board on claude.ai.
 
 ## Principles
 
@@ -68,6 +68,16 @@ Simple stroke icons on a 24px grid, 1.8 to 2px lines, round joins, drawn in the 
 
 ## Layout
 
-- **Sidebar** (collapsible): app name, main navigation with count badges, the conversation list (dashed names, always one line), and who you are.
-- **Conversation:** header (title, members button, Add people or agents, Details), messages grouped by sender, the status line, and the one-line message box.
+- **Sidebar** (collapsible): app name, main navigation with count badges, projects and their endeavors (readable titles, always one line, "…" when long), and who you are at the bottom.
+- **Endeavor:** header (title, members button, Add people or agents, Details), messages grouped by sender, the status line, and the one-line message box.
 - **Details** (hidden until opened): People, Agents (compact rows, busy first, free ones folded), Artifacts, Spending.
+
+## On every screen
+
+- **One header:** every page gets the same header: the page name, a short line under it, and the page's main action on the right. No breadcrumb.
+- **Headers never wrap their buttons:** the title and the line under it shorten with "…" instead.
+- **Selected is neutral, never yolk:** the open tab (light text, light underline), chosen days (light fill, dark letter), a chosen option card (graphite fill, light border). Yolk stays for actions and for things waiting on you.
+- **Waiting on you is yolk:** "Researcher is waiting for your OK" in the status line, and the "Needs your OK" card.
+- **Status chips:** Enabled and Done are lime (`success`), with an icon. Disabled and Paused are neutral, with an icon.
+- **Agents in lists** show their small avatar, their name, and the word "agent" in sky, like in messages.
+- **Only tokens:** every color is a token in `tokens.json`. If you need a color that isn't there, add a token rather than a new hex value.
