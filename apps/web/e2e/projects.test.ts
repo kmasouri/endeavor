@@ -330,6 +330,8 @@ test('projects: request retry creates one endeavor, reply stays there, goal edit
   await draft.getByRole('button', { name: 'Send message', exact: true }).click();
   const retry = draft.getByRole('button', { name: 'Retry first message', exact: true });
   await expect(retry).toBeDisabled();
+  await expect(draft.getByRole('button', { name: 'Project: Beta', exact: true })).toBeDisabled();
+  await expect(draft.getByRole('button', { name: 'Don’t work in a project' })).toHaveCount(0);
   await expect(draft.getByText('Send failed', { exact: true })).toBeVisible();
   await expect(input).toHaveValue('Build the report');
   state.failMessage = false;
@@ -375,6 +377,78 @@ test('projects: request retry creates one endeavor, reply stays there, goal edit
     'Reviewed and accepted'
   );
   expect(errors).toEqual([]);
+});
+
+test('composer project picker clears in place and sends the existing draft without a project', async ({
+  page
+}) => {
+  const { state, errors } = await fixture(page);
+  await page.goto('/app/#/projects/alpha');
+  await page.locator('main').getByRole('button', { name: 'New endeavor', exact: true }).click();
+  const draft = page.getByRole('region', { name: 'New endeavor' });
+  const input = draft.getByRole('textbox', { name: 'First message' });
+  const project = draft.getByRole('button', { name: 'Project: Alpha', exact: true });
+  const choose = draft.getByRole('button', { name: 'Choose project', exact: true });
+  const clear = draft.getByRole('button', { name: 'Don’t work in a project', exact: true });
+  const chevron = project.locator('.project-context-chevron');
+  await input.fill('Keep this draft');
+
+  await expect(clear).toHaveCSS('opacity', '0');
+  const resting = (await project.boundingBox())!;
+  const slot = (await chevron.boundingBox())!;
+  await project.hover();
+  await expect(clear).toHaveCSS('opacity', '1');
+  await expect(chevron).toHaveCSS('visibility', 'hidden');
+  await expect(project.locator('.project-glyph')).toBeVisible();
+  expect(await project.boundingBox()).toEqual(resting);
+  const clearBox = (await clear.boundingBox())!;
+  expect(clearBox.x).toBeCloseTo(slot.x);
+  expect(clearBox.width).toBeCloseTo(slot.width);
+  await captureReviewScreenshot(page, { path: '/tmp/ca123-project-picker-hover.png' });
+  await clear.click();
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('Keep this draft');
+  await expect(choose.locator('.project-glyph')).toHaveCount(0);
+
+  await choose.click();
+  const picker = draft.getByRole('dialog', { name: 'Choose project', exact: true });
+  await expect(picker.getByRole('button', { name: 'No project', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true'
+  );
+  await picker.getByRole('button', { name: 'Alpha', exact: true }).click();
+  await input.press('Tab');
+  await expect(draft.getByRole('button', { name: 'Send message' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(project).toBeFocused();
+  await expect(clear).toHaveCSS('opacity', '1');
+  await page.keyboard.press('Tab');
+  await expect(clear).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('Keep this draft');
+  await input.press('Enter');
+  await expect(page).toHaveURL(/conversations\/created$/);
+  expect(state.writes.find((write) => write.path === '/conversations')?.body).toEqual({
+    projectId: null,
+    title: 'keep-this-draft'
+  });
+  expect(errors).toEqual([]);
+});
+
+test.describe('composer project picker on touch', () => {
+  test.use({ hasTouch: true, viewport: { width: 320, height: 900 } });
+
+  test('clear is available without hover', async ({ page }) => {
+    await fixture(page);
+    await page.goto('/app/#/projects/alpha');
+    await page.locator('main').getByRole('button', { name: 'New endeavor', exact: true }).tap();
+    const draft = page.getByRole('region', { name: 'New endeavor' });
+    const clear = draft.getByRole('button', { name: 'Don’t work in a project', exact: true });
+    await expect(clear).toHaveCSS('opacity', '1');
+    await clear.tap();
+    await expect(draft.getByRole('button', { name: 'Choose project', exact: true })).toBeVisible();
+  });
 });
 
 for (const { theme, width } of [
@@ -590,8 +664,8 @@ test('project menu edits identity and the composer picker switches scope without
   const draft = page.getByRole('region', { name: 'New endeavor' });
   const input = draft.getByRole('textbox', { name: 'First message' });
   await input.fill('Review the homepage');
-  await draft.getByRole('button', { name: 'Project: Standalone' }).click();
-  const picker = page.getByRole('dialog', { name: 'Project: Standalone' });
+  await draft.getByRole('button', { name: 'Choose project', exact: true }).click();
+  const picker = page.getByRole('dialog', { name: 'Choose project', exact: true });
   await picker.getByRole('searchbox').fill('platform');
   await picker.getByRole('button', { name: 'Web platform', exact: true }).click();
   const context = draft.getByRole('button', { name: 'Project: Web platform' });

@@ -417,16 +417,64 @@
   gap: 4px 12px;
   padding-top: 4px;
 }
-.project-context {
+.project-scope {
+  --project-action-width: 26px;
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  border-radius: var(--radius-md);
+}
+.project-scope.removable:is(:hover, :focus-within) {
+  background: var(--bg-300);
+}
+button.project-context {
   display: flex;
   align-items: center;
   gap: 6px;
   max-width: 100%;
   min-width: 0;
-  padding: 4px 8px;
+  padding: 4px 0 4px 8px;
 }
-.project-context svg {
-  flex-shrink: 0;
+.project-context-chevron,
+button.project-context-clear {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--project-action-width);
+}
+button.project-context-clear {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+.project-scope.removable:is(:hover, :focus-within) .project-context-chevron {
+  visibility: hidden;
+}
+.project-scope:is(:hover, :focus-within) .project-context-clear {
+  opacity: 1;
+  pointer-events: auto;
+}
+.project-scope.removable > button.quiet:hover {
+  background: transparent;
+}
+@media (pointer: coarse), (hover: none) {
+  .project-scope {
+    --project-action-width: var(--touch);
+  }
+  button.project-context,
+  button.project-context-clear {
+    min-height: var(--touch);
+  }
+  .project-scope.removable .project-context-chevron {
+    visibility: hidden;
+  }
+  button.project-context-clear {
+    opacity: 1;
+    pointer-events: auto;
+  }
 }
 @media (max-width: 700px) {
   .project-menu-link {
