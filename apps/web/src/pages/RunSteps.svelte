@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count } from '../count';
   import { api, type TaskEvent } from '../api';
   import { createLoad } from '../state.svelte';
   import { buildAgentSteps } from '../agent-steps';
@@ -45,7 +46,7 @@
       stroke-width="1.8"
       aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg
     >
-    {steps.length ? `${steps.length} steps` : 'See steps'}
+    {steps.length ? count(steps.length, 'step') : 'See steps'}
   </button>
   {#if open}
     <section class="run-step-body" id={panelId} aria-label="Agent's steps">

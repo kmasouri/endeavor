@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count } from '../count';
   import { api, type AgentAppearance, type Task } from '../api';
   import Avatar from '../Avatar.svelte';
   import ErrorNote from '../ErrorNote.svelte';
@@ -59,6 +60,6 @@
   <div class="row wrap history-pagination">
     <button class="secondary" disabled={offset === 0} onclick={() => (offset = Math.max(0, offset - limit))}>Newer runs</button>
     <button class="secondary" disabled={offset + history.data.data.length >= history.data.page.total} onclick={() => (offset += limit)}>Older runs</button>
-    <span class="caption muted">{history.data.page.total} runs</span>
+    <span class="caption muted">{count(history.data.page.total, 'run')}</span>
   </div>
 {/if}

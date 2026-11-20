@@ -29,7 +29,7 @@ export function summarizeRecurrence(
   hour12 = true
 ): string {
   const rule = schedule.recurrence;
-  if (!rule) return `Every ${schedule.intervalMinutes} minutes`;
+  if (!rule) return schedule.intervalMinutes === 1 ? 'Every minute' : `Every ${schedule.intervalMinutes} minutes`;
   const clock = new Intl.DateTimeFormat(undefined, {
     timeZone: 'UTC',
     hour: 'numeric',

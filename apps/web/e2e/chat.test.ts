@@ -424,7 +424,7 @@ test('deleted agent profiles and member profiles preserve history and modal acce
   await expect(deleted).toContainText('Their messages remain');
   await expect(deleted.getByRole('link')).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: /members. Show who's here/ }).click();
+  await page.getByRole('button', { name: /members?\. Show who's here/ }).click();
   const members = page.getByRole('dialog', { name: 'People and agents', exact: true });
   await members.getByRole('button', { name: "View Researcher's profile" }).last().click();
   const card = page.getByRole('dialog', { name: "Researcher's profile" });

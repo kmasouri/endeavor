@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count } from '../count';
   import { api, type Member, type Task } from '../api';
   import { createAction } from '../state.svelte';
   import Avatar from '../Avatar.svelte';
@@ -104,7 +105,7 @@
       class="quiet free-agents"
       aria-expanded={showFree}
       onclick={() => (showFree = !showFree)}
-      >{free.length} more agents <span class="caption muted">· Free</span></button
+      >{count(free.length, 'more agent', 'more agents')} <span class="caption muted">· Free</span></button
     >{/if}
   <ErrorNote error={action.error} />
 </section>
