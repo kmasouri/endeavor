@@ -30,6 +30,8 @@
   const clientKey = crypto.randomUUID();
   const action = createAction();
   const project = $derived(projects.find((item) => item.id === projectId));
+  const projectName = $derived(project?.name ?? (projectId === null ? 'Choose project' : 'Unavailable'));
+  const pickerDisabled = $derived(action.busy || !!created);
   const unavailable = $derived(projectId !== null && (!project || !!project.archivedAt));
   const options = $derived(projects.filter((item) =>
     !item.archivedAt && item.name.toLowerCase().includes(search.trim().toLowerCase())
@@ -89,31 +91,41 @@
       </button>
     </form>
     <div class="new-endeavor-footer">
-      <ProjectPopover above label={`Project: ${project?.name ?? (projectId ? 'Unavailable' : 'Standalone')}`} className="quiet project-context" disabled={action.busy || !!created}>
-        {#snippet trigger()}
-          <ProjectGlyph {project} />
-          <span class="ellipsis">{project?.name ?? (projectId ? 'Unavailable' : 'Standalone')}</span>
-          <Icon name="chevron-down" size={12} />
-        {/snippet}
-        {#snippet children(close)}
-          <input aria-label="Search projects" type="search" placeholder="Search projects" bind:value={search} />
-          <div class="project-picker-list">
-            {#each options as option (option.id)}
-              <button type="button" class="quiet row" aria-pressed={projectId === option.id} onclick={() => { close(); void chooseProject(option.id); }}>
-                <ProjectGlyph project={option} /><span class="grow ellipsis">{option.name}</span>
-                {#if projectId === option.id}<Icon name="check" size={16} />{/if}
-              </button>
-            {:else}
-              <p class="caption muted">{projectError || (search ? 'No matching projects' : 'No projects')}</p>
-            {/each}
-          </div>
-          <button type="button" class="quiet row" onclick={() => { close(); search = ''; creatingProject = true; }}><Icon name="plus" size={16} /> New project</button>
-          <button type="button" class="quiet row" aria-pressed={projectId === null} onclick={() => { close(); void chooseProject(null); }}><Icon name="close" size={16} /> Don’t work in a project</button>
-        {/snippet}
-      </ProjectPopover>
+      <div class="project-scope" class:removable={projectId !== null && !pickerDisabled}>
+        <ProjectPopover above label={projectId === null ? projectName : `Project: ${projectName}`} className="quiet project-context" disabled={pickerDisabled}>
+          {#snippet trigger()}
+            {#if project}<ProjectGlyph {project} />{/if}
+            <span class="ellipsis">{projectName}</span>
+            <span class="project-context-chevron"><Icon name="chevron-down" size={12} /></span>
+          {/snippet}
+          {#snippet children(close)}
+            <input aria-label="Search projects" type="search" placeholder="Search projects" bind:value={search} />
+            <div class="project-picker-list">
+              {#each options as option (option.id)}
+                <button type="button" class="quiet row" aria-pressed={projectId === option.id} onclick={() => { close(); void chooseProject(option.id); }}>
+                  <ProjectGlyph project={option} /><span class="grow ellipsis">{option.name}</span>
+                  {#if projectId === option.id}<Icon name="check" size={16} />{/if}
+                </button>
+              {:else}
+                <p class="caption muted">{projectError || (search ? 'No matching projects' : 'No projects')}</p>
+              {/each}
+            </div>
+            <button type="button" class="quiet row" onclick={() => { close(); search = ''; creatingProject = true; }}><Icon name="plus" size={16} /> New project</button>
+            <button type="button" class="quiet row" aria-pressed={projectId === null} onclick={() => { close(); void chooseProject(null); }}>
+              <span class="grow">No project</span>
+              {#if projectId === null}<Icon name="check" size={16} />{/if}
+            </button>
+          {/snippet}
+        </ProjectPopover>
+        {#if projectId !== null && !pickerDisabled}
+          <button type="button" class="quiet project-context-clear" aria-label="Don’t work in a project" title="Don’t work in a project" onclick={() => void chooseProject(null)}>
+            <Icon name="close" size={14} />
+          </button>
+        {/if}
+      </div>
       <span class="caption muted">Enter sends · Shift+Enter for a new line</span>
     </div>
-    {#if unavailable && !created}<p class="caption muted">Choose an available project or work standalone.</p>{/if}
+    {#if unavailable && !created}<p class="caption muted">Choose an available project or select No project.</p>{/if}
     <ErrorNote error={action.error} />
     {#if created && action.error}
       <p class="caption">The endeavor was created. Retry the first message or <a href={`#/conversations/${created.id}`}>open it</a>.</p>
