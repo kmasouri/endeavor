@@ -100,17 +100,16 @@ live under `apps/web/e2e/`.
 
 The suite uses geometry contracts and review screenshots, **not pixel-diff golden images**.
 There are no image baselines to regenerate or silently accept. Review a changed assertion against
-the approved reference first, then inspect the corresponding screenshot at each theme and width.
+the [style guide](design/style-guide/README.md) first, then inspect the corresponding screenshot at each theme and width.
 
 - Chat: [MessageBox](design/style-guide/components/MessageBox/README.md) and
   [Message](design/style-guide/components/Message/README.md) define one attach/input/send row,
   a picker above it, reply context, and hover actions. Representative light desktop and dark phone cases at 1440px and 390px
   assert control order, containment, alignment, picker visibility and option clipping, and no page
   overflow. Screenshots are `chat-mention-reply.png` in each test's result directory.
-- Inspection: [agent history references](design/agent-history/README.md) define the contextual
-  Details panel and exact-run selection. Tests cover a light 1440px desktop and a dark 320px phone.
+- Inspection: tests cover the contextual Details panel and exact-run selection. Tests cover a light 1440px desktop and a dark 320px phone.
 - Agents, catalogs and approvals: existing cases check shared frame alignment, filters, responsive
-  controls and footer placement. See [design references](design/README.md).
+  controls and footer placement.
 - Schedules: the original production badge regression asserts single-line text/icon alignment,
   clipping, overlap and centered layout. The original regression failed before PR #54's CSS fix;
   CA-54 retains it along with all later schedule cases.

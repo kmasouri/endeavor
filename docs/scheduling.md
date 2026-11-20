@@ -101,9 +101,8 @@ A run key identifies the endeavor across retries and restarts.
 
 ## Web interface
 
-Schedules uses the approved list, detail, and full-width creation screens in `docs/design/schedules/`.
-The approved `docs/design/schedules-centered/` follow-up puts the heading, actions, list, and
-notices in one centered frame capped at 1,220px. Rows keep next-run and status columns aligned,
+Schedules has a list, a detail view, and a full-width creation form. The heading, actions, list, and
+notices sit in one centered frame capped at 1,220px. Rows keep next-run and status columns aligned,
 then reflow to fit narrow page widths. The form detects the creator's device timezone
 without a picker, previews the source rule, and keeps missed-run handling visible. The interval form sets
 its first slot one interval in the future; legacy API interval creation still defaults to now.
