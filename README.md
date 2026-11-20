@@ -278,3 +278,12 @@ Failed runs retain screenshots under `apps/web/test-results/`, with an HTML repo
 `apps/web/playwright-report/`. Both directories are ignored by git. To inspect a local report,
 run `npx playwright show-report` from `apps/web/`. For a focused debugging rerun, add
 `--trace=retain-on-failure`; full tracing and success screenshots (`E2E_SCREENSHOTS=1`) are opt-in.
+
+## License
+
+Endeavor is available under the [Business Source License 1.1](LICENSE).
+Individuals and companies can run it for non-production use, including local evaluation.
+The license also allows modification and redistribution under the same terms.
+Production use requires a separate license until the applicable Change Date.
+Each version switches to GPL version 2.0 or later four years after its first public
+distribution under BSL 1.1.
