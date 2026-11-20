@@ -107,7 +107,7 @@ the [style guide](design/style-guide/README.md) first, then inspect the correspo
   a picker above it, reply context, and hover actions. Representative light desktop and dark phone cases at 1440px and 390px
   assert control order, containment, alignment, picker visibility and option clipping, and no page
   overflow. Screenshots are `chat-mention-reply.png` in each test's result directory.
-- Inspection: tests cover the contextual Details panel and exact-run selection. Tests cover a light 1440px desktop and a dark 320px phone.
+- Inspection: the contextual Details panel and exact-run selection, on a light 1440px desktop and a dark 320px phone.
 - Agents, catalogs and approvals: existing cases check shared frame alignment, filters, responsive
   controls and footer placement.
 - Schedules: the original production badge regression asserts single-line text/icon alignment,
