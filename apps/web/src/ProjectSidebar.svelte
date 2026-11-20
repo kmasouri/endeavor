@@ -1,7 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import type { Conversation, Project } from './api';
-  import { conversationChannelName } from './appearance';
+  import { conversationName } from './appearance';
   import ErrorNote from './ErrorNote.svelte';
   import Icon from './Icon.svelte';
   import ProjectGlyph from './ProjectGlyph.svelte';
@@ -44,13 +44,13 @@
     <a
       class:active={selectedConversationId === conversation.id}
       class:unread={unread > 0}
-      aria-label={unread ? `${conversationChannelName(conversation.title)}, ${unread} unread` : undefined}
+      aria-label={unread ? `${conversationName(conversation.title)}, ${unread} unread` : undefined}
       aria-current={selectedConversationId === conversation.id ? 'page' : undefined}
       href={`#/conversations/${conversation.id}`}
       title={conversation.title}
       onclick={onNavigate}
     >
-      <span class="ellipsis grow">{conversationChannelName(conversation.title)}</span>
+      <span class="ellipsis grow">{conversationName(conversation.title)}</span>
       {#if unread}<span class="count-badge" aria-hidden="true">{unread}</span>{/if}
     </a>
   {:else}
@@ -58,13 +58,11 @@
   {/each}
 {/snippet}
 
-<div class="sidebar-projects-heading-row">
-  <a class="sidebar-projects-heading" href="#/projects" aria-label="Manage projects" title="Manage projects" onclick={onNavigate}>
-    <Icon name="folder" /><span class="sidebar-label">Projects</span>
-  </a>
-  <button type="button" class="quiet icon-button sidebar-new-project" aria-label="New project" title="New project" onclick={() => onEditProject(null)}><Icon name="plus" size={16} /></button>
-</div>
 <section class="sidebar-projects" aria-label="Projects">
+  <div class="sidebar-section-heading">
+    <a class="sidebar-section-label" href="#/projects" aria-label="Manage projects" title="Manage projects" onclick={onNavigate}>Projects</a>
+    <button type="button" class="quiet icon-button" aria-label="New project" title="New project" onclick={() => onEditProject(null)}><Icon name="plus" size={16} /></button>
+  </div>
   <ErrorNote error={projectError} />
   <ErrorNote error={conversationError} />
   {#each groups as group (group.id)}
@@ -81,10 +79,10 @@
           title={group.name}
           onclick={() => { expanded = { ...expanded, [group.id]: !open }; }}
         >
-          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={12} />
           <ProjectGlyph project={group.project} />
           <span class="ellipsis grow">{group.name}</span>
           {#if !open && unread}<span class="count-badge" aria-label={`${unread} unread`}>{unread}</span>{/if}
+          <Icon name={open ? 'chevron-down' : 'chevron-right'} size={14} />
         </button>
         {#if group.project}
           {@const project = group.project}
@@ -102,15 +100,13 @@
           </div>
         {/if}
       </div>
-      <div class="sidebar-conversations" id={`project-endeavors-${group.id}`} hidden={!open}>
+      <div class="sidebar-conversations sidebar-project-endeavors" id={`project-endeavors-${group.id}`} hidden={!open}>
         {@render rows(group.endeavors)}
       </div>
     </div>
   {/each}
   {#if standalone.length}
-    <div class="sidebar-standalone">
-      <span class="caption muted">Standalone</span>
-      <div class="sidebar-conversations">{@render rows(standalone)}</div>
-    </div>
+    <div class="sidebar-section-heading"><span class="sidebar-section-label">No project</span></div>
+    <div class="sidebar-conversations">{@render rows(standalone)}</div>
   {/if}
 </section>
