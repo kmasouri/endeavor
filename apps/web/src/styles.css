@@ -475,6 +475,9 @@ pre {
   overflow: hidden;
   transition: width 220ms ease, background-color 160ms ease;
 }
+.sidebar-backdrop {
+  display: none;
+}
 .sidebar-resizer {
   position: fixed;
   top: var(--app-bar-height);
@@ -785,13 +788,32 @@ details summary {
   color: var(--text-200);
 }
 @media (max-width: 700px) {
-  .shell {
-    grid-template-columns: 68px minmax(0, 1fr);
+  /* On a phone the sidebar is a drawer: it takes no room and slides over the page when open. */
+  .shell,
+  .shell.sidebar-collapsed {
+    grid-template-columns: 0 minmax(0, 1fr);
+    --sidebar-width: var(--sidebar-open-width);
+    --sidebar-opacity: 1;
+    --sidebar-visibility: visible;
+    --sidebar-projects-display: block;
   }
   .sidebar {
     position: fixed;
     left: 0;
     z-index: 10;
+    transition: transform 220ms ease;
+  }
+  .shell.sidebar-collapsed .sidebar {
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 220ms ease, visibility 0s linear 220ms;
+  }
+  .sidebar-backdrop {
+    position: fixed;
+    inset: var(--app-bar-height) 0 0;
+    z-index: 9;
+    display: block;
+    background: color-mix(in srgb, var(--bg-000) 60%, transparent);
   }
   .shell > main {
     padding: 16px;
@@ -806,6 +828,12 @@ details summary {
   }
   .row {
     max-width: 100%;
+  }
+}
+@media (max-width: 700px) and (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .shell.sidebar-collapsed .sidebar {
+    transition: none;
   }
 }
 .shell > main.conversation-main {

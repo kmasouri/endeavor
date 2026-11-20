@@ -277,21 +277,33 @@ test('sidebar width drags between its limits, remembers the choice, and works fr
 
 test.describe('touch sidebar', () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 390, height: 844 } });
-  test('compact icons navigate and the toggle opens the full menu', async ({ page }) => {
+  test('the sidebar is a drawer: hidden until opened, closed by a pick, a tap outside, or Escape', async ({
+    page
+  }) => {
     await mockApi(page);
-    await page.goto('/app/');
+    await page.goto('/app/#/agents');
     const sidebar = page.getByRole('complementary', { name: 'Sidebar', exact: true });
-    const width = () => sidebar.evaluate((element) => element.getBoundingClientRect().width);
-    await expect.poll(width).toBe(68);
-    await sidebar.getByRole('link', { name: 'Agents', exact: true }).tap();
-    await expect(page).toHaveURL(/#\/agents$/);
-    await expect.poll(width).toBe(68);
-    await page.getByRole('button', { name: 'Open sidebar', exact: true }).tap();
-    await expect.poll(width).toBe(264);
+    const open = page.getByRole('button', { name: 'Open sidebar', exact: true });
+    const main = page.locator('.shell > main');
+    // Closed, it takes no room: the page starts at the left edge.
+    await expect(sidebar).toBeHidden();
+    expect((await main.boundingBox())!.x).toBe(0);
+    await open.tap();
+    await expect(sidebar).toBeVisible();
+    await expect.poll(() => sidebar.evaluate((element) => element.getBoundingClientRect().left)).toBe(0);
     await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
-    await expect(sidebar.locator('.sidebar-conversations')).toBeVisible();
-    await sidebar.getByRole('link', { name: 'heat-pump-brief', exact: true }).tap();
-    await expect.poll(width).toBe(68);
+    // It slides over the page rather than pushing it.
+    expect((await main.boundingBox())!.x).toBe(0);
+    await sidebar.getByRole('link', { name: 'Schedules', exact: true }).tap();
+    await expect(page).toHaveURL(/#\/schedules$/);
+    await expect(sidebar).toBeHidden();
+    await open.tap();
+    await page.locator('.sidebar-backdrop').tap({ position: { x: 370, y: 400 } });
+    await expect(sidebar).toBeHidden();
+    await open.tap();
+    await expect(sidebar).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(sidebar).toBeHidden();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
     );
