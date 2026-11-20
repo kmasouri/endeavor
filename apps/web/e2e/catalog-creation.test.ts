@@ -85,12 +85,15 @@ for (const { viewport, theme } of [
       });
       await page.getByRole('link', { name: 'Cancel', exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${kind}$`));
+      // On a phone the sidebar is a closed drawer; open it to see which page is current.
+      if (viewport.width < 700) await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
       await expect(
         page.getByRole('link', {
           name: kind === 'skills' ? 'Skills' : 'Connections',
           exact: true
         })
       ).toHaveAttribute('aria-current', 'page');
+      if (viewport.width < 700) await page.keyboard.press('Escape');
       await expect(page.locator('form')).toHaveCount(0);
     }
     expect(errors).toEqual([]);

@@ -221,6 +221,10 @@
       event.preventDefault();
       searchEndeavors();
     }
+    // On a phone, Escape closes the open sidebar drawer unless a dialog is open.
+    if (event.key === 'Escape' && !collapsed && window.innerWidth < 700 && !searching && !picking && !projectEditor) {
+      collapsed = true;
+    }
   }}
   onbeforeunload={(event) => {
     if (dirty) {
@@ -327,6 +331,8 @@
       </div>
     </aside>
     {#if !collapsed}
+      <!-- Phones only: tapping outside the drawer closes it. Keyboard users have Escape and the menu button. -->
+      <div class="sidebar-backdrop" aria-hidden="true" onclick={() => (collapsed = true)}></div>
       <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
       <div
         class="sidebar-resizer"
