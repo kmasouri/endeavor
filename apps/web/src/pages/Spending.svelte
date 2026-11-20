@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count } from '../count';
   import { api, type CostReport } from '../api';
   import ErrorNote from '../ErrorNote.svelte';
   import Hint from '../Hint.svelte';
@@ -57,7 +58,7 @@
         of a {formatMoney(costReport.budgetUsd)} budget
       </span>
     {/if}
-    <span class="muted small"> · {spent.tokens.toLocaleString()} tokens</span>
+    <span class="muted small"> · {count(spent.tokens, 'token')}</span>
   </p>
 
   {#if spent.unpricedCalls > 0}

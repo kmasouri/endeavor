@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count } from '../count';
   import { untrack, tick } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import {
@@ -354,15 +355,16 @@
         <div class="heading">
           <h1 title={conversation.title}>{conversationName(conversation.title)}</h1>
           <p>
-            {conversation.members.filter((member) => member.participant.type === 'human').length} people · {conversation.members.filter(
-              (member) => member.participant.type === 'agent'
-            ).length} agents · Agents answer when you mention them
+            {count(conversation.members.filter((member) => member.participant.type === 'human').length, 'person', 'people')} · {count(
+              conversation.members.filter((member) => member.participant.type === 'agent').length,
+              'agent'
+            )} · Agents answer when you mention them
           </p>
         </div>
         <div class="header-actions">
           <button
             class="secondary members-button"
-            aria-label={`${conversation.members.length} members. Show who's here`}
+            aria-label={`${count(conversation.members.length, 'member')}. Show who's here`}
             onclick={() => (showMembers = true)}
           >
             {#each conversation.members.slice(0, 4) as member (member.participant.id)}<Avatar

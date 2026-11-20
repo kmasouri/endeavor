@@ -494,7 +494,7 @@ test('member dialog at 320px: avatars, search, retry, history and focus', async 
   await page.setViewportSize({ width, height: 900 });
   const { state, errors } = await mockApi(page, { fail: true });
   await page.goto('/app/#/conversations/site');
-  const opener = page.getByRole('button', { name: /members. Show who's here/ });
+  const opener = page.getByRole('button', { name: /members?\. Show who's here/ });
   await expect(opener).toBeVisible();
   await expect(page.locator('.add-members-button')).toHaveCount(0);
   await opener.click();

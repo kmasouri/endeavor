@@ -32,4 +32,5 @@ test('source recurrence and actual instants respect the selected hour format', (
   assert.match(summarizeRecurrence(calendar, false), /Monday at 0[0]?:30/);
   assert.match(scheduleInstant('2026-10-26T04:30:00Z', 'America/Los_Angeles', false), /21:30/);
   assert.equal(summarizeRecurrence({ intervalMinutes: 5, recurrence: null }), 'Every 5 minutes');
+  assert.equal(summarizeRecurrence({ intervalMinutes: 1, recurrence: null }), 'Every minute');
 });

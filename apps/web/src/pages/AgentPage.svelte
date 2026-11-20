@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { count } from '../count';
   import { untrack } from 'svelte';
   import DeleteAgent from './DeleteAgent.svelte';
   import Avatar from '../Avatar.svelte';
@@ -148,13 +149,13 @@
                 <dt>Limits per task</dt>
                 <dd>
                   {current.limits.maxModelTurns
-                    ? `${current.limits.maxModelTurns} model turns · `
+                    ? `${count(current.limits.maxModelTurns, 'model turn')} · `
                     : ''}{current.limits.maxTokens
-                    ? `${current.limits.maxTokens} tokens · `
+                    ? `${count(current.limits.maxTokens, 'token')} · `
                     : ''}{current.limits.maxCostUsd
                     ? `$${current.limits.maxCostUsd.toFixed(2)}`
                     : 'Default cost cap'}{current.limits.maxWorkingMinutes
-                    ? ` · ${current.limits.maxWorkingMinutes} working minutes`
+                    ? ` · ${count(current.limits.maxWorkingMinutes, 'working minute')}`
                     : ''}
                 </dd>
               </dl>
