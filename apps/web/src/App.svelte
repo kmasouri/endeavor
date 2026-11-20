@@ -276,7 +276,6 @@
     <aside class="sidebar" id="main-sidebar" aria-label="Sidebar">
       <nav aria-label="Main">
         <button class="quiet sidebar-new-request" aria-label="New endeavor" title="New endeavor" onclick={() => newEndeavor()}><Icon name="edit" /><span class="sidebar-label">New endeavor</span></button>
-        {#key actorId}<ProjectSidebar projects={visibleProjects} conversations={recent} selectedProjectId={section === 'new-endeavor' ? draftProjectId ?? undefined : currentProjectId ?? undefined} selectedConversationId={section === 'conversations' ? id : undefined} projectSelected={section === 'projects' && Boolean(id)} projectError={projects.error} conversationError={conversations.error} onNewEndeavor={newEndeavor} onEditProject={(project) => (projectEditor = { project })} onNavigate={() => { if (window.innerWidth < 700) collapsed = true; }} />{/key}
         {#each [['approvals', 'Approvals', 'approvals'], ['schedules', 'Schedules', 'schedules'], ['agents', 'Agents', 'agents'], ['plugins', 'Plugins', 'catalogs'], ['skills', 'Skills', 'file'], ['connections', 'Connections', 'connections'], ['setup', 'Setup', 'setup']] as [path, label, icon] (path)}
           <a
             class:active={navigationSection === path}
@@ -295,6 +294,7 @@
             {#if path === 'schedules' && catchUps}<span class="count-badge">{catchUps}</span>{/if}
           </a>
         {/each}
+        {#key actorId}<ProjectSidebar projects={visibleProjects} conversations={recent} selectedProjectId={section === 'new-endeavor' ? draftProjectId ?? undefined : currentProjectId ?? undefined} selectedConversationId={section === 'conversations' ? id : undefined} projectSelected={section === 'projects' && Boolean(id)} projectError={projects.error} conversationError={conversations.error} onNewEndeavor={newEndeavor} onEditProject={(project) => (projectEditor = { project })} onNavigate={() => { if (window.innerWidth < 700) collapsed = true; }} />{/key}
       </nav>
       <div class="sidebar-footer">
         <div class="sidebar-profile">

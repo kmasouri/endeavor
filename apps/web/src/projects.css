@@ -124,54 +124,142 @@
   visibility: var(--sidebar-visibility);
   transition: opacity 160ms ease;
 }
-.sidebar nav .sidebar-projects-heading {
-  margin-top: 14px;
+.sidebar-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  margin: 16px 0 2px;
+  padding-left: 12.5px;
+}
+.sidebar-section-heading .sidebar-section-label {
+  display: block;
+  width: auto;
+  padding: 4px 0;
   color: var(--text-300);
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+}
+.sidebar-section-heading a.sidebar-section-label:hover {
+  background: none;
+  color: var(--text-100);
+}
+.sidebar-section-heading .icon-button {
+  width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: var(--text-300);
 }
 .sidebar-project-row {
   display: flex;
   align-items: center;
   min-width: 0;
+  border-radius: var(--radius-md);
 }
-.project-disclosure {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 28px;
-  height: 36px;
-  padding: 0;
+.sidebar-project-row.project-current {
+  background: var(--bg-selected);
 }
-.sidebar nav .sidebar-project-link {
+.sidebar-project-toggle {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: auto;
+  justify-content: flex-start;
+  gap: 10px;
   min-width: 0;
-  flex: 1;
-  padding: 8px 6px;
+  padding: 6px 8px 6px 11.5px;
+  color: var(--text-100);
+  font-weight: 500;
+  text-align: left;
+}
+.sidebar-project-toggle > svg {
+  flex-shrink: 0;
+  color: var(--text-300);
+}
+/* The project's icon sits on a soft tile of its own color. */
+.sidebar-project-toggle .project-glyph {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: color-mix(in srgb, var(--project-swatch, var(--text-300)) 18%, transparent);
+}
+.project-row-actions {
+  display: flex;
+  flex-shrink: 0;
+}
+.project-row-actions .icon-button {
+  width: var(--control);
+}
+/* With a mouse, the actions appear over the end of the row on hover, so the
+   chevron can sit at the edge the rest of the time. */
+@media (hover: hover) and (pointer: fine) {
+  .sidebar-project-row {
+    position: relative;
+  }
+  .sidebar-project-row:hover,
+  .sidebar-project-row:focus-within,
+  .sidebar-project-row:has(.project-row-actions [aria-expanded='true']) {
+    background: var(--bg-300);
+  }
+  .sidebar-project-row .sidebar-project-toggle:hover {
+    background: transparent;
+  }
+  .sidebar-project-row .project-row-actions .icon-button:hover {
+    background: var(--bg-selected);
+  }
+  .project-row-actions {
+    position: absolute;
+    inset: 0 0 0 auto;
+    align-items: center;
+    border-radius: var(--radius-md);
+    background: inherit;
+    opacity: 0;
+  }
+  .sidebar-project-row:hover .project-row-actions,
+  .sidebar-project-row:focus-within .project-row-actions,
+  .project-row-actions:has([aria-expanded='true']) {
+    opacity: 1;
+  }
+}
+/* A thin guide line under the project icon ties its endeavors to it. */
+.sidebar-projects .sidebar-project-endeavors {
+  margin: 1px 0 4px 21.5px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-200);
 }
 .sidebar-projects .sidebar-conversations {
   width: auto;
-  margin-left: 48px;
 }
 .sidebar-projects .sidebar-conversations[hidden] {
   display: none;
 }
 .sidebar-projects .sidebar-conversations > a {
   width: 100%;
-  padding: 8px 10px;
+  padding: 6px 12.5px;
+}
+.sidebar-projects .sidebar-project-endeavors > a {
+  padding-inline: 10px;
 }
 .project-empty {
-  padding: 8px 10px;
+  padding: 6px 10px;
 }
 @media (max-width: 700px) {
   .sidebar-new-request,
-  .project-disclosure,
-  .sidebar nav .sidebar-project-link,
+  .sidebar-project-toggle,
   .sidebar-projects .sidebar-conversations > a {
-    min-height: 44px;
+    min-height: var(--touch);
+  }
+  .sidebar-section-heading .icon-button,
+  .project-row-actions .icon-button {
+    width: var(--touch);
+    min-height: var(--touch);
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -262,62 +350,6 @@
   border-radius: var(--radius-full);
   background: var(--project-swatch);
 }
-.sidebar-projects-heading-row {
-  position: relative;
-}
-.sidebar-new-project {
-  position: absolute;
-  top: 14px;
-  right: 0;
-  opacity: var(--sidebar-opacity);
-  visibility: var(--sidebar-visibility);
-}
-.sidebar-projects-heading-row .sidebar-projects-heading {
-  padding-right: 40px;
-}
-.sidebar-project-row.project-current {
-  background: var(--bg-selected);
-  border-radius: var(--radius-md);
-}
-.sidebar-project-toggle {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  gap: 8px;
-  padding-inline: 6px;
-  text-align: left;
-}
-.sidebar-project-toggle > svg {
-  flex-shrink: 0;
-}
-.project-row-actions {
-  display: flex;
-  flex-shrink: 0;
-}
-.project-row-actions .icon-button {
-  width: var(--control);
-}
-@media (hover: hover) and (pointer: fine) {
-  .project-row-actions {
-    opacity: 0;
-  }
-  .sidebar-project-row:hover .project-row-actions,
-  .sidebar-project-row:focus-within .project-row-actions,
-  .project-row-actions:has([aria-expanded='true']) {
-    opacity: 1;
-  }
-}
-.sidebar-standalone {
-  margin-top: 12px;
-}
-.sidebar-standalone > span {
-  display: block;
-  padding-inline: 12px;
-}
-.sidebar-projects .sidebar-standalone .sidebar-conversations {
-  margin-left: 0;
-}
 .project-popover {
   position: fixed;
   inset: auto;
@@ -397,10 +429,6 @@
   flex-shrink: 0;
 }
 @media (max-width: 700px) {
-  .project-row-actions .icon-button {
-    width: var(--touch);
-  }
-  .sidebar-project-toggle,
   .project-menu-link {
     min-height: var(--touch);
   }

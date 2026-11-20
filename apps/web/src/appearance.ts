@@ -35,5 +35,3 @@ export const conversationNameInput = (value: string): string =>
     .replace(/^-+/, '');
 export const canonicalConversationName = (value: string): string =>
   conversationNameInput(value).replace(/-+$/, '');
-export const conversationChannelName = (title: string): string =>
-  `#${canonicalConversationName(title) || 'endeavor'}`;

@@ -12,6 +12,7 @@ Endeavor is the current product name. See [rebrand compatibility](../rebranding.
 | --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `chat-view/chat-view.html` + `.png`                 | The conversation screen, with the Details panel closed                                                                                                   |
 | `conversation-workspace/`                           | Approved Endeavors view, compact Recent list, header search, and goal-focused creation dialog; editable source and theme/phone screenshots               |
+| `project-sidebar/`                                  | Approved CA-122 project sidebar: navigation first, then projects as a tree and a No project group; static preview and theme screenshots                  |
 | `chat-view/chat-view-details.html` + `.png`         | The same screen with Details open while an agent is working                                                                                              |
 | `chat-view/message-box.html` + `.png`               | The message box: the @ picker, replying, and how a reply shows                                                                                           |
 | `chat-view/agent-states.html` + `.png`              | How agents look at each step: working, playful status words, its work folded, waiting, needs your OK, paused, stuck                                      |
@@ -51,7 +52,7 @@ Endeavor is the current product name. See [rebrand compatibility](../rebranding.
 
 ### Every screen
 
-- **One sidebar everywhere:** Conversations (Endeavors under the approved CA-52 follow-up), Approvals, Schedules, Agents, Skills and connections, Setup, then the recent list. Work is gone (see Agent history below). Your name at the bottom opens Profile and settings.
+- **One sidebar everywhere:** Conversations (Endeavors under the approved CA-52 follow-up), Approvals, Schedules, Agents, Skills and connections, Setup, then the recent list. The approved [project sidebar](project-sidebar/README.md) (CA-122) keeps this order: main navigation first, then projects and their endeavors. Work is gone (see Agent history below). Your name at the bottom opens Profile and settings.
 - **One header:** pages that aren't a conversation get the same header bar as a conversation: the page name, a short line under it, and the page's main action on the right ("New schedule"). No "Workspace /" breadcrumb.
 - **Selected is neutral, never yolk:** the open tab (light text, light underline), chosen days (light fill, dark letter), a chosen option card (graphite fill, light border). Yolk stays for actions and for things waiting on you.
 - **Waiting on you is yolk:** "Researcher is waiting for your OK" in the status line, and the "Needs your OK" card.

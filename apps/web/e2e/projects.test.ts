@@ -436,13 +436,23 @@ for (const { theme, width } of [
   });
 }
 
-for (const width of [1440, 320]) {
-  test(`project sidebar: hierarchy, navigation and request context at ${width}px`, async ({
+for (const [theme, width] of [
+  ['dark', 1440],
+  ['light', 1440],
+  ['dark', 320]
+] as const) {
+  test(`project sidebar: hierarchy, navigation and request context, ${theme} at ${width}px`, async ({
     page
   }) => {
     await page.setViewportSize({ width, height: 900 });
-    const { state, errors } = await fixture(page, 'dark');
+    const { state, errors } = await fixture(page, theme);
     state.conversations.find((c) => c.id === 'other')!.unreadCount = 7;
+    state.conversations.push({
+      ...state.conversations.find((c) => c.id === 'open')!,
+      id: 'loose',
+      projectId: null,
+      title: 'loose-goal'
+    });
     await page.goto('/app/#/conversations/open');
     await expect(page.getByRole('heading', { name: 'open-goal', exact: true })).toBeVisible();
     if (width < 700) await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
@@ -451,6 +461,12 @@ for (const width of [1440, 320]) {
     const tree = sidebar.getByRole('region', { name: 'Projects', exact: true });
     await expect(sidebar.getByRole('link', { name: 'Endeavors', exact: true })).toHaveCount(0);
     await expect(sidebar.getByText('Recent', { exact: true })).toHaveCount(0);
+    // Main navigation stays above the project list, and names have no channel hash.
+    const agents = sidebar.getByRole('link', { name: 'Agents', exact: true });
+    expect((await agents.boundingBox())!.y).toBeLessThan((await tree.boundingBox())!.y);
+    await expect(sidebar.getByText(/^#/)).toHaveCount(0);
+    await expect(tree.getByText('No project', { exact: true })).toBeVisible();
+    await expect(tree.getByRole('link', { name: 'loose-goal', exact: true })).toBeVisible();
     const alpha = tree
       .locator('.sidebar-project')
       .filter({
@@ -459,7 +475,7 @@ for (const width of [1440, 320]) {
     const beta = tree
       .locator('.sidebar-project')
       .filter({ has: page.getByRole('button', { name: 'Project options for Beta', exact: true }) });
-    await expect(alpha.getByRole('link', { name: '#open-goal', exact: true })).toHaveAttribute(
+    await expect(alpha.getByRole('link', { name: 'open-goal', exact: true })).toHaveAttribute(
       'aria-current',
       'page'
     );
@@ -467,7 +483,7 @@ for (const width of [1440, 320]) {
     await expect(beta.getByLabel('7 unread', { exact: true })).toBeVisible();
     const projectBox = (await alpha.locator('.sidebar-project-toggle').boundingBox())!;
     const endeavorBox = (await alpha
-      .getByRole('link', { name: '#open-goal', exact: true })
+      .getByRole('link', { name: 'open-goal', exact: true })
       .boundingBox())!;
     expect(endeavorBox.x).toBeGreaterThan(projectBox.x);
     expect(endeavorBox.x + endeavorBox.width).toBeLessThanOrEqual(
@@ -475,7 +491,7 @@ for (const width of [1440, 320]) {
     );
     await alpha.getByRole('button', { name: 'Collapse Alpha', exact: true }).focus();
     await page.keyboard.press('Enter');
-    await expect(alpha.getByRole('link', { name: '#open-goal', exact: true })).toBeHidden();
+    await expect(alpha.getByRole('link', { name: 'open-goal', exact: true })).toBeHidden();
     await page.keyboard.press('Enter');
     await beta.getByRole('button', { name: 'Expand Beta', exact: true }).click();
     await beta.getByRole('link', { name: /other-project/ }).click();
@@ -494,8 +510,18 @@ for (const width of [1440, 320]) {
     await sidebar.getByRole('link', { name: 'Agents', exact: true }).click();
     if (width < 700) await page.getByRole('button', { name: 'Open sidebar', exact: true }).click();
     await expect(tree).toBeVisible();
-    await expect(alpha.getByRole('link', { name: '#open-goal', exact: true })).toBeVisible();
-    await captureReviewScreenshot(page, { path: `/tmp/ca110-sidebar-${width}.png` });
+    await expect(alpha.getByRole('link', { name: 'open-goal', exact: true })).toBeVisible();
+    await captureReviewScreenshot(page, { path: `/tmp/ca122-sidebar-${theme}-${width}.png` });
+    // With a mouse, the chevron ends the row and the actions appear over it on hover.
+    const alphaRow = alpha.locator('.sidebar-project-row');
+    const rowBox = (await alphaRow.boundingBox())!;
+    const chevronBox = (await alphaRow.locator('.sidebar-project-toggle > svg').boundingBox())!;
+    expect(rowBox.x + rowBox.width - (chevronBox.x + chevronBox.width)).toBeLessThan(16);
+    await alphaRow.hover();
+    await expect(alphaRow.locator('.project-row-actions')).toHaveCSS('opacity', '1');
+    await captureReviewScreenshot(sidebar, {
+      path: `/tmp/ca122-sidebar-hover-${theme}-${width}.png`
+    });
     await sidebar.getByRole('link', { name: 'Manage projects', exact: true }).click();
     await expect(
       page.locator('main').getByRole('button', { name: 'New project', exact: true })
@@ -518,7 +544,7 @@ test('project sidebar: search expands its project and a project-list failure ret
   const search = page.getByRole('dialog', { name: 'Find an endeavor' });
   await search.getByLabel('Search endeavors', { exact: true }).fill('other-project');
   await search.getByLabel('Search endeavors', { exact: true }).press('Enter');
-  await expect(sidebar.getByRole('link', { name: '#other-project', exact: true })).toHaveAttribute(
+  await expect(sidebar.getByRole('link', { name: 'other-project', exact: true })).toHaveAttribute(
     'aria-current',
     'page'
   );
@@ -529,7 +555,7 @@ test('project sidebar: search expands its project and a project-list failure ret
   state.failProjects = true;
   await page.reload();
   await expect(sidebar.getByText('Projects unavailable', { exact: true })).toBeVisible();
-  await expect(sidebar.getByRole('link', { name: '#other-project', exact: true })).toBeVisible();
+  await expect(sidebar.getByRole('link', { name: 'other-project', exact: true })).toBeVisible();
   await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeEnabled();
   expect(errors).toEqual([]);
 });

@@ -290,7 +290,7 @@ test.describe('touch sidebar', () => {
     await expect.poll(width).toBe(264);
     await expect(sidebar.getByRole('button', { name: 'New endeavor', exact: true })).toBeVisible();
     await expect(sidebar.locator('.sidebar-conversations')).toBeVisible();
-    await sidebar.getByRole('link', { name: '#heat-pump-brief', exact: true }).tap();
+    await sidebar.getByRole('link', { name: 'heat-pump-brief', exact: true }).tap();
     await expect.poll(width).toBe(68);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
       true
@@ -307,9 +307,9 @@ test('restores the last accessible selection, preserves links, and searches olde
     page.getByRole('heading', { name: 'website-reliability', exact: true })
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: '#website-reliability', exact: true })
+    page.getByRole('link', { name: 'website-reliability', exact: true })
   ).toHaveAttribute('title', 'website-reliability');
-  await page.getByRole('link', { name: '#heat-pump-brief', exact: true }).click();
+  await page.getByRole('link', { name: 'heat-pump-brief', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   for (const destination of [
     'Agents',
@@ -329,7 +329,7 @@ test('restores the last accessible selection, preserves links, and searches olde
   }
   await page.getByRole('button', { name: 'Profile and settings', exact: true }).click();
   await expect(page.locator('.sidebar-conversations')).toBeVisible();
-  await page.getByRole('link', { name: '#heat-pump-brief', exact: true }).click();
+  await page.getByRole('link', { name: 'heat-pump-brief', exact: true }).click();
   await expect(page.locator('.sidebar-conversations')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   await page.reload();
@@ -351,7 +351,7 @@ test('unavailable saved selection falls back, and switching people resets access
   await expect(page.getByRole('heading', { name: 'heat-pump-brief', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Switch person', exact: true }).click();
   await page.getByRole('button', { name: 'Lee', exact: true }).click();
-  await page.getByRole('link', { name: '#website-reliability', exact: true }).click();
+  await page.getByRole('link', { name: 'website-reliability', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'website-reliability', exact: true })
   ).toBeVisible();
@@ -408,7 +408,7 @@ test('leaving a new endeavor asks before discarding its draft', async ({ page })
   const message = draft.getByRole('textbox', { name: 'First message' });
   await expect(message).toBeFocused();
   await message.fill('Keep this draft');
-  const existing = page.getByRole('link', { name: '#website-reliability', exact: true });
+  const existing = page.getByRole('link', { name: 'website-reliability', exact: true });
   page.once('dialog', (dialog) => dialog.dismiss());
   await existing.click();
   await expect(page).toHaveURL(/new-endeavor$/);
@@ -441,9 +441,10 @@ test('standalone creation keeps a failed first draft and prevents duplicate send
     page.getByRole('heading', { name: 'explain-heat-pumps', exact: true })
   ).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Message', exact: true })).toBeFocused();
-  await expect(
-    page.getByRole('link', { name: '#explain-heat-pumps', exact: true })
-  ).toHaveAttribute('aria-current', 'page');
+  await expect(page.getByRole('link', { name: 'explain-heat-pumps', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page'
+  );
   expect(state.posts[1]).toEqual({ title: 'explain-heat-pumps', projectId: null });
   expect(state.writes.filter((write) => write.startsWith('POST '))).toEqual([
     'POST /conversations',
