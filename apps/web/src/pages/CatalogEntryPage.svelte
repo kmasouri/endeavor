@@ -38,7 +38,7 @@
       {#if 'baseUrl' in entry.data}
         <ConnectionConfiguration connection={entry.data} onChanged={entry.reload} startSignIn={new URLSearchParams(window.location.hash.split('?')[1]).get('signIn') === '1'} />
       {:else}
-        <div class="row"><h2 class="grow">Instructions</h2><EnableButton path={`/skills/${entryId}`} disabled={!!entry.data?.disabledAt} onChanged={entry.reload} /></div>
+        <div class="row wrap section-header"><h2 class="grow">Instructions</h2><EnableButton path={`/skills/${entryId}`} disabled={!!entry.data?.disabledAt} onChanged={entry.reload} /></div>
         <DiscoverableToggle path={`/skills/${entryId}`} discoverable={entry.data.discoverable} onChanged={entry.reload} />
         {#key entry.data.currentVersionId}<SkillVersionForm skill={entry.data} onSaved={entry.reload} />{/key}
       {/if}

@@ -200,3 +200,49 @@ test('connection editor changes authentication without resending credentials or 
   await expect(page.getByRole('button', { name: 'Edit configuration' })).toBeVisible();
   expect(api.writes).toEqual([{ path: '/connections/c1', body: { authMethod: 'none' } }]);
 });
+
+test('connection and skill section headers keep their headings whole on phones', async ({
+  page
+}) => {
+  await mockConnection(page);
+  await page.route('**/skills/s1', (route) =>
+    route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          id: 's1',
+          name: 'API check',
+          description: 'Check the API',
+          instructions: 'Call each endpoint.',
+          version: 1,
+          discoverable: false,
+          disabledAt: null
+        }
+      })
+    })
+  );
+  for (const width of [320, 390, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const [path, name] of [
+      ['/app/#/connections/c1', 'Configuration'],
+      ['/app/#/skills/s1', 'Instructions']
+    ]) {
+      await page.goto(path);
+      const heading = page.getByRole('heading', { name, exact: true, level: 2 });
+      await expect(heading).toBeVisible();
+      // One line of text: the heading is not squeezed into a narrow column.
+      const box = (await heading.boundingBox())!;
+      const lineHeight = await heading.evaluate((element) =>
+        parseFloat(getComputedStyle(element).lineHeight)
+      );
+      expect(box.height).toBeLessThan(lineHeight * 1.5);
+      const disable = page.getByRole('button', { name: 'Disable', exact: true });
+      const button = (await disable.boundingBox())!;
+      // The button either sits beside the heading or moves below it, never on top of it.
+      const beside = button.x >= box.x + box.width - 1;
+      expect(beside || button.y >= box.y + box.height - 1).toBe(true);
+      expect(button.x + button.width).toBeLessThanOrEqual(width);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  }
+});

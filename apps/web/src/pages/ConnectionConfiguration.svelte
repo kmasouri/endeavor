@@ -83,7 +83,7 @@
 </script>
 
 <div class="stack">
-  <div class="row wrap">
+  <div class="row wrap section-header">
     <div class="grow">
       <h2>Configuration</h2>
       <p class="muted small">{connection.kind === 'mcp' ? 'MCP server' : 'HTTP API'} · {authenticationLabel(connection)}</p>
