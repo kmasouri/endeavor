@@ -295,6 +295,12 @@ details summary {
   min-width: 0;
 }
 
+/* A section heading with buttons beside it. The heading keeps room for its words,
+   so on a narrow screen the buttons move below it instead of squeezing it. */
+.section-header > .grow {
+  flex: 1 1 12rem;
+}
+
 .events {
   list-style: none;
   padding: 0;
