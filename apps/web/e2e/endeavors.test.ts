@@ -349,6 +349,10 @@ test('restores the last accessible selection, preserves links, and searches olde
   await page.keyboard.press('Control+k');
   const search = page.getByRole('dialog', { name: 'Find an endeavor' });
   await search.getByLabel('Search endeavors', { exact: true }).fill('website');
+  // The details line tells same-named endeavors apart without changing the result's name.
+  await expect(
+    search.getByRole('button', { name: 'website-reliability', exact: true })
+  ).toHaveAccessibleDescription('Oct 23');
   await search.getByLabel('Search endeavors', { exact: true }).press('Enter');
   await expect(page).toHaveURL(/#\/conversations\/site$/);
   await expect(search).toHaveCount(0);
@@ -625,7 +629,7 @@ test('finder is wider and keeps long names on one line at every width', async ({
     expect(box).not.toBeNull();
     expect(box!.width).toBeLessThanOrEqual(width - 20);
     if (width === 1280) expect(box!.width).toBe(760);
-    const label = dialog.locator('.endeavor-results button span').last();
+    const label = dialog.locator('.endeavor-results .endeavor-name').last();
     const geometry = await label.evaluate((el) => {
       const style = getComputedStyle(el);
       return {

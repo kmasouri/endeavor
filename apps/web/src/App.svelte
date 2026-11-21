@@ -428,7 +428,7 @@
           void savedProject(project);
         }} />
       {/if}
-      {#if searching}<SearchEndeavors conversations={searchable.data ?? recent} error={searchable.error} loading={!searchable.data} onPick={openConversation} onClose={() => (searching = false)} onRetry={searchable.reload} />{/if}
+      {#if searching}<SearchEndeavors conversations={searchable.data ?? recent} projects={projects.data ?? []} error={searchable.error} loading={!searchable.data} onPick={openConversation} onClose={() => (searching = false)} onRetry={searchable.reload} />{/if}
     {/key}
     {#if picking}
       <SwitchPerson

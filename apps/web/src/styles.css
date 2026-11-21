@@ -1602,16 +1602,24 @@ progress::-webkit-progress-value {
   gap: 4px;
 }
 .endeavor-results button {
+  flex-direction: column;
+  align-items: flex-start;
   justify-content: flex-start;
+  gap: 2px;
   text-align: left;
   min-width: 0;
   max-width: 100%;
 }
 .endeavor-results button span {
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.endeavor-results .endeavor-details {
+  color: var(--muted);
+  font-size: 0.85rem;
 }
 @media (max-width: 700px) {
   .app-bar {
